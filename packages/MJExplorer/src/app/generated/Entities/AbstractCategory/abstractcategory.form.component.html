@@ -1,0 +1,47 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Abstract Categories" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Abstract Categories" [Visible]="record.IsSaved"> 
+                        Abstract Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Abstract Categories','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Abstract Categories')"
+                            [AllowLoad]="IsCurrentTab('Abstract Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Abstracts" [Visible]="record.IsSaved"> 
+                        Abstracts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Abstracts','CategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Abstracts')"
+                            [AllowLoad]="IsCurrentTab('Abstracts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

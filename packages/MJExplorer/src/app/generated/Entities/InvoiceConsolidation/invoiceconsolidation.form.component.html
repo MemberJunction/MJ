@@ -1,0 +1,47 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Invoice Consolidations" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Invoice Consolidation Orders" [Visible]="record.IsSaved"> 
+                        Invoice Consolidation Orders
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Invoice Consolidation Orders','InvoiceConsolidationID')"  
+                            [NewRecordValues]="NewRecordValues('Invoice Consolidation Orders')"
+                            [AllowLoad]="IsCurrentTab('Invoice Consolidation Orders')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Invoice Consolidation Payments" [Visible]="record.IsSaved"> 
+                        Invoice Consolidation Payments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Invoice Consolidation Payments','InvoiceConsolidationID')"  
+                            [NewRecordValues]="NewRecordValues('Invoice Consolidation Payments')"
+                            [AllowLoad]="IsCurrentTab('Invoice Consolidation Payments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

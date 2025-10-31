@@ -1,0 +1,34 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Contact Log Types" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Contact Logs" [Visible]="record.IsSaved"> 
+                        Contact Logs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Contact Logs','TypeID')"  
+                            [NewRecordValues]="NewRecordValues('Contact Logs')"
+                            [AllowLoad]="IsCurrentTab('Contact Logs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

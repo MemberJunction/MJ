@@ -107,24 +107,15 @@ import { TemplateParamEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="OrderBy"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TemplateContentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="Template"
             Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OrderBy"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

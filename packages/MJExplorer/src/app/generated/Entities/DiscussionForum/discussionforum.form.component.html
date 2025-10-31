@@ -1,0 +1,99 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Discussion Forums" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Discussion Forums" [Visible]="record.IsSaved"> 
+                        Discussion Forums
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Discussion Forums','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Discussion Forums')"
+                            [AllowLoad]="IsCurrentTab('Discussion Forums')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Discussion Forum Links" [Visible]="record.IsSaved"> 
+                        Discussion Forum Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Discussion Forum Links','DiscussionForumID')"  
+                            [NewRecordValues]="NewRecordValues('Discussion Forum Links')"
+                            [AllowLoad]="IsCurrentTab('Discussion Forum Links')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Discussion Forum Subscriptions" [Visible]="record.IsSaved"> 
+                        Discussion Forum Subscriptions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Discussion Forum Subscriptions','ForumID')"  
+                            [NewRecordValues]="NewRecordValues('Discussion Forum Subscriptions')"
+                            [AllowLoad]="IsCurrentTab('Discussion Forum Subscriptions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Discussion Forum Web Groups" [Visible]="record.IsSaved"> 
+                        Discussion Forum Web Groups
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Discussion Forum Web Groups','DiscussionForumID')"  
+                            [NewRecordValues]="NewRecordValues('Discussion Forum Web Groups')"
+                            [AllowLoad]="IsCurrentTab('Discussion Forum Web Groups')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Discussion Forum Moderators" [Visible]="record.IsSaved"> 
+                        Discussion Forum Moderators
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Discussion Forum Moderators','DiscussionForumID')"  
+                            [NewRecordValues]="NewRecordValues('Discussion Forum Moderators')"
+                            [AllowLoad]="IsCurrentTab('Discussion Forum Moderators')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Discussion Forum Messages" [Visible]="record.IsSaved"> 
+                        Discussion Forum Messages
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Discussion Forum Messages','ForumID')"  
+                            [NewRecordValues]="NewRecordValues('Discussion Forum Messages')"
+                            [AllowLoad]="IsCurrentTab('Discussion Forum Messages')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

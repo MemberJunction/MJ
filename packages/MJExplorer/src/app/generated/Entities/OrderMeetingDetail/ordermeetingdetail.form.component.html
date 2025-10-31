@@ -1,0 +1,125 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Order Meeting Details" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Order Meeting Detail Attributes" [Visible]="record.IsSaved"> 
+                        Order Meeting Detail Attributes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Meeting Detail Attributes','OrderMeetingDetailID')"  
+                            [NewRecordValues]="NewRecordValues('Order Meeting Detail Attributes')"
+                            [AllowLoad]="IsCurrentTab('Order Meeting Detail Attributes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Meeting Detail Education Units" [Visible]="record.IsSaved"> 
+                        Order Meeting Detail Education Units
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Meeting Detail Education Units','OrderMeetingDetailID')"  
+                            [NewRecordValues]="NewRecordValues('Order Meeting Detail Education Units')"
+                            [AllowLoad]="IsCurrentTab('Order Meeting Detail Education Units')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Meeting Session Details" [Visible]="record.IsSaved"> 
+                        Order Meeting Session Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Meeting Session Details','OrderMeetingDetailID')"  
+                            [NewRecordValues]="NewRecordValues('Order Meeting Session Details')"
+                            [AllowLoad]="IsCurrentTab('Order Meeting Session Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Class Registrations" [Visible]="record.IsSaved"> 
+                        Class Registrations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Class Registrations','OrderMeetingDetailID')"  
+                            [NewRecordValues]="NewRecordValues('Class Registrations')"
+                            [AllowLoad]="IsCurrentTab('Class Registrations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Learning Management System Interactions" [Visible]="record.IsSaved"> 
+                        Learning Management System Interactions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Learning Management System Interactions','MeetingRegistration')"  
+                            [NewRecordValues]="NewRecordValues('Learning Management System Interactions')"
+                            [AllowLoad]="IsCurrentTab('Learning Management System Interactions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Education Units" [Visible]="record.IsSaved"> 
+                        Education Units
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Education Units','OrderMeetingDetailID')"  
+                            [NewRecordValues]="NewRecordValues('Education Units')"
+                            [AllowLoad]="IsCurrentTab('Education Units')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Certifications" [Visible]="record.IsSaved"> 
+                        Certifications
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Certifications','OrderMeetingDetailID')"  
+                            [NewRecordValues]="NewRecordValues('Certifications')"
+                            [AllowLoad]="IsCurrentTab('Certifications')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Meeting Details" [Visible]="record.IsSaved"> 
+                        Order Meeting Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Meeting Details','TransferredFromID')"  
+                            [NewRecordValues]="NewRecordValues('Order Meeting Details')"
+                            [AllowLoad]="IsCurrentTab('Order Meeting Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

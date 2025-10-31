@@ -1,0 +1,203 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Opportunities" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Referrals" [Visible]="record.IsSaved"> 
+                        Referrals
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Referrals','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Referrals')"
+                            [AllowLoad]="IsCurrentTab('Referrals')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Masters" [Visible]="record.IsSaved"> 
+                        Order Masters
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Masters','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Order Masters')"
+                            [AllowLoad]="IsCurrentTab('Order Masters')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity Contacts" [Visible]="record.IsSaved"> 
+                        Opportunity Contacts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity Contacts','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity Contacts')"
+                            [AllowLoad]="IsCurrentTab('Opportunity Contacts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunities" [Visible]="record.IsSaved"> 
+                        Opportunities
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunities','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunities')"
+                            [AllowLoad]="IsCurrentTab('Opportunities')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity References" [Visible]="record.IsSaved"> 
+                        Opportunity References
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity References','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity References')"
+                            [AllowLoad]="IsCurrentTab('Opportunity References')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity Roles" [Visible]="record.IsSaved"> 
+                        Opportunity Roles
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity Roles','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity Roles')"
+                            [AllowLoad]="IsCurrentTab('Opportunity Roles')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity Competitors" [Visible]="record.IsSaved"> 
+                        Opportunity Competitors
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity Competitors','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity Competitors')"
+                            [AllowLoad]="IsCurrentTab('Opportunity Competitors')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity Status Reports" [Visible]="record.IsSaved"> 
+                        Opportunity Status Reports
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity Status Reports','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity Status Reports')"
+                            [AllowLoad]="IsCurrentTab('Opportunity Status Reports')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity Histories" [Visible]="record.IsSaved"> 
+                        Opportunity Histories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity Histories','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity Histories')"
+                            [AllowLoad]="IsCurrentTab('Opportunity Histories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity Partners" [Visible]="record.IsSaved"> 
+                        Opportunity Partners
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity Partners','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity Partners')"
+                            [AllowLoad]="IsCurrentTab('Opportunity Partners')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Referral Requests" [Visible]="record.IsSaved"> 
+                        Referral Requests
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Referral Requests','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Referral Requests')"
+                            [AllowLoad]="IsCurrentTab('Referral Requests')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunity Details" [Visible]="record.IsSaved"> 
+                        Opportunity Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunity Details','OpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunity Details')"
+                            [AllowLoad]="IsCurrentTab('Opportunity Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunities" [Visible]="record.IsSaved"> 
+                        Opportunities
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunities','PriorOpportunityID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunities')"
+                            [AllowLoad]="IsCurrentTab('Opportunities')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Opportunities" [Visible]="record.IsSaved"> 
+                        Opportunities
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Opportunities','NextProposalID')"  
+                            [NewRecordValues]="NewRecordValues('Opportunities')"
+                            [AllowLoad]="IsCurrentTab('Opportunities')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

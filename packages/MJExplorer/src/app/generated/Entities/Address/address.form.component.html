@@ -1,0 +1,437 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Addresses" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Chapter Meetings" [Visible]="record.IsSaved"> 
+                        Chapter Meetings
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Chapter Meetings','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Chapter Meetings')"
+                            [AllowLoad]="IsCurrentTab('Chapter Meetings')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Company Addresses" [Visible]="record.IsSaved"> 
+                        Company Addresses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Addresses','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Company Addresses')"
+                            [AllowLoad]="IsCurrentTab('Company Addresses')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Class Schedules" [Visible]="record.IsSaved"> 
+                        Class Schedules
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Class Schedules','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Class Schedules')"
+                            [AllowLoad]="IsCurrentTab('Class Schedules')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Advertising Blind Boxes" [Visible]="record.IsSaved"> 
+                        Advertising Blind Boxes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Advertising Blind Boxes','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Advertising Blind Boxes')"
+                            [AllowLoad]="IsCurrentTab('Advertising Blind Boxes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Pledge Guest Lists" [Visible]="record.IsSaved"> 
+                        Pledge Guest Lists
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Pledge Guest Lists','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Pledge Guest Lists')"
+                            [AllowLoad]="IsCurrentTab('Pledge Guest Lists')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organization Addresses" [Visible]="record.IsSaved"> 
+                        Organization Addresses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organization Addresses','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Organization Addresses')"
+                            [AllowLoad]="IsCurrentTab('Organization Addresses')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Subscription Delivery Schedules" [Visible]="record.IsSaved"> 
+                        Subscription Delivery Schedules
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Subscription Delivery Schedules','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Subscription Delivery Schedules')"
+                            [AllowLoad]="IsCurrentTab('Subscription Delivery Schedules')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Person Addresses" [Visible]="record.IsSaved"> 
+                        Person Addresses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Person Addresses','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Person Addresses')"
+                            [AllowLoad]="IsCurrentTab('Person Addresses')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Meetings" [Visible]="record.IsSaved"> 
+                        Meetings
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Meetings','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Meetings')"
+                            [AllowLoad]="IsCurrentTab('Meetings')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Subscription Delivery Logs" [Visible]="record.IsSaved"> 
+                        Subscription Delivery Logs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Subscription Delivery Logs','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Subscription Delivery Logs')"
+                            [AllowLoad]="IsCurrentTab('Subscription Delivery Logs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Company Persons" [Visible]="record.IsSaved"> 
+                        Company Persons
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Persons','BillingAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Company Persons')"
+                            [AllowLoad]="IsCurrentTab('Company Persons')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Shipments" [Visible]="record.IsSaved"> 
+                        Order Shipments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Shipments','ShipToAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Order Shipments')"
+                            [AllowLoad]="IsCurrentTab('Order Shipments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Meeting Sessions" [Visible]="record.IsSaved"> 
+                        Meeting Sessions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Meeting Sessions','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Meeting Sessions')"
+                            [AllowLoad]="IsCurrentTab('Meeting Sessions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Company Persons" [Visible]="record.IsSaved"> 
+                        Company Persons
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Persons','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Company Persons')"
+                            [AllowLoad]="IsCurrentTab('Company Persons')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organizations" [Visible]="record.IsSaved"> 
+                        Organizations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organizations','BillingAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Organizations')"
+                            [AllowLoad]="IsCurrentTab('Organizations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Classes" [Visible]="record.IsSaved"> 
+                        Classes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Classes','CertificationAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Classes')"
+                            [AllowLoad]="IsCurrentTab('Classes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organizations" [Visible]="record.IsSaved"> 
+                        Organizations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organizations','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Organizations')"
+                            [AllowLoad]="IsCurrentTab('Organizations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Classes" [Visible]="record.IsSaved"> 
+                        Classes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Classes','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Classes')"
+                            [AllowLoad]="IsCurrentTab('Classes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Employees__dbo" [Visible]="record.IsSaved"> 
+                        Employees__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employees__dbo','HomeAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Employees__dbo')"
+                            [AllowLoad]="IsCurrentTab('Employees__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Employees__dbo" [Visible]="record.IsSaved"> 
+                        Employees__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employees__dbo','WorkAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Employees__dbo')"
+                            [AllowLoad]="IsCurrentTab('Employees__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Details" [Visible]="record.IsSaved"> 
+                        Order Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Details','ShipToAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Order Details')"
+                            [AllowLoad]="IsCurrentTab('Order Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','POBoxAddressID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Companies__dbo" [Visible]="record.IsSaved"> 
+                        Companies__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Companies__dbo','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Companies__dbo')"
+                            [AllowLoad]="IsCurrentTab('Companies__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Masters" [Visible]="record.IsSaved"> 
+                        Order Masters
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Masters','BillToAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Order Masters')"
+                            [AllowLoad]="IsCurrentTab('Order Masters')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Membership Enrollments" [Visible]="record.IsSaved"> 
+                        Membership Enrollments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Membership Enrollments','PersonAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Membership Enrollments')"
+                            [AllowLoad]="IsCurrentTab('Membership Enrollments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','BillingAddressID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Companies__dbo" [Visible]="record.IsSaved"> 
+                        Companies__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Companies__dbo','BillingAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Companies__dbo')"
+                            [AllowLoad]="IsCurrentTab('Companies__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Masters" [Visible]="record.IsSaved"> 
+                        Order Masters
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Masters','ShipToAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Order Masters')"
+                            [AllowLoad]="IsCurrentTab('Order Masters')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Membership Enrollments" [Visible]="record.IsSaved"> 
+                        Membership Enrollments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Membership Enrollments','AddressID')"  
+                            [NewRecordValues]="NewRecordValues('Membership Enrollments')"
+                            [AllowLoad]="IsCurrentTab('Membership Enrollments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','HomeAddressID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Companies__dbo" [Visible]="record.IsSaved"> 
+                        Companies__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Companies__dbo','POBoxAddressID')"  
+                            [NewRecordValues]="NewRecordValues('Companies__dbo')"
+                            [AllowLoad]="IsCurrentTab('Companies__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

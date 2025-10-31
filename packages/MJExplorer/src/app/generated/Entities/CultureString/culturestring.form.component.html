@@ -1,0 +1,216 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Culture Strings" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Member Types" [Visible]="record.IsSaved"> 
+                        Member Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Member Types','DescriptionCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Member Types')"
+                            [AllowLoad]="IsCurrentTab('Member Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Status Types" [Visible]="record.IsSaved"> 
+                        Order Status Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Status Types','NameCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Order Status Types')"
+                            [AllowLoad]="IsCurrentTab('Order Status Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Attendee Status" [Visible]="record.IsSaved"> 
+                        Attendee Status
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Attendee Status','DescriptionCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Attendee Status')"
+                            [AllowLoad]="IsCurrentTab('Attendee Status')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Types" [Visible]="record.IsSaved"> 
+                        Product Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Types','TypeSpecificOrderLineDescriptionID')"  
+                            [NewRecordValues]="NewRecordValues('Product Types')"
+                            [AllowLoad]="IsCurrentTab('Product Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Sources" [Visible]="record.IsSaved"> 
+                        Order Sources
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Sources','NameCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Order Sources')"
+                            [AllowLoad]="IsCurrentTab('Order Sources')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Culture String Locals" [Visible]="record.IsSaved"> 
+                        Culture String Locals
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Culture String Locals','CultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Culture String Locals')"
+                            [AllowLoad]="IsCurrentTab('Culture String Locals')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Member Types" [Visible]="record.IsSaved"> 
+                        Member Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Member Types','NameCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Member Types')"
+                            [AllowLoad]="IsCurrentTab('Member Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Status Types" [Visible]="record.IsSaved"> 
+                        Order Status Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Status Types','DescriptionCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Order Status Types')"
+                            [AllowLoad]="IsCurrentTab('Order Status Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Attendee Status" [Visible]="record.IsSaved"> 
+                        Attendee Status
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Attendee Status','NameCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Attendee Status')"
+                            [AllowLoad]="IsCurrentTab('Attendee Status')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Sources" [Visible]="record.IsSaved"> 
+                        Order Sources
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Sources','DescriptionCultureStringID')"  
+                            [NewRecordValues]="NewRecordValues('Order Sources')"
+                            [AllowLoad]="IsCurrentTab('Order Sources')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Categories" [Visible]="record.IsSaved"> 
+                        Product Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Categories','SubscriptionDescriptionID')"  
+                            [NewRecordValues]="NewRecordValues('Product Categories')"
+                            [AllowLoad]="IsCurrentTab('Product Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Categories" [Visible]="record.IsSaved"> 
+                        Product Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Categories','CategorySpecificOrderLineDescriptionID')"  
+                            [NewRecordValues]="NewRecordValues('Product Categories')"
+                            [AllowLoad]="IsCurrentTab('Product Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Products" [Visible]="record.IsSaved"> 
+                        Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Products','PrerequisitesFailureMessageID')"  
+                            [NewRecordValues]="NewRecordValues('Products')"
+                            [AllowLoad]="IsCurrentTab('Products')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Products" [Visible]="record.IsSaved"> 
+                        Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Products','OrderLineDescriptionID')"  
+                            [NewRecordValues]="NewRecordValues('Products')"
+                            [AllowLoad]="IsCurrentTab('Products')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Products" [Visible]="record.IsSaved"> 
+                        Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Products','WebPrerequisitesFailureMessageID')"  
+                            [NewRecordValues]="NewRecordValues('Products')"
+                            [AllowLoad]="IsCurrentTab('Products')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

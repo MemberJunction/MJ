@@ -1,0 +1,47 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Curriculum Definition Categories" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Curriculum Definitions" [Visible]="record.IsSaved"> 
+                        Curriculum Definitions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Curriculum Definitions','CategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Curriculum Definitions')"
+                            [AllowLoad]="IsCurrentTab('Curriculum Definitions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Curriculum Applications" [Visible]="record.IsSaved"> 
+                        Curriculum Applications
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Curriculum Applications','CurriculumCategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Curriculum Applications')"
+                            [AllowLoad]="IsCurrentTab('Curriculum Applications')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

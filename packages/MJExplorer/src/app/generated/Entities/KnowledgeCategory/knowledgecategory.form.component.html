@@ -1,0 +1,60 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Knowledge Categories" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Knowledge Answers" [Visible]="record.IsSaved"> 
+                        Knowledge Answers
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Knowledge Answers','KnowledgeCategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Knowledge Answers')"
+                            [AllowLoad]="IsCurrentTab('Knowledge Answers')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Questions" [Visible]="record.IsSaved"> 
+                        Questions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Questions','KnowledgeCategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Questions')"
+                            [AllowLoad]="IsCurrentTab('Questions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Question Trees" [Visible]="record.IsSaved"> 
+                        Question Trees
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Question Trees','KnowledgeCategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Question Trees')"
+                            [AllowLoad]="IsCurrentTab('Question Trees')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

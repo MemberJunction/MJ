@@ -74,14 +74,14 @@ import { UserViewCategoryEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Entity"
+            FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="User"
+            FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

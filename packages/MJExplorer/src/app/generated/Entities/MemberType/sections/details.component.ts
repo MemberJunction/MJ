@@ -12,16 +12,18 @@ import { MemberTypeEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="MemberTypeID"
+            FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TypeName"
-            Type="textbox"
+            FieldName="ParentID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -33,8 +35,61 @@ import { MemberTypeEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AnnualDues"
+            FieldName="IsMember"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultType"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="NameCultureStringID"
             Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DescriptionCultureStringID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MemberType"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RankingField"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsDefaultMemberType"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -48,6 +103,27 @@ import { MemberTypeEntity } from 'mj_generatedentities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="NameCultureString"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DescriptionCultureString"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

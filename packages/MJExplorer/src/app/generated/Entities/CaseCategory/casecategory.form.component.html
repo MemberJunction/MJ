@@ -1,0 +1,73 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Case Categories" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Case Categories" [Visible]="record.IsSaved"> 
+                        Case Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Case Categories','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Case Categories')"
+                            [AllowLoad]="IsCurrentTab('Case Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Case Assignee Postal Codes" [Visible]="record.IsSaved"> 
+                        Case Assignee Postal Codes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Case Assignee Postal Codes','CaseCategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Case Assignee Postal Codes')"
+                            [AllowLoad]="IsCurrentTab('Case Assignee Postal Codes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Case Assignee Defaults" [Visible]="record.IsSaved"> 
+                        Case Assignee Defaults
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Case Assignee Defaults','CaseCategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Case Assignee Defaults')"
+                            [AllowLoad]="IsCurrentTab('Case Assignee Defaults')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Cases" [Visible]="record.IsSaved"> 
+                        Cases
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Cases','CaseCategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Cases')"
+                            [AllowLoad]="IsCurrentTab('Cases')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

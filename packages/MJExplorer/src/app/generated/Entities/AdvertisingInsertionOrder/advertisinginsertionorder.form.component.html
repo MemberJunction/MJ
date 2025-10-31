@@ -1,0 +1,73 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Advertising Insertion Orders" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Advertising Insertion Ord Adjust Histories" [Visible]="record.IsSaved"> 
+                        Advertising Insertion Ord Adjust Histories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Advertising Insertion Ord Adjust Histories','AdvertisingInsertionOrderID')"  
+                            [NewRecordValues]="NewRecordValues('Advertising Insertion Ord Adjust Histories')"
+                            [AllowLoad]="IsCurrentTab('Advertising Insertion Ord Adjust Histories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Ad Insertion Order Options" [Visible]="record.IsSaved"> 
+                        Ad Insertion Order Options
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Ad Insertion Order Options','AdvertisingInsertionOrderID')"  
+                            [NewRecordValues]="NewRecordValues('Ad Insertion Order Options')"
+                            [AllowLoad]="IsCurrentTab('Ad Insertion Order Options')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Advertising Insertion Ord Sales Reps" [Visible]="record.IsSaved"> 
+                        Advertising Insertion Ord Sales Reps
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Advertising Insertion Ord Sales Reps','AdvertisingInsertionOrderID')"  
+                            [NewRecordValues]="NewRecordValues('Advertising Insertion Ord Sales Reps')"
+                            [AllowLoad]="IsCurrentTab('Advertising Insertion Ord Sales Reps')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Advertising Insertion Ord Bill Tos" [Visible]="record.IsSaved"> 
+                        Advertising Insertion Ord Bill Tos
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Advertising Insertion Ord Bill Tos','InsertionOrderID')"  
+                            [NewRecordValues]="NewRecordValues('Advertising Insertion Ord Bill Tos')"
+                            [AllowLoad]="IsCurrentTab('Advertising Insertion Ord Bill Tos')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

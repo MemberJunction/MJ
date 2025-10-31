@@ -55,19 +55,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Query Parameters" [Visible]="record.IsSaved"> 
-                        MJ: Query Parameters
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Parameters','QueryID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Query Parameters')"
-                            [AllowLoad]="IsCurrentTab('MJ: Query Parameters')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Query Entities" [Visible]="record.IsSaved"> 
                         Query Entities
                     </mj-tab>

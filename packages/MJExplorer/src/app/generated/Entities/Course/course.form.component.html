@@ -16,14 +16,209 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Registrations__education" [Visible]="record.IsSaved"> 
-                        Registrations__education
+                    <mj-tab Name="Exams" [Visible]="record.IsSaved"> 
+                        Exams
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Registrations__education','CourseID')"  
-                            [NewRecordValues]="NewRecordValues('Registrations__education')"
-                            [AllowLoad]="IsCurrentTab('Registrations__education')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Exams','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Exams')"
+                            [AllowLoad]="IsCurrentTab('Exams')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Course Pre Reqs" [Visible]="record.IsSaved"> 
+                        Course Pre Reqs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Course Pre Reqs','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Course Pre Reqs')"
+                            [AllowLoad]="IsCurrentTab('Course Pre Reqs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Course Schools" [Visible]="record.IsSaved"> 
+                        Course Schools
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Course Schools','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Course Schools')"
+                            [AllowLoad]="IsCurrentTab('Course Schools')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Course Instructors" [Visible]="record.IsSaved"> 
+                        Course Instructors
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Course Instructors','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Course Instructors')"
+                            [AllowLoad]="IsCurrentTab('Course Instructors')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Course Part Uses" [Visible]="record.IsSaved"> 
+                        Course Part Uses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Course Part Uses','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Course Part Uses')"
+                            [AllowLoad]="IsCurrentTab('Course Part Uses')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Course Pre Reqs" [Visible]="record.IsSaved"> 
+                        Course Pre Reqs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Course Pre Reqs','PreReqCourseID')"  
+                            [NewRecordValues]="NewRecordValues('Course Pre Reqs')"
+                            [AllowLoad]="IsCurrentTab('Course Pre Reqs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Course Exams" [Visible]="record.IsSaved"> 
+                        Course Exams
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Course Exams','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Course Exams')"
+                            [AllowLoad]="IsCurrentTab('Course Exams')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Curriculum Courses" [Visible]="record.IsSaved"> 
+                        Curriculum Courses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Curriculum Courses','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Curriculum Courses')"
+                            [AllowLoad]="IsCurrentTab('Curriculum Courses')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Answer Sheets" [Visible]="record.IsSaved"> 
+                        Answer Sheets
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Answer Sheets','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Answer Sheets')"
+                            [AllowLoad]="IsCurrentTab('Answer Sheets')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Course Enrollment Types" [Visible]="record.IsSaved"> 
+                        Course Enrollment Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Course Enrollment Types','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Course Enrollment Types')"
+                            [AllowLoad]="IsCurrentTab('Course Enrollment Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Courses" [Visible]="record.IsSaved"> 
+                        Courses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Courses','PreviousVersionID')"  
+                            [NewRecordValues]="NewRecordValues('Courses')"
+                            [AllowLoad]="IsCurrentTab('Courses')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Meeting Detail Education Units" [Visible]="record.IsSaved"> 
+                        Order Meeting Detail Education Units
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Meeting Detail Education Units','RequirementID')"  
+                            [NewRecordValues]="NewRecordValues('Order Meeting Detail Education Units')"
+                            [AllowLoad]="IsCurrentTab('Order Meeting Detail Education Units')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Meeting Education Units" [Visible]="record.IsSaved"> 
+                        Meeting Education Units
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Meeting Education Units','RequirementID')"  
+                            [NewRecordValues]="NewRecordValues('Meeting Education Units')"
+                            [AllowLoad]="IsCurrentTab('Meeting Education Units')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Classes" [Visible]="record.IsSaved"> 
+                        Classes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Classes','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Classes')"
+                            [AllowLoad]="IsCurrentTab('Classes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Classes" [Visible]="record.IsSaved"> 
+                        Classes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Classes','SubsituteCourse')"  
+                            [NewRecordValues]="NewRecordValues('Classes')"
+                            [AllowLoad]="IsCurrentTab('Classes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Certifications" [Visible]="record.IsSaved"> 
+                        Certifications
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Certifications','CourseID')"  
+                            [NewRecordValues]="NewRecordValues('Certifications')"
+                            [AllowLoad]="IsCurrentTab('Certifications')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

@@ -1,0 +1,346 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="GL Accounts" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Sales Tax Rates" [Visible]="record.IsSaved"> 
+                        Sales Tax Rates
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Tax Rates','GLReceivableAccount')"  
+                            [NewRecordValues]="NewRecordValues('Sales Tax Rates')"
+                            [AllowLoad]="IsCurrentTab('Sales Tax Rates')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payment GL Entries" [Visible]="record.IsSaved"> 
+                        Payment GL Entries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payment GL Entries','GLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Payment GL Entries')"
+                            [AllowLoad]="IsCurrentTab('Payment GL Entries')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Ship Types" [Visible]="record.IsSaved"> 
+                        Ship Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Ship Types','GLPayableAccount')"  
+                            [NewRecordValues]="NewRecordValues('Ship Types')"
+                            [AllowLoad]="IsCurrentTab('Ship Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Schedule Trans Account Entries" [Visible]="record.IsSaved"> 
+                        Schedule Trans Account Entries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Schedule Trans Account Entries','GLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Schedule Trans Account Entries')"
+                            [AllowLoad]="IsCurrentTab('Schedule Trans Account Entries')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Batch Account Entries" [Visible]="record.IsSaved"> 
+                        Batch Account Entries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Batch Account Entries','GLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Batch Account Entries')"
+                            [AllowLoad]="IsCurrentTab('Batch Account Entries')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order GL Entries" [Visible]="record.IsSaved"> 
+                        Order GL Entries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order GL Entries','GLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Order GL Entries')"
+                            [AllowLoad]="IsCurrentTab('Order GL Entries')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organization GL Accounts" [Visible]="record.IsSaved"> 
+                        Organization GL Accounts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organization GL Accounts','GLAccountNumber')"  
+                            [NewRecordValues]="NewRecordValues('Organization GL Accounts')"
+                            [AllowLoad]="IsCurrentTab('Organization GL Accounts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organization Inter Company GLs" [Visible]="record.IsSaved"> 
+                        Organization Inter Company GLs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organization Inter Company GLs','DueFromGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Organization Inter Company GLs')"
+                            [AllowLoad]="IsCurrentTab('Organization Inter Company GLs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Campaign GL Accounts" [Visible]="record.IsSaved"> 
+                        Campaign GL Accounts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Campaign GL Accounts','GLAccountNumber')"  
+                            [NewRecordValues]="NewRecordValues('Campaign GL Accounts')"
+                            [AllowLoad]="IsCurrentTab('Campaign GL Accounts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Cost Types" [Visible]="record.IsSaved"> 
+                        Product Cost Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Cost Types','LiabilityGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Product Cost Types')"
+                            [AllowLoad]="IsCurrentTab('Product Cost Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Ship Types" [Visible]="record.IsSaved"> 
+                        Ship Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Ship Types','GLExpenseAccount')"  
+                            [NewRecordValues]="NewRecordValues('Ship Types')"
+                            [AllowLoad]="IsCurrentTab('Ship Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product GL Accounts" [Visible]="record.IsSaved"> 
+                        Product GL Accounts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product GL Accounts','GLAccountNumber')"  
+                            [NewRecordValues]="NewRecordValues('Product GL Accounts')"
+                            [AllowLoad]="IsCurrentTab('Product GL Accounts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payment Type GL Accounts" [Visible]="record.IsSaved"> 
+                        Payment Type GL Accounts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payment Type GL Accounts','GLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Payment Type GL Accounts')"
+                            [AllowLoad]="IsCurrentTab('Payment Type GL Accounts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Category GL Accounts" [Visible]="record.IsSaved"> 
+                        Product Category GL Accounts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Category GL Accounts','GLAccountNumber')"  
+                            [NewRecordValues]="NewRecordValues('Product Category GL Accounts')"
+                            [AllowLoad]="IsCurrentTab('Product Category GL Accounts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organization Inter Company GLs" [Visible]="record.IsSaved"> 
+                        Organization Inter Company GLs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organization Inter Company GLs','DueToGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Organization Inter Company GLs')"
+                            [AllowLoad]="IsCurrentTab('Organization Inter Company GLs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Cost Types" [Visible]="record.IsSaved"> 
+                        Product Cost Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Cost Types','ExpenseGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Product Cost Types')"
+                            [AllowLoad]="IsCurrentTab('Product Cost Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Ship Types" [Visible]="record.IsSaved"> 
+                        Ship Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Ship Types','GLUnearnedAccount')"  
+                            [NewRecordValues]="NewRecordValues('Ship Types')"
+                            [AllowLoad]="IsCurrentTab('Ship Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Ship Types" [Visible]="record.IsSaved"> 
+                        Ship Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Ship Types','GLReceivableAccount')"  
+                            [NewRecordValues]="NewRecordValues('Ship Types')"
+                            [AllowLoad]="IsCurrentTab('Ship Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payment Types" [Visible]="record.IsSaved"> 
+                        Payment Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payment Types','ServiceChargeGLLiabAccount')"  
+                            [NewRecordValues]="NewRecordValues('Payment Types')"
+                            [AllowLoad]="IsCurrentTab('Payment Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Ship Types" [Visible]="record.IsSaved"> 
+                        Ship Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Ship Types','GLIncomeAccount')"  
+                            [NewRecordValues]="NewRecordValues('Ship Types')"
+                            [AllowLoad]="IsCurrentTab('Ship Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payment Types" [Visible]="record.IsSaved"> 
+                        Payment Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payment Types','ServiceChargeGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Payment Types')"
+                            [AllowLoad]="IsCurrentTab('Payment Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organizations" [Visible]="record.IsSaved"> 
+                        Organizations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organizations','ExchangeRateGainGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Organizations')"
+                            [AllowLoad]="IsCurrentTab('Organizations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organizations" [Visible]="record.IsSaved"> 
+                        Organizations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organizations','ConversionAdjustmentGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Organizations')"
+                            [AllowLoad]="IsCurrentTab('Organizations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organizations" [Visible]="record.IsSaved"> 
+                        Organizations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organizations','ExchangeRateLossGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Organizations')"
+                            [AllowLoad]="IsCurrentTab('Organizations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payments" [Visible]="record.IsSaved"> 
+                        Payments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payments','ServiceChargeGLAccount')"  
+                            [NewRecordValues]="NewRecordValues('Payments')"
+                            [AllowLoad]="IsCurrentTab('Payments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

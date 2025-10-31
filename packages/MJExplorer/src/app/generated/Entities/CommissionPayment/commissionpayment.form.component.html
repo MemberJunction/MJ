@@ -1,0 +1,86 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Commission Payments" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Commission Pay Det Tiers" [Visible]="record.IsSaved"> 
+                        Commission Pay Det Tiers
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Pay Det Tiers','CommissionPaymentID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Pay Det Tiers')"
+                            [AllowLoad]="IsCurrentTab('Commission Pay Det Tiers')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Pay Det Adjustments" [Visible]="record.IsSaved"> 
+                        Commission Pay Det Adjustments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Pay Det Adjustments','CommissionPaymentID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Pay Det Adjustments')"
+                            [AllowLoad]="IsCurrentTab('Commission Pay Det Adjustments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Pay Source Details" [Visible]="record.IsSaved"> 
+                        Commission Pay Source Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Pay Source Details','CommissionPaymentID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Pay Source Details')"
+                            [AllowLoad]="IsCurrentTab('Commission Pay Source Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Pay Det Adjustments" [Visible]="record.IsSaved"> 
+                        Commission Pay Det Adjustments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Pay Det Adjustments','CPSDCommissionPaymentID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Pay Det Adjustments')"
+                            [AllowLoad]="IsCurrentTab('Commission Pay Det Adjustments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Payment Details" [Visible]="record.IsSaved"> 
+                        Commission Payment Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Payment Details','CommissionPaymentID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Payment Details')"
+                            [AllowLoad]="IsCurrentTab('Commission Payment Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

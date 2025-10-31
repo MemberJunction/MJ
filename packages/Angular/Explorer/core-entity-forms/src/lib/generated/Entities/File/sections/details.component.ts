@@ -45,7 +45,7 @@ import { FileEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="ContentType"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

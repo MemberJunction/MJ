@@ -1,0 +1,749 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Currency Types" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="GL Accounts" [Visible]="record.IsSaved"> 
+                        GL Accounts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('GL Accounts','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('GL Accounts')"
+                            [AllowLoad]="IsCurrentTab('GL Accounts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Batches" [Visible]="record.IsSaved"> 
+                        Batches
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Batches','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Batches')"
+                            [AllowLoad]="IsCurrentTab('Batches')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Payments" [Visible]="record.IsSaved"> 
+                        Commission Payments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Payments','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Payments')"
+                            [AllowLoad]="IsCurrentTab('Commission Payments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Campaign Costs" [Visible]="record.IsSaved"> 
+                        Campaign Costs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Campaign Costs','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Campaign Costs')"
+                            [AllowLoad]="IsCurrentTab('Campaign Costs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Advertising Insertion Orders" [Visible]="record.IsSaved"> 
+                        Advertising Insertion Orders
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Advertising Insertion Orders','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Advertising Insertion Orders')"
+                            [AllowLoad]="IsCurrentTab('Advertising Insertion Orders')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Scheduled Transactions" [Visible]="record.IsSaved"> 
+                        Scheduled Transactions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Transactions','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Scheduled Transactions')"
+                            [AllowLoad]="IsCurrentTab('Scheduled Transactions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Invoice Consolidations" [Visible]="record.IsSaved"> 
+                        Invoice Consolidations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Invoice Consolidations','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Invoice Consolidations')"
+                            [AllowLoad]="IsCurrentTab('Invoice Consolidations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Organizations" [Visible]="record.IsSaved"> 
+                        Organizations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organizations','FunctionalCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Organizations')"
+                            [AllowLoad]="IsCurrentTab('Organizations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Prod Inv Ledger Entries" [Visible]="record.IsSaved"> 
+                        Prod Inv Ledger Entries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Prod Inv Ledger Entries','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Prod Inv Ledger Entries')"
+                            [AllowLoad]="IsCurrentTab('Prod Inv Ledger Entries')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payment Details" [Visible]="record.IsSaved"> 
+                        Payment Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payment Details','AmountCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Payment Details')"
+                            [AllowLoad]="IsCurrentTab('Payment Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Cancellation Wizards" [Visible]="record.IsSaved"> 
+                        Order Cancellation Wizards
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Cancellation Wizards','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Order Cancellation Wizards')"
+                            [AllowLoad]="IsCurrentTab('Order Cancellation Wizards')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Gifts In Kinds" [Visible]="record.IsSaved"> 
+                        Gifts In Kinds
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Gifts In Kinds','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Gifts In Kinds')"
+                            [AllowLoad]="IsCurrentTab('Gifts In Kinds')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Pledges" [Visible]="record.IsSaved"> 
+                        Pledges
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Pledges','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Pledges')"
+                            [AllowLoad]="IsCurrentTab('Pledges')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Companies__dbo" [Visible]="record.IsSaved"> 
+                        Companies__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Companies__dbo','PreferredCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Companies__dbo')"
+                            [AllowLoad]="IsCurrentTab('Companies__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Fund Campaigns" [Visible]="record.IsSaved"> 
+                        Fund Campaigns
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Fund Campaigns','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Fund Campaigns')"
+                            [AllowLoad]="IsCurrentTab('Fund Campaigns')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Cash Ctrl Batch Details" [Visible]="record.IsSaved"> 
+                        Cash Ctrl Batch Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Cash Ctrl Batch Details','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Cash Ctrl Batch Details')"
+                            [AllowLoad]="IsCurrentTab('Cash Ctrl Batch Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Grant Disbursements" [Visible]="record.IsSaved"> 
+                        Grant Disbursements
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grant Disbursements','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Grant Disbursements')"
+                            [AllowLoad]="IsCurrentTab('Grant Disbursements')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Currency Spot Rates" [Visible]="record.IsSaved"> 
+                        Currency Spot Rates
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Currency Spot Rates','BaseCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Currency Spot Rates')"
+                            [AllowLoad]="IsCurrentTab('Currency Spot Rates')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Rate Scales" [Visible]="record.IsSaved"> 
+                        Commission Rate Scales
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Rate Scales','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Rate Scales')"
+                            [AllowLoad]="IsCurrentTab('Commission Rate Scales')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Campaign Product Categories" [Visible]="record.IsSaved"> 
+                        Campaign Product Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Campaign Product Categories','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Campaign Product Categories')"
+                            [AllowLoad]="IsCurrentTab('Campaign Product Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Accounting Periods" [Visible]="record.IsSaved"> 
+                        Accounting Periods
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Accounting Periods','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Accounting Periods')"
+                            [AllowLoad]="IsCurrentTab('Accounting Periods')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Agreements" [Visible]="record.IsSaved"> 
+                        Commission Agreements
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Agreements','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Agreements')"
+                            [AllowLoad]="IsCurrentTab('Commission Agreements')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Cash Ctrl Batches" [Visible]="record.IsSaved"> 
+                        Cash Ctrl Batches
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Cash Ctrl Batches','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Cash Ctrl Batches')"
+                            [AllowLoad]="IsCurrentTab('Cash Ctrl Batches')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Prices" [Visible]="record.IsSaved"> 
+                        Product Prices
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Prices','DerivedFromCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Product Prices')"
+                            [AllowLoad]="IsCurrentTab('Product Prices')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Vendors" [Visible]="record.IsSaved"> 
+                        Product Vendors
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Vendors','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Product Vendors')"
+                            [AllowLoad]="IsCurrentTab('Product Vendors')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Batches" [Visible]="record.IsSaved"> 
+                        Batches
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Batches','FunctionalCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Batches')"
+                            [AllowLoad]="IsCurrentTab('Batches')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','CreditLimitCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Referrals" [Visible]="record.IsSaved"> 
+                        Referrals
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Referrals','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Referrals')"
+                            [AllowLoad]="IsCurrentTab('Referrals')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payments" [Visible]="record.IsSaved"> 
+                        Payments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payments','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Payments')"
+                            [AllowLoad]="IsCurrentTab('Payments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Payment Types" [Visible]="record.IsSaved"> 
+                        Payment Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Payment Types','ServiceChargeFlatFeeCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Payment Types')"
+                            [AllowLoad]="IsCurrentTab('Payment Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Market Place Listings" [Visible]="record.IsSaved"> 
+                        Market Place Listings
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Market Place Listings','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Market Place Listings')"
+                            [AllowLoad]="IsCurrentTab('Market Place Listings')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Scheduled Transaction Groups" [Visible]="record.IsSaved"> 
+                        Scheduled Transaction Groups
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Transaction Groups','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Scheduled Transaction Groups')"
+                            [AllowLoad]="IsCurrentTab('Scheduled Transaction Groups')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Companies__dbo" [Visible]="record.IsSaved"> 
+                        Companies__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Companies__dbo','CreditLimitCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Companies__dbo')"
+                            [AllowLoad]="IsCurrentTab('Companies__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Advertising Rate Cards" [Visible]="record.IsSaved"> 
+                        Advertising Rate Cards
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Advertising Rate Cards','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Advertising Rate Cards')"
+                            [AllowLoad]="IsCurrentTab('Advertising Rate Cards')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Donor Advised Funds" [Visible]="record.IsSaved"> 
+                        Donor Advised Funds
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Donor Advised Funds','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Donor Advised Funds')"
+                            [AllowLoad]="IsCurrentTab('Donor Advised Funds')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Costs" [Visible]="record.IsSaved"> 
+                        Product Costs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Costs','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Product Costs')"
+                            [AllowLoad]="IsCurrentTab('Product Costs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Campaign Products" [Visible]="record.IsSaved"> 
+                        Campaign Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Campaign Products','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Campaign Products')"
+                            [AllowLoad]="IsCurrentTab('Campaign Products')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Hist Avg Costs" [Visible]="record.IsSaved"> 
+                        Product Hist Avg Costs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Hist Avg Costs','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Product Hist Avg Costs')"
+                            [AllowLoad]="IsCurrentTab('Product Hist Avg Costs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Grants" [Visible]="record.IsSaved"> 
+                        Grants
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grants','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Grants')"
+                            [AllowLoad]="IsCurrentTab('Grants')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Currency Spot Rates" [Visible]="record.IsSaved"> 
+                        Currency Spot Rates
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Currency Spot Rates','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Currency Spot Rates')"
+                            [AllowLoad]="IsCurrentTab('Currency Spot Rates')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Standing Orders" [Visible]="record.IsSaved"> 
+                        Standing Orders
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Standing Orders','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Standing Orders')"
+                            [AllowLoad]="IsCurrentTab('Standing Orders')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Cash Ctrl Batch Detail Allocs" [Visible]="record.IsSaved"> 
+                        Cash Ctrl Batch Detail Allocs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Cash Ctrl Batch Detail Allocs','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Cash Ctrl Batch Detail Allocs')"
+                            [AllowLoad]="IsCurrentTab('Cash Ctrl Batch Detail Allocs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Commission Payment Details" [Visible]="record.IsSaved"> 
+                        Commission Payment Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Commission Payment Details','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Commission Payment Details')"
+                            [AllowLoad]="IsCurrentTab('Commission Payment Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Donor Advised Fund Allocations" [Visible]="record.IsSaved"> 
+                        Donor Advised Fund Allocations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Donor Advised Fund Allocations','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Donor Advised Fund Allocations')"
+                            [AllowLoad]="IsCurrentTab('Donor Advised Fund Allocations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Prices" [Visible]="record.IsSaved"> 
+                        Product Prices
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Prices','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Product Prices')"
+                            [AllowLoad]="IsCurrentTab('Product Prices')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','LastDuesAmountCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Membership Enrollments" [Visible]="record.IsSaved"> 
+                        Membership Enrollments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Membership Enrollments','CompanyCreditLimitCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Membership Enrollments')"
+                            [AllowLoad]="IsCurrentTab('Membership Enrollments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Order Masters" [Visible]="record.IsSaved"> 
+                        Order Masters
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Order Masters','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Order Masters')"
+                            [AllowLoad]="IsCurrentTab('Order Masters')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Companies__dbo" [Visible]="record.IsSaved"> 
+                        Companies__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Companies__dbo','LastDuesAmountCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Companies__dbo')"
+                            [AllowLoad]="IsCurrentTab('Companies__dbo')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Membership Enrollments" [Visible]="record.IsSaved"> 
+                        Membership Enrollments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Membership Enrollments','PersonCreditLimitCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Membership Enrollments')"
+                            [AllowLoad]="IsCurrentTab('Membership Enrollments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','CompanyLastDuesAmountCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Meeting Transfers" [Visible]="record.IsSaved"> 
+                        Meeting Transfers
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Meeting Transfers','CurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Meeting Transfers')"
+                            [AllowLoad]="IsCurrentTab('Meeting Transfers')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Membership Enrollments" [Visible]="record.IsSaved"> 
+                        Membership Enrollments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Membership Enrollments','CompanyPreferredCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Membership Enrollments')"
+                            [AllowLoad]="IsCurrentTab('Membership Enrollments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','PreferredCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Membership Enrollments" [Visible]="record.IsSaved"> 
+                        Membership Enrollments
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Membership Enrollments','PersonCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Membership Enrollments')"
+                            [AllowLoad]="IsCurrentTab('Membership Enrollments')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Products" [Visible]="record.IsSaved"> 
+                        Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Products','CurrentAverageCostCurrencyTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Products')"
+                            [AllowLoad]="IsCurrentTab('Products')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

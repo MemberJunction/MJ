@@ -1,0 +1,47 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Answer Sheets" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Answer Sheet Answers" [Visible]="record.IsSaved"> 
+                        Answer Sheet Answers
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Answer Sheet Answers','AnswerSheetID')"  
+                            [NewRecordValues]="NewRecordValues('Answer Sheet Answers')"
+                            [AllowLoad]="IsCurrentTab('Answer Sheet Answers')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Certification Answer Sheets" [Visible]="record.IsSaved"> 
+                        Certification Answer Sheets
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Certification Answer Sheets','AnswerSheetID')"  
+                            [NewRecordValues]="NewRecordValues('Certification Answer Sheets')"
+                            [AllowLoad]="IsCurrentTab('Certification Answer Sheets')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

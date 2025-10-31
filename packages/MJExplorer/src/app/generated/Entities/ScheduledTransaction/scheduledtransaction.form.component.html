@@ -1,0 +1,99 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Scheduled Transactions" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Pledge Payment Schedules" [Visible]="record.IsSaved"> 
+                        Pledge Payment Schedules
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Pledge Payment Schedules','ScheduledTransactionID')"  
+                            [NewRecordValues]="NewRecordValues('Pledge Payment Schedules')"
+                            [AllowLoad]="IsCurrentTab('Pledge Payment Schedules')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Schedule Trans Account Entries" [Visible]="record.IsSaved"> 
+                        Schedule Trans Account Entries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Schedule Trans Account Entries','ScheduledTransactionID')"  
+                            [NewRecordValues]="NewRecordValues('Schedule Trans Account Entries')"
+                            [AllowLoad]="IsCurrentTab('Schedule Trans Account Entries')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Inventory Ledger Entry Transactions" [Visible]="record.IsSaved"> 
+                        Product Inventory Ledger Entry Transactions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Inventory Ledger Entry Transactions','ScheduledTransactionID')"  
+                            [NewRecordValues]="NewRecordValues('Product Inventory Ledger Entry Transactions')"
+                            [AllowLoad]="IsCurrentTab('Product Inventory Ledger Entry Transactions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Donor Advised Fund Allocations" [Visible]="record.IsSaved"> 
+                        Donor Advised Fund Allocations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Donor Advised Fund Allocations','ScheduledTransID')"  
+                            [NewRecordValues]="NewRecordValues('Donor Advised Fund Allocations')"
+                            [AllowLoad]="IsCurrentTab('Donor Advised Fund Allocations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Cost Details" [Visible]="record.IsSaved"> 
+                        Product Cost Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Cost Details','ScheduledTransactionID')"  
+                            [NewRecordValues]="NewRecordValues('Product Cost Details')"
+                            [AllowLoad]="IsCurrentTab('Product Cost Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Donor Advised Fund Allocations" [Visible]="record.IsSaved"> 
+                        Donor Advised Fund Allocations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Donor Advised Fund Allocations','ReverseScheduledTransID')"  
+                            [NewRecordValues]="NewRecordValues('Donor Advised Fund Allocations')"
+                            [AllowLoad]="IsCurrentTab('Donor Advised Fund Allocations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

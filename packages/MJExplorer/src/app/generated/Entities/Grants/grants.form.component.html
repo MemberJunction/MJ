@@ -1,0 +1,112 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Grants" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Grant Due Diligence Step Links" [Visible]="record.IsSaved"> 
+                        Grant Due Diligence Step Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grant Due Diligence Step Links','GrantID')"  
+                            [NewRecordValues]="NewRecordValues('Grant Due Diligence Step Links')"
+                            [AllowLoad]="IsCurrentTab('Grant Due Diligence Step Links')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Grant Report Payment Links" [Visible]="record.IsSaved"> 
+                        Grant Report Payment Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grant Report Payment Links','GrantID')"  
+                            [NewRecordValues]="NewRecordValues('Grant Report Payment Links')"
+                            [AllowLoad]="IsCurrentTab('Grant Report Payment Links')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Grants" [Visible]="record.IsSaved"> 
+                        Grants
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grants','ParentGrantID')"  
+                            [NewRecordValues]="NewRecordValues('Grants')"
+                            [AllowLoad]="IsCurrentTab('Grants')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Grant Reports" [Visible]="record.IsSaved"> 
+                        Grant Reports
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grant Reports','GrantID')"  
+                            [NewRecordValues]="NewRecordValues('Grant Reports')"
+                            [AllowLoad]="IsCurrentTab('Grant Reports')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Donor Advised Fund Allocations" [Visible]="record.IsSaved"> 
+                        Donor Advised Fund Allocations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Donor Advised Fund Allocations','GrantID')"  
+                            [NewRecordValues]="NewRecordValues('Donor Advised Fund Allocations')"
+                            [AllowLoad]="IsCurrentTab('Donor Advised Fund Allocations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Grant Disbursements" [Visible]="record.IsSaved"> 
+                        Grant Disbursements
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grant Disbursements','SubGrantID')"  
+                            [NewRecordValues]="NewRecordValues('Grant Disbursements')"
+                            [AllowLoad]="IsCurrentTab('Grant Disbursements')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Grant Disbursements" [Visible]="record.IsSaved"> 
+                        Grant Disbursements
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Grant Disbursements','GrantID')"  
+                            [NewRecordValues]="NewRecordValues('Grant Disbursements')"
+                            [AllowLoad]="IsCurrentTab('Grant Disbursements')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

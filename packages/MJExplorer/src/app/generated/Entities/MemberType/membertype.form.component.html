@@ -16,14 +16,79 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Members" [Visible]="record.IsSaved"> 
-                        Members
+                    <mj-tab Name="Member Types" [Visible]="record.IsSaved"> 
+                        Member Types
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Members','MemberTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Members')"
-                            [AllowLoad]="IsCurrentTab('Members')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Member Types','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Member Types')"
+                            [AllowLoad]="IsCurrentTab('Member Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Campaign Products" [Visible]="record.IsSaved"> 
+                        Campaign Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Campaign Products','MemberTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Campaign Products')"
+                            [AllowLoad]="IsCurrentTab('Campaign Products')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Campaign Product Categories" [Visible]="record.IsSaved"> 
+                        Campaign Product Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Campaign Product Categories','MemberTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Campaign Product Categories')"
+                            [AllowLoad]="IsCurrentTab('Campaign Product Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Product Prices" [Visible]="record.IsSaved"> 
+                        Product Prices
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Prices','MemberTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Product Prices')"
+                            [AllowLoad]="IsCurrentTab('Product Prices')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="People" [Visible]="record.IsSaved"> 
+                        People
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('People','MemberTypeID')"  
+                            [NewRecordValues]="NewRecordValues('People')"
+                            [AllowLoad]="IsCurrentTab('People')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Companies__dbo" [Visible]="record.IsSaved"> 
+                        Companies__dbo
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Companies__dbo','MemberTypeID')"  
+                            [NewRecordValues]="NewRecordValues('Companies__dbo')"
+                            [AllowLoad]="IsCurrentTab('Companies__dbo')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
