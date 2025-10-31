@@ -3,6 +3,7 @@ import { Metadata, RunView, LogError, EntitySaveOptions } from '@memberjunction/
 import { NewUserBase } from './newUsers.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { configInfo } from '../config.js';
+import { UserEntity } from '@memberjunction/core-entities';
 
 /**
  * This example class subclasses the @NewUserBase class and overrides the createNewUser method to create a new person record and then call the base class to create the user record. In this example there is an entity
@@ -13,7 +14,7 @@ import { configInfo } from '../config.js';
 //       so that your class is actually used.
 //@RegisterClass(NewUserBase, undefined, 1) /*by putting 1 into the priority setting, MJGlobal ClassFactory will use this instead of the base class as that registration had no priority*/
 export class ExampleNewUserSubClass extends NewUserBase {
-  public override async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string) {
+  public override async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<UserEntity | null> {
     try {
       const md = new Metadata();
 
