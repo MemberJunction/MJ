@@ -19,6 +19,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@memberjunction/core": "2.113.2",
     "@memberjunction/data-context": "2.113.2",
     "@memberjunction/global": "2.113.2",
     "mssql": "^11.0.1"
