@@ -520,7 +520,7 @@ export class FlowAgentType extends BaseAgentType {
                 return this.createNextStep('Sub-Agent', {
                     subAgent: {
                         name: subAgentName,
-                        message: node.Description || `Execute sub-agent: ${subAgentName}`,
+                        message: node.Description || '',
                         terminateAfter: false
                     },
                     terminate: false,

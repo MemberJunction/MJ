@@ -3048,11 +3048,12 @@ The context is now within limits. Please retry your request with the recovered c
             messages.push(contextMessage);
         }
 
-        // Always add the task message (for all modes)
-        messages.push({
-            role: 'user',
-            content: subAgentRequest.message
-        });
+        if (subAgentRequest.message) {
+            messages.push({
+                role: 'user',
+                content: subAgentRequest.message
+            });
+        }
 
         return messages;
     }

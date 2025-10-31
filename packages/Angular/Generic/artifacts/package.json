@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-artifacts",
-  "version": "2.113.2",
+  "version": "2.114.0",
   "description": "MemberJunction: Artifact viewer plugin system for rendering different artifact types (JSON, Code, Markdown, HTML, SVG, Components)",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,13 +24,13 @@
     "@angular/platform-browser": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core": "2.113.2",
-    "@memberjunction/global": "2.113.2",
-    "@memberjunction/core-entities": "2.113.2",
-    "@memberjunction/ng-base-types": "2.113.2",
-    "@memberjunction/ng-code-editor": "2.113.2",
-    "@memberjunction/ng-react": "2.113.2",
-    "@memberjunction/ng-notifications": "2.113.2",
+    "@memberjunction/core": "2.114.0",
+    "@memberjunction/global": "2.114.0",
+    "@memberjunction/core-entities": "2.114.0",
+    "@memberjunction/ng-base-types": "2.114.0",
+    "@memberjunction/ng-code-editor": "2.114.0",
+    "@memberjunction/ng-react": "2.114.0",
+    "@memberjunction/ng-notifications": "2.114.0",
     "@angular/cdk": "18.0.2",
     "tslib": "^2.3.0",
     "rxjs": "^7.8.1",

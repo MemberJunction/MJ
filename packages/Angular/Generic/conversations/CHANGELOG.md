@@ -1,5 +1,28 @@
 # @memberjunction/ng-conversations
 
+## 2.114.0
+
+### Minor Changes
+
+- a17ec8e: Migration
+
+### Patch Changes
+
+- 12ae685: chat mobile fixes
+  - @memberjunction/ai-engine-base@2.114.0
+  - @memberjunction/ai@2.114.0
+  - @memberjunction/ai-core-plus@2.114.0
+  - @memberjunction/ng-artifacts@2.114.0
+  - @memberjunction/ng-base-types@2.114.0
+  - @memberjunction/ng-code-editor@2.114.0
+  - @memberjunction/ng-container-directives@2.114.0
+  - @memberjunction/ng-notifications@2.114.0
+  - @memberjunction/ng-tasks@2.114.0
+  - @memberjunction/graphql-dataprovider@2.114.0
+  - @memberjunction/core@2.114.0
+  - @memberjunction/core-entities@2.114.0
+  - @memberjunction/global@2.114.0
+
 ## 2.113.2
 
 ### Patch Changes

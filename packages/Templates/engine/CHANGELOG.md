@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/templates
 
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.114.0
+- @memberjunction/aiengine@2.114.0
+- @memberjunction/ai-provider-bundle@2.114.0
+- @memberjunction/core@2.114.0
+- @memberjunction/core-entities@2.114.0
+- @memberjunction/global@2.114.0
+- @memberjunction/templates-base-types@2.114.0
+
 ## 2.113.2
 
 ### Patch Changes
