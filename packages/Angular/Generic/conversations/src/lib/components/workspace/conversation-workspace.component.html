@@ -12,8 +12,16 @@
   </div>
 
   <div class="workspace-content">
+    <!-- Mobile sidebar backdrop -->
+    @if (isMobileView && isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks') {
+      <div class="mobile-sidebar-backdrop visible" (click)="closeSidebar()"></div>
+    }
+
     <!-- Left Sidebar (hidden when Collections or Tasks view is active) -->
-    <div class="workspace-sidebar" *ngIf="isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks'" [style.width.px]="sidebarWidth">
+    <div class="workspace-sidebar"
+         *ngIf="activeTab !== 'collections' && activeTab !== 'tasks'"
+         [class.open]="isSidebarVisible"
+         [style.width.px]="sidebarWidth">
       <mj-conversation-sidebar
         [activeTab]="activeTab"
         [environmentId]="environmentId"
