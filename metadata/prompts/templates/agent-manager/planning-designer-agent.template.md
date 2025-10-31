@@ -465,57 +465,108 @@ When Agent Manager asks you to "CREATE A MODIFICATION PLAN", you analyze the exi
 
 ### Modification Plan Structure (Markdown)
 
+**🚨 CRITICAL: When to Include IDs vs Leave Empty**
+
+The modification plan describes changes to the existing agent (already in payload). Understanding when to include IDs is crucial:
+
+**Include Actual IDs (from research or payload)**:
+- ✅ **Adding existing agent as related subagent**: ID from "Find Candidate Agents" search results
+- ✅ **Adding existing action**: ID from "Find Candidate Actions" search results
+- ✅ **Updating existing subagent/action/prompt**: ID from payload (e.g., payload.SubAgents[0].ID)
+- ✅ **Deleting existing item**: ID from payload to identify which item to remove
+
+**Leave ID Empty (creating brand new)**:
+- ❌ **Creating new child subagent** (not in search results): Empty ID - system generates it
+- ❌ **Creating new prompt**: Empty ID - system generates it
+
+**Key Distinction**:
+- "Adding existing X" = reusing something that already exists → **needs ID**
+- "Creating new X" = making something brand new → **empty ID**
+
+Use **imperative verbs** (ADD, UPDATE, DELETE, APPEND, REPLACE) and show full structures.
+
 ```markdown
 # Modification Plan for [Agent Name]
 
-## Current State
-- Agent Type: [Loop/Flow]
-- Current Actions: [list with IDs and names]
-- Current SubAgents: [list with IDs and names]
-- Current Capabilities: [summary of what it can do]
-
-## User Request
-[What the user asked for]
-
 ## Research Findings
-### Available Actions
-- [Action Name] (ID: [guid]) - [why it fits]
+- Called "Find Candidate Agents": Found [Agent Name] (ID: xxx)
+- Called "Find Candidate Actions": Found [Action Name] (ID: xxx)
 
-### Available Agents
-- [Agent Name] (ID: [guid]) - [why it fits]
+## Modifications
 
-### Database Schema (if applicable)
-- Entity: [name]
-- Fields: [list]
+### 1. ADD Existing Agent as Related SubAgent (example)
+**Instruction**: APPEND to `SubAgents` array
 
-## Recommended Changes
+**Full Structure**:
+```json
+{
+  "Type": "related",
+  "SubAgent": {
+    "ID": "ACTUAL-GUID-FROM-FIND-CANDIDATE-AGENTS",  // ✅ Required - existing agent
+    "Name": "Database Research Agent",
+    "Description": "from search results",
+    "TypeID": "from search results",
+    "Status": "Active",
+    "ModelSelectionMode": "Agent",
+    "PayloadDownstreamPaths": ["*"],
+    "PayloadUpstreamPaths": ["*"]
+  }
+}
+```
+**Rationale**: [Why this existing agent is needed]
+**Before/After**: [N] → [N+1] items
 
-### Add
-- **Action**: [name] (ID: [guid])
-  - **Why**: [rationale]
-  - **How it helps**: [explanation]
+### 1b. CREATE New Child SubAgent (example - only if no existing agent fits)
+**Instruction**: CREATE new agent and APPEND to `SubAgents` array
 
-- **SubAgent**: [name] (ID: [guid])
-  - **Why**: [rationale]
-  - **How it helps**: [explanation]
+**Full Structure**:
+```json
+{
+  "Type": "child",
+  "SubAgent": {
+    "ID": "",  // ❌ Empty - brand new agent
+    "Name": "New Specialized Agent",
+    "Description": "what this new agent does",
+    "TypeID": "Loop or Flow type ID",
+    "Status": "Active",
+    "Prompts": [
+      {
+        "ID": "",  // ❌ Empty - brand new prompt
+        "PromptText": "full prompt for new agent",
+        "PromptRole": "System",
+        "PromptPosition": "First"
+      }
+    ]
+  }
+}
+```
+**Rationale**: [Why new agent needed - why existing agents don't fit]
+**Before/After**: [N] → [N+1] items
 
-### Remove
-- **[Item]**: [name]
-  - **Why**: [rationale - redundant, outdated, etc.]
+### 2. UPDATE Existing Prompt (example)
+**Instruction**: UPDATE PromptText of existing prompt
 
-### Update
-- **Prompt**: Update main prompt to include instructions for new capabilities
-  - **Add**: [specific instructions]
-- **Description**: Update to reflect new capabilities
+**Prompt to Update**:
+- **ID**: "GUID-FROM-PAYLOAD-PROMPTS-ARRAY"  // ✅ Required - identifies which prompt
+- **Name**: "Main System Prompt"
 
-## Updated Workflow
-[Explain how the modified agent will work]
+**Add to PromptText** (after [section]):
+```
+## Using Database Research Agent
+- When: Before doing new research, check existing records
+- How: Call Database Research Agent with "Find [Entity] where [criteria]"
+```
+**Rationale**: Prompt must include instructions for new capability
 
-## Validation
-- ✅ No redundant actions/subagents
-- ✅ All IDs are from actual research results
-- ✅ Database entities verified (if applicable)
-- ✅ Prompt updated to use new capabilities
+### 3. DELETE Redundant Item (example)
+**Instruction**: REMOVE from `Actions` array
+
+**Item to Delete**:
+- **ID**: "GUID-FROM-PAYLOAD-ACTIONS-ARRAY"  // ✅ Required - identifies which action
+- **Name**: "Execute Research Query"
+
+**Rationale**: Redundant - Database Research Agent already has this capability
+**Before/After**: [N] → [N-1] items
 ```
 
 ### Return Modification Plan
@@ -530,22 +581,6 @@ Return to parent with ONLY the `modificationPlan` field updated:
 - Update prompts to use new features
 
 ---
-
-## Context
-- **Functional Requirements**: {{ FunctionalRequirements }}
-- **User Request**: {{ agentManagerContext }}
-- **Available Actions**: Use "Find Candidate Actions" action to find actions that we can use to solve task. Use "Find Candidate Agents" action to find existing agents that we can use as RELATED SUBAGENT to solve task.
-
-## Available Artifact Types
-
-When designing agents that produce artifacts, you should assign an appropriate `DefaultArtifactTypeID`. The following artifact types are available:
-
-{% for artifactType in ARTIFACT_TYPES %}
-### {{ artifactType.Name }}
-- **ID**: `{{ artifactType.ID }}`
-- **Description**: {{ artifactType.Description }}
-{% endfor %}
-
 ### Artifact Type Selection Guidelines
 
 **Include `DefaultArtifactTypeID` in your TechnicalDesign when**:
