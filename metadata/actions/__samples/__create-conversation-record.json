@@ -1,0 +1,73 @@
+{
+  "$comment": "Example: Simple Entity CRUD Wrapper - Create Operation",
+  "Name": "Create Conversation Record",
+  "Type": "Generated",
+  "Category": "Examples",
+  "Status": "Active",
+  "CodeApprovalStatus": "Pending",
+  "CodeLocked": false,
+  "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+  "Description": "Creates a new Conversation record with entity-specific parameters instead of requiring generic EntityName and Fields parameters. Demonstrates the child action pattern for simplified CRUD operations.",
+  "UserPrompt": "Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters",
+  "UserComments": "This is a simple example of the child action pattern. It wraps the generic 'Create Record' action and provides entity-specific parameters for the Conversations table. The AI will automatically generate parameters for all Conversations fields, mark UserID and Type as required (based on entity schema), and create an output parameter for the new ConversationID.",
+  "ForceCodeGeneration": false,
+  "ExpectedOutcome": {
+    "Parameters": [
+      {
+        "Name": "UserID",
+        "Type": "Input",
+        "IsRequired": true,
+        "Description": "The user who owns the conversation"
+      },
+      {
+        "Name": "Type",
+        "Type": "Input",
+        "IsRequired": true,
+        "Description": "The type of conversation"
+      },
+      {
+        "Name": "Name",
+        "Type": "Input",
+        "IsRequired": false,
+        "Description": "Optional conversation name"
+      },
+      {
+        "Note": "... other Conversations entity fields ...",
+        "Comment": "AI generates parameters for all entity fields"
+      },
+      {
+        "Name": "ConversationID",
+        "Type": "Output",
+        "IsRequired": false,
+        "Description": "The ID of the newly created conversation"
+      }
+    ],
+    "ResultCodes": [
+      {
+        "ResultCode": "Success",
+        "IsSuccess": true,
+        "Description": "Conversation record created successfully"
+      },
+      {
+        "ResultCode": "ValidationError",
+        "IsSuccess": false,
+        "Description": "Required fields (UserID, Type) are missing"
+      },
+      {
+        "ResultCode": "ParentActionFailed",
+        "IsSuccess": false,
+        "Description": "The parent Create Record action failed"
+      },
+      {
+        "ResultCode": "ParentActionError",
+        "IsSuccess": false,
+        "Description": "Error invoking parent action"
+      },
+      {
+        "ResultCode": "MissingOutput",
+        "IsSuccess": false,
+        "Description": "Failed to retrieve ConversationID from parent result"
+      }
+    ]
+  }
+}
