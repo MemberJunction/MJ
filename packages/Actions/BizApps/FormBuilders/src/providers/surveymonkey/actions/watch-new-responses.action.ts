@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Watch for New SurveyMonkey Responses')
+@RegisterClass(BaseAction, 'WatchNewSurveyMonkeyResponsesAction')
 export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -86,12 +86,12 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
             const responsesByType: Record<string, any[]> = {};
             if (newResponses.length > 0) {
                 const firstResponse = newResponses[0];
-                for (const answer of firstResponse.answers) {
+                for (const answer of firstResponse.answerDetails) {
                     responsesByType[answer.fieldType] = [];
                 }
 
                 for (const response of newResponses) {
-                    for (const answer of response.answers) {
+                    for (const answer of response.answerDetails) {
                         if (!responsesByType[answer.fieldType]) {
                             responsesByType[answer.fieldType] = [];
                         }
@@ -218,4 +218,11 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadWatchNewSurveyMonkeyResponsesAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

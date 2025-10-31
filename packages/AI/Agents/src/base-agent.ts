@@ -1050,27 +1050,33 @@ export class BaseAgent {
             };
         }
 
-        // Find the system prompt (optional)
+        // Get the agent type instance to check if agent-level prompts are required
+        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
+        const requiresAgentLevelPrompts = agentTypeInstance.RequiresAgentLevelPrompts;
+
+        // Find the system prompt (optional for some agent types)
         const systemPrompt = engine.Prompts.find(p => p.ID === agentType.SystemPromptID);
 
-        if (!systemPrompt)
+        if (!systemPrompt) {
             metadataOptional = true; // If no system prompt, we can skip some validations
-        
-        // Find the first active agent prompt
+        }
+
+        // Find the first active agent prompt (optional for agent types that don't require them)
         const agentPrompt = engine.AgentPrompts
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
-        
-        if (!agentPrompt && !metadataOptional) {
+
+        if (!agentPrompt && !metadataOptional && requiresAgentLevelPrompts) {
             return {
                 success: false,
                 errorMessage: `No prompts configured for agent: ${agent.Name}`
             };
         }
 
-        // Find the actual prompt entity
-        const childPrompt = engine.Prompts.find(p => p.ID === agentPrompt?.PromptID);
-        if (!childPrompt && !metadataOptional) {
+        // Find the actual prompt entity (will be undefined for agent types with only step-level prompts)
+        const childPrompt = agentPrompt ? engine.Prompts.find(p => p.ID === agentPrompt.PromptID) : undefined;
+
+        if (!childPrompt && !metadataOptional && requiresAgentLevelPrompts) {
             return {
                 success: false,
                 errorMessage: `Child prompt not found for ID: ${agentPrompt?.PromptID}`
@@ -1147,9 +1153,9 @@ export class BaseAgent {
             this.logStatus(`🎯 Using agent default effort level: ${params.agent.DefaultPromptEffortLevel}`, true, params);
         } else {
             // If neither is set, effortLevel remains undefined and will fall back to prompt.EffortLevel in AIPromptRunner
-            // the issue thought is we really want the childPrompt.EffortLevel so we need to grab that and 
+            // the issue thought is we really want the childPrompt.EffortLevel so we need to grab that and
             // put it in place
-            if (childPrompt.EffortLevel !== undefined && childPrompt.EffortLevel !== null) {
+            if (childPrompt && childPrompt.EffortLevel !== undefined && childPrompt.EffortLevel !== null) {
                 promptParams.effortLevel = childPrompt.EffortLevel;
                 this.logStatus(`🎯 Using child prompt effort level: ${childPrompt.EffortLevel}`, true, params);
             }
@@ -1924,7 +1930,21 @@ export class BaseAgent {
         reason?: string;
     }> {
         const agent = params.agent;
-        
+
+        // Check absolute maximum iterations (safety net to prevent infinite loops)
+        const DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
+        const absoluteMaxIterations = params.absoluteMaxIterations ?? DEFAULT_ABSOLUTE_MAX_ITERATIONS;
+
+        if (agentRun.TotalPromptIterations && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
+            return {
+                exceeded: true,
+                type: 'iterations',
+                limit: absoluteMaxIterations,
+                current: agentRun.TotalPromptIterations,
+                reason: `Absolute maximum iteration safety limit of ${absoluteMaxIterations} exceeded. Current iterations: ${agentRun.TotalPromptIterations}. This is a system-wide safety measure to prevent infinite loops.`
+            };
+        }
+
         // Check cost limit
         if (agent.MaxCostPerRun && agentRun.TotalCost) {
             if (agentRun.TotalCost >= agent.MaxCostPerRun) {
@@ -2004,6 +2024,14 @@ export class BaseAgent {
      * @protected
      */
     protected isFatalPromptError(promptResult: AIPromptRunResult): boolean {
+        // First check error message for template rendering errors
+        if (promptResult?.errorMessage) {
+            const templateErrorPattern = /Failed to render/i;
+            if (templateErrorPattern.test(promptResult.errorMessage)) {
+                return true; // Template rendering errors are fatal
+            }
+        }
+
         // If no error info, not fatal (might be transient)
         if (!promptResult?.chatResult?.errorInfo) {
             return false;
@@ -2025,6 +2053,156 @@ export class BaseAgent {
         ];
 
         return fatalErrorTypes.includes(errorInfo.errorType);
+    }
+
+    /**
+     * Determines if an error is a configuration error that cannot be resolved by retrying.
+     * Configuration errors indicate issues with agent setup that need manual intervention.
+     *
+     * This method provides detailed diagnostic information to help identify what configuration
+     * is missing or incorrect.
+     *
+     * @param {any} error - The error object or Error instance
+     * @param {string} errorMessage - The error message string
+     * @param {AgentConfiguration} [config] - Optional agent configuration to check for missing pieces
+     * @returns {{isConfigError: boolean, detailedMessage: string}} Object with determination and detailed diagnostic message
+     * @protected
+     */
+    protected isConfigurationError(
+        errorMessage: string,
+        config?: AgentConfiguration
+    ): { isConfigError: boolean; detailedMessage: string } {
+        // Check for common configuration error patterns
+        const configErrorPatterns = [
+            {
+                pattern: /cannot read propert(y|ies) of (undefined|null)/i,
+                getMessage: () => {
+                    // Try to extract what property was being accessed
+                    const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
+                    const property = propertyMatch ? propertyMatch[1] : 'unknown property';
+
+                    let details = `Attempted to access property '${property}' on an undefined or null object.`;
+
+                    // Provide specific guidance based on the property name
+                    if (property.toLowerCase().includes('prompt')) {
+                        details += `\n\n🔧 Configuration Issue: Missing prompt configuration.`;
+                        if (config) {
+                            if (!config.childPrompt) {
+                                details += `\n   - Agent does not have a child prompt configured`;
+                                // Get agent-type-specific guidance
+                                if (this.AgentTypeInstance) {
+                                    const guidance = this.AgentTypeInstance.GetPromptConfigurationGuidance();
+                                    details += `\n${guidance}`;
+                                }
+                            }
+                            if (!config.systemPrompt) {
+                                details += `\n   - Agent type does not have a system prompt configured`;
+                            }
+                        }
+                    } else if (property.toLowerCase().includes('agent')) {
+                        details += `\n\n🔧 Configuration Issue: Missing agent configuration.`;
+                        details += `\n   - Ensure agent type is properly configured`;
+                        details += `\n   - Check that agent metadata is complete`;
+                    }
+
+                    return details;
+                }
+            },
+            {
+                pattern: /childprompt is (undefined|null|not defined)/i,
+                getMessage: () => {
+                    let details = `Agent is missing required child prompt configuration.\n\n` +
+                           `🔧 Configuration Fix:\n`;
+
+                    if (this.AgentTypeInstance) {
+                        const guidance = this.AgentTypeInstance.GetPromptConfigurationGuidance();
+                        details += `${guidance}`;
+                    } else {
+                        details += `   - Ensure agent has AI Agent Prompts relationship configured\n` +
+                                   `   - Verify that prompt exists in AI Prompts table and is active`;
+                    }
+
+                    return details;
+                }
+            },
+            {
+                pattern: /systemprompt is (undefined|null|not defined)/i,
+                getMessage: () => {
+                    return `Agent type is missing system prompt configuration.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Check agent type's SystemPromptID in AI Agent Types table\n` +
+                           `   - Verify system prompt exists and is active\n` +
+                           `   - Some agent types (like Flow) may not require system prompts`;
+                }
+            },
+            {
+                pattern: /no prompts configured/i,
+                getMessage: () => {
+                    return `Agent has no prompts configured.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Add at least one AI Agent Prompt relationship to this agent\n` +
+                           `   - Or for Flow agents: Add Prompt-type steps to the agent's step graph`;
+                }
+            },
+            {
+                pattern: /agent type not found/i,
+                getMessage: () => {
+                    return `Agent references an agent type that doesn't exist.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Verify TypeID in AI Agents table matches existing AI Agent Types record\n` +
+                           `   - Check that AIEngine.Instance.AgentTypes includes the required type\n` +
+                           `   - Ensure Config() has been called to load agent types`;
+                }
+            },
+            {
+                pattern: /child prompt not found/i,
+                getMessage: () => {
+                    return `Referenced child prompt doesn't exist or isn't loaded.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Check AI Agent Prompts relationship has valid PromptID\n` +
+                           `   - Verify prompt exists in AI Prompts table\n` +
+                           `   - Ensure AIEngine.Instance.Prompts includes the prompt`;
+                }
+            },
+            {
+                pattern: /agent configuration/i,
+                getMessage: () => {
+                    return `General agent configuration error.\n\n` +
+                           `🔧 Configuration Check:\n` +
+                           `   - Review agent metadata in AI Agents table\n` +
+                           `   - Check all foreign key relationships are valid\n` +
+                           `   - Verify agent type is properly configured`;
+                }
+            },
+            {
+                pattern: /Failed to render.*child prompt templates/i,
+                getMessage: () => {
+                    return `Template rendering error: ${errorMessage}\n\n` +
+                           `🔧 Template Configuration Fix:\n` +
+                           `   - Check nunjucks template syntax in prompt content\n` +
+                           `   - Use {% raw %}{{}}{% endraw %} for literal braces in examples\n` +
+                           `   - Verify all template variables are properly defined\n` +
+                           `   - Ensure template variables referenced in content exist in context`;
+                }
+            }
+        ];
+
+        // Check each pattern
+        for (const { pattern, getMessage } of configErrorPatterns) {
+            if (pattern.test(errorMessage)) {
+                const detailedMessage = getMessage();
+                return {
+                    isConfigError: true,
+                    detailedMessage: `Configuration Error: ${detailedMessage}\n\nOriginal Error: ${errorMessage}`
+                };
+            }
+        }
+
+        // Not a configuration error
+        return {
+            isConfigError: false,
+            detailedMessage: errorMessage
+        };
     }
 
     /**
@@ -2954,9 +3132,9 @@ The context is now within limits. Please retry your request with the recovered c
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 data: {
+                        ...params.data,
                         ...subAgentRequest.templateParameters,
-                        ...params.data, 
-                      }, // merge any template parameters, but override with explicitly provided data so that hallucinated input params don't override data provided by caller
+                      }, // merge parent data first, then override with template parameters so loop agents can dynamically override parent data
                 context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 // Add callback to link AgentRun ID immediately when created
@@ -3445,67 +3623,31 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     private async finalizeStepEntity(stepEntity: AIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
-        stepEntity.Status = success ? 'Completed' : 'Failed';
-        stepEntity.CompletedAt = new Date();
-        stepEntity.Success = success;
-        stepEntity.ErrorMessage = errorMessage || null;
-        
-        // Populate OutputData if provided
-        if (outputData) {
-            stepEntity.OutputData = JSON.stringify({
-                ...outputData,
-                context: {
-                    success,
-                    durationMs: stepEntity.CompletedAt.getTime() - stepEntity.StartedAt.getTime(),
-                    errorMessage
-                }
-            });
-        }
-        
-        if (!await stepEntity.Save()) {
-            console.error('Failed to update agent run step record');
-        }
-    }
-
-    /**
-     * Helper method to get a value from a nested object path
-     * Supports dot notation and array indexing
-     * @private
-     */
-    private getValueFromPath(obj: any, path: string): unknown {
-        const parts = path.split('.');
-        let current = obj;
-
-        for (const part of parts) {
-            if (!part) continue;
-
-            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
-
-            if (arrayMatch) {
-                const arrayName = arrayMatch[1];
-                const index = parseInt(arrayMatch[2], 10);
-
-                if (current && typeof current === 'object' && arrayName in current) {
-                    current = current[arrayName];
-
-                    if (Array.isArray(current) && index >= 0 && index < current.length) {
-                        current = current[index];
-                    } else {
-                        return undefined;
+        try {
+            stepEntity.Status = success ? 'Completed' : 'Failed';
+            stepEntity.CompletedAt = new Date();
+            stepEntity.Success = success;
+            stepEntity.ErrorMessage = errorMessage || null;
+            
+            // Populate OutputData if provided
+            if (outputData) {
+                stepEntity.OutputData = JSON.stringify({
+                    ...CopyScalarsAndArrays(outputData, true),
+                    context: {
+                        success,
+                        durationMs: stepEntity.CompletedAt.getTime() - stepEntity.StartedAt.getTime(),
+                        errorMessage
                     }
-                } else {
-                    return undefined;
-                }
-            } else {
-                if (current && typeof current === 'object' && part in current) {
-                    current = current[part];
-                } else {
-                    return undefined;
-                }
+                });
+            }
+            
+            if (!await stepEntity.Save()) {
+                console.error('Failed to update agent run step record');
             }
         }
-
-        return current;
+        catch (e) {
+            console.error('Failed to update agent run step record', e);
+        }
     }
 
     /**
@@ -3647,9 +3789,44 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                 }
                 else {
-                    // either task wasn't complete or was a sub-agent run in which case we ALWAYS process one more time
-                    // with the parent prompt
-                    return await this.executePromptStep(params, config, previousDecision);
+                    // Ask agent type how to handle this Success step
+                    const fallbackStep = await this.AgentTypeInstance.HandleStepFallback(
+                        previousDecision,
+                        config,
+                        params,
+                        previousDecision.newPayload || previousDecision.previousPayload,
+                        this.AgentTypeState
+                    );
+
+                    if (fallbackStep) {
+                        // Agent type provided custom handling (e.g., Flow agents terminate)
+
+                        // If agent type wants to terminate, create a step to log this decision for observability
+                        if (fallbackStep.terminate) {
+                            const terminationMessage = `Agent completed successfully. Agent type '${config.agentType.Name}' terminated execution.`;
+
+                            // Create termination step
+                            const stepEntity = await this.createStepEntity({
+                                stepType: 'Decision',
+                                stepName: terminationMessage,
+                                contextUser: params.contextUser,
+                                payloadAtStart: fallbackStep.previousPayload,
+                                payloadAtEnd: fallbackStep.newPayload
+                            });
+
+                            // Finalize immediately as completed
+                            await this.finalizeStepEntity(stepEntity, true, undefined, {
+                                reason: 'Agent type intervention - Success',
+                                agentType: config.agentType.Name,
+                                decision: 'Success'
+                            });
+                        }
+
+                        return fallbackStep;
+                    } else {
+                        // Agent type wants default behavior (e.g., Loop agents process with prompt)
+                        return await this.executePromptStep(params, config, previousDecision);
+                    }
                 }
             case 'Failed':
                 if (previousDecision.terminate) {
@@ -3661,9 +3838,60 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                 }
                 else {
-                    // we had a failure in the past step, but we are not terminating
-                    // so we will retry the prompt step
-                    return await this.executePromptStep(params, config, previousDecision);
+                    // Ask agent type how to handle this Failed step
+                    const fallbackStep = await this.AgentTypeInstance.HandleStepFallback(
+                        previousDecision,
+                        config,
+                        params,
+                        previousDecision.newPayload || previousDecision.previousPayload,
+                        this.AgentTypeState
+                    );
+
+                    if (fallbackStep) {
+                        // Agent type provided custom handling (e.g., Flow agents terminate)
+
+                        // If agent type wants to terminate, create a step to log this decision for observability
+                        if (fallbackStep.terminate) {
+                            const errorDetails = fallbackStep.errorMessage || 'No error details provided';
+                            const terminationMessage = `Agent failed. Agent type '${config.agentType.Name}' terminated execution: ${errorDetails}`;
+
+                            // Create termination step
+                            const stepEntity = await this.createStepEntity({
+                                stepType: 'Decision',
+                                stepName: terminationMessage,
+                                contextUser: params.contextUser,
+                                payloadAtStart: fallbackStep.previousPayload,
+                                payloadAtEnd: fallbackStep.newPayload
+                            });
+
+                            // Finalize as failed with error details
+                            await this.finalizeStepEntity(stepEntity, false, errorDetails, {
+                                reason: 'Agent type intervention - Failed',
+                                agentType: config.agentType.Name,
+                                decision: 'Failed'
+                            });
+
+                            // Also update the agent run's error message for top-level visibility
+                            if (this.AgentRun) {
+                                this.AgentRun.ErrorMessage = terminationMessage;
+                                await this.AgentRun.Save();
+                            }
+
+                            this.logError(`Agent type '${config.agentType.Name}' handling Failed step with termination`, {
+                                agent: params.agent,
+                                category: 'AgentExecution',
+                                metadata: {
+                                    errorDetails,
+                                    agentType: config.agentType.Name
+                                }
+                            });
+                        }
+
+                        return fallbackStep;
+                    } else {
+                        // Agent type wants default behavior (e.g., Loop agents retry with prompt)
+                        return await this.executePromptStep(params, config, previousDecision);
+                    }
                 }
             case 'ForEach':
                 return await this.executeForEachLoop(params, config, previousDecision);
@@ -3672,6 +3900,14 @@ The context is now within limits. Please retry your request with the recovered c
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
+    }
+
+    /**
+     * Returns the default payload self write paths for the agent. If not specified, it will return undefined
+     
+     */
+    private getDefaultPayloadSelfWritePaths(): string[] | undefined {
+        return undefined;
     }
 
     /**
@@ -3864,7 +4100,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // Parse the allowed paths if configured
                 const allowedPaths = params.agent.PayloadSelfWritePaths 
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
-                    : undefined;
+                    : this.getDefaultPayloadSelfWritePaths();
 
                 // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
@@ -3947,30 +4183,161 @@ The context is now within limits. Please retry your request with the recovered c
             // in this case, we have a failed prompt execution. In this situation, let's make sure our payload at end isn't adjusted as
             // that affects downstream things in the agent run
             // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
-            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload; 
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
             stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
-            await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
-            // instead retrun a helpful message in our return value that the parent loop can review and 
-            // adjust
+            // instead return a helpful message in our return value that the parent loop can review and adjust
             const errString = error?.message || error || 'Unknown error';
+
+            // Classify error type - configuration errors are fatal and should not be retried
+            const configCheck = this.isConfigurationError(errString, config);
+            const isConfigurationError = configCheck.isConfigError;
+            const detailedErrorMessage = configCheck.detailedMessage;
+
+            // Check guardrails to see if we've exceeded limits
+            const guardailCheck = await this.hasExceededAgentRunGuardrails(params, this.AgentRun);
+            const guardrailsExceeded = guardailCheck && guardailCheck.exceeded;
+
+            // Determine if we should terminate
+            // Terminate if: configuration error OR guardrails exceeded
+            const shouldTerminate = isConfigurationError || guardrailsExceeded;
+
+            // Build the error message for the step entity and return value
+            let finalErrorMessage: string;
+            if (isConfigurationError) {
+                finalErrorMessage = detailedErrorMessage;
+                this.logError(`❌ Configuration error in prompt execution (will terminate):\n${detailedErrorMessage}`, {
+                    agent: params.agent,
+                    category: 'AgentConfiguration',
+                    metadata: {
+                        error: CopyScalarsAndArrays(error, true)
+                    }
+                });
+            } else if (guardrailsExceeded) {
+                finalErrorMessage = `Guardrails exceeded: ${guardailCheck.reason}\n\nOriginal error: ${errString}`;
+                this.logError(`⛔ Guardrails exceeded during prompt execution: ${guardailCheck.reason}`, {
+                    agent: params.agent,
+                    category: 'Guardrails',
+                    metadata: {
+                        guardrailType: guardailCheck.type,
+                        limit: guardailCheck.limit,
+                        current: guardailCheck.current,
+                        originalError: errString
+                    }
+                });
+            } else {
+                finalErrorMessage = `Prompt execution failed: ${errString}`;
+                this.logError(`⚠️ Prompt execution error (will retry if guardrails allow): ${errString}`, {
+                    agent: params.agent,
+                    category: 'PromptExecution',
+                    metadata: {
+                        attemptNumber: this._agentRun?.TotalPromptIterations || 0,
+                        retryable: true,
+                        error: CopyScalarsAndArrays(error, true)
+                    }
+                });
+            }
+
+            // Finalize the step entity with the appropriate error message
+            await this.finalizeStepEntity(stepEntity, false, finalErrorMessage);
+
             const errorNextStep = {
-                errorMessage: `Prompt execution failed: ${errString}`,
+                errorMessage: finalErrorMessage,
                 step: 'Failed' as const,
-                terminate: false,
+                terminate: shouldTerminate,
                 previousPayload: payload,
                 newPayload: payload
             };
 
-            const guardailCheck = await this.hasExceededAgentRunGuardrails(params, this.AgentRun);
-            if(guardailCheck && guardailCheck.exceeded) {
-                errorNextStep.terminate = true;
-            };
             return errorNextStep;
         }
     }
 
+    /**
+     * Computes the upstream and downstream paths for a sub-agent based on the agent's payload paths.
+     * @param params 
+     * @param subAgentEntity 
+     * @param subAgentRequest 
+     * @returns 
+     */
+    private computeUpstreamDownstreamPaths<SC = any>(        
+        params: ExecuteAgentParams, 
+        subAgentEntity: AIAgentEntityExtended, 
+        subAgentRequest: AgentSubAgentRequest<SC>
+    ): { downstreamPaths: string[], upstreamPaths: string[] } {
+        let downstreamPaths: string[] = ['*'];
+        let upstreamPaths: string[] = ['*'];
+        
+        try {
+            // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
+            // until CodeGen runs after the migration to add these fields to AIAgentEntity
+            if (subAgentEntity.PayloadDownstreamPaths) {
+                downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
+            }
+            if (subAgentEntity.PayloadUpstreamPaths) {
+                upstreamPaths = JSON.parse(subAgentEntity.PayloadUpstreamPaths);
+            }
+        } catch (parseError) {
+            this.logError(`Failed to parse payload paths for sub-agent ${subAgentRequest.name}: ${parseError.message}`, {
+                category: 'SubAgentExecution',
+                metadata: {
+                    agentName: params.agent.Name,
+                    subAgentName: subAgentRequest.name,
+                    subAgentId: subAgentEntity.ID,
+                    downstreamPaths: subAgentEntity.PayloadDownstreamPaths,
+                    upstreamPaths: subAgentEntity.PayloadUpstreamPaths
+                }
+            });
+        }
+
+        return { downstreamPaths, upstreamPaths };
+    }
+
+    /**
+     * Computes the payload for a child sub-agent based on the agent's payload paths.
+     * @param params 
+     * @param subAgentEntity 
+     * @param downstreamPaths 
+     * @param subAgentRequest 
+     * @param previousDecision 
+     * @returns 
+     */
+    private async computeChildSubAgentPayload<SC = any, SR = any>(
+        params: ExecuteAgentParams, 
+        subAgentEntity: AIAgentEntityExtended,
+        downstreamPaths: string[],        
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        previousDecision?: BaseAgentNextStep<SR, SC>
+    ): Promise<any> {
+        // Extract only allowed downstream payload
+        let downstreamPayload = this._payloadManager.extractDownstreamPayload(
+            subAgentRequest.name,
+            previousDecision.newPayload,
+            downstreamPaths
+        );
+        
+        // Apply payload scope if defined
+        let scopedPayload = downstreamPayload;
+        if (subAgentEntity.PayloadScope) {
+            scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope) as Partial<SR>;
+            if (scopedPayload === null) {
+                // Critical failure - scope path doesn't exist in payload
+                const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
+                this.logError(errorMessage, {
+                    category: 'SubAgentExecution',
+                    metadata: {
+                        agentName: params.agent.Name,
+                        subAgentName: subAgentRequest.name,
+                        payloadScope: subAgentEntity.PayloadScope,
+                        availableKeys: Object.keys(downstreamPayload || {})
+                    }
+                });
+                throw new Error(errorMessage);
+            }
+        }
+        return scopedPayload
+    }
 
 
     /**
@@ -3978,10 +4345,14 @@ The context is now within limits. Please retry your request with the recovered c
      * Child agents use direct payload inheritance with downstream/upstream paths.
      *
      * @private
+     * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
+     * @param subAgentPayloadOverride - Optional payload override for sub-agent execution, if provided the normal payload computation is skipped
      */
     private async executeChildSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
+        parentStepId?: string,
+        subAgentPayloadOverride?: any
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
@@ -4024,63 +4395,20 @@ The context is now within limits. Please retry your request with the recovered c
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
-        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload });
+        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId });
         
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
         
         try {
             // Parse payload access paths
-            let downstreamPaths: string[] = ['*'];
-            let upstreamPaths: string[] = ['*'];
-            
-            try {
-                // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
-                // until CodeGen runs after the migration to add these fields to AIAgentEntity
-                if (subAgentEntity.PayloadDownstreamPaths) {
-                    downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
-                }
-                if (subAgentEntity.PayloadUpstreamPaths) {
-                    upstreamPaths = JSON.parse(subAgentEntity.PayloadUpstreamPaths);
-                }
-            } catch (parseError) {
-                this.logError(`Failed to parse payload paths for sub-agent ${subAgentRequest.name}: ${parseError.message}`, {
-                    category: 'SubAgentExecution',
-                    metadata: {
-                        agentName: params.agent.Name,
-                        subAgentName: subAgentRequest.name,
-                        subAgentId: subAgentEntity.ID,
-                        downstreamPaths: subAgentEntity.PayloadDownstreamPaths,
-                        upstreamPaths: subAgentEntity.PayloadUpstreamPaths
-                    }
-                });
+            const { downstreamPaths, upstreamPaths } = this.computeUpstreamDownstreamPaths(params, subAgentEntity, subAgentRequest);
+            let scopedPayload = null;
+            if (!subAgentPayloadOverride) {
+                scopedPayload = await this.computeChildSubAgentPayload<SC, SR>(params, subAgentEntity, downstreamPaths, subAgentRequest, previousDecision);
             }
-            
-            // Extract only allowed downstream payload
-            let downstreamPayload = this._payloadManager.extractDownstreamPayload(
-                subAgentRequest.name,
-                previousDecision.newPayload,
-                downstreamPaths
-            );
-            
-            // Apply payload scope if defined
-            let scopedPayload = downstreamPayload;
-            if (subAgentEntity.PayloadScope) {
-                scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope) as Partial<SR>;
-                if (scopedPayload === null) {
-                    // Critical failure - scope path doesn't exist in payload
-                    const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
-                    this.logError(errorMessage, {
-                        category: 'SubAgentExecution',
-                        metadata: {
-                            agentName: params.agent.Name,
-                            subAgentName: subAgentRequest.name,
-                            payloadScope: subAgentEntity.PayloadScope,
-                            availableKeys: Object.keys(downstreamPayload || {})
-                        }
-                    });
-                    throw new Error(errorMessage);
-                }
+            else {
+                scopedPayload = subAgentPayloadOverride; // we received a payload override, use it
             }
             
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
@@ -4328,10 +4656,14 @@ The context is now within limits. Please retry your request with the recovered c
      * Related agents (AgentRelationships) use message-based coupling with optional output mapping.
      *
      * @private
+     * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
+     * @param subAgentPayloadOverride - Optional payload override for sub-agent execution, if provided the normal payload computation is skipped
      */
     private async processSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
+        parentStepId?: string,
+        subAgentPayloadOverride?: any
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         const name = subAgentRequest?.name;
@@ -4355,7 +4687,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         if (childAgent) {
             // This is a child agent - use direct payload coupling
-            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision);
+            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision, parentStepId, subAgentPayloadOverride);
         }
 
         // Check for related agent
@@ -4372,7 +4704,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (relatedAgent && relatedAgent.Name.trim().toLowerCase() === name.trim().toLowerCase()) {
                 // This is a related agent - use message-based coupling
-                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship);
+                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship, parentStepId, subAgentPayloadOverride);
             }
         }
 
@@ -4397,12 +4729,15 @@ The context is now within limits. Please retry your request with the recovered c
      * Optional output mapping can merge sub-agent results back to parent payload.
      *
      * @private
+     * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      */
     private async executeRelatedSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision: BaseAgentNextStep<SR, SC>,
         subAgentEntity: AIAgentEntityExtended,
-        relationship: AIAgentRelationshipEntity
+        relationship: AIAgentRelationshipEntity,
+        parentStepId?: string,
+        subAgentPayloadOverride?: SR
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
 
@@ -4447,7 +4782,8 @@ The context is now within limits. Please retry your request with the recovered c
             contextUser: params.contextUser,
             targetId: subAgentEntity.ID,
             inputData,
-            payloadAtStart: previousDecision.newPayload
+            payloadAtStart: previousDecision.newPayload,
+            parentId: parentStepId
         });
 
         // Increment execution count for this sub-agent
@@ -4460,8 +4796,8 @@ The context is now within limits. Please retry your request with the recovered c
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
             // Prepare initial payload via input mapping (if configured)
-            let initialSubAgentPayload: SR | undefined = undefined;
-            if (relationship.SubAgentInputMapping) {
+            let initialSubAgentPayload: SR | undefined = subAgentPayloadOverride;
+            if (!initialSubAgentPayload && relationship.SubAgentInputMapping) {
                 const mapped = this.applySubAgentInputMapping(
                     previousDecision.newPayload as unknown as Record<string, unknown>,
                     relationship.SubAgentInputMapping
@@ -4925,7 +5261,8 @@ The context is now within limits. Please retry your request with the recovered c
                     actions,
                     currentPayload,
                     this.AgentTypeState,
-                    previousDecision
+                    previousDecision,
+                    params
                 );
             } catch (error) {
                 LogError(`Error in PreProcessActionStep: ${error.message}`);
@@ -4940,7 +5277,7 @@ The context is now within limits. Please retry your request with the recovered c
             let lastStep: AIAgentRunStepEntityExtended | undefined = undefined;
             const actionPromises = actions.map(async (aa) => {
                 // get all agent actions first for this agent
-                const actionEntity = actionEngine.Actions.find(a => a.Name === aa.name && agentActions.some(aa => aa.ActionID === a.ID));
+                const actionEntity = actionEngine.Actions.find(a => a.Name === aa.name && agentActions.some(agentAction => agentAction.ActionID === a.ID));
                 if (!actionEntity) {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
                 }
@@ -5090,7 +5427,7 @@ The context is now within limits. Please retry your request with the recovered c
                 if (payloadChangeRequest) {
                     const allowedPaths = params.agent.PayloadSelfWritePaths 
                         ? JSON.parse(params.agent.PayloadSelfWritePaths) 
-                        : undefined;
+                        : this.getDefaultPayloadSelfWritePaths();
                     
                     const changeResult = this._payloadManager.applyAgentChangeRequest(
                         currentPayload,
@@ -5533,13 +5870,24 @@ The context is now within limits. Please retry your request with the recovered c
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
                 { item, itemVariable: forEach.itemVariable,index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
             );
-            const resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
+            let resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
 
             // Execute action, sub-agent, or prompt
             let result;
             if (forEach.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(forEach.action.name, params.agent.ID, params.agent.Name, params);
+
+                // Create context for template resolution
+                const context = {
+                    item,
+                    index,
+                    payload: currentPayload,
+                    data: params.data
+                };
+
+                // Resolve action parameters using templates
+                resolvedParams = this.resolveTemplates(resolvedParams, context, forEach.itemVariable);
                 const resolvedAction = {
                     name: matchedAction.Action,
                     params: resolvedParams
@@ -5548,7 +5896,7 @@ The context is now within limits. Please retry your request with the recovered c
                 result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, item);
             } else {
                 throw new Error('ForEach missing action/subAgent');
             }
@@ -5784,13 +6132,25 @@ The context is now within limits. Please retry your request with the recovered c
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
                 { item: attemptContext, index, itemVariable: whileOp.itemVariable, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} }
             );
-            const resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
+            let resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
 
             // Execute action or sub-agent
             let result;
             if (whileOp.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(whileOp.action.name, params.agent.ID, params.agent.Name, params);
+
+                // Create context for template resolution
+                const context = {
+                    item: attemptContext,
+                    index,
+                    payload: currentPayload,
+                    data: params.data
+                };
+                
+                // Resolve action parameters using templates 
+                resolvedParams = this.resolveTemplates(resolvedParams, context, whileOp.itemVariable || 'item');
+
                 const resolvedAction = {
                     name: matchedAction.Action,
                     params: resolvedParams
@@ -5799,7 +6159,7 @@ The context is now within limits. Please retry your request with the recovered c
                 result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, attemptContext);
             } else {
                 throw new Error('While missing action/subAgent');
             }
@@ -6590,6 +6950,111 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.verbose) {
             console.log(`[Turn ${currentTurn}] Expanded message at index ${messageIndex}`);
         }
+    }
+
+    /**
+     * Generic template resolver for loop iterations - extracts from LoopAgentType to make available to all agent types
+     * Resolves templates like {{item.field}}, {{index}}, etc. in action parameters and sub-agent payloads
+     */
+    protected resolveTemplates(
+        obj: Record<string, unknown>,
+        context: Record<string, any>,
+        itemVariable: string
+    ): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string') {
+                result[key] = this.resolveValueFromContext(value, context, itemVariable);
+            } else if (Array.isArray(value)) {
+                result[key] = value.map(v =>
+                    typeof v === 'string' ? this.resolveValueFromContext(v, context, itemVariable) : v
+                );
+            } else if (typeof value === 'object' && value !== null) {
+                result[key] = this.resolveTemplates(value as Record<string, unknown>, context, itemVariable);
+            } else {
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Resolves a value from context using variable references - extracts from LoopAgentType
+     */
+    protected resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
+        // check to see if value is wrapped in a nunjucks style template like {{variable}} and
+        // if so, remove that wrapping to get the actual variable name.
+        // we only do this if the string starts and ends with the {{ }} pattern
+        // and we trim whitespace first
+        const trimmedValue = value.trim();
+        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
+            value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
+        }
+
+        // first check itemVariable name
+        const ivToLower = itemVariable?.trim().toLowerCase();
+        if (value?.toLowerCase().startsWith(`${ivToLower}.`)) {
+            const path = value.substring(ivToLower.length + 1);
+            return this.getValueFromPath(context.item, path);
+        }
+
+        // Check for direct context variable references
+        for (const [varName, varValue] of Object.entries(context)) {
+            if (value === varName) {
+                return varValue;
+            }
+
+            if (value?.trim().toLowerCase().startsWith(`${varName}.`)) {
+                const path = value.substring(varName.length + 1);
+                return this.getValueFromPath(varValue, path);
+            }
+        }
+
+        // Static value
+        return value;
+    }
+
+    /**
+     * Helper to get value from nested object path - extracts from LoopAgentType
+     */
+    protected getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+
+        for (const part of parts) {
+            if (!part) continue;
+
+            // Check for array indexing
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
+            } else {
+                // Regular property access
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
+            }
+        }
+
+        return current;
     }
 }
 

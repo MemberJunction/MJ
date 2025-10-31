@@ -1,5 +1,13 @@
 # @memberjunction/ai-openrouter
 
+## 2.113.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.113.2
+- @memberjunction/ai-openai@2.113.2
+- @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

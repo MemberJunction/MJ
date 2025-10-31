@@ -33,7 +33,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Update JotForm')
+@RegisterClass(BaseAction, 'UpdateJotFormAction')
 export class UpdateJotFormAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -251,4 +251,11 @@ export class UpdateJotFormAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadUpdateJotFormAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

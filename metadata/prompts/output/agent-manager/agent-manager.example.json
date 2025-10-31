@@ -1,17 +1,200 @@
 {
-  "action": "call_subagent",
-  "subagent": "Requirements Analyst Agent",
-  "input": {
-    "userRequest": "Create an agent that can analyze customer feedback and generate weekly summary reports",
-    "payload": {
-      "metadata": {
-        "sessionId": "session-12345",
-        "status": "requirements",
-        "originalRequest": "Create an agent that can analyze customer feedback and generate weekly summary reports",
-        "lastModifiedBy": "Agent Manager"
-      }
+  "description": "Agent Manager orchestrates the entire creation and modification workflow. It calls sub-agents, presents plans to users, and waits for approval.",
+
+  "example_1_creation_workflow_calling_requirements_analyst": {
+    "description": "Agent Manager starts creation workflow by calling Requirements Analyst",
+    "action": "call_subagent",
+    "subagent": "Requirements Analyst Agent",
+    "payloadChangeRequest": {
+      "comment": "No payload changes needed - Requirements Analyst will write to FunctionalRequirements"
+    },
+    "chat": {
+      "message": "I'll help you create an agent to analyze customer feedback and generate weekly reports. Let me start by gathering detailed requirements to ensure we build exactly what you need.",
+      "suggestedResponses": null
     }
   },
-  "reasoning": "Starting with requirements gathering to fully understand the needs for the customer feedback analysis agent before proceeding with design.",
-  "expectedNextSteps": "## Next Steps\n\n1. **Requirements Gathering** - Requirements Analyst will clarify:\n   - Business objectives and success criteria\n   - Technical requirements and constraints\n   - Stakeholder needs and expectations\n\n2. **Agent Design** - Planning Designer will create:\n   - Agent hierarchy and structure\n   - Action selection and configuration\n   - Data flow and execution strategy\n\n3. **Prompt Engineering** - Prompt Designer will craft:\n   - System prompts for each agent\n   - Template variables and examples\n   - Optimization recommendations\n\n4. **Implementation** - Agent Manager will:\n   - Create agents using metadata actions\n   - Configure prompts and associations\n   - Validate complete configuration"
+
+  "example_2_presenting_draft_requirements_questions": {
+    "description": "After Requirements Analyst returns DRAFT with questions, Agent Manager presents them conversationally",
+    "action": "continue",
+    "payloadChangeRequest": null,
+    "chat": {
+      "message": "I need a bit more information to design the best agent for you:\n\n1. **Data Sources**: Where should the agent collect feedback from - database tables, external APIs, file uploads?\n\n2. **Analysis Type**: What kind of analysis do you need - sentiment analysis, topic categorization, trend identification?\n\n3. **Report Delivery**: How should the weekly reports be delivered - email, database, dashboard, file export?\n\n4. **Scheduling**: When should the report run - specific day/time, automated, or manual trigger?\n\n5. **Success Criteria**: How will you measure if this agent is working well?\n\nCould you help me understand these points?",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_3_calling_planning_designer": {
+    "description": "After FunctionalRequirements is complete, Agent Manager calls Planning Designer for technical design",
+    "action": "call_subagent",
+    "subagent": "Planning Designer Agent",
+    "payloadChangeRequest": {
+      "comment": "FunctionalRequirements already in payload from Requirements Analyst. Planning Designer will add TechnicalDesign."
+    },
+    "chat": {
+      "message": "Great! I have a clear picture of what you need. Let me design the technical architecture for your Customer Feedback Analyzer agent.",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_4_presenting_design_plan_for_approval": {
+    "description": "CRITICAL: Agent Manager MUST present the design plan and WAIT for user approval before proceeding",
+    "action": "continue",
+    "payloadChangeRequest": null,
+    "chat": {
+      "message": "Here's the plan I've designed for your Customer Feedback Analyzer agent:\n\n**Main Agent**: Customer Feedback Analyzer (Loop agent)\n- Orchestrates the weekly analysis workflow\n- Runs on a schedule every Monday at 8 AM\n\n**Sub-Agents**:\n- **Database Research Agent** - Queries the CustomerFeedback table for the past week's data\n\n**Actions**:\n- **Text Analyzer** - Performs sentiment analysis on feedback text\n- **Send Single Message** - Emails the weekly report to product@company.com and support@company.com\n\n**Workflow**:\n1. Database Research Agent collects feedback from the CustomerFeedback table\n2. Text Analyzer analyzes each feedback item for sentiment and themes\n3. Aggregate insights: total count, sentiment breakdown, top themes, critical issues\n4. Generate HTML email report with summary and recommendations\n5. Send Single Message emails the report to stakeholders\n\n**What Gets Saved**:\n- Analysis results can be tracked in the email history\n- Reports include week-over-week comparisons\n\nDoes this plan look good, or would you like me to adjust anything?",
+      "suggestedResponses": [
+        {"label": "Looks good, proceed", "value": "approve"},
+        {"label": "Can you simplify this?", "value": "simplify"},
+        {"label": "Add database persistence", "value": "add_persistence"}
+      ]
+    }
+  },
+
+  "example_5_after_approval_calling_architect": {
+    "description": "After user approves, Agent Manager automatically calls Architect (no need to ask again)",
+    "action": "call_subagent",
+    "subagent": "Architect Agent",
+    "payloadChangeRequest": {
+      "comment": "Payload already has FunctionalRequirements and TechnicalDesign. Architect will validate and populate all AgentSpec fields."
+    },
+    "chat": {
+      "message": "Perfect! I'm validating the agent specification now...",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_6_after_architect_calling_builder": {
+    "description": "After Architect returns validated AgentSpec, Agent Manager automatically calls Builder",
+    "action": "call_subagent",
+    "subagent": "Builder Agent",
+    "payloadChangeRequest": {
+      "comment": "Architect has populated all AgentSpec fields. Builder will persist to database."
+    },
+    "chat": {
+      "message": "Creating your Customer Feedback Analyzer agent...",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_7_reporting_success": {
+    "description": "After Builder succeeds, Agent Manager reports the created agent to the user",
+    "action": "return_to_parent",
+    "output": {
+      "status": "success",
+      "agentID": "newly-created-agent-guid-123"
+    },
+    "chat": {
+      "message": "Your **Customer Feedback Analyzer** agent has been created successfully!\n\n**Agent ID**: newly-created-agent-guid-123\n\n**What it does**:\nThis agent runs every Monday at 8 AM to analyze the past week's customer feedback. It queries your CustomerFeedback table, performs sentiment analysis on each item, identifies top themes and critical issues, then emails a comprehensive weekly report to your product and support teams.\n\n**How to use it**:\nThe agent will run automatically on schedule, or you can invoke it manually by saying \"@Customer Feedback Analyzer run analysis\" from any conversation.\n\nWant to test it with a manual run?",
+      "suggestedResponses": [
+        {"label": "Test it now", "value": "test_run"},
+        {"label": "All set, thanks!", "value": "done"}
+      ]
+    }
+  },
+
+  "example_8_modification_workflow_finding_agent": {
+    "description": "Modification workflow starts by finding the agent to modify",
+    "action": "call_action",
+    "actionName": "Find Candidate Agents",
+    "actionInput": {
+      "TaskDescription": "customer feedback analyzer weekly reports",
+      "MaxResults": 5,
+      "ExcludeSubAgents": true
+    },
+    "chat": {
+      "message": "Let me find your Customer Feedback Analyzer agent...",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_9_modification_confirming_agent": {
+    "description": "If multiple agents found, present options to user",
+    "action": "continue",
+    "payloadChangeRequest": null,
+    "chat": {
+      "message": "I found a couple of agents that might be what you're looking for. Which one did you want to modify?",
+      "suggestedResponses": [
+        {
+          "label": "Customer Feedback Analyzer (weekly email reports)",
+          "value": "agent-guid-1"
+        },
+        {
+          "label": "Feedback Sentiment Tracker (real-time analysis)",
+          "value": "agent-guid-2"
+        }
+      ]
+    }
+  },
+
+  "example_10_modification_loading_agent_spec": {
+    "description": "After confirming which agent, call Agent Spec Loader sub-agent",
+    "action": "call_subagent",
+    "subagent": "Agent Spec Loader",
+    "payloadChangeRequest": {
+      "newElements": {
+        "ID": "agent-guid-1"
+      }
+    },
+    "chat": {
+      "message": "Loading the Customer Feedback Analyzer agent configuration...",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_11_modification_calling_planning_designer": {
+    "description": "After loading AgentSpec, call Planning Designer to create modification plan",
+    "action": "call_subagent",
+    "subagent": "Planning Designer Agent",
+    "payloadChangeRequest": {
+      "comment": "AgentSpec loaded by Agent Spec Loader. Planning Designer will research and add modificationPlan field."
+    },
+    "chat": {
+      "message": "Let me research the best way to add database persistence to your agent...",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_12_modification_presenting_plan": {
+    "description": "Present modification plan to user and WAIT for approval",
+    "action": "continue",
+    "payloadChangeRequest": null,
+    "chat": {
+      "message": "I've researched the best way to add database persistence to your Customer Feedback Analyzer. Here's the modification plan:\n\n**Current State**:\nYour agent can analyze feedback and email reports, but doesn't save results to the database.\n\n**Changes**:\n- **Add Action**: Create Record (for saving to FeedbackAnalysis table)\n- **Update Prompt**: Add Step 5 to save analysis metrics before sending email\n\n**What Gets Saved**:\n- Analysis date, feedback count, sentiment percentages, average rating\n- Top themes (as JSON), critical issue count\n- Stored in FeedbackAnalysis entity for historical tracking\n\n**Result**:\nAfter this change, you'll be able to track trends over time by querying the FeedbackAnalysis table, compare week-over-week performance, and build custom dashboards on historical data.\n\nShould I go ahead with these changes?",
+      "suggestedResponses": [
+        {"label": "Yes, make the changes", "value": "approve"},
+        {"label": "Can you explain the database schema?", "value": "explain_schema"},
+        {"label": "Actually, can we use a different table?", "value": "change_table"}
+      ]
+    }
+  },
+
+  "example_13_modification_executing_after_approval": {
+    "description": "After user approves modification plan, call Architect then Builder",
+    "action": "call_subagent",
+    "subagent": "Architect Agent",
+    "payloadChangeRequest": {
+      "comment": "Payload has AgentSpec + modificationPlan. Architect will apply changes and validate."
+    },
+    "chat": {
+      "message": "Applying the changes to your agent...",
+      "suggestedResponses": null
+    }
+  },
+
+  "example_14_modification_reporting_success": {
+    "description": "After Builder succeeds, report what changed",
+    "action": "return_to_parent",
+    "output": {
+      "status": "success",
+      "agentID": "agent-guid-1"
+    },
+    "chat": {
+      "message": "I've successfully updated your **Customer Feedback Analyzer** agent!\n\n**Changes applied**:\n- Added Create Record action for database persistence\n- Updated the agent's prompt with a new step to save analysis results\n- Configured to store metrics in the FeedbackAnalysis table\n\n**What's new**:\nYour agent will now save analysis results to the FeedbackAnalysis table every time it runs. This includes feedback count, sentiment breakdown, average rating, top themes, and critical issue count. You can query this table to track trends over time and build custom reports.\n\nThe changes are live and will take effect on the next scheduled run (Monday 8 AM).\n\nWant me to help you create a dashboard to visualize the historical data?",
+      "suggestedResponses": [
+        {"label": "Yes, create a dashboard", "value": "create_dashboard"},
+        {"label": "No, I'm all set", "value": "done"}
+      ]
+    }
+  }
 }

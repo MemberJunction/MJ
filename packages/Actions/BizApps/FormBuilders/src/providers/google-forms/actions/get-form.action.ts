@@ -23,7 +23,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Google Forms Details')
+@RegisterClass(BaseAction, 'GetGoogleFormAction')
 export class GetGoogleFormAction extends GoogleFormsBaseAction {
 
     public get Description(): string {
@@ -148,4 +148,11 @@ export class GetGoogleFormAction extends GoogleFormsBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetGoogleFormAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

@@ -35,6 +35,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() conversationHistory: ConversationDetailEntity[] = []; // For agent context
   @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
+  @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() inProgressMessageIds?: string[]; // Message IDs that are in-progress and need streaming reconnection
 
@@ -1129,6 +1130,56 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
+   * Load previous payload for an agent from its most recent OUTPUT artifact.
+   * Checks both user-visible and system artifacts to support agents like Agent Manager.
+   */
+  private async loadPreviousPayloadForAgent(agentId: string): Promise<{
+    payload: any;
+    artifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null;
+  }> {
+    // Find last message from this agent
+    const lastAgentMessage = this.conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+
+    if (!lastAgentMessage) {
+      return { payload: null, artifactInfo: null };
+    }
+
+    // Check user-visible artifacts first
+    let artifacts = this.artifactsByDetailId?.get(lastAgentMessage.ID);
+
+    // If not found, check system artifacts (Agent Manager, etc.)
+    if (!artifacts || artifacts.length === 0) {
+      artifacts = this.systemArtifactsByDetailId?.get(lastAgentMessage.ID);
+    }
+
+    // Load artifact content as payload
+    if (artifacts && artifacts.length > 0) {
+      const artifact = artifacts[0];
+      try {
+        const version = await artifact.getVersion();
+        if (version.Content) {
+          console.log(`📦 Loaded previous payload for agent ${agentId} from artifact`);
+          return {
+            payload: JSON.parse(version.Content),
+            artifactInfo: {
+              artifactId: artifact.artifactId,
+              versionId: artifact.artifactVersionId,
+              versionNumber: artifact.versionNumber
+            }
+          };
+        }
+      } catch (error) {
+        console.error('Error loading previous payload:', error);
+      }
+    }
+
+    return { payload: null, artifactInfo: null };
+  }
+
+  /**
    * Handle single task execution from task graph using direct agent execution
    * Uses the existing agent execution pattern with PubSub support
    */
@@ -1170,7 +1221,15 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         conversationName: this.conversationName
       });
 
-      // Invoke agent with task's input payload
+      // Load previous payload if agent has been invoked before
+      const { payload: previousPayload, artifactInfo } = await this.loadPreviousPayloadForAgent(agent.ID);
+
+      // Merge Sage's task payload with previous agent payload (Sage's takes precedence)
+      const mergedPayload = previousPayload
+        ? { ...previousPayload, ...task.inputPayload }
+        : task.inputPayload;
+
+      // Invoke agent with merged payload
       const agentResult = await this.agentService.invokeSubAgent(
         agentName,
         conversationId,
@@ -1178,8 +1237,10 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         this.conversationHistory,
         task.description || task.name,
         agentResponseMessage.ID,
-        task.inputPayload, // Pass the task's input payload
-        this.createProgressCallback(agentResponseMessage, agentName)
+        mergedPayload, // Pass merged payload for continuity
+        this.createProgressCallback(agentResponseMessage, agentName),
+        artifactInfo?.artifactId,
+        artifactInfo?.versionId
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -1264,6 +1325,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         conversationName: this.conversationName
       });
 
+      // Load previous payload if agent has been invoked before
+      const { payload: previousPayload, artifactInfo } = agent?.ID
+        ? await this.loadPreviousPayloadForAgent(agent.ID)
+        : { payload: null, artifactInfo: null };
+
       // Invoke the sub-agent with progress callback
       const subResult = await this.agentService.invokeSubAgent(
         agentName,
@@ -1272,8 +1338,10 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         this.conversationHistory,
         reasoning,
         agentResponseMessage.ID,
-        undefined, // no payload for initial invocation
-        this.createProgressCallback(agentResponseMessage, agentName)
+        previousPayload, // Pass previous payload for continuity
+        this.createProgressCallback(agentResponseMessage, agentName),
+        artifactInfo?.artifactId,
+        artifactInfo?.versionId
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -1313,7 +1381,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // Update the existing agentResponseMessage to show retry status
         await this.updateConversationDetail(agentResponseMessage, "Retrying...", agentResponseMessage.Status);
 
-        // Retry the sub-agent
+        // Retry the sub-agent (reuse previously loaded payload from first attempt)
         const retryResult = await this.agentService.invokeSubAgent(
           agentName,
           conversationId,
@@ -1321,8 +1389,10 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           this.conversationHistory,
           reasoning,
           agentResponseMessage.ID,
-          undefined, // no payload for retry
-          this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`)
+          previousPayload, // Pass same payload as first attempt
+          this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`),
+          artifactInfo?.artifactId,
+          artifactInfo?.versionId
         );
 
         if (retryResult && retryResult.success) {
@@ -1405,25 +1475,28 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 
     // Use pre-loaded artifact data (no DB queries!)
-    if (this.artifactsByDetailId) {
-      const artifacts = this.artifactsByDetailId.get(lastAIMessage.ID);
-      if (artifacts && artifacts.length > 0) {
-        try {
-          // Use the first artifact (should only be one OUTPUT per message)
-          const artifact = artifacts[0];
-          const version = await artifact.getVersion();
-          if (version.Content) {
-            previousPayload = JSON.parse(version.Content);
-            previousArtifactInfo = {
-              artifactId: artifact.artifactId,
-              versionId: artifact.artifactVersionId,
-              versionNumber: artifact.versionNumber
-            };
-            console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
-          }
-        } catch (error) {
-          console.warn('⚠️ Could not parse previous artifact content:', error);
+    // Check both user-visible and system artifacts
+    let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
+    if (!artifacts || artifacts.length === 0) {
+      artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
+    }
+
+    if (artifacts && artifacts.length > 0) {
+      try {
+        // Use the first artifact (should only be one OUTPUT per message)
+        const artifact = artifacts[0];
+        const version = await artifact.getVersion();
+        if (version.Content) {
+          previousPayload = JSON.parse(version.Content);
+          previousArtifactInfo = {
+            artifactId: artifact.artifactId,
+            versionId: artifact.artifactVersionId,
+            versionNumber: artifact.versionNumber
+          };
+          console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
         }
+      } catch (error) {
+        console.warn('⚠️ Could not parse previous artifact content:', error);
       }
     }
 
@@ -1570,6 +1643,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       await agentResponseMessage.Save();
       this.messageSent.emit(agentResponseMessage);
 
+      // Load previous payload if agent has been invoked before
+      const { payload: previousPayload, artifactInfo } = agent?.ID
+        ? await this.loadPreviousPayloadForAgent(agent.ID)
+        : { payload: null, artifactInfo: null };
+
       // Invoke the agent directly
       const result = await this.agentService.invokeSubAgent(
         agentName,
@@ -1578,8 +1656,10 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         this.conversationHistory,
         `User mentioned agent directly with @${agentName}`,
         agentResponseMessage.ID,
-        undefined, // no payload for direct mention
-        this.createProgressCallback(agentResponseMessage, agentName)
+        previousPayload, // Pass previous payload for continuity
+        this.createProgressCallback(agentResponseMessage, agentName),
+        artifactInfo?.artifactId,
+        artifactInfo?.versionId
       );
 
       // Remove from active tasks
@@ -1668,11 +1748,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 
     // Use targetArtifactVersionId if specified (from intent check)
-    if (targetArtifactVersionId && this.artifactsByDetailId) {
+    if (targetArtifactVersionId) {
       console.log('🎯 Using target artifact version from intent check:', targetArtifactVersionId);
 
-      // Find the artifact in pre-loaded data (O(n) search across all messages)
-      for (const [detailId, artifacts] of this.artifactsByDetailId.entries()) {
+      // Find the artifact in pre-loaded data (check both user-visible and system artifacts)
+      for (const [detailId, artifacts] of (this.artifactsByDetailId?.entries() || [])) {
         const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
         if (targetArtifact) {
           try {
@@ -1693,6 +1773,30 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           break;
         }
       }
+
+      // If not found in user-visible artifacts, check system artifacts
+      if (!previousPayload && this.systemArtifactsByDetailId) {
+        for (const [detailId, artifacts] of this.systemArtifactsByDetailId.entries()) {
+          const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
+          if (targetArtifact) {
+            try {
+              const version = await targetArtifact.getVersion();
+              if (version.Content) {
+                previousPayload = JSON.parse(version.Content);
+                previousArtifactInfo = {
+                  artifactId: targetArtifact.artifactId,
+                  versionId: targetArtifact.artifactVersionId,
+                  versionNumber: targetArtifact.versionNumber
+                };
+                console.log('📦 Loaded target artifact version as payload (from system artifacts)', previousArtifactInfo);
+              }
+            } catch (error) {
+              console.warn('⚠️ Could not load target artifact version:', error);
+            }
+            break;
+          }
+        }
+      }
     }
 
     // Fall back to most recent artifact if no target specified or target not found
@@ -1705,9 +1809,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         .reverse()
         .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
 
-      if (lastAIMessage && this.artifactsByDetailId) {
-        // Get artifacts from pre-loaded data (no DB query!)
-        const artifacts = this.artifactsByDetailId.get(lastAIMessage.ID);
+      if (lastAIMessage) {
+        // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
+        let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
+        if (!artifacts || artifacts.length === 0) {
+          artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
+        }
+
         if (artifacts && artifacts.length > 0) {
           try {
             // Use the first artifact (should only be one OUTPUT per message)

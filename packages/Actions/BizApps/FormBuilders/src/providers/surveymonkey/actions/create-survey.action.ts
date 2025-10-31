@@ -43,7 +43,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Create SurveyMonkey')
+@RegisterClass(BaseAction, 'CreateSurveyMonkeyAction')
 export class CreateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -193,4 +193,11 @@ export class CreateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadCreateSurveyMonkeyAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

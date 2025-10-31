@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { TypeformBaseAction } from '../typeform-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
+import { LogStatus } from '@memberjunction/core';
 
 /**
  * Action to retrieve a specific response from Typeform by response token
@@ -26,7 +27,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Single Typeform Response')
+@RegisterClass(BaseAction, 'GetSingleTypeformResponseAction')
 export class GetSingleTypeformResponseAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -67,8 +68,18 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
             // Securely retrieve API token using company integration
             const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
+            // Get form details to fetch field titles for simpleAnswers
+            let formFields: any[] = [];
+            try {
+                const formDetails = await this.getFormDetails(formId, apiToken);
+                formFields = formDetails.fields || [];
+            } catch (formError) {
+                LogStatus(`Warning: Could not fetch form details for simpleAnswers generation: ${formError.message}`);
+                // Continue without simpleAnswers - this is not a critical failure
+            }
+
             const tfResponse = await this.getSingleTypeformResponse(formId, responseToken, apiToken);
-            const normalizedResponse = this.normalizeTypeformResponse(tfResponse);
+            const normalizedResponse = this.normalizeTypeformResponse(tfResponse, formFields);
 
             const outputParams: ActionParam[] = [
                 {
@@ -90,6 +101,11 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
                     Name: 'Completed',
                     Type: 'Output',
                     Value: normalizedResponse.completed
+                },
+                {
+                    Name: 'AnswerDetails',
+                    Type: 'Output',
+                    Value: normalizedResponse.answerDetails
                 },
                 {
                     Name: 'Answers',
@@ -157,4 +173,11 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSingleTypeformResponseAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

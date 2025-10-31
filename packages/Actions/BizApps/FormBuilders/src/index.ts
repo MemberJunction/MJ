@@ -12,7 +12,3 @@ export * from './providers/surveymonkey';
 
 // Google Forms Provider
 export * from './providers/google-forms';
-
-// Package metadata
-export const PACKAGE_NAME = '@memberjunction/actions-bizapps-formbuilders';
-export const PACKAGE_VERSION = '2.110.1';

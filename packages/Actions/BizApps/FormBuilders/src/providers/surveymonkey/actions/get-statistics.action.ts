@@ -26,7 +26,7 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get SurveyMonkey Response Statistics')
+@RegisterClass(BaseAction, 'GetSurveyMonkeyStatisticsAction')
 export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -94,7 +94,7 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
                 const allFieldIds = new Set<string>();
 
                 for (const response of responses) {
-                    for (const answer of response.answers) {
+                    for (const answer of response.answerDetails) {
                         allFieldIds.add(answer.fieldId);
                     }
                 }
@@ -277,4 +277,11 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSurveyMonkeyStatisticsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

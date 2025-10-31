@@ -437,6 +437,45 @@ This package integrates seamlessly with:
 - **@memberjunction/core-entities**: Provides strongly-typed entity classes
 - **@memberjunction/global**: Manages class registration and instantiation
 
+## OAuth2Manager (Server-Side Only)
+
+The package includes a generic OAuth2 token manager for server-side integrations:
+
+```typescript
+import { OAuth2Manager } from '@memberjunction/actions';
+
+// Initialize OAuth2 manager
+const oauth = new OAuth2Manager({
+    clientId: process.env.OAUTH_CLIENT_ID,
+    clientSecret: process.env.OAUTH_CLIENT_SECRET,
+    tokenEndpoint: 'https://api.example.com/oauth/token',
+    authorizationEndpoint: 'https://api.example.com/oauth/authorize',
+    scopes: ['read', 'write'],
+    onTokenUpdate: async (tokens) => {
+        // Persist updated tokens to database
+        await saveTokens(tokens);
+    }
+});
+
+// Get authorization URL for user to visit
+const authUrl = oauth.getAuthorizationUrl('random-state-string');
+
+// Exchange authorization code for tokens
+const tokens = await oauth.exchangeAuthorizationCode(code);
+
+// Get valid access token (auto-refreshes if needed)
+const accessToken = await oauth.getAccessToken();
+```
+
+**Features:**
+- Multiple grant type support (authorization_code, client_credentials, refresh_token)
+- Automatic token refresh before expiration
+- Thread-safe token refresh (prevents concurrent requests)
+- Token persistence callbacks
+- Provider customization hooks for non-standard OAuth2 implementations
+
+**⚠️ Server-Side Only**: OAuth2Manager requires `process.env` and should only be used in Node.js server environments, not in browser/client code.
+
 ## Advanced Topics
 
 ### Custom Action Engines
