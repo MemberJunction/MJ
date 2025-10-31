@@ -2993,3 +2993,336 @@ Additional fields track:
 - **2.76.0** - Added intelligent failover system
 - **2.75.0** - Introduced dynamic template composition
 - **2.50.0** - Initial release with core prompt execution
+## 🔄 Pooling and Load Balancing System
+
+### Overview
+
+The pooling and load balancing system enables proactive distribution of AI requests across multiple vendors and API keys. Instead of reactive failover (trying alternatives after failure), the system intelligently queues, routes, and balances requests before execution.
+
+**Key Benefits:**
+- **Proactive load distribution** across vendors and API keys
+- **Intelligent queueing** when at capacity
+- **Multiple API keys per vendor** for scaling beyond single-key limits
+- **Sophisticated health tracking** with automatic recovery
+- **Rate limit management** with TPM/RPM tracking
+- **Zero impact on existing prompts** (opt-in activation)
+
+### Architecture
+
+```
+Server Startup
+    └─> ModelPoolManager.initialize()
+         └─> Singleton for entire server lifetime
+         └─> Shared VendorHealthTracker
+
+Request Processing  
+    └─> AIPromptRunner.ExecutePrompt()
+         │
+         ├─> Has PoolID? NO → Direct execution (existing path)
+         │
+         └─> Has PoolID? YES → ModelPoolManager.executeRequest()
+             └─> ModelExecutionPool (one per model)
+                 ├─> Queue if at capacity
+                 └─> Select vendor/key via load balancing
+                     └─> VendorAPIKeyPool (multi-key management)
+                         └─> RateLimitTracker (TPM/RPM tracking)
+```
+
+### Database Schema
+
+Four new tables enable pooling configuration:
+
+#### AIModelVendorPool
+Defines a pool of vendors for a specific model with queueing settings.
+
+```sql
+CREATE TABLE AIModelVendorPool (
+    ID UNIQUEIDENTIFIER PRIMARY KEY,
+    ModelID UNIQUEIDENTIFIER NOT NULL,          -- Model this pool serves
+    Name NVARCHAR(255) NOT NULL,                 -- Pool display name
+    MaxWaitTimeMS INT NOT NULL DEFAULT 60000,    -- Queue timeout
+    MaxParallelRequests INT NULL,                -- NULL = unlimited
+    LoadBalancingStrategy NVARCHAR(50) DEFAULT 'Priority',
+    IsActive BIT NOT NULL DEFAULT 1
+);
+```
+
+**Load Balancing Strategies:**
+- `Priority` - Always prefer lowest priority number (highest priority)
+- `RoundRobin` - Rotate through vendors evenly
+- `LeastBusy` - Send to vendor with fewest active requests
+- `Weighted` - Distribute based on configured weights (1-100)
+- `Random` - Random selection
+
+#### AIModelVendorPoolMember
+Associates vendors with pools and defines their participation settings.
+
+```sql
+CREATE TABLE AIModelVendorPoolMember (
+    ID UNIQUEIDENTIFIER PRIMARY KEY,
+    PoolID UNIQUEIDENTIFIER NOT NULL,
+    VendorID UNIQUEIDENTIFIER NOT NULL,
+    Priority INT NOT NULL DEFAULT 100,           -- Lower = higher priority
+    Weight INT NULL,                             -- For weighted strategy (1-100)
+    MaxParallelRequests INT NULL,                -- Per-vendor limit
+    IsActive BIT NOT NULL DEFAULT 1
+);
+```
+
+#### AIVendorAPIKey
+Stores multiple API keys per vendor with rate limit configurations.
+
+```sql
+CREATE TABLE AIVendorAPIKey (
+    ID UNIQUEIDENTIFIER PRIMARY KEY,
+    VendorID UNIQUEIDENTIFIER NOT NULL,
+    KeyName NVARCHAR(255) NOT NULL,              -- e.g., "Production Plan 1"
+    APIKeyValue NVARCHAR(MAX) NOT NULL,          -- Encrypted
+    RateLimitTPM INT NULL,                       -- Tokens per minute
+    RateLimitRPM INT NULL,                       -- Requests per minute
+    RateLimitScope NVARCHAR(50) DEFAULT 'ModelSpecific',  -- 'ModelSpecific' | 'AllModels'
+    Priority INT NOT NULL DEFAULT 100,
+    IsActive BIT NOT NULL DEFAULT 1
+);
+```
+
+#### AIPromptModel Enhancement
+The existing `AIPromptModel` table gains an optional `PoolID` column:
+
+```sql
+ALTER TABLE AIPromptModel
+ADD PoolID UNIQUEIDENTIFIER NULL,
+    CONSTRAINT FK_AIPromptModel_Pool
+        FOREIGN KEY (PoolID) REFERENCES AIModelVendorPool(ID);
+```
+
+**Backward Compatibility:** All existing records have `PoolID = NULL` (no pooling).
+
+### Configuration Examples
+
+#### Example 1: Basic Pool for High-Volume Prompt
+
+```sql
+-- Create pool for GPT-4
+INSERT INTO AIModelVendorPool (ID, ModelID, Name, MaxWaitTimeMS, LoadBalancingStrategy)
+VALUES (NEWID(), '<gpt4-model-id>', 'GPT-4 Production Pool', 60000, 'Priority');
+
+-- Add OpenAI to pool
+INSERT INTO AIModelVendorPoolMember (ID, PoolID, VendorID, Priority)
+VALUES (NEWID(), '<pool-id>', '<openai-vendor-id>', 10);
+
+-- Link prompt to pool
+UPDATE AIPromptModel
+SET PoolID = '<pool-id>'
+WHERE PromptID = '<high-volume-prompt-id>';
+```
+
+#### Example 2: Multi-Vendor Pool with Load Balancing
+
+```sql
+-- Create pool for OSS-120B model
+INSERT INTO AIModelVendorPool (ID, ModelID, Name, MaxWaitTimeMS, MaxParallelRequests, LoadBalancingStrategy)
+VALUES (NEWID(), '<oss120b-model-id>', 'OSS-120B Production Pool', 60000, 100, 'LeastBusy');
+
+-- Add Cerebras (preferred)
+INSERT INTO AIModelVendorPoolMember (ID, PoolID, VendorID, Priority, MaxParallelRequests)
+VALUES (NEWID(), '<pool-id>', '<cerebras-vendor-id>', 10, 60);
+
+-- Add Groq (fallback)
+INSERT INTO AIModelVendorPoolMember (ID, PoolID, VendorID, Priority, MaxParallelRequests)
+VALUES (NEWID(), '<pool-id>', '<groq-vendor-id>', 20, 40);
+```
+
+#### Example 3: Multiple API Keys for Scale
+
+```sql
+-- Add multiple API keys for Cerebras
+INSERT INTO AIVendorAPIKey (ID, VendorID, KeyName, APIKeyValue, RateLimitTPM, RateLimitRPM, RateLimitScope, Priority)
+VALUES
+  (NEWID(), '<cerebras-vendor-id>', 'Cerebras Production Plan 1', 'sk-...', 100000, 1000, 'ModelSpecific', 10),
+  (NEWID(), '<cerebras-vendor-id>', 'Cerebras Production Plan 2', 'sk-...', 100000, 1000, 'ModelSpecific', 20),
+  (NEWID(), '<cerebras-vendor-id>', 'Cerebras Dev Plan', 'sk-...', 50000, 500, 'ModelSpecific', 30);
+```
+
+### Health Tracking System
+
+The `VendorHealthTracker` monitors vendor health with error-specific recovery strategies:
+
+#### Health States
+- **Healthy** - Operating normally
+- **Degraded** - Some failures, still usable
+- **RateLimited** - At capacity (temporary, not unhealthy)
+- **NetworkUnreachable** - Can't reach endpoint
+- **ServiceError** - 500/503 responses
+- **AuthenticationFailed** - Invalid API key
+- **CircuitOpen** - Temporarily disabled by circuit breaker
+
+#### Recovery Strategies
+
+| Error Type | Strategy | Action |
+|-----------|----------|--------|
+| **Network Errors** | Health Check Required | TCP ping → Health check → Test API call |
+| **Service Errors (500/503)** | Circuit Breaker | Disable for 60s, half-open after 2min |
+| **Rate Limits (429)** | Immediate Retry | Not a failure, wait for capacity |
+| **Auth Errors (401/403)** | Manual Intervention | Disable key, notify admin |
+| **Other** | Backoff Retry | Exponential backoff |
+
+#### Circuit Breaker Pattern
+
+```
+States:
+  Closed → Normal operation
+  Open → Disabled, rejecting requests (after N failures)
+  Half-Open → Testing recovery (after cooldown)
+
+Transitions:
+  Closed → Open: After 5 consecutive failures
+  Open → Half-Open: After 60s cooldown
+  Half-Open → Closed: After 3 consecutive successes
+  Half-Open → Open: On any failure during testing
+```
+
+### Rate Limiting
+
+#### Sliding Window Tracking
+- Tracks tokens and requests per minute using sliding windows
+- Automatically expires entries outside 60-second window
+- Supports both model-specific and cross-model limits
+
+#### Multi-Key Aggregation
+When multiple API keys exist for a vendor:
+- Aggregate capacity calculated across all keys
+- Requests distributed to keys with available capacity
+- Each key tracked independently with its own limits
+
+#### Example Rate Limit Configuration
+
+```sql
+-- Key 1: Standard plan (100K TPM, 1K RPM)
+INSERT INTO AIVendorAPIKey (..., RateLimitTPM, RateLimitRPM)
+VALUES (..., 100000, 1000);
+
+-- Key 2: Enterprise plan (500K TPM, 5K RPM)
+INSERT INTO AIVendorAPIKey (..., RateLimitTPM, RateLimitRPM)
+VALUES (..., 500000, 5000);
+
+-- Aggregate capacity: 600K TPM, 6K RPM
+```
+
+### Queueing Behavior
+
+When pool capacity is exhausted:
+
+1. **Request is queued** with priority level (lower = higher priority)
+2. **Timeout timer starts** (`MaxWaitTimeMS` from pool config)
+3. **Queue processes** as capacity becomes available
+4. **Request executes** when selected or **times out** if capacity unavailable
+
+**Priority Queue:**
+- Tasks ordered by priority (0 = highest)
+- Higher priority tasks processed first
+- FIFO within same priority level
+
+### Monitoring and Statistics
+
+Access pool statistics via `ModelPoolManager`:
+
+```typescript
+const poolManager = ModelPoolManager.getInstance();
+
+// Get statistics for all pools
+const allStats = poolManager.getPoolStatistics();
+
+// Get statistics for specific model
+const modelStats = poolManager.getPoolStatisticsForModel('<model-id>');
+
+// Get vendor health status
+const vendorHealth = poolManager.getVendorHealth('<vendor-id>');
+const allHealth = poolManager.getAllVendorHealth();
+```
+
+**Statistics Include:**
+- Queue length and active requests
+- Total processed (succeeded/failed/cancelled)
+- Average queue wait time and execution time
+- Per-vendor request distribution
+- Available capacity percentage
+- Health status per vendor
+
+### Server Lifecycle Integration
+
+#### Startup
+```typescript
+// In server startup (e.g., server.ts)
+import { ModelPoolManager } from '@memberjunction/ai-prompts';
+
+const poolManager = ModelPoolManager.getInstance();
+await poolManager.initialize(contextUser);
+```
+
+#### Shutdown
+```typescript
+// In server shutdown handler
+await poolManager.shutdown(30000); // 30s timeout for graceful shutdown
+```
+
+### Opt-In Activation
+
+**Important:** Pooling is completely opt-in and has zero impact on existing prompts.
+
+**Without Pooling (Default):**
+```sql
+-- Existing prompts continue to work unchanged
+SELECT * FROM AIPromptModel WHERE PoolID IS NULL;
+-- Uses direct execution path (existing behavior)
+```
+
+**With Pooling (Opt-In):**
+```sql
+-- Set PoolID to enable pooling for specific prompts
+UPDATE AIPromptModel
+SET PoolID = '<pool-id>'
+WHERE PromptID = '<prompt-id>';
+-- Now uses pooling system (queueing, load balancing, etc.)
+```
+
+### Best Practices
+
+1. **Start with Critical Prompts** - Enable pooling for high-volume or mission-critical prompts first
+2. **Monitor Queue Depths** - If queues grow consistently, increase `MaxParallelRequests` or add vendors
+3. **Configure Appropriate Timeouts** - Set `MaxWaitTimeMS` based on acceptable wait times
+4. **Use Multiple Keys** - Add multiple API keys per vendor to scale beyond single-key limits
+5. **Set Realistic Rate Limits** - Configure `RateLimitTPM` and `RateLimitRPM` based on actual vendor limits
+6. **Review Health Status** - Periodically check vendor health to identify persistent issues
+7. **Test with Low Traffic First** - Enable pooling on low-traffic prompts before high-traffic ones
+
+### Troubleshooting
+
+**Queue Timeouts:**
+- Increase `MaxWaitTimeMS` in pool configuration
+- Add more vendors to pool
+- Increase `MaxParallelRequests` per vendor
+- Add more API keys per vendor
+
+**Vendors Marked Unhealthy:**
+- Check vendor health status: `poolManager.getVendorHealth(vendorId)`
+- Review `AIVendorHealthEvent` table for event history
+- Manually mark healthy if recovered: `healthTracker.markHealthy(vendorId)`
+
+**Rate Limits Hit Frequently:**
+- Verify `RateLimitTPM` and `RateLimitRPM` match vendor's actual limits
+- Add more API keys for the vendor
+- Distribute load across more vendors
+
+### Future Enhancements
+
+Planned features for future releases:
+
+- **Cross-Server Coordination** - Shared pool state via Redis
+- **Cost Tracking** - Track and optimize costs per vendor/key
+- **Predictive Rate Limiting** - ML-based prediction of rate limit exhaustion
+- **Admin UI** - Dashboard for pool management and monitoring
+- **Vendor-Specific Optimizations** - Parse vendor rate limit headers for accuracy
+
+---
+

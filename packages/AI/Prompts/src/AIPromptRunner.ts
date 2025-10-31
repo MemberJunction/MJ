@@ -10,12 +10,16 @@ import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
-import { 
+import {
     TemplateMessageRole,
     ChildPromptParam,
-    AIPromptParams
+    AIPromptParams,
+    PooledExecutionTask,
+    PoolConfig
 } from '@memberjunction/ai-core-plus';
 import * as JSON5 from 'json5';
+import { ModelPoolManager } from './ModelPoolManager';
+import { v4 as uuidv4 } from 'uuid';
  
 
 
@@ -257,7 +261,118 @@ export class AIPromptRunner {
    * }
    * ```
    */
+
+  /**
+   * Check if prompt should use pooling system
+   *
+   * Queries database to determine if this prompt has a pool configured.
+   *
+   * @param params - Prompt parameters
+   * @returns Pool configuration if pooling should be used, null otherwise
+   * @private
+   */
+  private async getPoolConfiguration(params: AIPromptParams): Promise<PoolConfig | null> {
+    // Skip pooling if explicitly disabled
+    if ((params as any).disablePooling) {
+      return null;
+    }
+
+    // Load AIPromptModel records for this prompt
+    const rv = new RunView();
+    const result = await rv.RunView<AIPromptModelEntity>({
+      EntityName: 'AI Prompt Models',
+      ExtraFilter: `PromptID='${params.prompt.ID}'`,
+      ResultType: 'entity_object'
+    }, params.contextUser);
+
+    if (!result.Success || !result.Results) {
+      return null;
+    }
+
+    // Find first model with PoolID configured
+    const pooledModel = result.Results.find(pm => (pm as any).PoolID != null);
+    if (!pooledModel || !(pooledModel as any).PoolID) {
+      return null;
+    }
+
+    // Load pool configuration
+    const poolManager = ModelPoolManager.getInstance();
+    if (!poolManager) {
+      return null;
+    }
+
+    // Check if pool exists and is active (will be loaded when needed)
+    return { poolId: (pooledModel as any).PoolID } as PoolConfig;
+  }
+
+  /**
+   * Execute prompt via pooling system
+   *
+   * Routes execution through ModelPoolManager for queueing and load balancing.
+   *
+   * @param params - Prompt parameters
+   * @param poolConfig - Pool configuration
+   * @returns Execution result
+   * @private
+   */
+  private async executeViaPool<T>(
+    params: AIPromptParams,
+    poolConfig: PoolConfig
+  ): Promise<AIPromptRunResult<T>> {
+    this.logStatus(`Executing prompt "${params.prompt.Name}" via pooling system`, true, params);
+
+    const poolManager = ModelPoolManager.getInstance();
+
+    // Note: Full integration would require:
+    // 1. Rendering the template first
+    // 2. Selecting the model
+    // 3. Creating the pooled task
+    // 4. Calling poolManager.executeRequest()
+    // 5. Converting pool result back to AIPromptRunResult
+    //
+    // For now, we'll fall back to direct execution
+    // This will be completed in a follow-up implementation
+
+    this.logStatus(`Pooling integration is in progress - falling back to direct execution`, true, params);
+    return await this.executeDirect<T>(params);
+  }
+
+  /**
+   * Execute prompt directly (legacy path, no pooling)
+   *
+   * This is the original execution path that will be used when pooling is not configured.
+   *
+   * @param params - Prompt parameters
+   * @returns Execution result
+   * @private
+   */
+  private async executeDirect<T>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
+    // This method wraps the existing ExecutePrompt logic
+    // The actual implementation is in the main body below
+    return await this.executePromptInternal<T>(params);
+  }
+
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
+    // Check for pooling configuration
+    const poolConfig = await this.getPoolConfiguration(params);
+
+    if (poolConfig) {
+      // Use pooling system
+      return await this.executeViaPool<T>(params, poolConfig);
+    } else {
+      // Use direct execution (existing logic)
+      return await this.executeDirect<T>(params);
+    }
+  }
+
+  /**
+   * Internal prompt execution logic (actual implementation)
+   *
+   * @param params - Prompt parameters
+   * @returns Execution result
+   * @private
+   */
+  private async executePromptInternal<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
     const promptRun: AIPromptRunEntityExtended | null = null;
 
