@@ -113,12 +113,12 @@ export class FindBestAgentAction extends BaseAction {
                 permissionFilteredAgents = permissionFilteredAgents.filter(a => a.status === 'Active');
             }
 
-            // Filter by invocation mode if excludeSubAgents is true
-            // Sub-Agents are meant to be called by other agents, not typically discovered by users/tools
+            // Filter by invocation mode and parent relationship if excludeSubAgents is true
+            // Sub-Agents and child agents are meant to be called by other agents, not typically discovered by users/tools
             let invocationFilteredAgents = permissionFilteredAgents;
             if (excludeSubAgents) {
                 invocationFilteredAgents = permissionFilteredAgents.filter(a =>
-                    a.invocationMode !== 'Sub-Agent'
+                    a.invocationMode !== 'Sub-Agent' && !a.parentId
                 );
             }
 
