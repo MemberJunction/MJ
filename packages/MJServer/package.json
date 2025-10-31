@@ -28,6 +28,7 @@
     "@memberjunction/actions-bizapps-crm": "2.113.2",
     "@memberjunction/actions-bizapps-lms": "2.113.2",
     "@memberjunction/actions-bizapps-social": "2.113.2",
+    "@memberjunction/actions-bizapps-formbuilders": "2.113.2",
     "@memberjunction/ai": "2.113.2",
     "@memberjunction/ai-agent-manager": "2.113.2",
     "@memberjunction/ai-agent-manager-actions": "2.113.2",

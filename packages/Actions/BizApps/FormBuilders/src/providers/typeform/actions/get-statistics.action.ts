@@ -27,7 +27,7 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Typeform Response Statistics')
+@RegisterClass(BaseAction, 'GetTypeformStatisticsAction')
 export class GetTypeformStatisticsAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -96,7 +96,7 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
                 const allFieldIds = new Set<string>();
 
                 for (const response of responses) {
-                    for (const answer of response.answers) {
+                    for (const answer of response.answerDetails) {
                         allFieldIds.add(answer.fieldId);
                     }
                 }
@@ -273,4 +273,11 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetTypeformStatisticsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/ai": "2.113.2",
+    "@memberjunction/core": "2.113.2",
     "@memberjunction/global": "2.113.2",
     "@memberjunction/ai-recommendations": "2.113.2",
     "openai": "^4.28.4",

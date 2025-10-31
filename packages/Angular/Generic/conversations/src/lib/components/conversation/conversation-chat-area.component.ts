@@ -80,7 +80,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   // System artifacts mapping: ConversationDetailID -> Array of LazyArtifactInfo (Visibility='System Only')
   // Kept separate so we can toggle their display without reloading
-  private systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+  // Made public so it can be passed to MessageInputComponent for payload loading
+  public systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
 
   // Cached combined artifacts map - updated when toggle changes
   private _combinedArtifactsMap: Map<string, LazyArtifactInfo[]> | null = null;
@@ -159,6 +160,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Setup resize listeners
     window.addEventListener('mousemove', this.onResizeMove.bind(this));
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
   }
 
   ngDoCheck() {
@@ -200,10 +203,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
     window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
-    this.activeTasks.clear();
+    // Do NOT clear activeTasks here - they are workspace-level and should persist across conversation switches
+    // Tasks will be automatically removed when agents complete (via markMessageComplete in MessageInputComponent)
+    // Clearing here causes bugs: global tasks panel blanks out, no notifications when switching, spinners disappear
 
     // Hide artifact panel when conversation changes
     this.showArtifactPanel = false;
@@ -798,15 +805,32 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
           // Clear existing artifacts for this detail and rebuild
           this.artifactsByDetailId.delete(conversationDetailId);
+          this.systemArtifactsByDetailId.delete(conversationDetailId);
 
           if (parsed.artifacts.length > 0) {
             const artifactList: LazyArtifactInfo[] = [];
+            const systemArtifactList: LazyArtifactInfo[] = [];
+
             for (const artifactData of parsed.artifacts) {
               const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-              artifactList.push(lazyInfo);
+
+              // Separate system-only artifacts from user-visible artifacts
+              if (artifactData.Visibility === 'System Only') {
+                systemArtifactList.push(lazyInfo);
+              } else {
+                artifactList.push(lazyInfo);
+              }
+
               LogStatusEx({message: `✅ Loaded artifact ${artifactData.ArtifactID} v${artifactData.VersionNumber} for message ${conversationDetailId}`, verboseOnly: true});
             }
-            this.artifactsByDetailId.set(conversationDetailId, artifactList);
+
+            // Add to appropriate maps
+            if (artifactList.length > 0) {
+              this.artifactsByDetailId.set(conversationDetailId, artifactList);
+            }
+            if (systemArtifactList.length > 0) {
+              this.systemArtifactsByDetailId.set(conversationDetailId, systemArtifactList);
+            }
           }
 
           // Create new Map reference to trigger Angular change detection
@@ -1269,6 +1293,37 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       document.body.style.userSelect = '';
 
       // Save to localStorage
+      this.saveArtifactPaneWidth();
+    }
+  }
+
+  /**
+   * Touch event handlers for mobile resize support
+   */
+  onResizeTouchStart(event: TouchEvent): void {
+    this.isResizing = true;
+    const touch = event.touches[0];
+    this.startX = touch.clientX;
+    this.startWidth = this.artifactPaneWidth;
+    event.preventDefault();
+  }
+
+  private onResizeTouchMove(event: TouchEvent): void {
+    if (!this.isResizing) return;
+
+    const touch = event.touches[0];
+    const containerWidth = window.innerWidth;
+    const deltaX = this.startX - touch.clientX;
+    const deltaPercent = (deltaX / containerWidth) * 100;
+    let newWidth = this.startWidth + deltaPercent;
+
+    newWidth = Math.max(20, Math.min(70, newWidth));
+    this.artifactPaneWidth = newWidth;
+  }
+
+  private onResizeTouchEnd(event: TouchEvent): void {
+    if (this.isResizing) {
+      this.isResizing = false;
       this.saveArtifactPaneWidth();
     }
   }

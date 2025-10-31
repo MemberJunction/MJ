@@ -25,7 +25,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Export SurveyMonkey Responses to CSV')
+@RegisterClass(BaseAction, 'ExportSurveyMonkeyCSVAction')
 export class ExportSurveyMonkeyCSVAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -172,4 +172,11 @@ export class ExportSurveyMonkeyCSVAction extends SurveyMonkeyBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadExportSurveyMonkeyCSVAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

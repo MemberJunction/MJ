@@ -1,8 +1,8 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormBuilderAction, FormResponse, FormAnswer } from '../../base/base-form-builder.action';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { BaseAction, OAuth2Manager } from '@memberjunction/actions';
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Typeform API response structures
@@ -80,6 +80,42 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
 
     private axiosInstance: AxiosInstance | null = null;
     private currentAPIToken: string | null = null;
+    private oauth2Manager: OAuth2Manager | null = null;
+
+    /**
+     * Creates an OAuth2Manager for Typeform authentication.
+     * Configures the OAuth2 endpoints and credentials for Typeform.
+     *
+     * @override
+     */
+    protected async createOAuth2Manager(companyId: string, contextUser: UserInfo): Promise<OAuth2Manager | null> {
+        const clientId = process.env['BIZAPPS_TYPEFORM_CLIENT_ID'];
+        const clientSecret = process.env['BIZAPPS_TYPEFORM_CLIENT_SECRET'];
+
+        if (!clientId || !clientSecret) {
+            return null; // OAuth2 not configured
+        }
+
+        // Check if we have stored tokens for this company
+        const integration = await this.getCompanyIntegration(companyId, contextUser);
+        const credentials = await this.getAPICredentials(integration);
+
+        const oauth = new OAuth2Manager({
+            clientId,
+            clientSecret,
+            tokenEndpoint: 'https://api.typeform.com/oauth/token',
+            authorizationEndpoint: 'https://api.typeform.com/oauth/authorize',
+            scopes: ['forms:read', 'forms:write', 'responses:read', 'accounts:read'],
+            accessToken: credentials.accessToken,
+            refreshToken: credentials.apiKey, // Store refresh token in apiKey field
+            onTokenUpdate: async (tokens) => {
+                // TODO: Persist updated tokens back to Company Integrations table
+                LogStatus(`Typeform OAuth2 tokens updated for company ${companyId}`);
+            }
+        });
+
+        return oauth;
+    }
 
     /**
      * Get axios instance with Typeform authentication
@@ -250,10 +286,34 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
     }
 
     /**
+     * Get form details from Typeform API
+     */
+    protected async getFormDetails(formId: string, apiToken: string): Promise<any> {
+        try {
+            const response = await this.getAxiosInstance(apiToken).get(`/forms/${formId}`);
+            return response.data;
+        } catch (error) {
+            LogError('Failed to get Typeform form details:', error);
+            throw this.handleTypeformError(error);
+        }
+    }
+
+    /**
      * Normalize Typeform response to common format
      */
-    protected normalizeTypeformResponse(tfResponse: TypeformResponseItem): FormResponse {
-        const answers: FormAnswer[] = tfResponse.answers.map(answer => {
+    protected normalizeTypeformResponse(tfResponse: TypeformResponseItem, formFields?: any[]): FormResponse {
+        // Create field title lookup map from form fields
+        const fieldTitleMap = new Map<string, string>();
+        if (formFields) {
+            formFields.forEach((field: any) => {
+                // Use the field ref as key (matches what's in response.question) and title as value
+                if (field.ref && field.title) {
+                    fieldTitleMap.set(field.ref, field.title);
+                }
+            });
+        }
+
+        const answerDetails: FormAnswer[] = tfResponse.answers.map(answer => {
             let answerValue: any;
             let question = answer.field.ref || answer.field.id;
 
@@ -314,6 +374,15 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
             };
         });
 
+        // Generate answers object with question titles as keys (renamed from simpleAnswers)
+        const answers: Record<string, any> = {};
+        answerDetails.forEach(answer => {
+            const questionTitle = fieldTitleMap.get(answer.question) || answer.question;
+            // Clean up the question title to be a valid object key
+            const cleanKey = questionTitle.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+            answers[cleanKey] = answer.answer;
+        });
+
         const completed = !!tfResponse.submitted_at;
         const submittedAt = tfResponse.submitted_at
             ? new Date(tfResponse.submitted_at)
@@ -324,7 +393,8 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
             formId: tfResponse.landing_id,
             submittedAt,
             completed,
-            answers,
+            answerDetails, // Renamed from answers
+            answers, // Renamed from simpleAnswers
             metadata: {
                 browser: tfResponse.metadata?.browser,
                 platform: tfResponse.metadata?.platform,

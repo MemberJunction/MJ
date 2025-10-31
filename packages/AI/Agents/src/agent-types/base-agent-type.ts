@@ -396,7 +396,8 @@ export abstract class BaseAgentType {
         actions: AgentAction[],
         currentPayload: P,
         agentTypeState: ATS,
-        currentStep: BaseAgentNextStep<P>
+        currentStep: BaseAgentNextStep<P>,
+        params?: ExecuteAgentParams<P>
     ): Promise<void> {
         // Default implementation does nothing
         // Subclasses can override to implement custom logic
@@ -458,6 +459,67 @@ export abstract class BaseAgentType {
         return null;
     }
 
+    /**
+     * Indicates whether this agent type requires agent-level prompts (AI Agent Prompts relationship).
+     *
+     * Some agent types (like Flow) use step-level prompts exclusively and don't need agent-level prompts.
+     * Other agent types (like Loop) require agent-level prompts for their main reasoning loop.
+     *
+     * Default: true (most agent types require agent-level prompts)
+     *
+     * @returns {boolean} True if agent-level prompts are required, false if optional
+     * @since 2.113.0
+     */
+    public get RequiresAgentLevelPrompts(): boolean {
+        return true; // Default: agent-level prompts are required
+    }
+
+    /**
+     * Provides agent-type-specific guidance for configuration errors related to missing prompts.
+     * This allows each agent type to give contextual help based on its architecture.
+     *
+     * Default implementation provides generic guidance. Agent types should override to provide
+     * specific instructions relevant to their configuration requirements.
+     *
+     * @returns {string} Configuration guidance specific to this agent type
+     * @since 2.113.0
+     */
+    public GetPromptConfigurationGuidance(): string {
+        return `   - Ensure agent has AI Agent Prompts relationship configured\n` +
+               `   - Verify that prompt exists in AI Prompts table and is active`;
+    }
+
+    /**
+     * Determines how to handle Success or Failed steps when no explicit termination is requested.
+     *
+     * This allows agent types to control their own fallback behavior:
+     * - Loop agents use default behavior (return null) to process results with their main prompt
+     * - Flow agents should terminate instead of falling back to prompts (return terminate step)
+     * - Pipeline agents might want to move to the next stage
+     *
+     * Default implementation returns null, which causes base-agent to fall back to prompt execution
+     * if prompts are configured. Agent types can override this to provide custom behavior.
+     *
+     * @param {BaseAgentNextStep<P>} step - The Success or Failed step that needs fallback handling
+     * @param {AgentConfiguration} config - The loaded agent configuration
+     * @param {ExecuteAgentParams} params - The execution parameters
+     * @param {P} payload - The current payload
+     * @param {ATS} agentTypeState - Agent type's state
+     * @returns {Promise<BaseAgentNextStep<P> | null>} Custom step to execute, or null for default behavior
+     *
+     * @since 2.113.0
+     */
+    public async HandleStepFallback<P = any, ATS = any>(
+        step: BaseAgentNextStep<P>,
+        config: AgentConfiguration,
+        params: ExecuteAgentParams<P>,
+        payload: P,
+        agentTypeState: ATS
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Default implementation: return null to use base-agent's default behavior
+        // (fall back to prompt execution if prompts are configured)
+        return null;
+    }
 
     /**
      * Determines if loop results should be injected as a temporary user message

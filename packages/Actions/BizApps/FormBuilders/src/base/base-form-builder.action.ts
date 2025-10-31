@@ -1,5 +1,5 @@
 import { ActionParam } from '@memberjunction/actions-base';
-import { BaseAction } from '@memberjunction/actions';
+import { BaseAction, OAuth2Manager } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
@@ -13,7 +13,8 @@ export interface FormResponse {
     formId: string;
     submittedAt: Date;
     completed: boolean;
-    answers: FormAnswer[];
+    answerDetails: FormAnswer[]; // Renamed from answers - detailed array with field info
+    answers?: Record<string, any>; // Renamed from simpleAnswers - flat object with question titles as keys
     metadata?: {
         browser?: string;
         platform?: string;
@@ -120,10 +121,25 @@ export abstract class BaseFormBuilderAction extends BaseAction {
      * Gets credentials from environment variables
      * Format: BIZAPPS_{PROVIDER}_{COMPANY_ID}_{CREDENTIAL_TYPE}
      * Example: BIZAPPS_TYPEFORM_12345_API_TOKEN
+     *
+     * Falls back to: BIZAPPS_{PROVIDER}_{CREDENTIAL_TYPE} if no company-specific credential found
+     * Example fallback: BIZAPPS_TYPEFORM_API_TOKEN
      */
     protected getCredentialFromEnv(companyId: string, credentialType: string): string | undefined {
-        const envKey = `BIZAPPS_${this.formPlatform.toUpperCase().replace(/\s+/g, '_')}_${companyId}_${credentialType.toUpperCase()}`;
-        return process.env[envKey];
+        const platformKey = this.formPlatform.toUpperCase().replace(/\s+/g, '_');
+
+        // Try company-specific credential first
+        if (companyId) {
+            const companyEnvKey = `BIZAPPS_${platformKey}_${companyId}_${credentialType.toUpperCase()}`;
+            const companyCredential = process.env[companyEnvKey];
+            if (companyCredential) {
+                return companyCredential;
+            }
+        }
+
+        // Fall back to default credential (no company ID)
+        const defaultEnvKey = `BIZAPPS_${platformKey}_${credentialType.toUpperCase()}`;
+        return process.env[defaultEnvKey];
     }
 
     /**
@@ -165,22 +181,55 @@ export abstract class BaseFormBuilderAction extends BaseAction {
      * @throws Error if no credentials are found or company integration is not configured
      */
     protected async getSecureAPIToken(companyId: string | null | undefined, contextUser: UserInfo): Promise<string> {
-        // CompanyID is required - if not provided, throw error
-        if (!companyId) {
-            throw new Error(`CompanyID parameter is required. Please provide a valid CompanyID to identify which company's ${this.integrationName} credentials should be used.`);
+        // Try environment variables first (faster, no database query needed)
+        const envToken = this.getCredentialFromEnv(companyId || '', 'API_TOKEN') ||
+                        this.getCredentialFromEnv(companyId || '', 'ACCESS_TOKEN') ||
+                        this.getCredentialFromEnv(companyId || '', 'API_KEY');
+
+        if (envToken) {
+            return envToken;
         }
 
-        const effectiveCompanyId = companyId;
+        // Fall back to database lookup if companyId provided
+        if (companyId) {
+            const integration = await this.getCompanyIntegration(companyId, contextUser);
+            const credentials = await this.getAPICredentials(integration);
 
-        const integration = await this.getCompanyIntegration(effectiveCompanyId, contextUser);
-        const credentials = await this.getAPICredentials(integration);
-
-        const token = credentials.apiToken || credentials.accessToken || credentials.apiKey;
-        if (!token) {
-            throw new Error(`No API token found for ${this.integrationName} integration for company ${effectiveCompanyId}. Please configure credentials in Company Integrations or set environment variable BIZAPPS_${this.formPlatform.toUpperCase().replace(/\s+/g, '_')}_${effectiveCompanyId}_API_TOKEN`);
+            const token = credentials.apiToken || credentials.accessToken || credentials.apiKey;
+            if (token) {
+                return token;
+            }
         }
 
-        return token;
+        // No credentials found
+        const platformKey = this.formPlatform.toUpperCase().replace(/\s+/g, '_');
+        const envVarSuggestion = companyId
+            ? `BIZAPPS_${platformKey}_${companyId}_API_TOKEN or BIZAPPS_${platformKey}_API_TOKEN`
+            : `BIZAPPS_${platformKey}_API_TOKEN`;
+
+        throw new Error(`No API token found for ${this.integrationName} integration. Please set environment variable ${envVarSuggestion} or configure in Company Integrations table.`);
+    }
+
+    /**
+     * Creates an OAuth2Manager instance for the specified company.
+     * Override this method in provider-specific base classes to configure OAuth2 endpoints.
+     *
+     * @param companyId - The MemberJunction company ID
+     * @param contextUser - The user context
+     * @returns OAuth2Manager instance or null if OAuth2 is not configured
+     */
+    protected async createOAuth2Manager(companyId: string, contextUser: UserInfo): Promise<OAuth2Manager | null> {
+        // Check for OAuth2 credentials in environment variables
+        const platformKey = this.formPlatform.toUpperCase().replace(/\s+/g, '_');
+        const clientId = process.env[`BIZAPPS_${platformKey}_CLIENT_ID`];
+        const clientSecret = process.env[`BIZAPPS_${platformKey}_CLIENT_SECRET`];
+
+        if (!clientId || !clientSecret) {
+            return null; // OAuth2 not configured
+        }
+
+        // Subclasses should override this method to provide proper endpoints
+        throw new Error(`OAuth2 endpoints not configured for ${this.formPlatform}. Override createOAuth2Manager() in your provider base class.`);
     }
 
     /**
@@ -253,7 +302,7 @@ export abstract class BaseFormBuilderAction extends BaseAction {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
         for (const response of responses) {
-            for (const answer of response.answers) {
+            for (const answer of response.answerDetails) {
                 if (answer.fieldType === 'email' ||
                     (typeof answer.answer === 'string' && emailRegex.test(answer.answer))) {
                     emails.push(answer.answer);
