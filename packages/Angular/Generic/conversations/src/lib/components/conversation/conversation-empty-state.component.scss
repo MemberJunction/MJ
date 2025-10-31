@@ -7,6 +7,12 @@
   padding: 2rem;
   overflow-y: auto;
   position: relative;
+
+  // Ensure content starts at top on mobile
+  @media (max-width: 768px) {
+    align-items: flex-start;
+    padding: 1rem 0.75rem;
+  }
 }
 
 .loading-overlay {
@@ -207,24 +213,135 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .conversation-empty-state {
-    padding: 1rem;
+  .empty-state-container {
+    gap: 0.75rem;
+  }
+
+  .greeting-section {
+    padding: 0.25rem 0;
+  }
+
+  .greeting-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
   }
 
   .greeting-title {
-    font-size: 1.5rem;
+    font-size: 1.1rem;
   }
 
   .greeting-subtitle {
-    font-size: 0.9rem;
+    font-size: 0.75rem;
+    padding: 0 0.5rem;
   }
 
   .prompt-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .prompt-card {
+    padding: 0.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .prompt-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+
+  .prompt-title {
+    font-size: 0.75rem;
+  }
+
+  .prompt-text {
+    font-size: 0.7rem;
+    -webkit-line-clamp: 1;
+  }
+
+  .message-input-wrapper {
+    margin: 0.5rem 0;
   }
 
   .tips-section {
+    display: none; // Hide tips on mobile to save space
+  }
+
+  .loading-content {
+    padding: 1rem;
+  }
+
+  .loading-message {
+    font-size: 0.85rem;
+  }
+}
+
+/* Small Phone adjustments */
+@media (max-width: 480px) {
+  .empty-state-container {
+    gap: 0.5rem;
+  }
+
+  .greeting-section {
+    padding: 0.25rem 0;
+  }
+
+  .greeting-icon {
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .greeting-title {
+    font-size: 1rem;
+  }
+
+  .greeting-subtitle {
+    font-size: 0.7rem;
+    padding: 0 0.25rem;
+  }
+
+  .prompt-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+  }
+
+  .prompt-card {
+    padding: 0.4rem;
     flex-direction: column;
-    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .prompt-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+  }
+
+  .prompt-title {
+    font-size: 0.7rem;
+  }
+
+  .prompt-text {
+    font-size: 0.65rem;
+    -webkit-line-clamp: 1;
+  }
+
+  .message-input-wrapper {
+    margin: 0.4rem 0;
+  }
+
+  .tips-section {
+    display: none;
+  }
+
+  .loading-content {
+    padding: 1rem;
+  }
+
+  .loading-message {
+    font-size: 0.8rem;
   }
 }

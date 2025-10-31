@@ -6,7 +6,8 @@ import {
   OnInit,
   OnDestroy,
   DoCheck,
-  ChangeDetectorRef
+  ChangeDetectorRef,
+  HostListener
 } from '@angular/core';
 import { ConversationEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
@@ -104,6 +105,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public activeArtifactId: string | null = null;
   public activeVersionNumber: number | null = null;
   public activeVersionId: string | null = null;
+  public isMobileView: boolean = false;
 
   // Artifact permissions
   public canShareActiveArtifact: boolean = false;
@@ -150,6 +152,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async ngOnInit() {
+    // Check initial mobile state
+    this.checkMobileView();
+
     // Load saved widths from localStorage
     this.loadSidebarWidth();
     this.loadArtifactPanelWidth();
@@ -157,6 +162,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Setup resize listeners
     window.addEventListener('mousemove', this.onResizeMove.bind(this));
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
+
+    // Setup touch listeners for mobile
+    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
 
     // Initialize AI Engine to load agent metadata cache
     // This ensures agent names and icons are available for display
@@ -298,6 +307,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
     window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.checkMobileView();
+  }
+
+  private checkMobileView(): void {
+    const wasMobile = this.isMobileView;
+    this.isMobileView = window.innerWidth < 768;
+
+    if (this.isMobileView && !wasMobile) {
+      this.isSidebarVisible = false;
+    } else if (!this.isMobileView && wasMobile) {
+      this.isSidebarVisible = true;
+    }
   }
 
   onTabChanged(tab: NavigationTab): void {
@@ -340,6 +367,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   toggleSidebar(): void {
     this.isSidebarVisible = !this.isSidebarVisible;
+  }
+
+  closeSidebar(): void {
+    if (this.isMobileView && this.isSidebarVisible) {
+      this.isSidebarVisible = false;
+    }
   }
 
   closeArtifactPanel(): void {
@@ -492,6 +525,58 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.isArtifactPanelResizing = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      this.saveArtifactPanelWidth();
+    }
+  }
+
+  /**
+   * Touch event handlers for mobile resize support
+   */
+  onSidebarResizeTouchStart(event: TouchEvent): void {
+    this.isSidebarResizing = true;
+    const touch = event.touches[0];
+    this.sidebarResizeStartX = touch.clientX;
+    this.sidebarResizeStartWidth = this.sidebarWidth;
+    event.preventDefault();
+  }
+
+  onArtifactPanelResizeTouchStart(event: TouchEvent): void {
+    this.isArtifactPanelResizing = true;
+    const touch = event.touches[0];
+    this.artifactPanelResizeStartX = touch.clientX;
+    this.artifactPanelResizeStartWidth = this.artifactPanelWidth;
+    event.preventDefault();
+  }
+
+  private onResizeTouchMove(event: TouchEvent): void {
+    if (this.isSidebarResizing) {
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - this.sidebarResizeStartX;
+      let newWidth = this.sidebarResizeStartWidth + deltaX;
+
+      newWidth = Math.max(200, Math.min(500, newWidth));
+      this.sidebarWidth = newWidth;
+    } else if (this.isArtifactPanelResizing) {
+      const container = document.querySelector('.workspace-content') as HTMLElement;
+      if (!container) return;
+
+      const touch = event.touches[0];
+      const containerWidth = container.offsetWidth;
+      const deltaX = touch.clientX - this.artifactPanelResizeStartX;
+      const deltaPercent = (deltaX / containerWidth) * -100;
+      let newWidth = this.artifactPanelResizeStartWidth + deltaPercent;
+
+      newWidth = Math.max(20, Math.min(70, newWidth));
+      this.artifactPanelWidth = newWidth;
+    }
+  }
+
+  private onResizeTouchEnd(event: TouchEvent): void {
+    if (this.isSidebarResizing) {
+      this.isSidebarResizing = false;
+      this.saveSidebarWidth();
+    } else if (this.isArtifactPanelResizing) {
+      this.isArtifactPanelResizing = false;
       this.saveArtifactPanelWidth();
     }
   }
