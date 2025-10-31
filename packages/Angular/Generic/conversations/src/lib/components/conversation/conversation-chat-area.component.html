@@ -108,6 +108,7 @@
                       [currentUser]="currentUser"
                       [conversationHistory]="inputRef.conversationId === conversationState.activeConversation.ID ? messages : []"
                       [artifactsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? artifactsByDetailId : emptyArtifactsMap"
+                      [systemArtifactsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? systemArtifactsByDetailId : emptyArtifactsMap"
                       [agentRunsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? agentRunsByDetailId : emptyAgentRunsMap"
                       [inProgressMessageIds]="inputRef.conversationId === conversationState.activeConversation.ID ? inProgressMessageIds : emptyInProgressIds"
                       [disabled]="isProcessing"

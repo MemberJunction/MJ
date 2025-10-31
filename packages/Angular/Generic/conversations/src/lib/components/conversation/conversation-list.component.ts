@@ -465,7 +465,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe(conversationIds => {
       this.conversationIdsWithTasks = conversationIds;
-      this.cdr.markForCheck(); // Trigger change detection for icon updates
+      this.cdr.detectChanges(); // Force change detection to ensure spinner icons update reliably
     });
   }
 
