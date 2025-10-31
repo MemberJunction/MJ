@@ -51,11 +51,14 @@ import { AppComponent } from './app.component';
 import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-forms.module';
 import { environment } from 'src/environments/environment';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { EventAbstractSubmissionModule, LoadEventManagementDashboard, LoadAbstractSubmissionDashboard } from 'event-abstract-submission-ui';
 import { NavigationItemDemoComponent } from './demo/navigation-item.component';
 import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
 
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
+LoadEventManagementDashboard(); // prevent tree shaking for event management dashboard
+LoadAbstractSubmissionDashboard(); // prevent tree shaking for abstract submission dashboard
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -97,6 +100,7 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     NotificationModule,
     ReactiveFormsModule,
     AuthServicesModule.forRoot(environment),
+    EventAbstractSubmissionModule,
     // Import standalone component
     SystemValidationBannerComponent,
   ],
