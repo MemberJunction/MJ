@@ -33,15 +33,7 @@
           <div class="form-section">
 
           <div class="form-group">
-            <label for="event" class="form-label required">
-              Event
-              <a *ngIf="record.EventID"
-                 (click)="openEventRecord()"
-                 class="entity-link-icon"
-                 title="Open event record">
-                <i class="fa fa-external-link-alt"></i>
-              </a>
-            </label>
+            <label for="event" class="form-label required">Event</label>
             <select
               id="event"
               name="event"
@@ -114,7 +106,6 @@
               </select>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
