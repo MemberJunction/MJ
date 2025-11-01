@@ -4997,7 +4997,7 @@ The context is now within limits. Please retry your request with the recovered c
                     for (let i = 0; i < pathParts.length - 1; i++) {
                         const part = pathParts[i];
                         // Remove [] suffix for intermediate path parts
-                        const cleanPart = part.replace('[]', '');
+                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
                         if (!(cleanPart in current)) {
                             current[cleanPart] = {};
                         }

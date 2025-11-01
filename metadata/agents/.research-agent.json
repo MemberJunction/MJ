@@ -84,6 +84,28 @@
             "checksum": "616a50e782ee92895f6f2982620728edf2559ee9183981058c4d8946f5b18fc8"
           }
         }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "*": "codeAnalysis[]"
+            },
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "78270AE2-0FCD-4E07-B6A8-C581D18F31FA"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T20:26:05.300Z",
+            "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -208,6 +230,28 @@
             "checksum": "d8b358da42739a5d23ca02dd91c36d37c6c6467e2a6eba9c6f78dfdd64c0abbf"
           }
         }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "*": "codeAnalysis[]"
+            },
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "4DFF6A3D-E25F-42E6-A5D1-52AFA4B00C81"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T20:26:05.508Z",
+            "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -274,6 +318,28 @@
           "sync": {
             "lastModified": "2025-10-15T23:02:37.521Z",
             "checksum": "e4a517c48df4a1d9a19b7d584214d6d9a7ac2371073b79e72070e9d4cb0e1b75"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "*": "codeAnalysis[]"
+            },
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "E23ACB34-4865-4F9A-89D0-9C1E19DCCF7B"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T20:26:05.518Z",
+            "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
           }
         }
       ]
@@ -457,7 +523,9 @@
                   "AgentID": "@parent:ID",
                   "SubAgentID": "@lookup:AI Agents.Name=Infographic Agent",
                   "Status": "Active",
-                  "SubAgentOutputMapping": "{\"*\": \"visualizations\"}",
+                  "SubAgentOutputMapping": {
+                    "*": "visualizations"
+                  },
                   "SubAgentContextPaths": [
                     "*"
                   ]
@@ -466,8 +534,28 @@
                   "ID": "75E27303-EA65-4EC6-A104-DF63359BCA61"
                 },
                 "sync": {
-                  "lastModified": "2025-10-19T17:24:37.534Z",
-                  "checksum": "6f01c3651388e68e96bed9d2805bcef0c5eb86061c8714b8a3df9c3fd2687177"
+                  "lastModified": "2025-11-01T20:26:05.751Z",
+                  "checksum": "032fd5b4e0a61e39eccf398e68afdec2205a4ed4e592f8db3d7c1efe86cfc6fd"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": {
+                    "*": "codeAnalysis[]"
+                  },
+                  "SubAgentContextPaths": [
+                    "*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "26243E8B-A3F5-48F6-81DE-3B9F74E63531"
+                },
+                "sync": {
+                  "lastModified": "2025-11-01T20:26:05.689Z",
+                  "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
                 }
               }
             ]

@@ -451,7 +451,7 @@ export class FlowAgentType extends BaseAgentType {
                     for (let i = 0; i < pathParts.length - 1; i++) {
                         const part = pathParts[i];
                         // Remove [] suffix for intermediate path parts
-                        const cleanPart = part.replace('[]', '');
+                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
                         if (!(cleanPart in current)) {
                             current[cleanPart] = {};
                         }
