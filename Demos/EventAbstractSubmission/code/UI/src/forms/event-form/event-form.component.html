@@ -10,22 +10,22 @@
       <div class="form-body">
         <div class="form-section">
           <div class="form-section-title">Basic Information</div>
-          <mj-form-field [record]="record" fieldName="Name"></mj-form-field>
-          <mj-form-field [record]="record" fieldName="Description"></mj-form-field>
-          <mj-form-field [record]="record" fieldName="Venue"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Name"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Description"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Venue"></mj-form-field>
         </div>
 
         <div class="form-section">
           <div class="form-section-title">Dates & Deadlines</div>
-          <mj-form-field [record]="record" fieldName="StartDate"></mj-form-field>
-          <mj-form-field [record]="record" fieldName="EndDate"></mj-form-field>
-          <mj-form-field [record]="record" fieldName="SubmissionDeadline"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="StartDate"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="EndDate"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="SubmissionDeadline"></mj-form-field>
         </div>
 
         <div class="form-section">
           <div class="form-section-title">Details</div>
-          <mj-form-field [record]="record" fieldName="Status"></mj-form-field>
-          <mj-form-field [record]="record" fieldName="MaxSubmissionsPerSpeaker"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Status"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="MaxSubmissionsPerSpeaker"></mj-form-field>
         </div>
       </div>
     </div>

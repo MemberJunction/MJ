@@ -129,6 +129,38 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   }
 
   /**
+   * Handle paste event - strip HTML and paste as plain text only
+   */
+  onPaste(event: ClipboardEvent): void {
+    event.preventDefault();
+
+    // Get plain text from clipboard
+    const text = event.clipboardData?.getData('text/plain') || '';
+
+    if (!text) return;
+
+    // Insert plain text at cursor position
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+
+    // Insert text as text node (not HTML)
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+
+    // Move cursor to end of inserted text
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    // Trigger input event to update model
+    this.onInput();
+  }
+
+  /**
    * Handle keydown events
    */
   onKeyDown(event: KeyboardEvent): void {

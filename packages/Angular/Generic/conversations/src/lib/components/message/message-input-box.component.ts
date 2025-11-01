@@ -52,7 +52,7 @@ export class MessageInputBoxComponent {
   /**
    * Handle Enter key from MentionEditorComponent
    */
-  onEnterPressed(text: string): void {
+  onEnterPressed(_text: string): void {
     this.onSendClick();
   }
 
@@ -79,6 +79,7 @@ export class MessageInputBoxComponent {
 
   /**
    * Handle clicks on the container - focus the mention editor
+   * Only moves cursor to end if clicking outside the contentEditable area
    */
   onContainerClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
@@ -88,21 +89,24 @@ export class MessageInputBoxComponent {
       return;
     }
 
-    // Focus the mention editor when clicking anywhere in the container
-    if (this.mentionEditor?.editorRef) {
-      this.mentionEditor.editorRef.nativeElement.focus();
+    const editor = this.mentionEditor?.editorRef?.nativeElement;
+    if (!editor) return;
 
-      // Move cursor to end of content
-      const selection = window.getSelection();
-      const range = document.createRange();
-      const editor = this.mentionEditor.editorRef.nativeElement;
+    // If clicking directly on the editor or its children, let the browser handle cursor placement
+    if (target === editor || editor.contains(target)) {
+      return;
+    }
 
-      if (editor && selection) {
-        range.selectNodeContents(editor);
-        range.collapse(false); // Collapse to end
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
+    // Only if clicking on the container (empty space), focus and move cursor to end
+    editor.focus();
+    const selection = window.getSelection();
+    const range = document.createRange();
+
+    if (selection) {
+      range.selectNodeContents(editor);
+      range.collapse(false); // Collapse to end
+      selection.removeAllRanges();
+      selection.addRange(range);
     }
   }
 }
