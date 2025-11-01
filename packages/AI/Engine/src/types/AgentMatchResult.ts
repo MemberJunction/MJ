@@ -49,6 +49,12 @@ export interface AgentMatchResult {
      * Examples: "Research Content", "Report", "Diagram"
      */
     defaultArtifactType?: string;
+
+    /**
+     * Parent agent ID for child agents (optional)
+     * NULL if this is a top-level agent
+     */
+    parentId?: string;
 }
 
 /**
@@ -72,4 +78,10 @@ export interface AgentEmbeddingMetadata {
      * NULL if agent doesn't produce artifacts
      */
     defaultArtifactType?: string;
+
+    /**
+     * Parent agent ID for child agents
+     * NULL if this is a top-level agent
+     */
+    parentId?: string;
 }

@@ -232,39 +232,38 @@ export class AIEngine extends AIEngineBase {
     /**
      * Override AdditionalLoading to load Actions and compute embeddings.
      * Called automatically during AIEngine initialization after base loading completes.
-     * Only generates embeddings on the first load to avoid wasteful regeneration during auto-refresh.
+     * Embeddings are generated incrementally - only new agents/actions get embeddings computed.
      * @param contextUser - User context for any additional operations
      */
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Call parent first (sets up prompt-category associations, agent relationships, etc.)
         await super.AdditionalLoading(contextUser);
 
-        // Only generate embeddings on the very first load
-        // On subsequent auto-refreshes (when configs are updated), skip embedding generation
-        // since the embeddings are still valid and expensive to regenerate
-        if (!this._embeddingsGenerated) {
-            // Must load actions first since action embeddings depend on them
-            await this.loadActions(contextUser);
+        // Always load actions and embeddings
+        // The embedding methods have built-in incremental checks:
+        // - loadAgentEmbeddings() and loadActionEmbeddings() filter to only items not in cache
+        // - Early returns if no new items (lines 296, 375) - minimal overhead (~1ms)
+        // - First load: generates all embeddings
+        // - Subsequent loads: only generates embeddings for new items
+        await this.loadActions(contextUser);
 
-            // now load all the related embeddings and we can do this all in parallel as well
-            // since they are independent of each other
-            const promises = [];
-            // Compute agent embeddings using agents already loaded by base class
-            promises.push(this.loadAgentEmbeddings());
+        // Load all embeddings in parallel since they are independent
+        const promises = [];
+        // Compute agent embeddings using agents already loaded by base class
+        promises.push(this.loadAgentEmbeddings());
 
-            // Compute action embeddings using actions we just loaded
-            promises.push(this.loadActionEmbeddings());
+        // Compute action embeddings using actions we just loaded
+        promises.push(this.loadActionEmbeddings());
 
-            // Load note embeddings
-            promises.push(this.loadNoteEmbeddings(contextUser));
+        // Load note embeddings
+        promises.push(this.loadNoteEmbeddings(contextUser));
 
-            // Load example embeddings
-            promises.push(this.loadExampleEmbeddings(contextUser));
+        // Load example embeddings
+        promises.push(this.loadExampleEmbeddings(contextUser));
 
-            await Promise.all(promises);
+        await Promise.all(promises);
 
-            this._embeddingsGenerated = true;
-        }
+        this._embeddingsGenerated = true;
     }
 
     /**
