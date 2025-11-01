@@ -1,17 +1,17 @@
 <div class="message-input-box-container">
   <div class="input-wrapper">
-    <textarea
-      #messageTextarea
-      class="message-input-box-textarea"
-      [(ngModel)]="value"
-      [disabled]="disabled"
+    <mj-mention-editor
       [placeholder]="placeholder"
-      [rows]="rows"
-      (keydown)="onKeyDown($event)"
-      (input)="onInput($event)"
-    ></textarea>
+      [disabled]="disabled"
+      [currentUser]="currentUser"
+      [enableMentions]="enableMentions"
+      [(ngModel)]="value"
+      (valueChange)="onValueChange($event)"
+      (enterPressed)="onEnterPressed($event)"
+      (mentionSelected)="onMentionSelected($event)">
+    </mj-mention-editor>
 
-    <!-- Send Button (Icon Only) - Inside textarea area -->
+    <!-- Send Button (Icon Only) - Positioned over editor -->
     <button
       class="send-button-icon"
       [disabled]="!canSend"
@@ -21,16 +21,4 @@
       <i class="fa-solid fa-paper-plane"></i>
     </button>
   </div>
-
-  <!-- Mention Dropdown -->
-  <mj-mention-dropdown
-    *ngIf="showMentionDropdown && enableMentions"
-    [suggestions]="mentionSuggestions"
-    [position]="mentionDropdownPosition"
-    [showAbove]="mentionDropdownShowAbove"
-    [useFixedPositioning]="true"
-    [visible]="true"
-    (suggestionSelected)="onMentionSelected($event)"
-    (closed)="closeMentionDropdown()">
-  </mj-mention-dropdown>
 </div>

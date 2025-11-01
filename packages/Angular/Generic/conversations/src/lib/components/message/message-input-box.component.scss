@@ -19,6 +19,13 @@
   position: relative;
   display: flex;
   align-items: flex-end; // Align send button to bottom
+  padding: 5px; // Add padding around the editor
+
+  // Ensure mention editor takes full width
+  mj-mention-editor {
+    flex: 1;
+    display: block;
+  }
 }
 
 .message-input-box-textarea {

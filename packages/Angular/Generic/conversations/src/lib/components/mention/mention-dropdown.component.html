@@ -12,7 +12,7 @@
       *ngFor="let suggestion of suggestions; let i = index; trackBy: trackBySuggestion"
       class="mention-suggestion"
       [class.selected]="i === selectedIndex"
-      (click)="selectSuggestion(suggestion)"
+      (mousedown)="selectSuggestion(suggestion); $event.preventDefault()"
       (mouseenter)="selectedIndex = i"
     >
       <div class="suggestion-icon">

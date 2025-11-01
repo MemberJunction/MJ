@@ -1,0 +1,24 @@
+<div class="mention-editor-container" (click)="onContainerClick($event)">
+  <div
+    #editor
+    class="mention-editor"
+    contenteditable="true"
+    [attr.contenteditable]="!disabled"
+    [attr.data-placeholder]="placeholder"
+    (input)="onInput()"
+    (keydown)="onKeyDown($event)"
+    (blur)="onTouched()"
+  ></div>
+
+  <!-- Mention Dropdown -->
+  <mj-mention-dropdown
+    *ngIf="showMentionDropdown && enableMentions"
+    [suggestions]="mentionSuggestions"
+    [position]="mentionDropdownPosition"
+    [showAbove]="mentionDropdownShowAbove"
+    [useFixedPositioning]="true"
+    [visible]="true"
+    (suggestionSelected)="onMentionSelected($event)"
+    (closed)="closeMentionDropdown()">
+  </mj-mention-dropdown>
+</div>
