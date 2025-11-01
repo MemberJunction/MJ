@@ -348,11 +348,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     for (const mention of parseResult.mentions) {
       const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
 
+      // Get icon for the mention
+      let iconHTML = '';
+      if (mention.type === 'agent') {
+        // For agents, look up their icon from AIEngineBase cached agents
+        const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === mention.id);
+        const iconClass = agent?.IconClass || 'fa-solid fa-robot';
+        iconHTML = `<i class="${iconClass}"></i> `;
+      } else {
+        // For users, use user icon
+        iconHTML = '<i class="fa-solid fa-user"></i> ';
+      }
+
       // Match both quoted and unquoted versions
       const quotedPattern = new RegExp(`@"${this.escapeRegex(mention.name)}"`, 'gi');
       const unquotedPattern = new RegExp(`@${this.escapeRegex(mention.name)}(?![\\w"])`, 'gi');
 
-      const badgeHTML = `<span class="${badgeClass}">@${mention.name}</span>`;
+      // Create badge HTML with icon and NO @ sign
+      const badgeHTML = `<span class="${badgeClass}">${iconHTML}${mention.name}</span>`;
 
       // Replace quoted version first, then unquoted
       transformedText = transformedText.replace(quotedPattern, badgeHTML);

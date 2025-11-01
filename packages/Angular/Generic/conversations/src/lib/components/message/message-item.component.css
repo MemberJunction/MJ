@@ -80,31 +80,44 @@
   background-color: rgba(0, 0, 0, 0.02);
 }
 
-/* Mention Pills */
+/* Mention Pills - Match new editor chip style */
 :host ::ng-deep .mention-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  margin: 0 2px;
-  border-radius: 4px;
-  font-weight: 500;
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  margin: 0 3px;
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 :host ::ng-deep .mention-badge.agent {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  border: 2px solid rgba(102, 126, 234, 0.4);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 :host ::ng-deep .mention-badge.user {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
+  border: 2px solid rgba(240, 147, 251, 0.4);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+:host ::ng-deep .mention-badge i {
+  font-size: 12px;
+  opacity: 0.95;
 }
 
 :host ::ng-deep .mention-badge:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .message-avatar {

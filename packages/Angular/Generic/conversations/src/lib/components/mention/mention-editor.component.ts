@@ -73,15 +73,20 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   onContainerClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
+    const editor = this.editorRef?.nativeElement;
 
-    // If click is on the container itself (not the editor or dropdown), focus the editor
-    if (target.classList.contains('mention-editor-container')) {
-      this.editorRef?.nativeElement?.focus();
+    // Don't handle clicks on the dropdown or its children
+    if (target.closest('mj-mention-dropdown')) {
+      return;
+    }
+
+    // If clicking on container or any element that's not the editor itself, focus the editor
+    if (target !== editor && !editor?.contains(target)) {
+      editor?.focus();
 
       // Move cursor to end of content
       const selection = window.getSelection();
       const range = document.createRange();
-      const editor = this.editorRef?.nativeElement;
 
       if (editor && selection) {
         range.selectNodeContents(editor);

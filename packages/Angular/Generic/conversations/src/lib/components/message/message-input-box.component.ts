@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { MentionSuggestion } from '../../services/mention-autocomplete.service';
+import { MentionEditorComponent } from '../mention/mention-editor.component';
 
 /**
  * Reusable message input box component (presentational)
@@ -23,6 +24,8 @@ import { MentionSuggestion } from '../../services/mention-autocomplete.service';
   styleUrls: ['./message-input-box.component.scss']
 })
 export class MessageInputBoxComponent {
+  @ViewChild('mentionEditor') mentionEditor?: MentionEditorComponent;
+
   @Input() placeholder: string = 'Type your message to start a new conversation...';
   @Input() disabled: boolean = false;
   @Input() value: string = '';
@@ -71,6 +74,35 @@ export class MessageInputBoxComponent {
       this.textSubmitted.emit(textToSend);
       this.value = ''; // Clear input after sending
       this.valueChange.emit(this.value);
+    }
+  }
+
+  /**
+   * Handle clicks on the container - focus the mention editor
+   */
+  onContainerClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+
+    // Don't handle clicks on the send button
+    if (target.closest('.send-button-icon')) {
+      return;
+    }
+
+    // Focus the mention editor when clicking anywhere in the container
+    if (this.mentionEditor?.editorRef) {
+      this.mentionEditor.editorRef.nativeElement.focus();
+
+      // Move cursor to end of content
+      const selection = window.getSelection();
+      const range = document.createRange();
+      const editor = this.mentionEditor.editorRef.nativeElement;
+
+      if (editor && selection) {
+        range.selectNodeContents(editor);
+        range.collapse(false); // Collapse to end
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
     }
   }
 }

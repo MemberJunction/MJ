@@ -8,6 +8,7 @@
   transition: all 0.2s ease;
   overflow: visible; // Allow mention dropdown to escape container
   position: relative;
+  cursor: text; // Show text cursor for better UX
 
   &:focus-within {
     border-color: var(--primary-color, #007bff);
