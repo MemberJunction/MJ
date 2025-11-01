@@ -97,7 +97,7 @@ Parent Agent
 "User wants to 'save findings' but didn't specify what database entity/table to use."
 "I CANNOT guess entity names - I must call Database Research Agent."
 
-**Call Database Research Agent**: Ask it to look for entities we care about, it's possible user doesn't provide the correct entity name, so you should ask it like this: "Is there any entity for [some entity name] or related to [PURPOSE]? Please give me all fields in JSON for all entities that match what we describe"
+**Call Database Research Agent**: Ask it to look for entities that matches what we want, it's possible user doesn't provide the correct entity name, so you should ask it like this: "Is there any entity for [some entity name] or related to [PURPOSE]? Please investigate if such entity exists and if yes give me all fields in JSON for all entities that match what we describe"
 
 **IMPORTANT EXAMPLE CALL TO DATABASE RESEARCH AGENT**:
 
