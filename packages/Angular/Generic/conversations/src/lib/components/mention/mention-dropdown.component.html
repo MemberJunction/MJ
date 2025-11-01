@@ -16,10 +16,19 @@
       (mouseenter)="selectedIndex = i"
     >
       <div class="suggestion-icon">
+        <!-- Agent with LogoURL image (takes precedence) -->
+        <img
+          *ngIf="suggestion.type === 'agent' && suggestion.imageUrl"
+          [src]="suggestion.imageUrl"
+          [alt]="suggestion.displayName"
+          class="suggestion-image"
+        />
+        <!-- Agent with icon class (fallback) -->
         <i
-          *ngIf="suggestion.type === 'agent' && suggestion.icon"
+          *ngIf="suggestion.type === 'agent' && !suggestion.imageUrl && suggestion.icon"
           [ngClass]="getIconClasses(suggestion.icon)"
         ></i>
+        <!-- User icon -->
         <i
           *ngIf="suggestion.type === 'user'"
           class="fa-solid fa-user"

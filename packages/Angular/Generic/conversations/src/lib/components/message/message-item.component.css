@@ -115,6 +115,28 @@
   opacity: 0.95;
 }
 
+/* Support for custom icon classes with background-image (like mj-icon-skip) */
+:host ::ng-deep .mention-badge i[class^="mj-icon-"],
+:host ::ng-deep .mention-badge i[class*=" mj-icon-"] {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  vertical-align: middle;
+  font-size: inherit;
+}
+
+/* Support for image tags in mention badges */
+:host ::ng-deep .mention-badge img {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+}
+
 :host ::ng-deep .mention-badge:hover {
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
