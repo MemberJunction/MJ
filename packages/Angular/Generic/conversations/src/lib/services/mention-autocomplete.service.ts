@@ -12,8 +12,9 @@ export interface MentionSuggestion {
   name: string;
   displayName: string;
   description?: string;
-  avatarUrl?: string;
-  icon?: string; // For agents
+  avatarUrl?: string; // Deprecated, use imageUrl
+  imageUrl?: string; // For agent LogoURL or user avatar
+  icon?: string; // For agents (FontAwesome class)
 }
 
 /**
@@ -75,6 +76,7 @@ export class MentionAutocompleteService {
           name: agent.Name || 'Unknown',
           displayName: agent.Name || 'Unknown',
           description: agent.Description || undefined,
+          imageUrl: agent.LogoURL || undefined, // Agent logo/avatar image
           icon: this.getAgentIcon(agent)
         });
       }

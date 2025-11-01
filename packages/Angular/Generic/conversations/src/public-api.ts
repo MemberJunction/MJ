@@ -41,6 +41,7 @@ export * from './lib/components/message/message-input.component';
 export * from './lib/components/message/message-input-box.component';
 export * from './lib/components/message/conversation-message-rating.component';
 export * from './lib/components/mention/mention-dropdown.component';
+export * from './lib/components/mention/mention-editor.component';
 export * from './lib/components/collection/collection-tree.component';
 export * from './lib/components/collection/collection-view.component';
 export * from './lib/components/collection/collection-artifact-card.component';

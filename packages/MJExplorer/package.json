@@ -32,6 +32,7 @@
     "@memberjunction/ng-container-directives": "2.114.0",
     "@memberjunction/ng-core-entity-forms": "2.114.0",
     "@memberjunction/ng-dashboards": "2.114.0",
+    "event-abstract-submission-ui": "file:../../Demos/EventAbstractSubmission/code/UI",
     "@memberjunction/ng-explorer-core": "2.114.0",
     "@memberjunction/ng-explorer-settings": "2.114.0",
     "@memberjunction/ng-join-grid": "2.114.0",
