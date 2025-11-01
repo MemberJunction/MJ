@@ -171,6 +171,10 @@ export class SubmissionFormComponent extends BaseFormComponent implements OnInit
       this.sharedService.OpenEntityRecord('Events', CompositeKey.FromID(this.record.EventID));
     }
   }
+
+  public goToDashboard(): void {
+    this.router.navigate(['app', 'Events']);
+  }
 }
 
 export function LoadSubmissionFormComponent() {

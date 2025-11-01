@@ -9,11 +9,17 @@
           <h3>{{ record.Name || 'New Event' }}</h3>
           <p class="header-subtitle">{{ record.Location || 'Event Details' }}</p>
         </div>
-        <div class="header-meta" *ngIf="record.ID">
-          <span class="status-badge" [ngClass]="statusBadgeClass">{{ record.Status }}</span>
-          <span class="event-dates" *ngIf="record.StartDate">
-            {{ record.StartDate | date:'MMM d, y' }} - {{ record.EndDate | date:'MMM d, y' }}
-          </span>
+        <div class="header-actions">
+          <button type="button" class="btn-dashboard" (click)="goToDashboard()">
+            <i class="fa fa-th-large"></i>
+            Dashboard
+          </button>
+          <div class="header-meta" *ngIf="record.ID">
+            <span class="status-badge" [ngClass]="statusBadgeClass">{{ record.Status }}</span>
+            <span class="event-dates" *ngIf="record.StartDate">
+              {{ record.StartDate | date:'MMM d, y' }} - {{ record.EndDate | date:'MMM d, y' }}
+            </span>
+          </div>
         </div>
       </div>
     </div>

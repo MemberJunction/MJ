@@ -149,11 +149,18 @@
                 "EventID": "data.eventId",
                 "TypeformResponseID": "payload.responseId",
                 "SubmittedAt": "payload.submittedAt",
-                "Status": "New",
+                "Status": "payload.passedInitialScreening ? 'Passed Initial' : 'Failed Initial'",
                 "SubmissionTitle": "payload.answers.What is your proposed session topic",
                 "SubmissionAbstract": "payload.answers.Please share a brief biography about yourself",
                 "SubmissionSummary": "payload.generatedSummary",
-                "PresentationFileURL": "payload.answers.Please upload your detailed session proposal required"
+                "KeyTopics": "payload.keyTopics",
+                "PresentationFileURL": "payload.answers.Please upload your detailed session proposal required",
+                "AIEvaluationScore": "payload.aiEvaluationScore",
+                "AIEvaluationReasoning": "payload.aiEvaluationReasoning",
+                "AIEvaluationDimensions": "payload.aiEvaluationDimensions",
+                "PassedInitialScreening": "payload.passedInitialScreening",
+                "FailureReasons": "payload.failureReasons",
+                "IsFixable": "payload.isFixable"
               }
             },
             "ActionOutputMapping": {
@@ -167,8 +174,8 @@
             "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
           },
           "sync": {
-            "lastModified": "2025-11-01T15:39:39.072Z",
-            "checksum": "ebeda45211708bdb4fc3907a07a39dceec46ed9dff1e1c06b571aa54e7984e39"
+            "lastModified": "2025-11-01T17:39:47.759Z",
+            "checksum": "4ac0895ea2860b0c3db8dfbc131bdd63f6cc4a69756a01290cc41627694ab8b9"
           }
         },
         {

@@ -9,9 +9,15 @@
           <h3>{{ eventName }}</h3>
           <p class="header-subtitle">{{ record.SubmissionTitle || 'New Submission' }}</p>
         </div>
-        <div class="header-meta" *ngIf="record.ID">
-          <span class="status-badge" [ngClass]="statusBadgeClass">{{ record.Status }}</span>
-          <span class="submission-date">{{ record.SubmittedAt | date:'MMM d, y' }}</span>
+        <div class="header-actions">
+          <button type="button" class="btn-dashboard" (click)="goToDashboard()">
+            <i class="fa fa-th-large"></i>
+            Dashboard
+          </button>
+          <div class="header-meta" *ngIf="record.ID">
+            <span class="status-badge" [ngClass]="statusBadgeClass">{{ record.Status }}</span>
+            <span class="submission-date">{{ record.SubmittedAt | date:'MMM d, y' }}</span>
+          </div>
         </div>
       </div>
     </div>
