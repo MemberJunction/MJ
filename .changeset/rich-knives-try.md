@@ -2,4 +2,4 @@
 "@memberjunction/ng-conversations": patch
 ---
 
-chat mobile fixes
+code fixes

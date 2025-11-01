@@ -51,10 +51,10 @@ const sanitized = validator.escape(userInput);
 
 ## Code Structure
 
-Your code MUST follow this pattern:
+Your code MUST follow this exact pattern:
 
 ```javascript
-// 1. Access input data via 'input' variable
+// 1. Access input data via 'input' global variable (automatically provided)
 const data = input.myData;
 
 // 2. Require any needed libraries
@@ -72,22 +72,100 @@ for (const [category, items] of Object.entries(results)) {
     };
 }
 
-// 4. Set output variable with result
+// 4. CRITICAL: Assign result to 'output' variable (NOT return statement)
 output = stats;
+```
+
+### CRITICAL REQUIREMENTS:
+
+1. **Input**: Your code receives data via the global `input` variable (do NOT declare it)
+2. **Output**: Your code MUST assign the result to the global `output` variable (do NOT use `return`)
+3. **No Functions Wrapping**: Do NOT wrap your code in a function - write it as top-level statements
+4. **Return Values**: The execution environment returns whatever value is in the `output` variable
+
+### What Works:
+```javascript
+// ✅ CORRECT - assigns to output variable
+const result = calculateSomething(input.data);
+output = result;
+```
+
+```javascript
+// ✅ CORRECT - output can be any type (string, number, object, array)
+output = "Hello World";
+output = 42;
+output = { key: "value" };
+output = [1, 2, 3];
+output = "# Markdown\n\n| Table | Data |\n|---|---|";
+```
+
+### What Doesn't Work:
+```javascript
+// ❌ WRONG - using return statement
+function myCode() {
+    const result = input.data;
+    return result;  // This won't work!
+}
+```
+
+```javascript
+// ❌ WRONG - not assigning to output
+const result = calculateSomething(input.data);
+// Forgot to assign to output!
+```
+
+## Supported Output Types
+
+Your code can return ANY JSON-serializable value via the `output` variable:
+
+- **Primitives**: Numbers, strings, booleans, null
+- **Objects**: Plain JavaScript objects `{ key: value }`
+- **Arrays**: Arrays of any JSON-serializable values `[1, 2, 3]`
+- **Complex Structures**: Nested objects and arrays
+- **Strings**: Including multi-line strings, markdown, CSV, JSON strings, etc.
+
+**Examples:**
+```javascript
+// Number
+output = 42;
+
+// String (including markdown tables)
+output = "| Name | Value |\n|------|-------|\n| A | 1 |\n| B | 2 |";
+
+// Object
+output = { totalSales: 15000, avgOrderValue: 125.50, topProduct: "Widget" };
+
+// Array of objects
+output = [
+    { name: "Alice", score: 95 },
+    { name: "Bob", score: 87 }
+];
+
+// Complex nested structure
+output = {
+    summary: { total: 100, processed: 95 },
+    details: [
+        { id: 1, data: "..." },
+        { id: 2, data: "..." }
+    ]
+};
 ```
 
 ## Security Constraints
 
 Your code runs in a secure sandbox with these restrictions:
-- ✅ CAN access `input` data
+- ✅ CAN access `input` data (automatically provided global variable)
 - ✅ CAN use console.log/error/warn/info for debugging
 - ✅ CAN require allowed libraries (listed above)
-- ✅ CAN use built-ins: JSON, Math, Date, Array, Object, String, Number, Boolean
+- ✅ CAN use built-ins: JSON, Math, Date, Array, Object, String, Number, Boolean, RegExp
+- ✅ CAN define and call functions within your code
+- ✅ CAN use recursion
 - ❌ CANNOT access filesystem (no fs, path)
-- ❌ CANNOT make network requests (no http, https, axios)
-- ❌ CANNOT spawn processes
+- ❌ CANNOT make network requests (no http, https, axios, fetch)
+- ❌ CANNOT spawn processes (no child_process)
 - ❌ CANNOT use async/await or Promises (synchronous only)
 - ❌ CANNOT run beyond timeout (default 30 seconds)
+- ❌ CANNOT access Node.js process or OS modules
 
 ## Your Workflow
 

@@ -6,6 +6,58 @@ The `@memberjunction/core-actions` library provides a collection of pre-built ac
 
 This package contains both custom-built and generated actions that extend the MemberJunction Actions framework. It provides ready-to-use implementations for core functionality that many MemberJunction applications require.
 
+## Action Types in This Package
+
+### 1. Custom Actions (`/src/custom/`)
+
+Manually written TypeScript actions for complex business logic, external integrations, and core functionality. These are hand-crafted implementations that handle sophisticated use cases.
+
+**Location:** [/src/custom/](./src/custom/)
+
+### 2. Generated Actions (`/src/generated/action_subclasses.ts`)
+
+AI-generated action implementations created from natural language descriptions. These are particularly useful for entity-specific CRUD operations and parameter mapping.
+
+**Location:** [/src/generated/action_subclasses.ts](./src/generated/action_subclasses.ts)
+
+#### About Generated Actions
+
+Generated actions are created by:
+1. Creating an Action record with `Type='Generated'` and a `UserPrompt` describing desired functionality
+2. AI automatically generates TypeScript code, parameters, and result codes
+3. Generated code is saved to database for review
+4. After approval (`CodeApprovalStatus='Approved'`), this file is generated during build
+
+**See:** [Actions Framework Documentation](../GENERATED-ACTIONS.md) for complete guide.
+
+#### Child Actions & Composition Pattern
+
+Many generated actions are "child actions" that wrap generic parent actions (like "Create Record" or "Get Record").
+
+**⚠️ Important:** Child actions do **NOT** inherit from their parent action classes. Instead, they use a **composition pattern**:
+
+- Child action **ALWAYS extends `BaseAction`** (not the parent action class)
+- `ParentID` is a database relationship (metadata), not TypeScript inheritance
+- Child invokes parent via `ActionEngineServer.Instance.RunAction()` at runtime
+
+**Example:**
+
+"Create Conversation Record" (child) wraps "Create Record" (parent):
+- Provides entity-specific parameters (UserID, Type, Name, etc.)
+- Maps these to parent's generic format (EntityName + Fields object)
+- Invokes parent action via ActionEngine
+- Extracts and returns entity-specific outputs
+
+**See Examples:**
+- [Create Conversation Record](./src/generated/action_subclasses.ts#L98-L215) - Child action implementation
+- [Get AI Model Cost](./src/generated/action_subclasses.ts#L218-L317) - Another child action example
+
+**Why Composition?**
+- ParentID is metadata-only (can change parent without recompiling)
+- Child works independently without parent's TypeScript code
+- ActionEngine finds parent by ID at runtime (fully dynamic)
+- No coupling to parent's implementation details
+
 ## Important Note
 
 **This library should only be imported on the server side.** It contains server-specific dependencies and functionality that are not suitable for client-side applications.

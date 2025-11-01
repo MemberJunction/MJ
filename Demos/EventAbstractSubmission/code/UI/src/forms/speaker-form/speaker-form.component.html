@@ -1,0 +1,34 @@
+<div class="record-form-container">
+  <form *ngIf="record" class="record-form" #form="ngForm">
+    <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+    <div class="form-card">
+      <div class="form-header">
+        <h3>{{ record.ID ? 'Edit Speaker' : 'New Speaker' }}</h3>
+      </div>
+
+      <div class="form-body">
+        <div class="form-section">
+          <div class="form-section-title">Personal Information</div>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="FullName"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Email"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="PhoneNumber"></mj-form-field>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Professional Information</div>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Organization"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Title"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="Bio"></mj-form-field>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Social Media & Web</div>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="LinkedInURL"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="TwitterHandle"></mj-form-field>
+          <mj-form-field [record]="record" [EditMode]="EditMode" fieldName="WebsiteURL"></mj-form-field>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>

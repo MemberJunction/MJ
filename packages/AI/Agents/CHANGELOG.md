@@ -1,5 +1,25 @@
 # @memberjunction/ai-agents
 
+## 2.114.0
+
+### Minor Changes
+
+- 683eaeb: migration
+- 7f46575: Migration
+- 9af02f0: Migration
+
+### Patch Changes
+
+- @memberjunction/ai@2.114.0
+- @memberjunction/ai-core-plus@2.114.0
+- @memberjunction/aiengine@2.114.0
+- @memberjunction/ai-prompts@2.114.0
+- @memberjunction/actions-base@2.114.0
+- @memberjunction/actions@2.114.0
+- @memberjunction/core@2.114.0
+- @memberjunction/core-entities@2.114.0
+- @memberjunction/global@2.114.0
+
 ## 2.113.2
 
 ### Patch Changes

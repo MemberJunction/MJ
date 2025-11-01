@@ -108,7 +108,7 @@ import { UserInfo } from '@memberjunction/core';
       color: white;
     }
     .sidebar-toggle {
-      display: none;
+      display: flex;
     }
 
     /* Mobile adjustments: 481px - 768px */

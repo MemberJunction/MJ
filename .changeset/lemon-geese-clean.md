@@ -2,4 +2,4 @@
 "@memberjunction/ng-conversations": minor
 ---
 
-Migration
+Fixed Conversations Hamburger Functionality
