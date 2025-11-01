@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Create SVG Chart",
-      "Description": "Generates SVG charts from data using Vega-Lite. Supports various chart types including bar, line, pie, scatter, and area charts. Designed for AI agents and workflows to create publication-quality visualizations from structured data without writing visualization code.",
+      "Description": "Generates SVG charts from data using D3. Supports various chart types including bar, line, pie, scatter, and area charts. Designed for AI agents and workflows to create publication-quality visualizations from structured data without writing visualization code.",
       "DriverClass": "__CreateSVGChart",
       "Type": "Custom",
       "Status": "Active",
@@ -18,15 +18,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Type of chart to generate: 'bar', 'line', 'pie', 'scatter', 'area', 'point'. Required unless VegaLiteSpec is provided.",
-            "IsRequired": false
+            "Description": "Type of chart to generate: 'bar', 'line', 'pie', 'scatter', 'area'. Required.",
+            "IsRequired": true
           },
           "primaryKey": {
             "ID": "588CFAFD-1EA3-478E-935A-33932113B44A"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.113Z",
-            "checksum": "060ffb6c8836cfbbde94bdd57604738a505f8f0714be2cfd3c985f24d3860966"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-1"
           }
         },
         {
@@ -36,87 +36,15 @@
             "Type": "Input",
             "ValueType": "Other",
             "IsArray": true,
-            "Description": "JSON array of data objects. Each object represents a data point with field names as keys. Required unless VegaLiteSpec is provided.",
-            "IsRequired": false
+            "Description": "Array of data objects (can be passed as object or JSON string). For bar charts: {label, value} or {x, y}. For line/area/scatter: {x, y}. For pie: {label, value}. Required.",
+            "IsRequired": true
           },
           "primaryKey": {
             "ID": "71FD517A-B020-4D93-A543-67ABE3BD48BD"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.126Z",
-            "checksum": "a7fdbfc33e2d60c5a96d99240fdbeabe7e72444e7d33541fda4413578a1c76f7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "XField",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Field name for X axis (required for bar, line, scatter, area, point charts). Example: 'category', 'date', 'label'.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "4884669D-97F3-4310-87EF-2ED2D92E4979"
-          },
-          "sync": {
-            "lastModified": "2025-10-18T03:09:39.137Z",
-            "checksum": "794255f63bd12eab60fc614bfff550f67b2e7c8c216781c2b6f25875adcd0539"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "YField",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Field name for Y axis (required for bar, line, scatter, area, point charts). Example: 'value', 'count', 'amount'.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "C94A6AFB-640A-4984-8746-FD03CD2217D2"
-          },
-          "sync": {
-            "lastModified": "2025-10-18T03:09:39.145Z",
-            "checksum": "0786da765f24ad5c97e9c64e33895dd0446860463b5dc0fb9e15f62efe60bf74"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ThetaField",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Field name for pie slice size (required for pie charts). Example: 'count', 'value', 'percentage'.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "671E5709-A089-4FD3-9CF1-C6F002DCE357"
-          },
-          "sync": {
-            "lastModified": "2025-10-18T03:09:39.155Z",
-            "checksum": "5591840951902858379dce7d1ee64cc7f9d99d9d444271b5fdd67fb396e099d6"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ColorField",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Field name for color encoding (optional). Adds color differentiation by category. Example: 'category', 'type', 'status'.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "594520D7-C9CC-4ADC-95E4-394747302829"
-          },
-          "sync": {
-            "lastModified": "2025-10-18T03:09:39.164Z",
-            "checksum": "7267644167213eb6168d79203ee7726a4c163700b7910b46c6e170415f58e52c"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-2"
           }
         },
         {
@@ -133,64 +61,139 @@
             "ID": "0F8129B4-C0A9-4DC8-B3AC-7C8A9743C075"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.176Z",
-            "checksum": "92905bee5a1eef4974b74b39b404e75a3d90688b18bc3240714680d388b9fff2"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "XAxisLabel",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "X-axis label (optional). Displayed below the X-axis.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "YAxisLabel",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Y-axis label (optional). Displayed along the Y-axis.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2C3D4E5-F6A7-8901-BCDE-F12345678901"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-5"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "Width",
-            "DefaultValue": "400",
+            "DefaultValue": "800",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Chart width in pixels. Default: 400.",
+            "Description": "Chart width in pixels. Default: 800.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "5BA494B6-E742-441F-AA15-BD7587EB8B26"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.188Z",
-            "checksum": "98a04bcb466d4c3a998137bc7bf2203c6cd65f9c6c0aef00cf40c26a5fd335cb"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-6"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "Height",
-            "DefaultValue": "300",
+            "DefaultValue": "600",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Chart height in pixels. Default: 300.",
+            "Description": "Chart height in pixels. Default: 600.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "DD01BD72-1555-43C5-A7C1-0B1199E0E298"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.199Z",
-            "checksum": "638d093096c89441fbb7eb4b966d8179dbc14ea6a0a8dcfb27139286391ac297"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-7"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "VegaLiteSpec",
+            "Name": "Palette",
+            "DefaultValue": "mjDefault",
             "Type": "Input",
-            "ValueType": "Other",
+            "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Full Vega-Lite JSON specification (optional). If provided, overrides all other parameters and uses the complete spec directly. For advanced users who want full control over visualization.",
+            "Description": "Color palette name (optional). Options: 'mjDefault', 'gray', 'pastel', 'highContrast'. Default: 'mjDefault'.",
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "821A9947-2C6E-4ACD-A240-32C4C3984A83"
+            "ID": "C3D4E5F6-A789-0123-CDEF-234567890123"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.209Z",
-            "checksum": "546a5dbe20d18f804963d05f69658e0a8111523a7f838c4cdb0d8a2dc1f6a9bb"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ShowGrid",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Show grid lines (optional). 'true' or 'false'. Default: 'false'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D4E5F6A7-8901-2345-DEF0-345678901234"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ShowLegend",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Show legend (optional). 'true' or 'false'. Default: 'false'. Currently only supported for pie charts.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E5F6A789-0123-4567-EF01-456789012345"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-10"
           }
         },
         {
@@ -207,8 +210,8 @@
             "ID": "AB4D1DDE-0B66-4E82-A99D-9C5B80A3085E"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.229Z",
-            "checksum": "754788aedce1a97f89fd0926253b3a2e933fcc737baeb922527ef759531f2446"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-11"
           }
         }
       ],
@@ -224,8 +227,8 @@
             "ID": "7405B524-7AA8-4A62-AF4D-99A55E764567"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.248Z",
-            "checksum": "a0d42519fa4134cf3deacb27b4d03fdddf1344a4b0c0d0a4c8b46ae42052204f"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-12"
           }
         },
         {
@@ -233,14 +236,29 @@
             "ActionID": "@parent:ID",
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
-            "Description": "Required parameters are missing. Either provide VegaLiteSpec, or provide ChartType and Data."
+            "Description": "Required parameters are missing. ChartType and Data are required."
           },
           "primaryKey": {
             "ID": "FEE3B108-3F65-4B9A-BC5F-2FCADA68172C"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.258Z",
-            "checksum": "9fdf1261bd2c7b3ab3f0121b74fa9919f864c05af7d51c8aae99535c63011013"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-13"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CHART_TYPE",
+            "IsSuccess": false,
+            "Description": "ChartType must be one of: bar, line, pie, scatter, area."
+          },
+          "primaryKey": {
+            "ID": "F6A78901-2345-6789-0ABC-DEF012345678"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-14"
           }
         },
         {
@@ -254,8 +272,8 @@
             "ID": "6A904526-B5B6-44B6-851A-F8EF376449EB"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.269Z",
-            "checksum": "4308bd751cff10fc6d4c1a9fcebd539981556c16d2eaffbedb95dd03a199a233"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-15"
           }
         },
         {
@@ -269,8 +287,8 @@
             "ID": "740840DE-3A10-4920-A6B4-0771673684A0"
           },
           "sync": {
-            "lastModified": "2025-10-18T03:09:39.278Z",
-            "checksum": "c7e23a2a9fba0674c0dcac448b77c48c0d6731dd0bb664c48debb5c1d13471a2"
+            "lastModified": "2025-11-01T12:00:00.000Z",
+            "checksum": "new-checksum-16"
           }
         }
       ]
@@ -279,8 +297,8 @@
       "ID": "88D95CCD-EBAB-4760-80AD-39B12E251175"
     },
     "sync": {
-      "lastModified": "2025-10-18T03:09:39.071Z",
-      "checksum": "b149bad80046c6f2c4e6840f68dcd182a4fb774f273eba5bb4d515b63b0835b0"
+      "lastModified": "2025-11-01T12:00:00.000Z",
+      "checksum": "new-checksum-root"
     }
   }
 ]
