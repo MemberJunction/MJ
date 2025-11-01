@@ -43,7 +43,7 @@ import { LogError } from '@memberjunction/core';
  * }
  * ```
  */
-@RegisterClass(BaseAction, "Execute Code")
+@RegisterClass(BaseAction, "__ExecuteCode")
 export class ExecuteCodeAction extends BaseAction {
     /**
      * Execute the action by delegating to CodeExecutionService
@@ -173,4 +173,8 @@ export class ExecuteCodeAction extends BaseAction {
             Value: value
         });
     }
+}
+
+export function LoadCodeExecutionAction() {
+    // do nothing - prevents tree-shaking
 }
