@@ -1,0 +1,92 @@
+{
+  "$comment": "Example: Data Aggregation from Multiple Sources",
+  "Name": "Get Conversation Summary",
+  "Type": "Generated",
+  "Category": "Examples",
+  "Status": "Active",
+  "CodeApprovalStatus": "Pending",
+  "CodeLocked": false,
+  "ParentID": null,
+  "Description": "Retrieves a conversation and aggregates related data from multiple entities. Returns a summary object combining conversation metadata, message count, and participant information. Demonstrates multi-entity aggregation pattern.",
+  "UserPrompt": "Get conversation summary by ConversationID. Use RunViews (plural, batch operation) to retrieve: (1) the Conversation record itself, (2) all ConversationMessage records for this conversation, (3) the User record for the conversation owner. Aggregate the data into a summary object with these properties: conversationName, conversationType, ownerName, messageCount, firstMessageDate, lastMessageDate. Return as ConversationSummary output parameter. Handle errors: ConversationNotFound if ConversationID doesn't exist, QueryError if database queries fail.",
+  "UserComments": "This demonstrates data aggregation from multiple entities. Note the use of RunViews (plural) for batch loading - this is more efficient than separate RunView calls. The AI should generate code that loads all data in one batch operation, then aggregates client-side.",
+  "ForceCodeGeneration": false,
+  "ExpectedOutcome": {
+    "Parameters": [
+      {
+        "Name": "ConversationID",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": true,
+        "Description": "The ID of the conversation to summarize"
+      },
+      {
+        "Name": "ConversationSummary",
+        "Type": "Output",
+        "ValueType": "Simple Object",
+        "IsRequired": false,
+        "Description": "Aggregated summary with conversation metadata and statistics"
+      }
+    ],
+    "ResultCodes": [
+      {
+        "ResultCode": "Success",
+        "IsSuccess": true,
+        "Description": "Conversation summary generated successfully"
+      },
+      {
+        "ResultCode": "ValidationError",
+        "IsSuccess": false,
+        "Description": "ConversationID parameter is missing"
+      },
+      {
+        "ResultCode": "ConversationNotFound",
+        "IsSuccess": false,
+        "Description": "No conversation exists with the provided ID"
+      },
+      {
+        "ResultCode": "QueryError",
+        "IsSuccess": false,
+        "Description": "Error executing database queries"
+      }
+    ],
+    "GeneratedCodePattern": {
+      "Step1": "Extract ConversationID parameter",
+      "Step2": "Validate ConversationID is provided",
+      "Step3": "Create RunView instance",
+      "Step4": "Call RunViews (batch) with array of queries:",
+      "Query1": "Conversations entity, filter by ID",
+      "Query2": "ConversationMessages entity, filter by ConversationID",
+      "Query3": "Users entity, filter by conversation.UserID",
+      "Step5": "Check if conversation exists (first query result)",
+      "Step6": "Extract conversation data",
+      "Step7": "Extract messages array",
+      "Step8": "Calculate messageCount = messages.length",
+      "Step9": "Find firstMessageDate = min(messages.CreatedAt)",
+      "Step10": "Find lastMessageDate = max(messages.CreatedAt)",
+      "Step11": "Extract owner user record",
+      "Step12": "Build summary object with all aggregated data",
+      "Step13": "Add ConversationSummary output parameter",
+      "Step14": "Return success"
+    },
+    "KeyFeatures": [
+      "Multi-entity data loading with RunViews (batch)",
+      "Client-side aggregation of loaded data",
+      "Demonstrates efficient data access pattern",
+      "Complex output object construction",
+      "Shows how to combine data from related entities",
+      "Uses array operations (count, min, max) on results"
+    ],
+    "PerformanceNote": "Using RunViews (plural) loads all data in one database round trip instead of 3 separate calls. This is the recommended pattern for multi-entity operations.",
+    "OutputExample": {
+      "ConversationSummary": {
+        "conversationName": "Project Discussion",
+        "conversationType": "Team Chat",
+        "ownerName": "John Doe",
+        "messageCount": 42,
+        "firstMessageDate": "2024-01-15T10:30:00Z",
+        "lastMessageDate": "2024-01-20T16:45:00Z"
+      }
+    }
+  }
+}

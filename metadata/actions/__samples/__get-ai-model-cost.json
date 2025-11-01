@@ -1,0 +1,64 @@
+{
+  "$comment": "Example: Simple Entity CRUD Wrapper - Get/Retrieval Operation",
+  "Name": "Get AI Model Cost",
+  "Type": "Generated",
+  "Category": "Examples",
+  "Status": "Active",
+  "CodeApprovalStatus": "Pending",
+  "CodeLocked": false,
+  "ParentID": "49E30665-1A90-45CA-9129-C33959A51B4F",
+  "Description": "Retrieves an AI Model Cost record by ID. Demonstrates entity-specific retrieval with proper error handling and simplified parameter interface.",
+  "UserPrompt": "Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters",
+  "UserComments": "This example shows retrieval pattern. Note that the entity name is 'MJ: AI Model Costs' (with prefix) - AI will use exact name from schema. The action takes a simple 'ID' parameter instead of the parent's complex 'PrimaryKey' object, making it easier for workflow designers.",
+  "ForceCodeGeneration": false,
+  "ExpectedOutcome": {
+    "Parameters": [
+      {
+        "Name": "ID",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": true,
+        "Description": "The ID (primary key) of the AI Model Cost record to retrieve"
+      },
+      {
+        "Name": "ModelCostRecord",
+        "Type": "Output",
+        "ValueType": "BaseEntity Sub-Class",
+        "IsRequired": false,
+        "Description": "The retrieved AI Model Cost record"
+      }
+    ],
+    "ResultCodes": [
+      {
+        "ResultCode": "Success",
+        "IsSuccess": true,
+        "Description": "Record retrieved successfully"
+      },
+      {
+        "ResultCode": "ValidationError",
+        "IsSuccess": false,
+        "Description": "ID parameter is missing or invalid"
+      },
+      {
+        "ResultCode": "RecordNotFound",
+        "IsSuccess": false,
+        "Description": "No record exists with the provided ID"
+      },
+      {
+        "ResultCode": "ParentActionFailed",
+        "IsSuccess": false,
+        "Description": "The parent Get Record action failed"
+      }
+    ],
+    "GeneratedCodePattern": {
+      "Step1": "Extract ID parameter",
+      "Step2": "Validate ID is provided",
+      "Step3": "Map to parent format: PrimaryKey={ID: id}, EntityName='MJ: AI Model Costs'",
+      "Step4": "Invoke parent Get Record action",
+      "Step5": "Check parent success",
+      "Step6": "Extract Record from parent output",
+      "Step7": "Add ModelCostRecord output parameter",
+      "Step8": "Return success or appropriate error"
+    }
+  }
+}

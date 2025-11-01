@@ -29,6 +29,7 @@ import { MessageInputComponent } from './components/message/message-input.compon
 import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { SuggestedResponsesComponent } from './components/message/suggested-responses.component';
 import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
+import { MentionEditorComponent } from './components/mention/mention-editor.component';
 import { ConversationMessageRatingComponent } from './components/message/conversation-message-rating.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
@@ -77,6 +78,7 @@ const COMPONENTS = [
   MessageInputBoxComponent,
   SuggestedResponsesComponent,
   MentionDropdownComponent,
+  MentionEditorComponent,
   ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,

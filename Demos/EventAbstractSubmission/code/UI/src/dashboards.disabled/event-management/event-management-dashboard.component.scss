@@ -1,0 +1,61 @@
+.event-dashboard {
+  padding: 20px;
+  height: 100%;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+
+  h2 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px;
+}
+
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.kpi-section {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.events-card {
+  width: 100%;
+}
+
+.card-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+
+  h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+  }
+}
+
+.empty-state {
+  padding: 60px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 16px;
+}
