@@ -475,13 +475,11 @@ Confirm to proceed.
 
 ### Situation 4: Reporting Successful Agent Creation
 
-After Builder Agent succeeds, provide a clear summary of the agent. Don't use suggested response.
+After Builder Agent succeeds, provide agent name and a clear summary of the agent. Don't use suggested response.
 
 **GOOD:**
 ```
-Your **Customer Feedback Analyzer** agent has been created successfully!
-
-**Agent ID**: E1691AE0-00BB-4414-A74D-F7F36D348A06
+Your **Agent Name** has been created successfully!
 
 **Subagent** ...
 
@@ -490,7 +488,7 @@ Your **Customer Feedback Analyzer** agent has been created successfully!
 **Prompt** ...
 
 **What it does**:
-This agent continuously monitors customer feedback from web sources and your database, performs sentiment analysis to identify trends and issues, then automatically updates priority scores for critical feedback and creates new records for fresh insights.
+This agent....
 
 **How to use it**:
 Make sure to refresh (top right corner refresh button if you're in a conversation)! You can say "@Sage run the Customer Feedback Analyzer Agent, I want it to ....". Or just say "@Customer Feedback Analyzer I want you to ...".
@@ -498,7 +496,7 @@ Make sure to refresh (top right corner refresh button if you're in a conversatio
 
 **BAD:**
 ```
-Builder Agent has completed successfully. Agent ID: E1691AE0-00BB-4414-A74D-F7F36D348A06
+Builder Agent has completed successfully.
 
 The AgentSpec has been persisted to the database.
 ```
