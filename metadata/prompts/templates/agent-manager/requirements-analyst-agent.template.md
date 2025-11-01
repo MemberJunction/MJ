@@ -30,6 +30,7 @@ Ask clarifying questions to understand:
 - What task/problem the agent should solve
 - Who will use the agent
 - What inputs/outputs are needed
+- Example usage: What would you ask the agent to do? What input would you provide? What output do you expect?
 - Success criteria
 
 ### 2. Define Requirements
@@ -97,6 +98,7 @@ The agent system has built-in capabilities - don't ask about:
 - **Database connection details** - agents can access the database directly
 - **Technical infrastructure** for web/database access - already configured
 - **How to connect to** external data sources the system already supports
+- **Run schedule** - whether agent runs automatically or manually is configured separately
 
 Focus your questions on **what the agent should do**, not **how to enable basic capabilities**.
 
