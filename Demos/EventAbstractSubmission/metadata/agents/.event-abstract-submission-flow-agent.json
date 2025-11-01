@@ -52,15 +52,57 @@
             "lastModified": "2025-11-01T15:39:39.009Z",
             "checksum": "ed41243f44831cc3446179f52d70ea9417ff9ad88b2a3d26ab543f8274a533a6"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Records",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "143B3145-0D66-40F1-9F7C-B3D93E7BFB05"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T17:54:29.790Z",
+            "checksum": "4146c35256704b866c1905be7d5bffa30875108bed1452e7109b21da8ae38bb4"
+          }
         }
       ],
       "MJ: AI Agent Steps": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Get File Content",
+            "Name": "Check If Response Exists",
             "StepType": "Action",
             "StartingStep": true,
+            "ActionID": "@lookup:Actions.Name=Get Records",
+            "ActionInputMapping": {
+              "EntityName": "Submissions",
+              "Filter": "TypeformResponseID = '{{payload.responseId}}'",
+              "MaxRows": 1
+            },
+            "ActionOutputMapping": {
+              "Records": "existingSubmission"
+            },
+            "Description": "Check if this Typeform response has already been imported to prevent duplicates",
+            "Status": "Active",
+            "PositionX": 50,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "CCCB138F-4776-4524-866E-3D3DF4CDE69F"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T17:54:29.808Z",
+            "checksum": "d24accb02701e81cd3ad89a486bee28517e6555f8657ae0e2c7649102444120f"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Get File Content",
+            "StepType": "Action",
+            "StartingStep": false,
             "ActionID": "@lookup:Actions.Name=Typeform Get File Content",
             "ActionInputMapping": {
               "CompanyID": "data.companyId",
@@ -72,15 +114,15 @@
               "Format": "payload.fileFormat"
             },
             "Status": "Active",
-            "PositionX": 100,
+            "PositionX": 150,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "E4FE92F0-4FE7-4175-AD3A-714CCE1A7CC7"
           },
           "sync": {
-            "lastModified": "2025-11-01T15:39:39.025Z",
-            "checksum": "220a3dcdee1cddb196f7ab4f6e758aa3dac129a915f0d6b7133f2e48d6b678de"
+            "lastModified": "2025-11-01T17:54:29.827Z",
+            "checksum": "5b3a25775a284f5b6a9155089359884330b891a9fc618bd6bb705b85b7d09d35"
           }
         },
         {
@@ -207,6 +249,25 @@
         }
       ],
       "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Check If Response Exists&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Get File Content&AgentID=@parent:ID",
+            "Condition": "payload.existingSubmission.length === 0",
+            "Priority": 1,
+            "Description": "Only process if response has not already been imported",
+            "OutputMapping": {
+              "processingResult": "new"
+            }
+          },
+          "primaryKey": {
+            "ID": "46AFE63A-25E1-4F67-A28C-93C56613C026"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T17:54:29.881Z",
+            "checksum": "2e3451797079313f0753bb9cb8d2085260f1f41ef793623fe99b1acaa87a0db1"
+          }
+        },
         {
           "fields": {
             "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Get File Content&AgentID=@parent:ID",
