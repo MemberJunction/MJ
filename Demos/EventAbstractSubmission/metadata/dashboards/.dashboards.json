@@ -8,8 +8,9 @@
       "Type": "Code",
       "Scope": "Global",
       "ApplicationID": "@lookup:Applications.Name=Events",
-      "DriverClass":"",
-      "EnvironmentID": "@lookup:Environments.Name=Default"
+      "DriverClass": "__EventsDashboard",
+      "UIConfigDetails": "",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
     },
     "relatedEntities": {
       "MJ: Dashboard User Preferences": [
@@ -17,11 +18,25 @@
           "fields": {
             "DashboardID": "@parent:ID",
             "Scope": "App",
-            "DisplayOrder": 0,
-            "ApplicationID": "@lookup:Applications.Name=Events"          
+            "DisplayOrder": "0",
+            "ApplicationID": "@lookup:Applications.Name=Events"
+          },
+          "primaryKey": {
+            "ID": "3EBA26AC-905D-4A83-90CE-A4BC6A51C312"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T17:25:24.915Z",
+            "checksum": "2eb0b5d07fa672a717bcc72e5afb0127959cdf1013e1bbe20b0546e899291d6f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "598D9DAC-307F-4107-82E7-1DAE212B11CE"
+    },
+    "sync": {
+      "lastModified": "2025-11-01T17:25:24.890Z",
+      "checksum": "c9505f1be39aae4b4e87ed428ea41b98a4c28dc4a5c3852d1b73743ea67d55b7"
     }
   }
 ]

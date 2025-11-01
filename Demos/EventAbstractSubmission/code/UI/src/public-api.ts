@@ -5,9 +5,8 @@
 // Module
 export * from './module';
 
-// Dashboards - temporarily disabled due to Kendo dependencies
-// export * from './dashboards/event-management/event-management-dashboard.component';
-// export * from './dashboards/abstract-submission/abstract-submission-dashboard.component';
+// Dashboards
+export * from './dashboards/events-dashboard/events-dashboard.component';
 
 // Forms
 export * from './forms/event-form/event-form.component';
@@ -26,12 +25,7 @@ export * from './services/submission.service';
 export * from './services/speaker.service';
 
 // Tree shaking prevention functions
-// export { LoadEventManagementDashboardComponent } from './dashboards/event-management/event-management-dashboard.component';
-// export { LoadAbstractSubmissionDashboardComponent } from './dashboards/abstract-submission/abstract-submission-dashboard.component';
+export { LoadEventsDashboardComponent } from './dashboards/events-dashboard/events-dashboard.component';
 export { LoadEventFormComponent } from './forms/event-form/event-form.component';
 export { LoadSubmissionFormComponent } from './forms/submission-form/submission-form.component';
 export { LoadSpeakerFormComponent } from './forms/speaker-form/speaker-form.component';
-
-// Shorter aliases for tree shaking functions
-// export { LoadEventManagementDashboardComponent as LoadEventManagementDashboard } from './dashboards/event-management/event-management-dashboard.component';
-// export { LoadAbstractSubmissionDashboardComponent as LoadAbstractSubmissionDashboard } from './dashboards/abstract-submission/abstract-submission-dashboard.component';
