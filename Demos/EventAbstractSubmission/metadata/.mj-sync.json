@@ -4,6 +4,8 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [ 
+    "dashboard-categories",
+    "dashboards",
     "prompt-categories",
     "prompts",
     "agents"

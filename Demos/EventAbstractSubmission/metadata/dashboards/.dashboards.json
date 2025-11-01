@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "Name": "Events Dashboard",
+      "Description": "Dashboard for managing Events",
+      "CategoryID": "@lookup:Dashboard Categories.Name=Events",
+      "UserID": "@lookup:Users.Name=System",
+      "Type": "Code",
+      "Scope": "Global",
+      "ApplicationID": "@lookup:Applications.Name=Events",
+      "DriverClass":"",
+      "EnvironmentID": "@lookup:Environments.Name=Default"
+    },
+    "relatedEntities": {
+      "MJ: Dashboard User Preferences": [
+        {
+          "fields": {
+            "DashboardID": "@parent:ID",
+            "Scope": "App",
+            "DisplayOrder": 0,
+            "ApplicationID": "@lookup:Applications.Name=Events"          
+          }
+        }
+      ]
+    }
+  }
+]
