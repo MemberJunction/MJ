@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.115.0
+
+### Minor Changes
+
+- c29e21b: migration
+- 2e0fe8b: Migration
+
+### Patch Changes
+
+- Updated dependencies [6378103]
+- Updated dependencies [c29e21b]
+- Updated dependencies [2e0fe8b]
+  - @memberjunction/ai-agents@2.115.0
+  - @memberjunction/code-execution@2.115.0
+  - @memberjunction/aiengine@2.115.0
+  - @memberjunction/ai-vector-sync@2.115.0
+  - @memberjunction/actions@2.115.0
+  - @memberjunction/content-autotagging@2.115.0
+  - @memberjunction/core-entities-server@2.115.0
+  - @memberjunction/sqlserver-dataprovider@2.115.0
+  - @memberjunction/external-change-detection@2.115.0
+  - @memberjunction/communication-engine@2.115.0
+  - @memberjunction/ai-engine-base@2.115.0
+  - @memberjunction/ai-core-plus@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+  - @memberjunction/storage@2.115.0
+
 ## 2.114.0
 
 ### Minor Changes
