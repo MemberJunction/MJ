@@ -2,9 +2,7 @@
  * Library Provider for isolated-vm
  *
  * This module provides allowlisted utility libraries to sandboxed code.
- * Libraries are provided as either:
- * - Inline implementations (lodash, date-fns, uuid, validator) - simpler, hand-coded subsets
- * - Bundled source code (mathjs, papaparse, jstat) - full libraries with complex functionality
+ * Libraries are provided as inline implementations or bundled source code.
  *
  * SECURITY NOTE: Only add libraries here that are safe for untrusted code execution.
  */
@@ -15,9 +13,6 @@
 export const ALLOWED_MODULES = [
     'lodash',
     'date-fns',
-    'mathjs',
-    'papaparse',
-    'jstat',
     'uuid',
     'validator'
 ] as const;
@@ -52,12 +47,6 @@ export function getLibrarySource(moduleName: string): string | null {
             return getLodashSource();
         case 'date-fns':
             return getDateFnsSource();
-        case 'mathjs':
-            return getMathjsSource();
-        case 'papaparse':
-            return getPapaparseSource();
-        case 'jstat':
-            return getJstatSource();
         case 'uuid':
             return getUuidSource();
         case 'validator':
@@ -206,12 +195,6 @@ function getLodashSource(): string {
 
         mean: function(array) {
             return array.length ? _.sum(array) / array.length : 0;
-        },
-
-        meanBy: function(array, iteratee) {
-            const fn = typeof iteratee === 'function' ? iteratee : x => x[iteratee];
-            const values = array.map(fn);
-            return values.length ? _.sum(values) / values.length : 0;
         },
 
         cloneDeep: function(value) {
@@ -373,70 +356,4 @@ function getValidatorSource(): string {
     return validator;
 })()
     `.trim();
-}
-
-/**
- * mathjs implementation
- * Provides comprehensive mathematics and statistics functions
- * We bundle the actual mathjs library for full functionality
- */
-function getMathjsSource(): string {
-    // Load bundled library source at compile time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-
-    const libPath = path.join(__dirname, 'bundled-libs', 'mathjs.js');
-    const source = fs.readFileSync(libPath, 'utf8');
-
-    // Wrap in IIFE that returns the math object
-    return `(function() {
-        ${source}
-        return math;
-    })()`;
-}
-
-/**
- * papaparse implementation
- * Provides CSV parsing and generation
- * We bundle the actual papaparse library
- */
-function getPapaparseSource(): string {
-    // Load bundled library source at compile time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-
-    const libPath = path.join(__dirname, 'bundled-libs', 'papaparse.js');
-    const source = fs.readFileSync(libPath, 'utf8');
-
-    // Wrap in IIFE that returns the Papa object
-    return `(function() {
-        ${source}
-        return Papa;
-    })()`;
-}
-
-/**
- * jstat implementation
- * Provides statistical distributions, hypothesis testing, and regression
- * We bundle the actual jstat library
- */
-function getJstatSource(): string {
-    // Load bundled library source at compile time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-
-    const libPath = path.join(__dirname, 'bundled-libs', 'jstat.js');
-    const source = fs.readFileSync(libPath, 'utf8');
-
-    // Wrap in IIFE that returns the jStat object
-    return `(function() {
-        ${source}
-        return jStat;
-    })()`;
 }
