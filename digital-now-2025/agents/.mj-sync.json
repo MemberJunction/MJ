@@ -1,0 +1,63 @@
+{
+  "entity": "AI Agents",
+  "filePattern": ".*.json",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".digital-now-agents.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "ignoreVirtualFields": true,
+    "filter": "Name IN ('Grant Proposal Agent', 'Meeting Agenda Generation Agent', 'Account Updater', 'Legislative Research Agent')",
+    "excludeFields": ["__mj_CreatedAt", "__mj_UpdatedAt", "CreatedAt", "UpdatedAt", "OwnerUserID"],
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: AI Agent Types",
+        "field": "Name"
+      },
+      "ParentID": {
+        "entity": "AI Agents",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": {
+        "entity": "MJ: AI Agent Prompts",
+        "foreignKey": "AgentID",
+        "ignoreVirtualFields": true,
+        "lookupFields": {
+          "PromptID": {
+            "entity": "AI Prompts",
+            "field": "Name"
+          }
+        }
+      },
+      "AI Agent Actions": {
+        "entity": "AI Agent Actions",
+        "foreignKey": "AgentID",
+        "ignoreVirtualFields": true,
+        "lookupFields": {
+          "ActionID": {
+            "entity": "Actions",
+            "field": "Name"
+          }
+        }
+      },
+      "MJ: AI Agent Relationships": {
+        "entity": "MJ: AI Agent Relationships",
+        "foreignKey": "AgentID",
+        "ignoreVirtualFields": true,
+        "lookupFields": {
+          "SubAgentID": {
+            "entity": "AI Agents",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}

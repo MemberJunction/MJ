@@ -1,0 +1,668 @@
+[
+  {
+    "fields": {
+      "Name": "Meeting Agenda Generation Agent",
+      "Description": "Generates a formatted meeting agenda based on past meeting data, obtains user approval, and dispatches the agenda via Microsoft Graph email to the appropriate audience.",
+      "LogoURL": null,
+      "ParentID": null,
+      "ExposeAsAction": false,
+      "ExecutionOrder": 0,
+      "ExecutionMode": "Sequential",
+      "EnableContextCompression": false,
+      "ContextCompressionMessageThreshold": null,
+      "ContextCompressionPromptID": null,
+      "ContextCompressionMessageRetentionCount": null,
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "DriverClass": null,
+      "IconClass": "fa-solid fa-clipboard-list",
+      "ModelSelectionMode": "Agent Type",
+      "PayloadDownstreamPaths": "[\"*\"]",
+      "PayloadUpstreamPaths": "[\"agendaDocument\",\"contextMeetings\",\"recipients\",\"agendaRecordId\",\"emailDispatchResults\",\"status\",\"approvalStatus\"]",
+      "PayloadSelfReadPaths": null,
+      "PayloadSelfWritePaths": null,
+      "PayloadScope": null,
+      "FinalPayloadValidation": null,
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3,
+      "MaxCostPerRun": null,
+      "MaxTokensPerRun": null,
+      "MaxIterationsPerRun": null,
+      "MaxTimePerRun": null,
+      "MinExecutionsPerRun": null,
+      "MaxExecutionsPerRun": null,
+      "StartingPayloadValidation": null,
+      "StartingPayloadValidationMode": "Fail",
+      "DefaultPromptEffortLevel": null,
+      "ChatHandlingOption": null,
+      "DefaultArtifactTypeID": null,
+      "InvocationMode": "Any",
+      "ArtifactCreationMode": "Always",
+      "FunctionalRequirements": "# Meeting Agenda Generation Agent - Functional Requirements\n\n## Business Goal\n\nCreate an agent that automatically generates meeting agendas based on past meeting data and user inputs, then dispatches them via email with an approval workflow.\n\n## Functional Requirements\n\n- **Agenda Naming**: Use the title pattern \"Q1 Sprint Planning – 2025-11-01\" where the date component reflects the meeting date.\n- **Activity Fields**: Retrieve appropriate fields from the CRM schema for an Activity (e.g., title, date, time, participants, objectives, agenda items, owner, status, attachments). The agent will query the schema to confirm exact field names.\n- **Agenda Generation**: Produce a formatted agenda including talking points and time allocations, and list past meetings used for context.\n- **Approval Workflow**: Before any email is sent, the agent must present the generated agenda to the user for explicit approval.\n- **Email Notification**: Send agenda emails via Microsoft Graph using the user's email `ethan.lin@bluecypress.io` as the sender (default if not specified). Emails include the agenda content.\n- **Target Audience Selection**:\n  - When the user requests \"send this to everybody at Microsoft Corporation\", the agent queries Contact records where Account = \"Microsoft Corporation\".\n  - The agent then dispatches the email to each contact using a parallel `ForEach` loop for fast delivery.\n- **Result Reporting**: After execution, the agent returns:\n  - The generated agenda (talking points + time allocations).\n  - A list of past meetings used for context.\n  - If emails were sent, a list of recipients.\n\n## Technical Requirements\n\n- Access to CRM database to read Activity schema and Contact records.\n- Use `Web Search`/`Web Page Content` if needed to retrieve schema information.\n- Utilize `Web Search` to locate Microsoft Graph API documentation if required.\n- Implement parallel `ForEach` for email dispatch.\n\n## Data Requirements\n\n- **Input**: User request specifying agenda purpose, date, and target audience.\n- **CRM Data**: Activity fields, past meeting records, Contact records filtered by Account.\n- **Output**: Generated agenda document and email dispatch logs.\n\n## Integration Requirements\n\n- Microsoft Graph email sending capability.\n- CRM query capabilities (Read Activity schema, Contact entity).\n\n## Assumptions\n\n- The user has appropriate permissions to read CRM data and send emails via Microsoft Graph.\n- Contact records contain valid email addresses.\n- The CRM schema includes the standard Activity fields listed.\n\n## Risks\n\n- **Permission Issues**: Lack of rights to read CRM schema or send emails could cause failures.\n- **Email Deliverability**: Large parallel dispatch may hit rate limits.\n- **Schema Variability**: Activity field names may differ; schema discovery is required.\n\n## Out of Scope\n\n- Real-time agenda updates after initial send.\n- Scheduling recurring agenda generation.\n- Non‑Microsoft Graph email providers.\n- Handling attachments beyond those referenced in Activity.\n\n## Success Criteria\n\n- Agenda generated and approved by the user.\n- Emails successfully sent to all contacts of the specified Account.\n- Agent returns agenda, context meetings, and recipient list.\n- No errors in schema discovery or email dispatch.",
+      "TechnicalDesign": "# Meeting Agenda Generation Agent – Technical Design\n\n## Overview\n- **Agent Name**: Meeting Agenda Generation Agent\n- **Agent Type**: **Loop** (adaptive workflow driven by LLM reasoning)\n- **Purpose**: Generate a formatted meeting agenda based on past meeting data, obtain user approval, and dispatch the agenda via Microsoft Graph email to the appropriate audience.\n- **Primary Functional Requirements**:\n  1. Discover the exact CRM schema for **Activities** and **Contacts** entities.\n  2. Retrieve past meetings for context.\n  3. Retrieve contacts for a target Account (e.g., *Microsoft Corporation*).\n  4. Generate a named agenda (e.g., `\"Q1 Sprint Planning – 2025-11-01\"`).\n  5. Present the agenda to the user for explicit approval before any email is sent.\n  6. Send the approved agenda via Microsoft Graph to each recipient using a **parallel `ForEach`** loop.\n\n---\n\n## Architecture\n```\nParent Loop Agent (Meeting Agenda Generation)\n├─ Sub‑Agent: **Database Research Agent** (READ operations)\n│   └─ Retrieves Activity schema, past meetings, and Contact records\n├─ Action: **Create Record** (store generated agenda for audit)\n├─ Action: **Send Single Message** (Microsoft Graph email)\n└─ Prompt (system) – orchestrates the workflow, handles approval UI\n```\n\n### Why this structure?\n- **Database Research Agent** already knows how to query the CRM schema and records, eliminating the need for separate low‑level CRUD actions for reads.\n- **Send Single Message** is the only action needed to send email; parameters are case‑sensitive.\n- The **Loop** type allows the LLM to decide when to ask for approval and when to proceed to email dispatch, handling dynamic user responses.\n- **ForEach (parallel)** maximises throughput when emailing many recipients.\n\n---\n\n## Sub‑Agents\n| Sub‑Agent | ID (from Find‑Candidate‑Agents) | Role | When Used |\n|-----------|------------------------------|------|-----------|\n| Database Research Agent | 746CD1E8-CB8D-49A4-BE69-D0F208A0B462 | Executes read‑only queries against the CRM, returns JSON with full fields (no truncation). | • Fetch Activity schema & sample records<br>• Pull past meetings for the given date range<br>• Retrieve contacts where `Account = \"Microsoft Corporation\"` |\n\n*No other sub‑agents are required.*\n\n---\n\n## Actions\n| Action | ID (from Find‑Candidate‑Actions) | Purpose |\n|--------|-------------------------------|---------|\n| Send Single Message | DC4C7E64-2D93-43E4-9F02-F5D7E702784A | Sends an email via **Microsoft Graph**. Required parameters: `Provider='Microsoft Graph'` (case‑sensitive), `MessageType='Email'`, `Subject`, `Body`, `To`, `From` |\n| Create Record | 2504E288-ADF7-4913-A627-AA14276BAA55 | Persists the generated agenda in a CRM entity (e.g., `Agenda` table) for audit and trend tracking |\n\n---\n\n## Data Flow & Payload Structure\n### Input (initial payload)\n```json\n{\n  \"userRequest\": {\n    \"agendaPurpose\": \"Q1 Sprint Planning\",\n    \"meetingDate\": \"2025-11-01\",\n    \"targetAudience\": \"everyone at Microsoft Corporation\"\n  }\n}\n```\n### Intermediate Fields (added by sub‑agent / actions)\n- `schemaInfo` – JSON of Activities & Contacts schema (debug only).\n- `pastMeetings` – array of Activity records retrieved via **Database Research Agent**.\n- `recipients` – array of Contact records (Email, FullName) filtered by Account.\n- `agendaDocument` – markdown string generated by the LLM.\n- `approvalStatus` – boolean set after user approves.\n- `emailDispatchResults` – array of results from the **ForEach** email loop.\n- `agendaRecordId` – primary key returned by **Create Record**.\n\n### Output (final payload)\n```json\n{\n  \"agendaDocument\": \"# Q1 Sprint Planning – 2025‑11‑01\\n...\",\n  \"contextMeetings\": [/* IDs and brief titles */],\n  \"recipients\": [\"john.doe@msft.com\", \"jane.smith@msft.com\"],\n  \"agendaRecordId\": \"...\",\n  \"emailDispatchResults\": [{\"to\":\"john.doe@msft.com\",\"status\":\"sent\"}, ...],\n  \"status\": \"success\"\n}\n```\n---\n\n## Prompt (System) – Core LLM Instructions\n```markdown\n# Meeting Agenda Generation Agent\n\nYou are an orchestrator that creates meeting agendas based on CRM data and sends them via email.\n\n## Workflow\n1. **Schema Discovery** – Call **Database Research Agent** with:\n   \"Find the **Activities** entity and return all fields in JSON (show all columns in max length). Also retrieve the **Contacts** entity schema.\"\n   *Store the schema under `payload.schemaInfo` (for debugging only).*\n2. **Retrieve Past Meetings** – Using the same sub‑agent, query:\n   \"Find **Activities** where `ActivityType='Meeting'` AND `StartDate` is within the last 30 days of the requested meeting date. Return `ID`, `Subject`, `StartDate`, `EndDate`, `Location`.\n   Request JSON format.\"\n   *Store results in `payload.pastMeetings`.*\n3. **Identify Recipients** – If the user asks to \"send to everybody at Microsoft Corporation\", query:\n   \"Find **Contacts** where `Account='Microsoft Corporation'` and `Email` is not null. Return `FullName` and `Email`.\n   Store in `payload.recipients`.*\n4. **Generate Agenda** – Assemble a markdown agenda with:\n   - Title: \"{agendaPurpose} – {meetingDate}\" (e.g., `Q1 Sprint Planning – 2025-11-01`).\n   - List of **Context Meetings** (use `payload.pastMeetings`).\n   - Sections for **Objectives**, **Talking Points**, **Time Allocations** (you may ask the user for specifics if not provided).\n   Store the full markdown in `payload.agendaDocument`.\n5. **Approval Step** – Present `payload.agendaDocument` to the user and ask for explicit approval:\n   \"Please confirm you would like to send the above agenda. Reply with **YES** to send or **NO** to cancel.\"\n   *Record the boolean in `payload.approvalStatus`.*\n6. **If Approved** –\n   - **Persist Agenda**: Call **Create Record** action:\n     ```json\n     {\n       \"EntityName\": \"Agenda\",\n       \"Fields\": {\n         \"Title\": \"{agendaPurpose} – {meetingDate}\",\n         \"Content\": \"{{payload.agendaDocument}}\",\n         \"GeneratedAt\": \"{{now}}\",\n         \"CreatedBy\": \"{{payload.userRequest.requesterId}}\"\n       }\n     }\n     ```\n     Capture `PrimaryKey` as `payload.agendaRecordId`.\n   - **Send Emails** – Execute a **parallel ForEach** over `payload.recipients`:\n     - Action: **Send Single Message**\n     - Params:\n       ```json\n       {\n         \"Provider\": \"Microsoft Graph\",\n         \"MessageType\": \"Email\",\n         \"Subject\": \"[agenda title]\",\n         \"Body\": \"{{payload.agendaDocument}}\",\n         \"To\": \"{{item.Email}}\",\n         \"From\": \"ethan.lin@bluecypress.io\"\n       }\n       ```\n     - Execution mode: **parallel**, `maxConcurrency`=15, `continueOnError`=true.\n     - Collect each result into `payload.emailDispatchResults`.\n7. **Return Summary** – Respond with a concise JSON summary containing:\n   - `agendaDocument`\n   - Number of past meetings used\n   - Number of recipients\n   - `agendaRecordId`\n   - Success/failure counts from the email loop\n   - Overall `status` (success or cancelled).\n\n**Important Rules**\n- ALWAYS use **Database Research Agent** for any READ operation; never call low‑level CRUD actions for reads.\n- Use **Send Single Message** ONLY for email; parameters are case‑sensitive.\n- The approval step must block email dispatch until the user explicitly answers.\n- The ForEach loop is **parallel** to maximise speed, but set `continueOnError=true` so a single failing email does not abort the whole batch.\n```\n---\n\n## Execution Flow Summary\n1. **Database Research Agent** → schema discovery (one call).\n2. **Database Research Agent** → fetch past meetings (READ).\n3. **Database Research Agent** → fetch contacts for target audience (READ).\n4. **LLM Prompt** → generate agenda markdown.\n5. **User Interaction** → approval (Chat step).\n6. **Create Record** → persist agenda.\n7. **ForEach (parallel)** → `Send Single Message` to each recipient.\n8. **Return** final JSON summary.\n\n---\n\n## Why This Design Is Optimal\n- **Reuse existing capabilities**: The heavy lifting of schema discovery and data retrieval is delegated to the **Database Research Agent**, avoiding redundant CRUD actions.\n- **Minimal actions**: Only three actions are required – `Create Record` (persistence), `Send Single Message` (email), and the built‑in `Loop`/`ForEach` mechanisms for iteration.\n- **Adaptive Loop**: The LLM controls the flow, handling dynamic user approval and any follow‑up questions.\n- **Parallelism**: Using `ForEach` with parallel execution drastically reduces email‑send time when dealing with many recipients.\n- **Clear data contracts**: Payload fields are explicitly defined, making downstream debugging and monitoring straightforward.\n- **Safety**: Email dispatch is gated behind explicit user consent, satisfying the approval workflow requirement.\n\n---\n\n## Dependencies\n- **Microsoft Graph** API credentials must be configured in the environment (OAuth token). \n- **CRM access** must permit the Database Research Agent to execute read queries on **Activities** and **Contacts**.\n- **User permissions**: The invoking user must have rights to read CRM data and send emails.\n\n---\n\n**End of Technical Design**",
+      "InjectNotes": true,
+      "MaxNotesToInject": 5,
+      "NoteInjectionStrategy": "Relevant",
+      "InjectExamples": false,
+      "MaxExamplesToInject": 3,
+      "ExampleInjectionStrategy": "Semantic",
+      "IsRestricted": false,
+      "MessageMode": "None",
+      "MaxMessages": null
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Meeting Agenda Generation Agent - Prompt 1",
+            "Purpose": null,
+            "ExecutionOrder": 0,
+            "ConfigurationID": null,
+            "Status": "Active",
+            "ContextBehavior": "Complete",
+            "ContextMessageCount": null
+          },
+          "primaryKey": {
+            "ID": "63D3A347-CBC3-4457-8F0D-46D2BFA2A44E"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.063Z",
+            "checksum": "89f179fa429cbcfefc8a4cf25805fd4a742d9ac54a943c9f1dc1a060a9fbcacb"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Send Single Message",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "3F1C7561-9FD6-48DC-99C1-98A1779E4A34"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.081Z",
+            "checksum": "1dcbdf9609e74659f77b120a1e372bf5ec2752191d97ba7e766f923dbc4f7d84"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "168BD428-CA25-4FBD-BEB2-CE3D13F80B08"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.091Z",
+            "checksum": "1d92f6a34f5da5806f1c10efd7c467fec3bc3438b6b53ca84bfee1851da5ce56"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"\":\"*\"}",
+            "SubAgentInputMapping": "{\"\":\"*\"}",
+            "SubAgentContextPaths": "[]",
+            "MessageMode": "None",
+            "MaxMessages": null
+          },
+          "primaryKey": {
+            "ID": "765A5C39-2A9A-4E82-AC7B-527F16849A88"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.109Z",
+            "checksum": "755732485a5fc60d3b44a83a1d095fa19adb96371bdc1f48afe39a11e6b406e3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1A0E6352-BAC6-4D32-8FD0-FA0E5D1DD61D"
+    },
+    "sync": {
+      "lastModified": "2025-11-02T03:54:33.916Z",
+      "checksum": "a9ee990c92ecbd8c0e8fdee8e59918aa23a93035610f575531dc41d49cd90579"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Account Updater",
+      "Description": "Loop agent that keeps the Accounts CRM table up‑to‑date by retrieving active accounts, researching each on the web, detecting missing or stale fields, updating only necessary columns in parallel, and returning a concise plain‑text summary of the changes.",
+      "LogoURL": null,
+      "ParentID": null,
+      "ExposeAsAction": false,
+      "ExecutionOrder": 0,
+      "ExecutionMode": "Sequential",
+      "EnableContextCompression": false,
+      "ContextCompressionMessageThreshold": null,
+      "ContextCompressionPromptID": null,
+      "ContextCompressionMessageRetentionCount": null,
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "DriverClass": null,
+      "IconClass": "fa-solid fa-sync-alt",
+      "ModelSelectionMode": "Agent Type",
+      "PayloadDownstreamPaths": "[\"*\"]",
+      "PayloadUpstreamPaths": "[\"summary\",\"forEachResults\"]",
+      "PayloadSelfReadPaths": null,
+      "PayloadSelfWritePaths": null,
+      "PayloadScope": null,
+      "FinalPayloadValidation": null,
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3,
+      "MaxCostPerRun": null,
+      "MaxTokensPerRun": null,
+      "MaxIterationsPerRun": null,
+      "MaxTimePerRun": null,
+      "MinExecutionsPerRun": null,
+      "MaxExecutionsPerRun": null,
+      "StartingPayloadValidation": null,
+      "StartingPayloadValidationMode": "Fail",
+      "DefaultPromptEffortLevel": null,
+      "ChatHandlingOption": null,
+      "DefaultArtifactTypeID": null,
+      "InvocationMode": "Any",
+      "ArtifactCreationMode": "Always",
+      "FunctionalRequirements": "# Business Goal\n\nAutomatically keep CRM **Accounts** data current by identifying accounts with missing or outdated information, researching the latest data from the web, and updating the records accordingly.\n\n# Functional Requirements\n\n## Data Collection\n- Retrieve all active accounts from the CRM **Accounts** table.\n\n## Update Criteria\n- Only accounts that have **missing** or **outdated** data should be selected for update. Accounts that already have complete and up‑to‑date information are left untouched.\n\n## Research Sources\n- Perform web research for each selected account using:\n  - The account name\n  - The official website\n  - Recent news articles\n  - Other relevant web sources that may contain updated contact or company information.\n\n## Fields to Update\n- Based on the research findings, the system will determine which fields need updating (e.g., address, phone number, website URL, contact details, etc.). No predefined list of fields is required; the system decides dynamically.\n\n## Updating Process\n- Update the identified fields for each account in parallel using the **Update Record** action.\n\n## Summary Format\n- After processing, return a **plain‑text** summary that lists each updated account and the fields that were changed.\n\n# Technical Requirements\n\n- Parallel execution of update actions to improve performance.\n- Use the existing **Web Search** and **Web Page Content** actions for research.\n- Ensure proper handling of rate limits and errors during web calls.\n\n# Assumptions\n- The **Accounts** table contains a field indicating active status.\n- Web sources provide reliable, up‑to‑date information.\n- The system has permission to read and update records in the CRM.\n\n# Risks\n- Inaccurate or stale information from web sources could lead to incorrect updates.\n- Rate limiting or site blocking may impede research for some accounts.\n\n# Out of Scope\n- Real‑time monitoring of account data (updates are batch‑processed).\n- Manual review or approval workflow before applying updates.\n- Integration with non‑web data sources (e.g., proprietary databases).\n\n# Success Criteria\n- **Coverage**: ≥ 95 % of accounts with missing/outdated data are identified and updated.\n- **Accuracy**: Updated fields reflect the latest information verified by at least two independent sources.\n- **Timeliness**: The entire process completes within the defined time window (e.g., nightly batch).",
+      "TechnicalDesign": "# Account Updater – Technical Design\n\n## Overview\nThis Loop‑type agent keeps the **Accounts** CRM table up‑to‑date. It retrieves all active accounts, researches each one on the web, detects missing or stale fields, updates only the necessary columns in parallel, and finally returns a concise plain‑text summary of the changes.\n\n## Agent Type\n- **Loop** – the LLM decides the next step for each account based on search results.\n- **Icon**: `fa-solid fa-sync-alt`\n\n## Related Sub‑Agents\n| Sub‑Agent | Agent ID | Purpose | How it is used |\n|-----------|----------|---------|----------------|\n| **Database Research Agent** | `746CD1E8-CB8D-49A4-BE69-D0F208A0B462` | Reads schema, executes queries, returns records in JSON. | Used to fetch the list of active accounts (`IsActive = true`). |\n| **Web Research Agent** | `5DDF4F5D-B977-42B0-BED5-4A2F0021BC58` | Performs web searches, fetches page content, extracts key data. | For each account it runs a search using the account name and website, then extracts metadata (address, phone, website URL, etc.). |\n\n## Actions\n| Action | Action ID | Purpose | When invoked |\n|--------|-----------|---------|---------------|\n| **Update Record** | `FCAAD325-0D33-4E48-BC25-49C0E3587062` | Updates specific fields of an existing entity. | After the research step, only fields that are missing or outdated are sent here. |\n| **Create Record** (fallback) | `2504E288-ADF7-4913-A627-AA14276BAA55` | Creates a new Accounts record. | If the web research discovers a brand‑new company that does not exist in the CRM, this action is used to insert it. |\n\n## Prompt (System Prompt – core workflow)\n```\nYou are **Account Updater**, a Loop agent orchestrating the following workflow:\n\n### Step 1 – Load active accounts\nCall **Database Research Agent** with the query:\n```\nFind Accounts where IsActive = true. Return JSON with all columns (show all columns in max length).\n```\nStore the result in `payload.accounts` (array of account objects).\n\n### Step 2 – Process each account (ForEach)\nIterate over `payload.accounts` using a **ForEach** loop (parallel execution).\nFor each `account`:\n1. **Research** – Call **Web Research Agent** with the prompt:\n   ````\n   Search the web for the most recent official information about \"{account.Name}\". Use the account's current Website field as a primary source if present. Return the following fields (if found):\n   - `Website`\n   - `Phone`\n   - `Address` (concatenation of BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry)\n   - `Industry`\n   - `AnnualRevenue`\n   Provide each field as a plain value, not a paragraph.\n   ````\n   The agent will internally use **Web Search** → **Web Page Content** → **URL Metadata Extractor** as needed.\n2. **Detect changes** – Compare the returned values with the current record. Build an object `updates` containing only the fields that are:\n   - missing (`null` or empty) in the current record, or\n   - different from the newly fetched value (treat string comparison case‑insensitively, numbers with tolerance 1%).\n3. **Update** – If `updates` is not empty, call **Update Record** with:\n   ```json\n   {\n     \"EntityName\": \"Accounts\",\n     \"PrimaryKey\": { \"ID\": account.ID },\n     \"Fields\": updates\n   }\n   ```\n   Capture the `UpdatedFields` output for the summary.\n4. **Create fallback** – If the research discovers an account *not* present in the original list (e.g., a new subsidiary), call **Create Record** with the same field set.\n\n### Step 3 – Summarise\nAfter the ForEach loop completes, aggregate all `UpdatedFields` results into a plain‑text report:\n```\nUpdated Accounts Summary:\n- Account ID 12: changed fields – Phone (old: (555) 123‑4567 → new: (555) 987‑6543), Website (old: www.old.com → new: www.new.com)\n- Account ID 47: added missing Industry \"Healthcare\"\n…\nTotal accounts processed: X\nTotal updates applied: Y\n```\nReturn this string as the final output of the agent.\n\n## Parallel Execution Details\n- The **ForEach** operation uses `executionMode: parallel` with `maxConcurrency: 15` (reasonable for web I/O). \n- Each iteration is independent; no shared mutable state is modified until the final aggregation step.\n- Errors in a single iteration are captured in `payload.forEachErrors` but do not abort the whole workflow.\n\n## Payload Structure (simplified)\n```json\n{\n  \"accounts\": [ { \"ID\": 1, \"Name\": \"TechNova Systems\", \"Website\": \"www.technovasystems.com\", \"Phone\": \"(415) 555-1234\", … } ],\n  \"forEachResults\": [ { \"accountID\": 1, \"updatedFields\": { \"Phone\": { \"old\": \"(415) 555-1234\", \"new\": \"(415) 555-4321\" } } }, … ],\n  \"summary\": \"Updated Accounts Summary: …\"\n}\n```\nAll fields listed above are taken directly from the **Database Research Agent** schema; no guessed column names are used.\n\n## Why This Design Is Optimal\n- **Reuse of existing expertise**: The Database Research Agent handles all database reads, eliminating the need for custom `Get Record` actions. The Web Research Agent encapsulates search, page retrieval, and metadata extraction, so we do not manually chain `Web Search` + `Web Page Content`.\n- **Minimal actions**: Only `Update Record` (and optional `Create Record`) are required for data mutation, preventing redundant CRUD actions.\n- **Parallelism**: The ForEach loop processes many accounts at once, satisfying the performance requirement.\n- **Accurate schema**: Entity name, primary key, and column definitions are sourced from the verified Database Research Agent output.\n- **Clear, user‑friendly summary**: The final plain‑text report lists each updated account and the exact fields changed, matching the functional requirement.\n\n---\n*End of Technical Design.*\n```",
+      "InjectNotes": true,
+      "MaxNotesToInject": 5,
+      "NoteInjectionStrategy": "Relevant",
+      "InjectExamples": false,
+      "MaxExamplesToInject": 3,
+      "ExampleInjectionStrategy": "Semantic",
+      "IsRestricted": false,
+      "MessageMode": "None",
+      "MaxMessages": null
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Account Updater - Prompt 1",
+            "Purpose": null,
+            "ExecutionOrder": 0,
+            "ConfigurationID": null,
+            "Status": "Active",
+            "ContextBehavior": "Complete",
+            "ContextMessageCount": null
+          },
+          "primaryKey": {
+            "ID": "58DF1649-B79A-4885-8EC3-41EBA9776E3A"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.119Z",
+            "checksum": "f82d61e202a371a746c951860a99d6fb4536e870ba5ce4e23363fa44d9133303"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "FE13ABFA-3A94-49B9-8405-4D9B6CC844E9"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.128Z",
+            "checksum": "1d92f6a34f5da5806f1c10efd7c467fec3bc3438b6b53ca84bfee1851da5ce56"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Update Record",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "2F74A2AC-398E-4ED2-8F15-DBCD34FB538F"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.137Z",
+            "checksum": "97f637ff1b5959609ec90f48c0295b09f586052b8aa8599c72ee1c8881061660"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"accounts\":\"accounts\"}",
+            "SubAgentInputMapping": "{\"query\":\"SELECT * FROM Accounts WHERE IsActive = true\"}",
+            "SubAgentContextPaths": "[]",
+            "MessageMode": "None",
+            "MaxMessages": null
+          },
+          "primaryKey": {
+            "ID": "1D6A8206-7D3B-4956-8F56-3C78FCC7ED30"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.146Z",
+            "checksum": "c5a2b8fd3bc44a2e2539e6d99ab06f40b9e77fffdef65aa16e00354993dfa464"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"researchResult\":\"researchResult\"}",
+            "SubAgentInputMapping": "{\"account\":\"account\"}",
+            "SubAgentContextPaths": "[]",
+            "MessageMode": "None",
+            "MaxMessages": null
+          },
+          "primaryKey": {
+            "ID": "D7A071AD-4F58-400B-99A8-5D02EA68EF27"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.156Z",
+            "checksum": "da27c3c3300e269a305554a07bb4380d1ef52c9766c4f8d18494cc30185cbe2d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "35697879-936E-4947-9449-03FB068271AC"
+    },
+    "sync": {
+      "lastModified": "2025-11-02T03:54:33.930Z",
+      "checksum": "40f2986f6cfa65b57498605da61ac568be16506fe969fe96ca3d6b4903ffc41a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Legislative Research Agent",
+      "Description": "Researches Missouri legislative dockets, DESE rulemaking, and education‑related news; stores findings in the Legislative Fundings entity and answers user queries from the stored data.",
+      "LogoURL": null,
+      "ParentID": null,
+      "ExposeAsAction": false,
+      "ExecutionOrder": 0,
+      "ExecutionMode": "Sequential",
+      "EnableContextCompression": false,
+      "ContextCompressionMessageThreshold": null,
+      "ContextCompressionPromptID": null,
+      "ContextCompressionMessageRetentionCount": null,
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "DriverClass": null,
+      "IconClass": "fa-solid fa-robot",
+      "ModelSelectionMode": "Agent Type",
+      "PayloadDownstreamPaths": "[\"*\"]",
+      "PayloadUpstreamPaths": "[\"researchResults.*\",\"existingFundings.*\",\"errors.*\"]",
+      "PayloadSelfReadPaths": null,
+      "PayloadSelfWritePaths": null,
+      "PayloadScope": null,
+      "FinalPayloadValidation": null,
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3,
+      "MaxCostPerRun": null,
+      "MaxTokensPerRun": null,
+      "MaxIterationsPerRun": null,
+      "MaxTimePerRun": null,
+      "MinExecutionsPerRun": null,
+      "MaxExecutionsPerRun": null,
+      "StartingPayloadValidation": null,
+      "StartingPayloadValidationMode": "Fail",
+      "DefaultPromptEffortLevel": null,
+      "ChatHandlingOption": null,
+      "DefaultArtifactTypeID": null,
+      "InvocationMode": "Any",
+      "ArtifactCreationMode": "Always",
+      "FunctionalRequirements": "# Legislative Research Agent - Functional Requirements\n\n## Business Goal\n\nProvide teachers and the association with up‑to‑date information on Missouri legislative dockets, DESE rulemaking, and education‑related news. The agent will research relevant web sources, save findings to the **Legislative Fundings** entity (linked to **Legislative Findings**), and answer user queries using the stored data.\n\n## Functional Requirements\n\n- **Web Research**: On demand (manual trigger), search for legislative dockets, DESE rulemaking, and education news relevant to teachers, school funding, or the association.\n- **Data Storage**: Save each finding as plain‑text in the existing fields of the Legislative Fundings entity (e.g., docket ID, title, source URL, summary, key dates, funding amount, relevance tags). No additional fields are added.\n- **Database Access**: Read Legislative Fundings data to respond to user questions about the collected information.\n- **Update Frequency**: Manual execution only; the user decides when to run the research.\n- **Output Format**: All collected information is stored as plain text in the database; responses to user queries are returned as plain‑text.\n- **Notifications**: No automatic notifications are sent when new findings are added.\n\n## Technical Requirements\n\n- Use the Web Research Agent for searching the web.\n- Use the Database Research Agent for reading Legislative Fundings data.\n- Operate within existing system permissions; no new integrations required.\n\n## Data Requirements\n\n- **Legislative Fundings Entity** (existing fields only): docket ID, title, source URL, summary, key dates, funding amount, relevance tags.\n- No new entities or fields.\n\n## Integration Requirements\n\n- Integration with the existing Web Research and Database Research agents.\n\n## Assumptions\n\n- The Legislative Fundings entity already exists with the required fields.\n- Users will manually invoke the research when needed.\n- Plain‑text storage is sufficient for downstream querying.\n\n## Risks\n\n- Manual trigger may lead to outdated information if not run regularly.\n- Plain‑text storage limits structured querying capabilities.\n\n## Out of Scope\n\n- Automatic scheduling of research runs.\n- Notification mechanisms.\n- Adding new data fields or entities.\n- Real‑time monitoring of legislative updates.\n\n## Success Criteria\n\n- Ability to manually trigger research and have findings saved as plain‑text in the Legislative Fundings entity.\n- Users can query the stored data and receive accurate plain‑text answers.\n- No errors or notifications are generated during operation.",
+      "TechnicalDesign": "# Legislative Research Agent – Technical Design\n\n## Overview\n**Agent Name**: Legislative Research Agent\n**Agent Type**: Loop (LLM‑driven, adaptive workflow)\n**Purpose**: Research Missouri legislative dockets, DESE rulemaking, and education‑related news; store findings in the *Legislative Fundings* entity; and answer user queries from the stored data.\n\n---\n\n## Architecture Diagram (conceptual)\n```\nLegislative Research Agent (Loop)\n├─ Sub‑Agent: Web Research Agent (search & summarise web sources)\n├─ Sub‑Agent: Database Research Agent (read existing Legislative Fundings records)\n├─ Action: Create Record (store new findings)\n└─ Action: Update Record (update existing insights)\n```\n---\n\n## Sub‑Agents\n| Sub‑Agent | Agent ID | Role | Why Used |\n|-----------|----------|------|----------|\n| **Web Research Agent** | 5DDF4F5D‑B977‑42B0‑BED5‑4A2F0021BC58 | Performs web searches, retrieves page content, extracts citations, and creates concise summaries. | Handles the *Web Research* functional requirement without needing separate actions. |\n| **Database Research Agent** | 746CD1E8‑CB8D‑49A4‑BE69‑D0F208A0B462 | Executes flexible database queries, returns full schema, records, and IDs in JSON. | Provides READ capability for the *Legislative Fundings* entity and supplies primary‑key values required for UPDATE actions. |\n\n## Actions (CRUD)\n| Action | Action ID | Purpose | Parameters (key) |\n|--------|-----------|---------|------------------|\n| **Create Record** | 2504E288‑ADF7‑4913‑A627‑AA14276BAA55 | Insert a new legislative finding into the *Legislative Fundings* entity. | `EntityName` (string), `Fields` (object) |\n| **Update Record** | FCAAD325‑0D33‑4E48‑BC25‑49C0E3587062 | Update an existing finding (e.g., add tags, correct data). | `EntityName` (string), `PrimaryKey` (object), `Fields` (object) |\n\n## Database Schema – Legislative Fundings\nThe research step revealed **no existing entity** that matches the required Legislative Fundings structure. Therefore the agent design includes the creation of a **new entity** with the exact fields described in the functional requirements.\n\n### Proposed Entity Definition\n| Field | Type | Nullable | Description |\n|-------|------|----------|-------------|\n| `ID` | `uniqueidentifier` | **No** | Primary key generated by the system. |\n| `DocketID` | `nvarchar(50)` | **No** | Identifier of the legislative docket. |\n| `Title` | `nvarchar(200)` | **No** | Short title of the docket or rulemaking. |\n| `SourceURL` | `nvarchar(500)` | **No** | URL of the source document or web page. |\n| `Summary` | `nvarchar(MAX)` | **No** | Plain‑text summary of the finding. |\n| `KeyDates` | `nvarchar(200)` | **Yes** | Important dates (e.g., hearing, enactment). |\n| `FundingAmount` | `decimal(18,2)` | **Yes** | Monetary amount, if applicable. |\n| `RelevanceTags` | `nvarchar(200)` | **Yes** | Comma‑separated tags for categorisation. |\n| `CreatedAt` | `datetimeoffset` | **No** | Record creation timestamp (auto‑filled). |\n| `UpdatedAt` | `datetimeoffset` | **No** | Record last‑update timestamp (auto‑filled). |\n\n> **Note**: The above schema must be created by the system administrator before the agent is deployed. The *Create Record* action will target this entity.\n\n## Data Flow & Prompt Logic\n### Step 1 – Initiate Research (Web)\n```\nCall **Web Research Agent** with message:\n\"Search for recent Missouri legislative dockets, DESE rulemaking, and education news relevant to teachers and the association. Return results in JSON format, include title, source URL, publication date, and a concise plain‑text summary for each item.\"\nStore the array of findings in `payload.researchResults`.\n```\n### Step 2 – Merge with Existing Data (Read)\n```\nCall **Database Research Agent** with message:\n\"Find all records in the *Legislative Fundings* entity. Return JSON with all columns (show all columns in max length) and include the primary key field `ID`.\"\nStore the result in `payload.existingFundings`.\n```\n### Step 3 – Determine New vs. Existing\nIterate over each item in `payload.researchResults`:\n- If `SourceURL` already exists in `payload.existingFundings` → **Update** the record (e.g., refresh `Summary`, `KeyDates`, `FundingAmount`, `RelevanceTags`).\n- If not present → **Create** a new record.\n\n### Step 4 – CRUD Operations (ForEach)\nUse a **ForEach** loop on `payload.researchResults`.\n- **Condition**: `item.SourceURL` NOT IN `payload.existingFundings.SourceURL`\n  - **Action**: `Create Record`\n    - `EntityName`: \"Legislative Fundings\"\n    - `Fields`:\n      ```json\n      {\n        \"DocketID\": \"{{item.DocketID}}\",\n        \"Title\": \"{{item.Title}}\",\n        \"SourceURL\": \"{{item.SourceURL}}\",\n        \"Summary\": \"{{item.Summary}}\",\n        \"KeyDates\": \"{{item.KeyDates}}\",\n        \"FundingAmount\": {{item.FundingAmount}},\n        \"RelevanceTags\": \"{{item.RelevanceTags}}\"\n      }\n      ```\n- **Else** (record exists):\n  - **Action**: `Update Record`\n    - `EntityName`: \"Legislative Fundings\"\n    - `PrimaryKey`: `{ \"ID\": \"{{matched.ID}}\" }`\n    - `Fields` (only changed fields, e.g., `Summary`, `KeyDates`, `FundingAmount`, `RelevanceTags`).\n\n### Step 5 – Return Summary to User\nCompose a plain‑text response summarising:\n- Number of new findings created.\n- Number of existing records updated.\n- Any errors encountered.\n```\nCreated {{createCount}} new Legislative Fundings records.\nUpdated {{updateCount}} existing records.\n{{errorCount}} items failed (list IDs if needed).\n```\n---\n\n## Prompt for the Legislative Research Agent (System Prompt)\n```\n# Legislative Research Agent\nYou are an orchestrator that coordinates web research, database lookup, and storage of legislative funding information for Missouri educators.\n\n## Your Responsibilities\n1. **Web Research** – Use the *Web Research Agent* to collect up‑to‑date docket information.\n2. **Database Read** – Use the *Database Research Agent* to retrieve existing Legislative Fundings rows.\n3. **Deduplication** – Compare new findings with stored data by `SourceURL`.\n4. **Create / Update** – Call *Create Record* for brand‑new items and *Update Record* for items that already exist.\n5. **Reporting** – After processing all items, return a concise plain‑text summary (counts of creates/updates, any failures).\n\n### Important Rules\n- **Never guess entity or field names** – always use the exact schema provided for *Legislative Fundings*.\n- **Always request JSON** from sub‑agents and request \"show all columns in max length\" when reading the database.\n- **Use ForEach** for batch processing to minimise token usage.\n- **Error handling** – If a CRUD action fails, capture the error in `payload.errors` and continue processing remaining items.\n- **No redundant actions** – Do not call generic \"Execute Research Query\" or \"Get Record\" because the Database Research Agent already provides those capabilities.\n```\n---\n\n## Configuration Summary\n- **Sub‑Agents**: Web Research Agent (ID `5DDF4F5D‑B977‑42B0‑BED5‑4A2F0021BC58`), Database Research Agent (ID `746CD1E8‑CB8D‑49A4‑BE69‑D0F208A0B462`).\n- **Actions**: Create Record (`2504E288‑ADF7‑4913‑A627‑AA14276BAA55`), Update Record (`FCAAD325‑0D33‑4E48‑BC25‑49C0E3587062`).\n- **Entity to be created**: Legislative Fundings (fields listed above).\n- **Loop workflow**: Web research → DB read → ForEach (create / update) → Summary.\n\n---\n\n**All design decisions are based on the actual research results** (Web Research Agent and Database Research Agent IDs, and the CRUD action IDs). No assumed entity names were used; the required Legislative Fundings entity is explicitly defined for creation.\n\n---\n\n*End of Technical Design*",
+      "InjectNotes": true,
+      "MaxNotesToInject": 5,
+      "NoteInjectionStrategy": "Relevant",
+      "InjectExamples": false,
+      "MaxExamplesToInject": 3,
+      "ExampleInjectionStrategy": "Semantic",
+      "IsRestricted": false,
+      "MessageMode": "None",
+      "MaxMessages": null
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Legislative Research Agent - Prompt 1",
+            "Purpose": null,
+            "ExecutionOrder": 0,
+            "ConfigurationID": null,
+            "Status": "Active",
+            "ContextBehavior": "Complete",
+            "ContextMessageCount": null
+          },
+          "primaryKey": {
+            "ID": "8543B505-C008-4AA7-8CF4-2C818518E2E7"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.165Z",
+            "checksum": "814e01ed71962cf60ad33d1ccef7c29c32519d1c85d92e27680714c051d0e464"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "563CBC9A-2330-41A3-996A-54ABE520F957"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.226Z",
+            "checksum": "1d92f6a34f5da5806f1c10efd7c467fec3bc3438b6b53ca84bfee1851da5ce56"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Update Record",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "C69511BD-2DF1-4F6D-8B02-F60A5D7B2915"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.235Z",
+            "checksum": "97f637ff1b5959609ec90f48c0295b09f586052b8aa8599c72ee1c8881061660"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"\":\"researchResults\"}",
+            "SubAgentInputMapping": "{}",
+            "SubAgentContextPaths": "[]",
+            "MessageMode": "None",
+            "MaxMessages": null
+          },
+          "primaryKey": {
+            "ID": "BF7B8EDA-E7C5-43EC-A074-E61A8B70BF6B"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.244Z",
+            "checksum": "a12d6bda17bc03bc7a9ac6029de495a6d9db4df942941f22dfb2b77d6d23a912"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"\":\"existingFundings\"}",
+            "SubAgentInputMapping": "{}",
+            "SubAgentContextPaths": "[]",
+            "MessageMode": "None",
+            "MaxMessages": null
+          },
+          "primaryKey": {
+            "ID": "D0DA347E-3F78-4D2E-AEC6-FF2A75198F0E"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.253Z",
+            "checksum": "4dd462ea1bf7012abe755acca7d5754a74ef26e17234452abab9b4b7b0553f02"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "356C5960-B0B6-438D-82ED-7BC5F0092BD2"
+    },
+    "sync": {
+      "lastModified": "2025-11-02T03:54:33.945Z",
+      "checksum": "0bbe1617cc81eaf6579c6adb4e02d4b6a006f0762364f2b981ae7f6ae51bcf14"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grant Proposal Agent",
+      "Description": "Generates tailored grant proposals based on user‑provided program details, industry tone, and CRM data (accounts, contacts, deal history). The agent researches relevant information, composes a structured proposal, saves it to a new Deal record, and optionally emails the proposal to stakeholders.",
+      "LogoURL": null,
+      "ParentID": null,
+      "ExposeAsAction": false,
+      "ExecutionOrder": 0,
+      "ExecutionMode": "Sequential",
+      "EnableContextCompression": false,
+      "ContextCompressionMessageThreshold": null,
+      "ContextCompressionPromptID": null,
+      "ContextCompressionMessageRetentionCount": null,
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "DriverClass": null,
+      "IconClass": "fa-solid fa-briefcase",
+      "ModelSelectionMode": "Agent Type",
+      "PayloadDownstreamPaths": "[\"*\"]",
+      "PayloadUpstreamPaths": "[\"*\"]",
+      "PayloadSelfReadPaths": null,
+      "PayloadSelfWritePaths": null,
+      "PayloadScope": null,
+      "FinalPayloadValidation": null,
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3,
+      "MaxCostPerRun": null,
+      "MaxTokensPerRun": null,
+      "MaxIterationsPerRun": null,
+      "MaxTimePerRun": null,
+      "MinExecutionsPerRun": null,
+      "MaxExecutionsPerRun": null,
+      "StartingPayloadValidation": null,
+      "StartingPayloadValidationMode": "Fail",
+      "DefaultPromptEffortLevel": null,
+      "ChatHandlingOption": null,
+      "DefaultArtifactTypeID": null,
+      "InvocationMode": "Any",
+      "ArtifactCreationMode": "Always",
+      "FunctionalRequirements": "# DRAFT - Needs Clarification\n\n## What We Know\n- The Grant Proposal Agent will be invoked via a natural language request where the user asks to write a specific grant proposal.\n- The agent must look up relevant data such as Account, Contact, and Deal history to personalize the proposal.\n- The generated proposal will include sections: greeting, funding request, program description, impact metrics, and a tone that adapts to the industry of the prospect.\n- After generation, the proposal text will be saved to a new Deal record with an appropriate status and description.\n\n## Questions for User\n1. **Grant Program Details**: Which grant programs or funding sources should the agent support (e.g., NIH, NSF, state grants, private foundations)?\n2. **Proposal Content Requirements**: Are there mandatory fields such as budget amount, project timeline, or submission deadline that must appear in every proposal?\n3. **Industry‑Specific Tone**: Can you provide examples of industries and the preferred tone for each (e.g., formal for biotech, conversational for education)?\n4. **Deal Record Settings**: What status value and any additional custom fields should be set on the new Deal record when the proposal is saved?",
+      "TechnicalDesign": "# Grant Proposal Agent – Technical Design\n\n## Overview\n**Agent Name**: Grant Proposal Agent\n**Agent Type**: Loop (adaptive workflow driven by LLM reasoning)\n**Description**: Generates tailored grant proposals based on user‑provided program details, industry tone, and CRM data (accounts, contacts, deal history). The agent researches relevant information, composes a structured proposal, saves it to a new Deal record, and optionally emails the proposal to stakeholders.\n\n## Architecture\n- **Related Sub‑Agents**:\n  1. **Research Agent** (ID: E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB) – orchestrates web research, data extraction, and report writing. Utilises its own sub‑agents (Web Research, Database Research, Report Writer) to gather content and synthesize the proposal.\n  2. **Database Research Agent** (ID: 746CD1E8-CB8D-49A4-BE69-D0F208A0B462) – provides READ operations on the CRM database (used for fetching account/contact info).\n- **Actions**:\n  - **Create Record** (ID: 2504E288-ADF7-4913-A627-AA14276BAA55) – creates a new Deal record to store the proposal.\n  - **Update Record** (ID: FCAAD325-0D33-4E48-BC25-49C0E3587062) – updates the Deal status after email is sent (optional).\n  - **Send Single Message** (ID: DC4C7E64-2D93-43E4-9F02-F5D7E702784A) – emails the final proposal.\n\n## Database Schema (source: Database Research Agent)\n- **Entity**: `Deals`\n- **Primary Key**: `ID`\n- **Relevant Fields**:\n  - `ID` (int, PK)\n  - `Name` (nvarchar(200)) – proposal title\n  - `AccountID` (int) – reference to the target account\n  - `ContactID` (int, nullable) – primary contact for proposal\n  - `Stage` (nvarchar(50)) – workflow stage (e.g., Draft, Sent, Approved)\n  - `Amount` (decimal) – requested grant amount\n  - `Probability` (int) – likelihood of approval\n  - `Description` (nvarchar(MAX)) – full proposal text\n  - `OwnerID` (int) – owner/creator of the proposal\n  - `__mj_CreatedAt`, `__mj_UpdatedAt` – timestamps\n\n## Prompt (System Prompt for Loop Agent)\n```\n# Grant Proposal Agent\nYou are an AI assistant that creates grant proposals.\n\n## Workflow\n1. **Gather Context**: Use the input `payload.FunctionalRequirements` to extract:\n   - Grant program name and requirements\n   - Desired funding amount\n   - Industry of the prospect (for tone)\n   - Any mandatory sections (budget, timeline, etc.)\n2. **Fetch CRM Data**:\n   - Call **Database Research Agent** with a query like:\n     \"Find Account where Name matches the prospect and include ContactID, OwnerID, and relevant fields. Return JSON with all columns at max length.\"\n   - Store result in `payload.accountData`.\n3. **Research Background**:\n   - Delegate to **Research Agent**:\n     Message: \"Research recent successes, statistics, and relevant case studies for the specified industry and grant program. Return a concise summary in JSON.\"\n   - Store result in `payload.researchInfo`.\n4. **Compose Proposal**:\n   - Using `payload.FunctionalRequirements`, `payload.accountData`, and `payload.researchInfo`, generate a structured proposal with sections:\n     * Executive Summary\n     * Program Alignment\n     * Project Description\n     * Budget & Timeline\n     * Impact Metrics\n     * Closing Statement (tone based on industry)\n   - Place the final proposal text in `payload.proposalText` and set `payload.proposalTitle` (e.g., \"[Program] Grant Proposal for [Account]\").\n5. **Persist Proposal**:\n   - Call **Create Record** action with:\n     ```json\n     {\n       \"EntityName\": \"Deals\",\n       \"Fields\": {\n         \"Name\": \"payload.proposalTitle\",\n         \"AccountID\": \"payload.accountData.ID\",\n         \"ContactID\": \"payload.accountData.ContactID\",\n         \"Stage\": \"Draft\",\n         \"Amount\": <requested amount extracted>,\n         \"Description\": \"payload.proposalText\",\n         \"OwnerID\": \"payload.accountData.OwnerID\"\n       }\n     }\n     ```\n   - Capture returned `PrimaryKey.ID` as `payload.dealId`.\n6. **Email Proposal** (optional but recommended):\n   - Call **Send Single Message** with:\n     - Provider: `'SendGrid'`\n     - MessageType: `'Email'`\n     - To: `<recipient email from user or account contact>`\n     - From: `<configured sender email>`\n     - Subject: `\"Grant Proposal – {payload.proposalTitle}\"`\n     - Body: `payload.proposalText`\n   - Store result `payload.emailSent`.\n7. **Update Deal Status** (if email sent):\n   - Call **Update Record** with:\n     ```json\n     {\n       \"EntityName\": \"Deals\",\n       \"PrimaryKey\": { \"ID\": \"payload.dealId\" },\n       \"Fields\": { \"Stage\": \"Sent\" }\n     }\n     ```\n   - Record `payload.updateResult`.\n\n## Payload Structure\n```json\n{\n  \"FunctionalRequirements\": \"...\",\n  \"accountData\": { /* from Database Research Agent */ },\n  \"researchInfo\": { /* from Research Agent */ },\n  \"proposalTitle\": \"string\",\n  \"proposalText\": \"string\",\n  \"dealId\": \"int\",\n  \"emailSent\": true,\n  \"updateResult\": { \"UpdatedFields\": { \"Stage\": \"Sent\" } }\n}\n```\n\n## Why This Design is Optimal\n- **Reuse**: Leverages existing **Research Agent** (covers web search, analysis, report writing) and **Database Research Agent** (securely reads CRM data) – no redundant actions.\n- **Minimal Actions**: Only three actions (Create Record, Update Record, Send Single Message) are required for persistence and communication.\n- **Schema Verified**: Uses the exact `Deals` entity schema returned by Database Research Agent – no guessed field names.\n- **Adaptive Loop**: The LLM decides when to call sub‑agents and actions based on the data it receives, handling variations in grant program requirements.\n- **Clear Separation**: Data retrieval, content generation, storage, and notification are distinct steps, simplifying debugging and future extensions.\n```",
+      "InjectNotes": true,
+      "MaxNotesToInject": 5,
+      "NoteInjectionStrategy": "Relevant",
+      "InjectExamples": false,
+      "MaxExamplesToInject": 3,
+      "ExampleInjectionStrategy": "Semantic",
+      "IsRestricted": false,
+      "MessageMode": "None",
+      "MaxMessages": null
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Grant Proposal Agent - Prompt 1",
+            "Purpose": null,
+            "ExecutionOrder": 0,
+            "ConfigurationID": null,
+            "Status": "Active",
+            "ContextBehavior": "Complete",
+            "ContextMessageCount": null
+          },
+          "primaryKey": {
+            "ID": "944B00EA-C86C-4F24-BD34-3DE3C7F92FCE"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.263Z",
+            "checksum": "c08d25c8a1bab6399110533084a769d08a4a6b7561ac6472520491d66dcb09fa"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Send Single Message",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "6CEBAB0C-DDA1-420A-A086-1497C7936128"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.273Z",
+            "checksum": "1dcbdf9609e74659f77b120a1e372bf5ec2752191d97ba7e766f923dbc4f7d84"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Update Record",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "2D3CAAAA-BAB6-46F1-B1D4-19380ACD9651"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.284Z",
+            "checksum": "97f637ff1b5959609ec90f48c0295b09f586052b8aa8599c72ee1c8881061660"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          },
+          "primaryKey": {
+            "ID": "4882647C-6A29-40C9-BC49-84FED2089D5C"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.295Z",
+            "checksum": "1d92f6a34f5da5806f1c10efd7c467fec3bc3438b6b53ca84bfee1851da5ce56"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"\":\"accountData\"}",
+            "SubAgentInputMapping": "{\"\":\"payload\"}",
+            "SubAgentContextPaths": "[\"*\",\"*\"]",
+            "MessageMode": "None",
+            "MaxMessages": null
+          },
+          "primaryKey": {
+            "ID": "3093DF0D-B658-4207-901E-1DAD5D9C6DE1"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.304Z",
+            "checksum": "13f4735cf17ed597d8368f9978e8b299faa662bd29309311f49958e27385d09e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"\":\"researchInfo\"}",
+            "SubAgentInputMapping": "{\"\":\"payload\"}",
+            "SubAgentContextPaths": "[\"*\",\"*\"]",
+            "MessageMode": "None",
+            "MaxMessages": null
+          },
+          "primaryKey": {
+            "ID": "07799F6C-F36A-45A3-91B0-BED15A635D87"
+          },
+          "sync": {
+            "lastModified": "2025-11-02T03:54:34.314Z",
+            "checksum": "cdc8ff0d8a8675e135e01ecc2f4e0d2fd9b385290ef830cd3357e0d11ac25b16"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D8015CD3-618C-4886-8C19-D6566C02AC6F"
+    },
+    "sync": {
+      "lastModified": "2025-11-02T03:54:33.959Z",
+      "checksum": "fea5a326de44999de07bf2995e2c1d4df97c41bffda49c0bd9ea581b13c02313"
+    }
+  }
+]

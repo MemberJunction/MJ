@@ -1,0 +1,51 @@
+{
+  "entity": "AI Prompts",
+  "filePattern": ".*.json",
+  "ignoreDirectories": ["templates", "output"],
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".digital-now-prompts.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "ignoreVirtualFields": true,
+    "filter": "Name IN ('Account Updater - Prompt 1', 'Legislative Research Agent - Prompt 1', 'Grant Proposal Agent - Prompt 1', 'Meeting Agenda Generation Agent - Prompt 1')",
+    "excludeFields": ["__mj_CreatedAt", "__mj_UpdatedAt", "CreatedAt", "UpdatedAt", "TemplateID"],
+    "externalizeFields": [
+      {
+        "field": "TemplateText",
+        "pattern": "@file:templates/{Name}.template.md"
+      }
+    ],
+    "lookupFields": {
+      "TypeID": {
+        "entity": "AI Prompt Types",
+        "field": "Name"
+      },
+      "CategoryID": {
+        "entity": "AI Prompt Categories",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": {
+        "entity": "MJ: AI Prompt Models",
+        "foreignKey": "PromptID",
+        "lookupFields": {
+          "ModelID": {
+            "entity": "AI Models",
+            "field": "Name"
+          },
+          "VendorID": {
+            "entity": "MJ: AI Vendors",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}

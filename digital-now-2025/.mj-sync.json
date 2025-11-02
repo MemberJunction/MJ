@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "description": "Digital Now 2025 Demo Agents",
+  "directoryOrder": ["prompts", "agents"],
+  "ignoreDirectories": ["templates"],
+  "push": {
+    "autoCreateMissingRecords": true
+  }
+}
