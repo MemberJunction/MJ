@@ -695,7 +695,7 @@ wm.FlushWarnings();
   └─ "Users"
      └─ OldField (called from: DataLoader::process)
 
-💡 Run with MJ_SHOW_ALL_WARNINGS=1 to see every occurrence.
+💡 Set ShowAll=true in configuration to see every occurrence.
 
 
 ⚠️  DATA INTEGRITY WARNINGS - The following fields were not found in entity definitions:
@@ -726,27 +726,7 @@ wm.UpdateConfig({
 const config = wm.GetConfig();
 ```
 
-Or via environment variables:
-
-```bash
-# Set debounce time (milliseconds)
-MJ_WARNING_DEBOUNCE_MS=5000
-
-# Show every occurrence of warnings (ignores session tracking)
-MJ_SHOW_ALL_WARNINGS=1
-
-# Disable all warnings
-MJ_DISABLE_WARNINGS=1
-
-# Disable grouping (show immediately)
-MJ_GROUP_WARNINGS=0
-```
-
-**Backward Compatibility**: Legacy environment variables are still supported:
-- `MJ_DEPRECATION_DEBOUNCE_MS`
-- `MJ_SHOW_ALL_DEPRECATION_WARNINGS`
-- `MJ_DISABLE_DEPRECATION_WARNINGS`
-- `MJ_GROUP_DEPRECATION_WARNINGS`
+All configuration is done via the runtime API.
 
 #### Warning Types
 
