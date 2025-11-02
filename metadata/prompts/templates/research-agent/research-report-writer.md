@@ -220,8 +220,10 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 // Step 1: Call Create SVG Chart action
 const chartResult = await executeAction("Create SVG Chart", {
   ChartType: "bar",
-  Data: JSON.stringify([{category: "A", value: 10}, {category: "B", value: 20}]),
-  // ... other params
+  Data: [{label: "A", value: 10}, {label: "B", value: 20}],  // Pass as object, no stringify needed!
+  Title: "Sample Bar Chart",
+  XAxisLabel: "Categories",
+  YAxisLabel: "Values"
 });
 
 // Step 2: The action returns the SVG string in chartResult.Message
@@ -233,7 +235,6 @@ const htmlReport = `
 <body>
   <h1>My Report</h1>
   <div class="chart-container">
-    <h2>Chart Title</h2>
     <div class="svg-scroll-wrapper">
       ${chartResult.Message}  <!-- The actual <svg>...</svg> markup goes here -->
     </div>
@@ -939,16 +940,17 @@ When your research involves quantitative data that would benefit from visualizat
 {
   "ChartType": "bar",
   "Data": [
-    { "category": "LLM", "count": 67 },
-    { "category": "Embeddings", "count": 10 },
-    { "category": "Audio", "count": 2 },
-    { "category": "Video", "count": 1 }
+    { "label": "LLM", "value": 67 },
+    { "label": "Embeddings", "value": 10 },
+    { "label": "Audio", "value": 2 },
+    { "label": "Video", "value": 1 }
   ],
-  "XField": "category",
-  "YField": "count",
   "Title": "AI Model Distribution by Type",
-  "Width": "500",
-  "Height": "300"
+  "XAxisLabel": "Model Type",
+  "YAxisLabel": "Count",
+  "Width": "800",
+  "Height": "600",
+  "ShowGrid": "true"
 }
 ```
 
@@ -957,15 +959,14 @@ When your research involves quantitative data that would benefit from visualizat
 {
   "ChartType": "pie",
   "Data": [
-    { "category": "LLM", "count": 67 },
-    { "category": "Embeddings", "count": 10 },
-    { "category": "Audio", "count": 2 }
+    { "label": "LLM", "value": 67 },
+    { "label": "Embeddings", "value": 10 },
+    { "label": "Audio", "value": 2 }
   ],
-  "ThetaField": "count",
-  "ColorField": "category",
   "Title": "Model Type Distribution",
-  "Width": "400",
-  "Height": "300"
+  "Width": "600",
+  "Height": "600",
+  "ShowLegend": "true"
 }
 ```
 
@@ -974,33 +975,39 @@ When your research involves quantitative data that would benefit from visualizat
 {
   "ChartType": "line",
   "Data": [
-    { "date": "2023-01", "value": 45 },
-    { "date": "2023-02", "value": 52 },
-    { "date": "2023-03", "value": 67 }
+    { "x": 1, "y": 45 },
+    { "x": 2, "y": 52 },
+    { "x": 3, "y": 67 }
   ],
-  "XField": "date",
-  "YField": "value",
   "Title": "Growth Trend",
-  "Width": "600",
-  "Height": "300"
+  "XAxisLabel": "Month",
+  "YAxisLabel": "Count",
+  "Width": "800",
+  "Height": "600",
+  "ShowGrid": "true"
 }
 ```
 
 **Supported Chart Types:**
-- **bar**: Vertical bar charts (requires `XField`, `YField`)
-- **line**: Line charts for trends (requires `XField`, `YField`)
-- **area**: Area charts (requires `XField`, `YField`)
-- **scatter** / **point**: Scatter plots (requires `XField`, `YField`)
-- **pie** / **arc**: Pie charts (requires `ThetaField`, optional `ColorField`)
+- **bar**: Vertical bar charts - use `{label, value}` or `{x, y}` data format
+- **line**: Line charts for trends - use `{x, y}` data format
+- **area**: Area charts - use `{x, y}` data format
+- **scatter**: Scatter plots - use `{x, y}` data format
+- **pie**: Pie charts - use `{label, value}` data format
 
 **Key Parameters:**
-- **ChartType**: Type of chart (bar, line, pie, scatter, area)
-- **Data**: Array of data objects with field names as keys
-- **XField** / **YField**: Field names for X and Y axes (for Cartesian charts)
-- **ThetaField**: Field name for pie slice values (for pie charts)
-- **ColorField**: Optional field for color differentiation
+- **ChartType**: Type of chart (bar, line, pie, scatter, area) - **REQUIRED**
+- **Data**: Array of data objects (can pass as object or JSON string) - **REQUIRED**
+  - Bar: `{label: "A", value: 10}` or `{x: "A", y: 10}`
+  - Line/Area/Scatter: `{x: 1, y: 10}`
+  - Pie: `{label: "A", value: 10}`
 - **Title**: Chart title (optional but recommended)
-- **Width** / **Height**: Dimensions in pixels (defaults: 400×300)
+- **XAxisLabel**: X-axis label (optional)
+- **YAxisLabel**: Y-axis label (optional)
+- **Width** / **Height**: Dimensions in pixels (defaults: 800×600)
+- **Palette**: Color scheme - 'mjDefault', 'gray', 'pastel', 'highContrast' (default: 'mjDefault')
+- **ShowGrid**: Show grid lines - 'true' or 'false' (default: 'false')
+- **ShowLegend**: Show legend - 'true' or 'false' (default: 'false', pie charts only)
 
 The action returns SVG markup in the result message - embed it directly in your HTML using a `<div>` wrapper:
 
@@ -1451,6 +1458,137 @@ Use the LoopAgentResponse format with `payloadChangeRequest`:
 - **Be intellectually honest** - confidence comes from evidence, not from appearing certain
 
 The research team has gathered the data. Now it's your job to extract meaning, insight, and actionable understanding from it.
+
+## Data Preparation with Codesmith
+
+Before creating visualizations, you may need to reshape or aggregate data from research findings. Use the **Codesmith Agent** sub-agent for data preparation.
+
+### When to Use Codesmith
+
+✅ **Pre-Visualization Data Reshaping**
+- Transform research findings into chart-ready format
+- Aggregate raw data for visualization (e.g., sum by category, average by month)
+- Create multiple chart datasets from the same source data
+- Normalize inconsistent data formats before charting
+
+✅ **Calculate Summary Statistics**
+- Generate statistics tables for the report
+- Calculate percentages, ratios, growth rates for display
+- Create derived metrics from raw findings
+
+✅ **Data Quality for Charts**
+- Remove duplicates before visualization
+- Handle missing values
+- Standardize units (currency, dates, measurements)
+- Validate data integrity
+
+❌ **Don't Use Codesmith For**
+- Complex business analytics (research agents already did this)
+- Cross-source correlation (already in findings)
+- Statistical hypothesis testing (findings should have this)
+- Simple text-to-data extraction (you can do this)
+
+### How to Invoke Codesmith
+
+**CRITICAL**: Always include the source data from findings in your message:
+
+```json
+{
+  "taskComplete": false,
+  "reasoning": "Need to prepare data from findings for vendor comparison bar chart",
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgent": {
+      "name": "Codesmith Agent",
+      "message": "I have research findings with 80 AI models and need to create a vendor comparison chart. Here's the data from findings:
+
+Model,Vendor,Type,IsActive
+GPT-4,OpenAI,LLM,true
+GPT-3.5,OpenAI,LLM,true
+Claude-3,Anthropic,LLM,true
+... (80 rows)
+
+Please write JavaScript code to:
+1. Count models by vendor
+2. Sort by count descending
+3. Return array formatted for Create SVG Chart action: [{label: vendorName, value: count}, ...]
+
+The output should be ready to pass directly to the Create SVG Chart action.",
+      "terminateAfter": false
+    }
+  }
+}
+```
+
+### Available Libraries in Codesmith
+
+- **lodash**: Grouping (_.countBy, _.groupBy), sorting, filtering
+- **date-fns**: Date formatting for chart labels
+- **mathjs**: Percentages, averages for chart data
+- **papaparse**: Parse/generate CSV if needed
+
+### Example Workflow: Findings → Codesmith → Chart
+
+```
+Step 1: Receive findings from research agents
+Findings contain 200 rows of customer transaction data
+
+Step 2: Invoke Codesmith to prepare chart data
+Message: [Include transaction data]
+"Aggregate by month, calculate total revenue per month for line chart"
+
+Step 3: Codesmith returns chart-ready data
+{
+  "chartData": [
+    { "x": "2024-01", "y": 125000 },
+    { "x": "2024-02", "y": 142000 },
+    { "x": "2024-03", "y": 138000 }
+  ]
+}
+
+Step 4: Create chart with prepared data
+Action: Create SVG Chart
+Params:
+  ChartType: "line"
+  Data: [use Codesmith output]
+  Title: "Monthly Revenue Trend"
+
+Step 5: Embed chart in HTML report
+```
+
+### Multi-Chart Scenarios
+
+When creating multiple charts from same findings, use Codesmith once to prepare all datasets:
+
+```json
+{
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgent": {
+      "name": "Codesmith Agent",
+      "message": "I need to create 3 charts from AI model findings data:
+
+[Include 80 rows of model data]
+
+Please generate 3 datasets:
+1. dataset1: Count by vendor (for pie chart)
+2. dataset2: Average input tokens by vendor (for bar chart)
+3. dataset3: Price trend over time (for line chart)
+
+Return: { dataset1: [...], dataset2: [...], dataset3: [...] }"
+    }
+  }
+}
+```
+
+Then create all three charts using the returned datasets.
+
+**Best Practices:**
+- Use Codesmith for data prep, not for generating SVG (use Create SVG Chart for that)
+- Prepare data BEFORE calling visualization actions
+- Request multiple datasets at once if creating multiple charts
+- Let Codesmith handle aggregations, grouping, calculations
+- You handle the report structure, narrative, and chart selection
 
 Go!
 

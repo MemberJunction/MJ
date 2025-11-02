@@ -363,8 +363,44 @@ export class FlowAgentType extends BaseAgentType {
     }
     
     /**
+     * Helper to set a value on a target object, supporting array append syntax.
+     * If key ends with '[]', the value is pushed to an array (auto-initialized if needed).
+     *
+     * @private
+     */
+    private setMappedValue(
+        target: Record<string, unknown>,
+        key: string,
+        value: unknown
+    ): void {
+        const isArrayAppend = key.endsWith('[]');
+        const actualKey = isArrayAppend ? key.slice(0, -2) : key;
+
+        if (isArrayAppend) {
+            // Initialize array if it doesn't exist
+            if (!(actualKey in target)) {
+                target[actualKey] = [];
+            }
+
+            // Validate it's actually an array
+            if (!Array.isArray(target[actualKey])) {
+                throw new Error(
+                    `Cannot append to '${actualKey}': target is not an array. ` +
+                    `Use '${actualKey}' without [] suffix for property update.`
+                );
+            }
+
+            // Append the value
+            (target[actualKey] as unknown[]).push(value);
+        } else {
+            // Standard property assignment
+            target[actualKey] = value;
+        }
+    }
+
+    /**
      * Applies action output mapping to update the payload
-     * 
+     *
      * @private
      */
     private applyActionOutputMapping<P>(
@@ -411,16 +447,19 @@ export class FlowAgentType extends BaseAgentType {
                     // Parse the path and build nested object
                     const pathParts = payloadPath.split('.');
                     let current = updateObj;
-                    
+
                     for (let i = 0; i < pathParts.length - 1; i++) {
                         const part = pathParts[i];
-                        if (!(part in current)) {
-                            current[part] = {};
+                        // Remove [] suffix for intermediate path parts
+                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
+                        if (!(cleanPart in current)) {
+                            current[cleanPart] = {};
                         }
-                        current = current[part] as Record<string, unknown>;
+                        current = current[cleanPart] as Record<string, unknown>;
                     }
-                    
-                    current[pathParts[pathParts.length - 1]] = value;
+
+                    // Use helper to support array append on final path part
+                    this.setMappedValue(current, pathParts[pathParts.length - 1], value);
                 }
             }
             
