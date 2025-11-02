@@ -1,5 +1,25 @@
 # @memberjunction/ai-agents
 
+## 2.115.0
+
+### Minor Changes
+
+- c29e21b: migration
+
+### Patch Changes
+
+- 6378103: Fix Flow Agent path condition evaluation by storing step results before path traversal
+- Updated dependencies [2e0fe8b]
+  - @memberjunction/aiengine@2.115.0
+  - @memberjunction/ai-prompts@2.115.0
+  - @memberjunction/actions@2.115.0
+  - @memberjunction/ai@2.115.0
+  - @memberjunction/ai-core-plus@2.115.0
+  - @memberjunction/actions-base@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+
 ## 2.114.0
 
 ### Minor Changes

@@ -1,5 +1,7 @@
 # @memberjunction/db-auto-doc
 
+## 2.115.0
+
 ## 2.114.0
 
 ## 2.113.2

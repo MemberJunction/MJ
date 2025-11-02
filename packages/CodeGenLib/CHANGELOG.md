@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.115.0
+
+### Minor Changes
+
+- c29e21b: migration
+
+### Patch Changes
+
+- Updated dependencies [2e0fe8b]
+  - @memberjunction/aiengine@2.115.0
+  - @memberjunction/actions@2.115.0
+  - @memberjunction/core-entities-server@2.115.0
+  - @memberjunction/sqlserver-dataprovider@2.115.0
+  - @memberjunction/ai@2.115.0
+  - @memberjunction/ai-provider-bundle@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+
 ## 2.114.0
 
 ### Patch Changes

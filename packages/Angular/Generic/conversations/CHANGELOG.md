@@ -1,5 +1,30 @@
 # @memberjunction/ng-conversations
 
+## 2.115.0
+
+### Minor Changes
+
+- 751e3d1: Fixed Conversations Hamburger Functionality
+- 5b7d788: Migration
+
+### Patch Changes
+
+- dffe12f: code fixes
+- 1a96840: Conversation UI Improvement
+  - @memberjunction/ai-engine-base@2.115.0
+  - @memberjunction/ai@2.115.0
+  - @memberjunction/ai-core-plus@2.115.0
+  - @memberjunction/ng-artifacts@2.115.0
+  - @memberjunction/ng-base-types@2.115.0
+  - @memberjunction/ng-code-editor@2.115.0
+  - @memberjunction/ng-container-directives@2.115.0
+  - @memberjunction/ng-notifications@2.115.0
+  - @memberjunction/ng-tasks@2.115.0
+  - @memberjunction/graphql-dataprovider@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+
 ## 2.114.0
 
 ### Minor Changes

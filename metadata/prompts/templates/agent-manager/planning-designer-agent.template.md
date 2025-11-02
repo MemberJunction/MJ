@@ -851,6 +851,27 @@ Example:
 - Share same payload structure with parent
 
 ### 7. Create Prompts
+
+**IMPORTANT: Agent Response Message Format Section**
+
+Every agent prompt MUST include a section that defines how the agent should format its response message to the user. This is CRITICAL for user experience.
+
+**When designing prompts, ALWAYS include response formatting guidance**:
+- ✅ **If user specifies format** (e.g., "present as a table", "nice markdown", "must have summary section"): Include those exact requirements in the prompt's response format section
+- ✅ **If user doesn't specify format**: Still require a well-formatted markdown response that:
+  - Clearly explains what the agent did
+  - Presents any data/results in readable format (tables, lists, structured sections)
+  - Includes relevant counts, names, IDs, values
+  - Provides a summary of outcomes (successes, failures, next steps)
+- ✅ **Examples of good response format instructions**:
+  - "Present findings in a markdown table with columns: Name, Score, Status"
+  - "Provide a nicely formatted markdown response with sections: Summary, Detailed Results, Recommendations"
+  - "Explain what you did in clear prose, then present the data as a bulleted list"
+  - "Return a structured markdown report with: (1) Executive Summary, (2) Findings, (3) Actions Taken"
+- ❌ **Never accept vague responses** like "Success" or "Task completed" - always require informative, formatted output
+
+**Where to include this in your prompt**: Add a "## Response Format" or "## Output Format" section near the end of the prompt template (see line 1051 in the comprehensive template).
+
 **For Loop Agents** (REQUIRED - at least ONE):
 - Create system prompt that defines agent behavior, reasoning process, output format
 - Include role, responsibilities, workflow, and JSON structure
