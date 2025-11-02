@@ -1,4 +1,4 @@
-import { CompositeKey, LogError, KeyValuePair } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
@@ -103,12 +103,26 @@ export class GraphQLSystemUserClient {
             }
         }
         catch (e) {
-            const error = `GraphQLSystemUserClient::GetData - Error getting data - ${e}`
-            LogError(error);
+            // Extract clean error message - the GraphQL error response contains the actual SQL error
+            let cleanError = e instanceof Error ? e.message : String(e);
+
+            // Try to extract just the SQL error from GraphQL response
+            // Look for the actual error message before the JSON payload
+            const match = cleanError.match(/Error: ([^:]+)\./);
+            if (match) {
+                cleanError = match[1] + '.';
+            }
+
+            // Only log verbose details if in verbose mode
+            if (IsVerboseLoggingEnabled()) {
+                const verboseError = `GraphQLSystemUserClient::GetData - Error getting data - ${e}`;
+                LogError(verboseError);
+            }
+
             return {
                 Success: false,
                 Results: [],
-                ErrorMessages: [error],
+                ErrorMessages: [cleanError],
                 Queries: queries
             }
         }

@@ -1,0 +1,286 @@
+<div class="dashboard-container">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <h1 class="dashboard-title">
+        <i class="fa fa-calendar-alt"></i>
+        Event Abstract Submissions
+      </h1>
+      <p class="dashboard-subtitle">Conference management and submission tracking</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-refresh" (click)="refreshDashboard()" [disabled]="isLoading">
+        <i class="fa fa-sync-alt" [class.spinning]="isLoading"></i>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="dashboard-loading">
+    <div class="loading-spinner"></div>
+    <p>Loading dashboard data...</p>
+  </div>
+
+  <!-- Dashboard Content -->
+  <div *ngIf="!isLoading" class="dashboard-content">
+
+    <!-- KPI Cards Row -->
+    <div class="kpi-row">
+      <div class="kpi-card kpi-primary">
+        <div class="kpi-icon">
+          <i class="fa fa-calendar-check"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{ formatNumber(stats.totalEvents) }}</div>
+          <div class="kpi-label">Total Events</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info">
+        <div class="kpi-icon">
+          <i class="fa fa-file-alt"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{ formatNumber(stats.activeSubmissions) }}</div>
+          <div class="kpi-label">Active Submissions</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-success">
+        <div class="kpi-icon">
+          <i class="fa fa-check-circle"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{ stats.acceptanceRate }}%</div>
+          <div class="kpi-label">Acceptance Rate</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-warning">
+        <div class="kpi-icon">
+          <i class="fa fa-clock"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{ formatNumber(stats.pendingReviews) }}</div>
+          <div class="kpi-label">Pending Reviews</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-purple">
+        <div class="kpi-icon">
+          <i class="fa fa-robot"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{ stats.avgAIScore }}</div>
+          <div class="kpi-label">Avg AI Score</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="dashboard-grid">
+
+      <!-- Events List Panel -->
+      <div class="dashboard-panel events-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <i class="fa fa-calendar-alt"></i>
+            Events
+          </h2>
+          <span class="panel-badge">{{ events.length }}</span>
+        </div>
+        <div class="panel-body">
+
+          <!-- Empty State -->
+          <div *ngIf="eventSummaries.length === 0" class="empty-state">
+            <i class="fa fa-calendar-times"></i>
+            <p>No events yet</p>
+          </div>
+
+          <!-- Events List -->
+          <div *ngIf="eventSummaries.length > 0" class="events-list">
+            <div *ngFor="let summary of eventSummaries"
+                 class="event-item"
+                 [class.urgency-high]="summary.urgency === 'high'"
+                 [class.urgency-medium]="summary.urgency === 'medium'"
+                 (click)="openEventRecord(summary.event.ID)">
+              <div class="event-header">
+                <div class="event-title">{{ summary.event.Name }}</div>
+                <span class="status-badge" [ngClass]="getStatusBadgeClass(summary.event.Status || '')">
+                  {{ summary.event.Status }}
+                </span>
+              </div>
+              <div class="event-meta">
+                <span class="meta-item" *ngIf="summary.event.Location">
+                  <i class="fa fa-map-marker-alt"></i>
+                  {{ summary.event.Location }}
+                </span>
+                <span class="meta-item" *ngIf="summary.event.StartDate">
+                  <i class="fa fa-calendar"></i>
+                  {{ summary.event.StartDate | date:'MMM d, y' }}
+                </span>
+                <span class="meta-item">
+                  <i class="fa fa-file-alt"></i>
+                  {{ summary.submissionCount }} submissions
+                </span>
+              </div>
+              <div *ngIf="summary.daysUntilDeadline !== null && summary.urgency !== 'none'"
+                   class="event-deadline"
+                   [class.deadline-urgent]="summary.urgency === 'high'"
+                   [class.deadline-soon]="summary.urgency === 'medium'">
+                <i class="fa fa-exclamation-triangle"></i>
+                <span *ngIf="summary.daysUntilDeadline >= 0">
+                  {{ summary.daysUntilDeadline }} days until deadline
+                </span>
+                <span *ngIf="summary.daysUntilDeadline < 0">
+                  Deadline passed
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submissions Summary Panel -->
+      <div class="dashboard-panel submissions-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <i class="fa fa-chart-bar"></i>
+            Submission Status
+          </h2>
+        </div>
+        <div class="panel-body">
+          <div class="status-breakdown">
+            <div class="status-row">
+              <div class="status-label">
+                <span class="status-dot status-new"></span>
+                New
+              </div>
+              <div class="status-count">{{ getSubmissionsByStatus('New') }}</div>
+            </div>
+            <div class="status-row">
+              <div class="status-label">
+                <span class="status-dot status-analyzing"></span>
+                Analyzing
+              </div>
+              <div class="status-count">{{ getSubmissionsByStatus('Analyzing') }}</div>
+            </div>
+            <div class="status-row">
+              <div class="status-label">
+                <span class="status-dot status-passed"></span>
+                Passed Initial
+              </div>
+              <div class="status-count">{{ getSubmissionsByStatus('Passed Initial') }}</div>
+            </div>
+            <div class="status-row">
+              <div class="status-label">
+                <span class="status-dot status-review"></span>
+                Under Review
+              </div>
+              <div class="status-count">{{ getSubmissionsByStatus('Under Review') }}</div>
+            </div>
+            <div class="status-row">
+              <div class="status-label">
+                <span class="status-dot status-accepted"></span>
+                Accepted
+              </div>
+              <div class="status-count">{{ getSubmissionsByStatus('Accepted') }}</div>
+            </div>
+            <div class="status-row">
+              <div class="status-label">
+                <span class="status-dot status-rejected"></span>
+                Rejected
+              </div>
+              <div class="status-count">{{ getSubmissionsByStatus('Rejected') }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Activity Panel -->
+      <div class="dashboard-panel activity-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <i class="fa fa-bolt"></i>
+            Recent Activity
+          </h2>
+        </div>
+        <div class="panel-body">
+
+          <!-- Empty State -->
+          <div *ngIf="recentActivity.length === 0" class="empty-state">
+            <i class="fa fa-inbox"></i>
+            <p>No recent activity</p>
+          </div>
+
+          <!-- Activity Feed -->
+          <div *ngIf="recentActivity.length > 0" class="activity-feed">
+            <div *ngFor="let activity of recentActivity"
+                 class="activity-item"
+                 (click)="openSubmissionRecord(activity.submissionId)">
+              <div class="activity-icon">
+                <i class="fa" [class]="activity.icon"></i>
+              </div>
+              <div class="activity-content">
+                <div class="activity-title">{{ activity.title }}</div>
+                <div class="activity-description">{{ activity.description }}</div>
+              </div>
+              <div class="activity-time">{{ getTimeAgo(activity.timestamp) }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Insights Panel -->
+      <div class="dashboard-panel ai-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <i class="fa fa-robot"></i>
+            AI Evaluation Insights
+          </h2>
+        </div>
+        <div class="panel-body">
+          <div class="ai-stats">
+            <div class="ai-stat-item">
+              <div class="ai-stat-label">Total Evaluated</div>
+              <div class="ai-stat-value">{{ getEvaluatedSubmissionsCount() }}</div>
+            </div>
+            <div class="ai-stat-item">
+              <div class="ai-stat-label">Average Score</div>
+              <div class="ai-stat-value">{{ stats.avgAIScore }}</div>
+            </div>
+            <div class="ai-stat-item">
+              <div class="ai-stat-label">High Scores (80+)</div>
+              <div class="ai-stat-value">{{ getHighScoreCount() }}</div>
+            </div>
+          </div>
+
+          <!-- Score Distribution -->
+          <div class="score-distribution">
+            <div class="distribution-label">Score Distribution</div>
+            <div class="distribution-bars">
+              <div class="distribution-bar" *ngFor="let range of [
+                { label: '0-20', min: 0, max: 20, color: '#ef4444' },
+                { label: '21-40', min: 21, max: 40, color: '#f59e0b' },
+                { label: '41-60', min: 41, max: 60, color: '#fbbf24' },
+                { label: '61-80', min: 61, max: 80, color: '#10b981' },
+                { label: '81-100', min: 81, max: 100, color: '#059669' }
+              ]">
+                <div class="bar-label">{{ range.label }}</div>
+                <div class="bar-container">
+                  <div class="bar-fill"
+                       [style.width.%]="getScoreRangePercentage(range.min, range.max)"
+                       [style.background-color]="range.color">
+                  </div>
+                </div>
+                <div class="bar-count">{{ getScoreRangeCount(range.min, range.max) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
