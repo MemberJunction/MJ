@@ -136,7 +136,8 @@ async function executeInIsolate(params: CodeExecutionParams): Promise<CodeExecut
 
         // SECURITY: Create require() function with strict module allowlisting
         // This ivm.Reference is safe - it's a loader function we control
-        const requireFunc = new ivm.Reference(async (moduleName: string) => {
+        // CRITICAL: Must be synchronous (not async) - see file header comments for why
+        const requireFunc = new ivm.Reference((moduleName: string) => {
             const blockedModules = ['fs', 'path', 'http', 'https', 'net', 'child_process', 'cluster', 'os', 'process', 'axios'];
 
             // Check if module is blocked
@@ -188,11 +189,15 @@ async function executeInIsolate(params: CodeExecutionParams): Promise<CodeExecut
         `);
 
         // Wrap user code to capture output
+        // We store output in globalThis._output because script.run() doesn't reliably
+        // return the IIFE's return value - we need to extract it from the context
+        await jail.set('_output', undefined);
+
         const wrappedCode = `
             (function() {
                 let output;
                 ${params.code}
-                return output;
+                globalThis._output = output;
             })();
         `;
 
@@ -200,15 +205,16 @@ async function executeInIsolate(params: CodeExecutionParams): Promise<CodeExecut
         // CVE-2022-39266: Never use cachedData from untrusted sources
         // We do NOT pass any cachedData parameter here - only compile from source
         const script = await isolate.compileScript(wrappedCode);
-        const result = await script.run(context, { timeout: timeoutMs });
+        await script.run(context, { timeout: timeoutMs });
 
-        // SECURITY: Extract output value - use .copy() to get plain data, not References
+        // SECURITY: Extract output value - use .copySync() to get plain data, not References
         // This ensures no ivm objects leak back to caller
+        const outputRef = await jail.get('_output');
         let output: any;
-        if (result && typeof result === 'object' && 'copy' in result) {
-            output = await result.copy();
+        if (outputRef && typeof outputRef === 'object' && 'copySync' in outputRef) {
+            output = outputRef.copySync();
         } else {
-            output = result;
+            output = outputRef;
         }
 
         return {

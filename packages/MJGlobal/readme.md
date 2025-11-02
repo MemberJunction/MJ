@@ -19,6 +19,7 @@ The `@memberjunction/global` library serves as the foundation for cross-componen
 - **Class Reflection Utilities** - Runtime class hierarchy inspection and analysis
 - **Deep Diff Engine** - Comprehensive object comparison and change tracking
 - **JSON Validator** - Lightweight JSON validation with flexible rules and special syntax
+- **Warning Manager** - Smart warning system with debouncing, batching, and session tracking
 - **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), pattern matching, and formatting utilities
 
 ## Core Components
@@ -649,6 +650,110 @@ import { ConvertMarkdownStringToHtmlList } from '@memberjunction/global';
 const html = ConvertMarkdownStringToHtmlList('Unordered', '- Item 1\n- Item 2\n- Item 3');
 // Returns: <ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul>
 ```
+
+### Warning Manager
+
+The Warning Manager provides intelligent warning batching and deduplication for console messages across your application. It tracks warnings per session, groups them by type, and displays them in clean, formatted output after a configurable debounce period.
+
+#### Features
+
+- **Session-level tracking** - Each warning shown only once per session
+- **Debounced output** - Groups warnings and displays after a configurable quiet period (default 10s)
+- **Multiple warning types** - Supports deprecation warnings and data integrity warnings
+- **Beautiful formatting** - Tree-structured console output with emojis and clear grouping
+- **Configurable** - Runtime API and environment variables for customization
+- **Backward compatible** - `DeprecationWarningManager` alias provided
+
+#### Basic Usage
+
+```typescript
+import { WarningManager } from '@memberjunction/global';
+
+const wm = WarningManager.Instance;
+
+// Record deprecation warnings
+wm.RecordEntityDeprecationWarning('LegacyEntity', 'MyComponent::method');
+wm.RecordFieldDeprecationWarning('Users', 'OldField', 'DataLoader::process');
+
+// Record field-not-found warnings (data integrity issues)
+wm.RecordFieldNotFoundWarning('Users', 'DeletedColumn', 'BaseEntity::SetMany during import');
+
+// Warnings are automatically batched and displayed after debounce period
+// Or manually flush immediately:
+wm.FlushWarnings();
+```
+
+#### Example Output
+
+```
+⚠️  DEPRECATION WARNINGS - The following entities/fields are deprecated and may be removed in future versions:
+
+📦 DEPRECATED ENTITIES:
+  • "LegacyEntity" (called from: MyComponent::method)
+
+📋 DEPRECATED ENTITY FIELDS:
+  └─ "Users"
+     └─ OldField (called from: DataLoader::process)
+
+💡 Set ShowAll=true in configuration to see every occurrence.
+
+
+⚠️  DATA INTEGRITY WARNINGS - The following fields were not found in entity definitions:
+
+📋 MISSING FIELDS:
+  └─ "Users"
+     └─ DeletedColumn (context: BaseEntity::SetMany during import)
+
+💡 These fields exist in your data but not in the entity schema. This may indicate:
+   • Schema is out of sync with database
+   • Data contains legacy fields that were removed
+   • Field names have been changed
+```
+
+#### Configuration
+
+Configure via runtime API:
+
+```typescript
+wm.UpdateConfig({
+  DebounceMs: 5000,        // Wait 5 seconds after last warning
+  ShowAll: false,          // Show each warning once per session (default)
+  DisableWarnings: false,  // Enable warnings (default)
+  GroupWarnings: true      // Group warnings in tree format (default)
+});
+
+// Get current configuration
+const config = wm.GetConfig();
+```
+
+All configuration is done via the runtime API.
+
+#### Warning Types
+
+**Deprecation Warnings** indicate entities or fields that may be removed in future versions:
+- `RecordEntityDeprecationWarning(entityName, callerName)` - Deprecated entity
+- `RecordFieldDeprecationWarning(entityName, fieldName, callerName)` - Deprecated field
+
+**Data Integrity Warnings** indicate mismatches between data and schema:
+- `RecordFieldNotFoundWarning(entityName, fieldName, context)` - Field exists in data but not in schema
+
+#### Advanced Usage
+
+```typescript
+// Reset all tracking (useful for testing)
+wm.Reset();
+
+// Backward compatibility - DeprecationWarningManager is an alias
+import { DeprecationWarningManager } from '@memberjunction/global';
+const dwm = DeprecationWarningManager.Instance; // Same as WarningManager.Instance
+```
+
+#### Use Cases
+
+1. **Framework-level warnings** - Alert developers about deprecated APIs
+2. **Data migration** - Track fields that don't match current schema
+3. **Development debugging** - Identify outdated code patterns
+4. **Testing** - Verify no deprecated features are used
 
 ### Safe Expression Evaluator
 

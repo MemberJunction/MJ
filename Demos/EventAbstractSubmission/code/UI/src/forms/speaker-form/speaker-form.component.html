@@ -1,0 +1,330 @@
+<div class="record-form-container">
+  <form *ngIf="isRecordReady" class="record-form" #form="ngForm">
+    <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+    <!-- Header Card -->
+    <div class="form-card">
+      <div class="form-header">
+        <div class="header-content">
+          <h3>{{ record.FullName || 'New Speaker' }}</h3>
+          <p class="header-subtitle">{{ record.Title ? record.Title + (record.Organization ? ' at ' + record.Organization : '') : 'Speaker Profile' }}</p>
+        </div>
+      </div>
+
+      <div class="form-body">
+        <!-- Personal Information Section -->
+        <div class="form-section">
+          <div class="form-section-title">Personal Information</div>
+
+          <div class="form-group">
+            <label for="fullName" class="form-label required">Full Name</label>
+            <input
+              type="text"
+              id="fullName"
+              name="fullName"
+              class="form-control"
+              [(ngModel)]="record.FullName"
+              [disabled]="!EditMode"
+              placeholder="Enter full name"
+              maxlength="200"
+              required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="email" class="form-label required">Email</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                class="form-control"
+                [(ngModel)]="record.Email"
+                [disabled]="!EditMode"
+                placeholder="speaker@example.com"
+                maxlength="100"
+                required>
+            </div>
+
+            <div class="form-group">
+              <label for="phoneNumber" class="form-label">Phone Number</label>
+              <input
+                type="tel"
+                id="phoneNumber"
+                name="phoneNumber"
+                class="form-control"
+                [(ngModel)]="record.PhoneNumber"
+                [disabled]="!EditMode"
+                placeholder="+1 (555) 123-4567"
+                maxlength="20">
+            </div>
+          </div>
+        </div>
+
+        <!-- Professional Information Section -->
+        <div class="form-section">
+          <div class="form-section-title">Professional Information</div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="organization" class="form-label">Organization</label>
+              <input
+                type="text"
+                id="organization"
+                name="organization"
+                class="form-control"
+                [(ngModel)]="record.Organization"
+                [disabled]="!EditMode"
+                placeholder="Company or organization"
+                maxlength="200">
+            </div>
+
+            <div class="form-group">
+              <label for="title" class="form-label">Title</label>
+              <input
+                type="text"
+                id="title"
+                name="title"
+                class="form-control"
+                [(ngModel)]="record.Title"
+                [disabled]="!EditMode"
+                placeholder="Professional title"
+                maxlength="100">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="bio" class="form-label">Biography</label>
+            <textarea
+              id="bio"
+              name="bio"
+              class="form-control textarea-large"
+              [(ngModel)]="record.Bio"
+              [disabled]="!EditMode"
+              placeholder="Speaker biography"
+              rows="6"></textarea>
+          </div>
+        </div>
+
+        <!-- Social Media & Web Section -->
+        <div class="form-section">
+          <div class="form-section-title">Social Media & Web</div>
+
+          <div class="form-group">
+            <label for="linkedInUrl" class="form-label">LinkedIn URL</label>
+            <div class="url-input-group">
+              <input
+                type="url"
+                id="linkedInUrl"
+                name="linkedInUrl"
+                class="form-control"
+                [(ngModel)]="record.LinkedInURL"
+                [disabled]="!EditMode"
+                placeholder="https://linkedin.com/in/...">
+              <a *ngIf="record.LinkedInURL && !EditMode"
+                 [href]="record.LinkedInURL"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 class="url-link-button"
+                 title="Open in new tab">
+                <i class="fa fa-external-link-alt"></i>
+              </a>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="twitterHandle" class="form-label">Twitter Handle</label>
+              <input
+                type="text"
+                id="twitterHandle"
+                name="twitterHandle"
+                class="form-control"
+                [(ngModel)]="record.TwitterHandle"
+                [disabled]="!EditMode"
+                placeholder="@username"
+                maxlength="50">
+            </div>
+
+            <div class="form-group">
+              <label for="websiteUrl" class="form-label">Website URL</label>
+              <div class="url-input-group">
+                <input
+                  type="url"
+                  id="websiteUrl"
+                  name="websiteUrl"
+                  class="form-control"
+                  [(ngModel)]="record.WebsiteURL"
+                  [disabled]="!EditMode"
+                  placeholder="https://example.com">
+                <a *ngIf="record.WebsiteURL && !EditMode"
+                   [href]="record.WebsiteURL"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="url-link-button"
+                   title="Open in new tab">
+                  <i class="fa fa-external-link-alt"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Research Dossier Card - Always visible with special styling -->
+    <div class="ai-dossier-card">
+      <div class="ai-card-header">
+        <div class="ai-header-icon">
+          <i class="fa fa-user-secret"></i>
+        </div>
+        <div class="ai-header-content">
+          <h3>AI Research Dossier</h3>
+          <p>Automated background research and credibility analysis</p>
+        </div>
+        <div class="ai-status-indicator" [class.processed]="hasDossierData" [class.pending]="!hasDossierData">
+          <i [class]="hasDossierData ? 'fa fa-check-circle' : 'fa fa-clock'"></i>
+          <span>{{ hasDossierData ? 'Research Complete' : 'Not Yet Researched' }}</span>
+        </div>
+      </div>
+
+      <div class="ai-card-body">
+        <!-- Not Researched State -->
+        <div *ngIf="!hasDossierData" class="ai-empty-state">
+          <div class="empty-state-icon">
+            <i class="fa fa-search"></i>
+          </div>
+          <h4>Awaiting Background Research</h4>
+          <p>This speaker has not been researched by the AI system yet. Research includes credibility scoring, speaking history analysis, and expertise assessment.</p>
+        </div>
+
+        <!-- Researched State -->
+        <div *ngIf="hasDossierData" class="ai-content-grid">
+          <!-- Credibility Score Card -->
+          <div class="ai-metric-card" *ngIf="record.CredibilityScore != null">
+            <div class="metric-header">
+              <i class="fa fa-shield-alt"></i>
+              <span>Credibility Score</span>
+            </div>
+            <div class="score-display-large" [ngClass]="credibilityScoreClass">
+              <div class="score-number">{{ record.CredibilityScore }}</div>
+              <div class="score-label">/100</div>
+            </div>
+            <div class="score-description">
+              Based on research and verification
+            </div>
+          </div>
+
+          <!-- Dossier Summary Card -->
+          <div class="ai-content-card" *ngIf="record.DossierSummary">
+            <div class="content-card-header">
+              <i class="fa fa-file-alt"></i>
+              <span>Research Summary</span>
+            </div>
+            <div class="content-card-body">{{ record.DossierSummary }}</div>
+          </div>
+
+          <!-- Speaking History Card -->
+          <div class="ai-content-card" *ngIf="record.SpeakingHistory">
+            <div class="content-card-header">
+              <i class="fa fa-microphone"></i>
+              <span>Speaking History</span>
+            </div>
+            <div class="content-card-body">
+              <div class="history-list">
+                <div *ngFor="let event of parseJsonArray(record.SpeakingHistory)" class="history-item">
+                  <i class="fa fa-calendar"></i>
+                  <span>{{ event }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Expertise Card -->
+          <div class="ai-content-card" *ngIf="record.Expertise">
+            <div class="content-card-header">
+              <i class="fa fa-lightbulb"></i>
+              <span>Areas of Expertise</span>
+            </div>
+            <div class="content-card-body">
+              <div class="topics-container">
+                <span *ngFor="let topic of parseJsonArray(record.Expertise)" class="topic-badge">
+                  {{ topic }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Research Metrics -->
+          <div class="ai-metrics-grid" *ngIf="hasResearchData">
+            <div class="metric-item">
+              <i class="fa fa-book"></i>
+              <div class="metric-content">
+                <div class="metric-value">{{ formatNumber(record.PublicationsCount) }}</div>
+                <div class="metric-label">Publications</div>
+              </div>
+            </div>
+            <div class="metric-item">
+              <i class="fa fa-users"></i>
+              <div class="metric-content">
+                <div class="metric-value">{{ formatNumber(record.SocialMediaReach) }}</div>
+                <div class="metric-label">Social Reach</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Red Flags Card -->
+          <div class="ai-content-card warning-card" *ngIf="hasRedFlags">
+            <div class="content-card-header">
+              <i class="fa fa-exclamation-triangle"></i>
+              <span>Red Flags</span>
+            </div>
+            <div class="content-card-body">
+              <div class="warning-list">
+                <div *ngFor="let flag of parseJsonArray(record.RedFlags)" class="warning-item">
+                  <i class="fa fa-flag"></i>
+                  <span>{{ flag }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Section -->
+    <div class="form-card metadata-card" *ngIf="record.ID">
+      <div class="form-header">
+        <h3>Metadata</h3>
+      </div>
+
+      <div class="form-body">
+        <div class="metadata-grid">
+          <div class="metadata-item" *ngIf="record.ContactID">
+            <span class="metadata-label">CRM Contact:</span>
+            <span class="metadata-value">
+              {{ getContactName(record.ContactID) }}
+              <a (click)="openContactRecord()"
+                 class="entity-link-icon"
+                 title="Open contact record">
+                <i class="fa fa-external-link-alt"></i>
+              </a>
+            </span>
+          </div>
+          <div class="metadata-item">
+            <span class="metadata-label">Created:</span>
+            <span class="metadata-value">{{ record.__mj_CreatedAt | date:'medium' }}</span>
+          </div>
+          <div class="metadata-item">
+            <span class="metadata-label">Updated:</span>
+            <span class="metadata-value">{{ record.__mj_UpdatedAt | date:'medium' }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div *ngIf="!isRecordReady" class="loading-container">
+    <div class="loading-spinner"></div>
+    <p>Loading speaker data...</p>
+  </div>
+</div>

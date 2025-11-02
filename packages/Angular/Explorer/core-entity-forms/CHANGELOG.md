@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.115.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.115.0
+- @memberjunction/ai-core-plus@2.115.0
+- @memberjunction/actions-base@2.115.0
+- @memberjunction/ng-base-forms@2.115.0
+- @memberjunction/ng-form-toolbar@2.115.0
+- @memberjunction/ng-action-gallery@2.115.0
+- @memberjunction/ng-ai-test-harness@2.115.0
+- @memberjunction/ng-code-editor@2.115.0
+- @memberjunction/ng-container-directives@2.115.0
+- @memberjunction/ng-deep-diff@2.115.0
+- @memberjunction/ng-join-grid@2.115.0
+- @memberjunction/ng-tabstrip@2.115.0
+- @memberjunction/ng-timeline@2.115.0
+- @memberjunction/core@2.115.0
+- @memberjunction/core-entities@2.115.0
+- @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.114.0
+- @memberjunction/ai-core-plus@2.114.0
+- @memberjunction/actions-base@2.114.0
+- @memberjunction/ng-base-forms@2.114.0
+- @memberjunction/ng-form-toolbar@2.114.0
+- @memberjunction/ng-action-gallery@2.114.0
+- @memberjunction/ng-ai-test-harness@2.114.0
+- @memberjunction/ng-code-editor@2.114.0
+- @memberjunction/ng-container-directives@2.114.0
+- @memberjunction/ng-deep-diff@2.114.0
+- @memberjunction/ng-join-grid@2.114.0
+- @memberjunction/ng-tabstrip@2.114.0
+- @memberjunction/ng-timeline@2.114.0
+- @memberjunction/core@2.114.0
+- @memberjunction/core-entities@2.114.0
+- @memberjunction/global@2.114.0
+
 ## 2.113.2
 
 ### Patch Changes

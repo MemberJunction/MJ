@@ -1,0 +1,84 @@
+{
+  "$comment": "Example: Conditional Logic Based on Parameters",
+  "Name": "Get User Profile with Privacy",
+  "Type": "Generated",
+  "Category": "Examples",
+  "Status": "Active",
+  "CodeApprovalStatus": "Pending",
+  "CodeLocked": false,
+  "ParentID": null,
+  "Description": "Retrieves user profile information with conditional field inclusion based on privacy settings. If IncludePrivateData is true, returns full profile including email and phone. Otherwise returns only public fields (name, avatar, bio). Demonstrates conditional logic pattern.",
+  "UserPrompt": "Get user profile information by UserID. If IncludePrivateData parameter is true, use RunView to retrieve all user fields including Email and Phone. If IncludePrivateData is false or not provided, retrieve only public fields (FirstName, LastName, Avatar, Bio). Return the user data as UserProfile output parameter. Handle these errors: UserNotFound if UserID doesn't exist, ValidationError if UserID is missing.",
+  "UserComments": "This demonstrates conditional logic where behavior changes based on parameter values. Note this is NOT a child action - it implements logic directly using RunView. The AI will generate different RunView calls or field filtering based on the IncludePrivateData flag.",
+  "ForceCodeGeneration": false,
+  "ExpectedOutcome": {
+    "Parameters": [
+      {
+        "Name": "UserID",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": true,
+        "Description": "The ID of the user whose profile to retrieve"
+      },
+      {
+        "Name": "IncludePrivateData",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": false,
+        "DefaultValue": false,
+        "Description": "If true, include private fields (email, phone); if false, only public fields"
+      },
+      {
+        "Name": "UserProfile",
+        "Type": "Output",
+        "ValueType": "Simple Object",
+        "IsRequired": false,
+        "Description": "User profile data (fields included depend on IncludePrivateData flag)"
+      }
+    ],
+    "ResultCodes": [
+      {
+        "ResultCode": "Success",
+        "IsSuccess": true,
+        "Description": "User profile retrieved successfully"
+      },
+      {
+        "ResultCode": "ValidationError",
+        "IsSuccess": false,
+        "Description": "UserID parameter is missing"
+      },
+      {
+        "ResultCode": "UserNotFound",
+        "IsSuccess": false,
+        "Description": "No user exists with the provided UserID"
+      },
+      {
+        "ResultCode": "QueryError",
+        "IsSuccess": false,
+        "Description": "Error executing database query"
+      }
+    ],
+    "GeneratedCodePattern": {
+      "Step1": "Extract UserID and IncludePrivateData parameters",
+      "Step2": "Validate UserID is provided",
+      "Step3": "Build field list based on IncludePrivateData flag",
+      "Step4_IfPrivate": "Query: 'ID, FirstName, LastName, Email, Phone, Avatar, Bio'",
+      "Step4_IfPublic": "Query: 'ID, FirstName, LastName, Avatar, Bio'",
+      "Step5": "Execute RunView with appropriate field list and UserID filter",
+      "Step6": "Check if result is empty (UserNotFound)",
+      "Step7": "Extract user record from results",
+      "Step8": "Add UserProfile output parameter",
+      "Step9": "Return success"
+    },
+    "KeyFeatures": [
+      "Conditional logic based on boolean parameter",
+      "Different RunView queries based on condition",
+      "No parent action (standalone implementation)",
+      "Privacy-aware data retrieval",
+      "Shows use of RunView directly in actions"
+    ],
+    "AlternativeImplementation": {
+      "Note": "AI might implement this by querying all fields then filtering client-side, or by building different RunView queries. Both approaches are valid - AI chooses based on efficiency."
+    }
+  }
+}

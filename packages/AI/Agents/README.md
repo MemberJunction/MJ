@@ -1411,7 +1411,68 @@ Paths are the edges connecting your workflow nodes. They determine the flow:
 }
 ```
 
-#### 3. Action Input/Output Mapping
+#### 3. Output Mapping with Array Append Syntax
+
+**Array Append Syntax** - When mapping outputs that can occur multiple times, use the `[]` suffix to append values to an array instead of replacing them:
+
+```typescript
+// SubAgentOutputMapping for agents that can be called multiple times
+{
+    "*": "codeAnalysis[]"  // Append each sub-agent result to array
+}
+
+// ActionOutputMapping for actions that run in loops
+{
+    "result": "findings[]",              // Append to array
+    "score": "scores[]",                 // Each iteration adds to array
+    "*": "rawResults.allData[]"          // Wildcard append
+}
+
+// Without [] suffix (default behavior - replace)
+{
+    "*": "latestResult"  // Each call REPLACES the value
+}
+
+// Array append features:
+// - Auto-initializes array if it doesn't exist
+// - Validates target is an array before appending
+// - Prevents data loss from multiple sub-agent/action calls
+// - Works with both simple and nested payload paths
+```
+
+**When to Use Array Append**:
+- Sub-agents that can be invoked multiple times (e.g., Codesmith for different analysis tasks)
+- Actions in ForEach/While loops where each iteration produces a result
+- Accumulating multiple responses over agent execution
+- Building collections of findings, recommendations, or analysis results
+
+**Example Use Case**:
+```typescript
+// Research Agent with Codesmith sub-agent for code-based analytics
+// Each time Codesmith is called, its output is appended to codeAnalysis[]
+
+// First call to Codesmith
+{
+  "name": "Sales Trend Analysis",
+  "code": "...",
+  "output": { trend: "increasing", rate: 0.15 }
+}
+
+// Second call to Codesmith
+{
+  "name": "Customer Segmentation",
+  "code": "...",
+  "output": { segments: [...] }
+}
+
+// Final payload.codeAnalysis array contains BOTH results:
+[
+  { name: "Sales Trend Analysis", output: {...} },
+  { name: "Customer Segmentation", output: {...} }
+]
+```
+
+#### 4. Action Input/Output Mapping
 
 **Action Input Mapping** (`ActionInputMapping`) - Maps payload values to action parameters:
 
@@ -1460,7 +1521,7 @@ Paths are the edges connecting your workflow nodes. They determine the flow:
 // If action returns { UserId: "123" }, it matches "userId" in mapping
 ```
 
-#### 4. Prompt Result Merging
+#### 5. Prompt Result Merging
 
 When a Prompt step executes, its JSON response is **deep merged** into the payload:
 

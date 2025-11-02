@@ -102,6 +102,13 @@ export class AgentArchitectAgent extends BaseAgent {
 
         const correctedSpec = { ...spec };
 
+        // Deduplicate arrays to fix common LLM retry issues
+        const dedupeResult = this.deduplicateAgentSpec(correctedSpec);
+        if (dedupeResult.hadDuplicates) {
+            corrected = true;
+            console.log('✓ Auto-corrected: Removed duplicate entries from AgentSpec arrays');
+        }
+
         // 1. Validate required fields
         if (!correctedSpec.Name || correctedSpec.Name.trim().length === 0) {
             errors.push('❌ AgentSpec.Name is required and cannot be empty');
@@ -363,31 +370,48 @@ export class AgentArchitectAgent extends BaseAgent {
                 errors.push(`❌ SubAgent at index ${i} is missing SubAgent.Name`);
             }
 
-            // Validate TypeID for sub-agent
-            if (!subAgent.SubAgent.TypeID) {
-                errors.push(`❌ SubAgent[${i}] "${subAgent.SubAgent.Name}" is missing TypeID field`);
-            } else {
-                // Validate Loop/Flow specific requirements for sub-agents
-                const isLoopSubAgent = subAgent.SubAgent.TypeID.includes('Loop');
-                const isFlowSubAgent = subAgent.SubAgent.TypeID.includes('Flow');
+            // Validate TypeID ONLY for child sub-agents (related sub-agents use minimal spec without TypeID)
+            if (subAgent.Type === 'child') {
+                if (!subAgent.SubAgent.TypeID) {
+                    errors.push(`❌ Child SubAgent[${i}] "${subAgent.SubAgent.Name}" is missing TypeID field`);
+                } else {
+                    // Validate Loop/Flow specific requirements for child sub-agents
+                    const isLoopSubAgent = subAgent.SubAgent.TypeID.includes('Loop');
+                    const isFlowSubAgent = subAgent.SubAgent.TypeID.includes('Flow');
 
-                if (isLoopSubAgent) {
-                    // Loop sub-agents require at least one prompt
-                    if (!subAgent.SubAgent.Prompts || subAgent.SubAgent.Prompts.length === 0) {
-                        errors.push(`❌ Loop SubAgent[${i}] "${subAgent.SubAgent.Name}" requires at least ONE prompt in Prompts array`);
+                    if (isLoopSubAgent) {
+                        // Loop sub-agents require at least one prompt
+                        if (!subAgent.SubAgent.Prompts || subAgent.SubAgent.Prompts.length === 0) {
+                            errors.push(`❌ Loop SubAgent[${i}] "${subAgent.SubAgent.Name}" requires at least ONE prompt in Prompts array`);
+                        }
+                    }
+
+                    if (isFlowSubAgent) {
+                        // Flow sub-agents MUST have empty Prompts array
+                        if (subAgent.SubAgent.Prompts && subAgent.SubAgent.Prompts.length > 0) {
+                            errors.push(`❌ Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" MUST have empty Prompts array. Use Prompt steps or Loop sub-agents for LLM functionality.`);
+                        }
+
+                        // Flow sub-agents require Steps
+                        if (!subAgent.SubAgent.Steps || subAgent.SubAgent.Steps.length === 0) {
+                            errors.push(`❌ Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" requires at least ONE step in Steps array`);
+                        }
                     }
                 }
-
-                if (isFlowSubAgent) {
-                    // Flow sub-agents MUST have empty Prompts array
-                    if (subAgent.SubAgent.Prompts && subAgent.SubAgent.Prompts.length > 0) {
-                        errors.push(`❌ Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" MUST have empty Prompts array. Use Prompt steps or Loop sub-agents for LLM functionality.`);
-                    }
-
-                    // Flow sub-agents require Steps
-                    if (!subAgent.SubAgent.Steps || subAgent.SubAgent.Steps.length === 0) {
-                        errors.push(`❌ Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" requires at least ONE step in Steps array`);
-                    }
+            } else if (subAgent.Type === 'related') {
+                // Related sub-agents should NOT have TypeID, Actions, SubAgents, or Prompts
+                // Warn if they do (don't fail, just inform)
+                if (subAgent.SubAgent.TypeID) {
+                    console.log(`⚠️ Warning: Related SubAgent[${i}] "${subAgent.SubAgent.Name}" has TypeID field. Related sub-agents use minimal spec (ID, Name, StartingPayloadValidationMode, Status only).`);
+                }
+                if (subAgent.SubAgent.Actions && subAgent.SubAgent.Actions.length > 0) {
+                    console.log(`⚠️ Warning: Related SubAgent[${i}] "${subAgent.SubAgent.Name}" has Actions field. Related sub-agents use minimal spec.`);
+                }
+                if (subAgent.SubAgent.SubAgents && subAgent.SubAgent.SubAgents.length > 0) {
+                    console.log(`⚠️ Warning: Related SubAgent[${i}] "${subAgent.SubAgent.Name}" has SubAgents field. Related sub-agents use minimal spec.`);
+                }
+                if (subAgent.SubAgent.Prompts && subAgent.SubAgent.Prompts.length > 0) {
+                    console.log(`⚠️ Warning: Related SubAgent[${i}] "${subAgent.SubAgent.Name}" has Prompts field. Related sub-agents use minimal spec.`);
                 }
             }
 
@@ -437,6 +461,141 @@ export class AgentArchitectAgent extends BaseAgent {
         }
 
         return { errors, corrected };
+    }
+
+    /**
+     * Deduplicates arrays in AgentSpec to fix common LLM retry issues
+     * Modifies spec in place and returns whether duplicates were found
+     */
+    protected deduplicateAgentSpec(spec: AgentSpec): { hadDuplicates: boolean } {
+        let hadDuplicates = false;
+
+        // Deduplicate Actions by ActionID
+        if (spec.Actions && spec.Actions.length > 0) {
+            const uniqueActions = new Map<string, typeof spec.Actions[0]>();
+            for (const action of spec.Actions) {
+                if (action.ActionID && !uniqueActions.has(action.ActionID)) {
+                    uniqueActions.set(action.ActionID, action);
+                }
+            }
+            if (uniqueActions.size < spec.Actions.length) {
+                hadDuplicates = true;
+                console.log(`🔧 Deduplicating Actions: ${spec.Actions.length} → ${uniqueActions.size}`);
+                spec.Actions = Array.from(uniqueActions.values());
+            }
+        }
+
+        // Deduplicate PayloadDownstreamPaths
+        if (spec.PayloadDownstreamPaths && spec.PayloadDownstreamPaths.length > 0) {
+            const uniquePaths = Array.from(new Set(spec.PayloadDownstreamPaths));
+            if (uniquePaths.length < spec.PayloadDownstreamPaths.length) {
+                hadDuplicates = true;
+                console.log(`🔧 Deduplicating PayloadDownstreamPaths: ${spec.PayloadDownstreamPaths.length} → ${uniquePaths.length}`);
+                spec.PayloadDownstreamPaths = uniquePaths;
+            }
+        }
+
+        // Deduplicate PayloadUpstreamPaths
+        if (spec.PayloadUpstreamPaths && spec.PayloadUpstreamPaths.length > 0) {
+            const uniquePaths = Array.from(new Set(spec.PayloadUpstreamPaths));
+            if (uniquePaths.length < spec.PayloadUpstreamPaths.length) {
+                hadDuplicates = true;
+                console.log(`🔧 Deduplicating PayloadUpstreamPaths: ${spec.PayloadUpstreamPaths.length} → ${uniquePaths.length}`);
+                spec.PayloadUpstreamPaths = uniquePaths;
+            }
+        }
+
+        // Deduplicate SubAgents by SubAgent.ID (for related) or SubAgent.Name (for child)
+        if (spec.SubAgents && spec.SubAgents.length > 0) {
+            const uniqueSubAgents = new Map<string, typeof spec.SubAgents[0]>();
+            for (const subAgent of spec.SubAgents) {
+                // Use ID for related agents, Name for child agents as key
+                const key = subAgent.Type === 'related' && subAgent.SubAgent.ID
+                    ? subAgent.SubAgent.ID
+                    : subAgent.SubAgent.Name;
+                if (key && !uniqueSubAgents.has(key)) {
+                    uniqueSubAgents.set(key, subAgent);
+
+                    // Recursively deduplicate nested sub-agents
+                    if (subAgent.SubAgent.SubAgents && subAgent.SubAgent.SubAgents.length > 0) {
+                        const nestedResult = this.deduplicateAgentSpec(subAgent.SubAgent as AgentSpec);
+                        if (nestedResult.hadDuplicates) {
+                            hadDuplicates = true;
+                        }
+                    }
+
+                    // SubAgentContextPaths is Record<string, string>, no need to deduplicate
+                    // (object keys are already unique by definition)
+                }
+            }
+            if (uniqueSubAgents.size < spec.SubAgents.length) {
+                hadDuplicates = true;
+                console.log(`🔧 Deduplicating SubAgents: ${spec.SubAgents.length} → ${uniqueSubAgents.size}`);
+                spec.SubAgents = Array.from(uniqueSubAgents.values());
+            }
+        }
+
+        // Deduplicate Prompts by PromptID (if set) or PromptText hash
+        if (spec.Prompts && spec.Prompts.length > 0) {
+            const uniquePrompts = new Map<string, typeof spec.Prompts[0]>();
+            for (const prompt of spec.Prompts) {
+                const key = prompt.PromptID || this.hashString(prompt.PromptText || '');
+                if (key && !uniquePrompts.has(key)) {
+                    uniquePrompts.set(key, prompt);
+                }
+            }
+            if (uniquePrompts.size < spec.Prompts.length) {
+                hadDuplicates = true;
+                console.log(`🔧 Deduplicating Prompts: ${spec.Prompts.length} → ${uniquePrompts.size}`);
+                spec.Prompts = Array.from(uniquePrompts.values());
+            }
+        }
+
+        // Deduplicate Steps (for Flow agents) by Name
+        if (spec.Steps && spec.Steps.length > 0) {
+            const uniqueSteps = new Map<string, typeof spec.Steps[0]>();
+            for (const step of spec.Steps) {
+                if (step.Name && !uniqueSteps.has(step.Name)) {
+                    uniqueSteps.set(step.Name, step);
+                }
+            }
+            if (uniqueSteps.size < spec.Steps.length) {
+                hadDuplicates = true;
+                console.log(`🔧 Deduplicating Steps: ${spec.Steps.length} → ${uniqueSteps.size}`);
+                spec.Steps = Array.from(uniqueSteps.values());
+            }
+        }
+
+        // Deduplicate Paths (for Flow agents) by OriginStepID + DestinationStepID
+        if (spec.Paths && spec.Paths.length > 0) {
+            const uniquePaths = new Map<string, typeof spec.Paths[0]>();
+            for (const path of spec.Paths) {
+                const key = `${path.OriginStepID}→${path.DestinationStepID}`;
+                if (!uniquePaths.has(key)) {
+                    uniquePaths.set(key, path);
+                }
+            }
+            if (uniquePaths.size < spec.Paths.length) {
+                hadDuplicates = true;
+                console.log(`🔧 Deduplicating Paths: ${spec.Paths.length} → ${uniquePaths.size}`);
+                spec.Paths = Array.from(uniquePaths.values());
+            }
+        }
+
+        return { hadDuplicates };
+    }
+
+    /**
+     * Simple hash function for string deduplication
+     */
+    protected hashString(str: string): string {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return hash.toString();
     }
 
     /**
