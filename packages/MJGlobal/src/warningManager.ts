@@ -30,20 +30,20 @@ export interface WarningConfig {
 
     /**
      * If true, shows every occurrence of warnings (ignores session tracking).
-     * Default: false (from env var MJ_SHOW_ALL_WARNINGS)
+     * Default: false
      */
     ShowAll: boolean;
 
     /**
      * If true, disables all warnings.
-     * Default: false (from env var MJ_DISABLE_WARNINGS)
+     * Default: false
      */
     DisableWarnings: boolean;
 
     /**
      * If true, groups warnings and displays them in formatted tree structure.
      * If false, displays warnings immediately as they occur.
-     * Default: true (from env var MJ_GROUP_WARNINGS)
+     * Default: true
      */
     GroupWarnings: boolean;
 }
@@ -98,24 +98,12 @@ export class WarningManager {
     private config: WarningConfig;
 
     private constructor() {
-        // Initialize config from environment variables
-        // Support both old (MJ_DEPRECATION_*) and new (MJ_WARNING_*) env vars for backward compatibility
+        // Initialize with default configuration
         this.config = {
-            DebounceMs: parseInt(
-                process.env.MJ_WARNING_DEBOUNCE_MS ||
-                process.env.MJ_DEPRECATION_DEBOUNCE_MS ||
-                '10000',
-                10
-            ),
-            ShowAll:
-                process.env.MJ_SHOW_ALL_WARNINGS === '1' ||
-                process.env.MJ_SHOW_ALL_DEPRECATION_WARNINGS === '1',
-            DisableWarnings:
-                process.env.MJ_DISABLE_WARNINGS === '1' ||
-                process.env.MJ_DISABLE_DEPRECATION_WARNINGS === '1',
-            GroupWarnings:
-                process.env.MJ_GROUP_WARNINGS !== '0' &&
-                process.env.MJ_GROUP_DEPRECATION_WARNINGS !== '0' // default true
+            DebounceMs: 10000,
+            ShowAll: false,
+            DisableWarnings: false,
+            GroupWarnings: true
         };
     }
 
@@ -430,7 +418,7 @@ export class WarningManager {
                 lines.push('');
             }
 
-            lines.push('💡 Run with MJ_SHOW_ALL_WARNINGS=1 to see every occurrence.');
+            lines.push('💡 Set ShowAll=true in configuration to see every occurrence.');
             lines.push('');
         }
 

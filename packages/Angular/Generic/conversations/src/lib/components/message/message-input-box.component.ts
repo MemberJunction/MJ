@@ -109,4 +109,14 @@ export class MessageInputBoxComponent {
       selection.addRange(range);
     }
   }
+
+  /**
+   * Public method to focus the input programmatically
+   */
+  focus(): void {
+    const editor = this.mentionEditor?.editorRef?.nativeElement;
+    if (editor) {
+      editor.focus();
+    }
+  }
 }
