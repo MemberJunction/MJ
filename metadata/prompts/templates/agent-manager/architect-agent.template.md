@@ -514,10 +514,12 @@ This example shows all patterns in one agent: Flow orchestration, Action steps w
 - **Flow agents need steps** - Steps and Paths arrays required (Prompts optional)
 - **Use exact ActionID values** from the design (don't make up IDs)
 - **SubAgent.ID = ""** for NEW sub-agents (Builder creates them recursively)
-- **SubAgent is full AgentSpec** - include Name, Description, TypeID, Status, Actions, Prompts, etc.
+- **SubAgent is full AgentSpec for child agents** - include Name, Description, TypeID, Status, Actions, Prompts, etc.
+- **SubAgent is MINIMAL for related agents** - ONLY include ID, Name, StartingPayloadValidationMode, Status (NO TypeID, Actions, SubAgents, or Prompts)
 - **Match prompts to agents** - use design.prompts[].agentName to assign prompts correctly
 - **Don't guess field names** - follow the AgentSpec interface exactly
 - **Keep it minimal** - only include fields that have values from the design
-- **Avoid Duplicate** - No duplicate actions, subagents, prompt, etc.
+- **CRITICAL: NO DUPLICATES**
+  - NEVER create duplicate Actions, SubAgents, Prompts, or PayloadPaths
 
 {{ _OUTPUT_EXAMPLE }}

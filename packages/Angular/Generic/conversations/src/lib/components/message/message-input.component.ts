@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
@@ -16,6 +16,7 @@ import { Mention, MentionParseResult } from '../../models/conversation-state.mod
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
+import { MessageInputBoxComponent } from './message-input-box.component';
 
 @Component({
   selector: 'mj-message-input',
@@ -49,7 +50,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
   @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
 
-  @ViewChild('inputBox') inputBox!: any; // MessageInputBoxComponent
+  @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
   public messageText: string = '';
   public isSending: boolean = false;

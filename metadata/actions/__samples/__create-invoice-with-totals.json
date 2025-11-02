@@ -1,0 +1,104 @@
+{
+  "$comment": "Example: Entity CRUD with Calculated Fields",
+  "Name": "Create Invoice with Totals",
+  "Type": "Generated",
+  "Category": "Examples",
+  "Status": "Active",
+  "CodeApprovalStatus": "Pending",
+  "CodeLocked": false,
+  "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+  "Description": "Creates an Invoice record with automatically calculated Subtotal, TaxAmount, and TotalAmount fields. Demonstrates calculated field pattern where some values are computed from input parameters.",
+  "UserPrompt": "Create a record in the Invoices entity. The action takes CustomerID (required), LineItems (array of objects with {description: string, amount: number}), and TaxRate (optional, default 0.1). Calculate the following fields: (1) Subtotal = sum of all LineItems amounts, (2) TaxAmount = Subtotal * TaxRate, (3) TotalAmount = Subtotal + TaxAmount. Store LineItems as JSON string. Map to parent Create Record action and return the new InvoiceID.",
+  "UserComments": "This demonstrates the calculated fields pattern. The AI generates code to compute values from input parameters before passing to the parent action. Note how we clearly specify the calculation formulas and data types in the UserPrompt.",
+  "ForceCodeGeneration": false,
+  "ExpectedOutcome": {
+    "Parameters": [
+      {
+        "Name": "CustomerID",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": true,
+        "Description": "The customer's ID"
+      },
+      {
+        "Name": "LineItems",
+        "Type": "Input",
+        "ValueType": "Simple Object",
+        "IsArray": true,
+        "IsRequired": true,
+        "Description": "Array of line items with description and amount"
+      },
+      {
+        "Name": "TaxRate",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": false,
+        "DefaultValue": 0.1,
+        "Description": "Tax rate as decimal (default 0.1 = 10%)"
+      },
+      {
+        "Name": "InvoiceID",
+        "Type": "Output",
+        "ValueType": "Scalar",
+        "IsRequired": false,
+        "Description": "The ID of the newly created invoice"
+      }
+    ],
+    "ResultCodes": [
+      {
+        "ResultCode": "Success",
+        "IsSuccess": true,
+        "Description": "Invoice created successfully with calculated totals"
+      },
+      {
+        "ResultCode": "ValidationError",
+        "IsSuccess": false,
+        "Description": "Required parameters missing or invalid (CustomerID or LineItems)"
+      },
+      {
+        "ResultCode": "CalculationError",
+        "IsSuccess": false,
+        "Description": "Error calculating totals (invalid LineItems format or amounts)"
+      },
+      {
+        "ResultCode": "ParentActionFailed",
+        "IsSuccess": false,
+        "Description": "Parent Create Record action failed"
+      }
+    ],
+    "GeneratedCodePattern": {
+      "Step1": "Extract CustomerID, LineItems, TaxRate parameters",
+      "Step2": "Validate CustomerID and LineItems are provided",
+      "Step3": "Calculate Subtotal by summing LineItems amounts",
+      "Step4": "Calculate TaxAmount = Subtotal * TaxRate",
+      "Step5": "Calculate TotalAmount = Subtotal + TaxAmount",
+      "Step6": "Convert LineItems array to JSON string",
+      "Step7": "Map to parent with calculated fields in Fields object",
+      "Step8": "Invoke parent Create Record action",
+      "Step9": "Extract InvoiceID from parent result",
+      "Step10": "Return success with InvoiceID"
+    },
+    "KeyFeatures": [
+      "Demonstrates field calculations from input data",
+      "Shows array parameter handling (LineItems)",
+      "Default value usage (TaxRate)",
+      "Array to JSON string conversion",
+      "Calculated fields added to entity record"
+    ],
+    "UsageExample": {
+      "Input": {
+        "CustomerID": "customer-guid",
+        "LineItems": [
+          { "description": "Product A", "amount": 100 },
+          { "description": "Product B", "amount": 50 }
+        ],
+        "TaxRate": 0.08
+      },
+      "Calculated": {
+        "Subtotal": 150,
+        "TaxAmount": 12,
+        "TotalAmount": 162
+      }
+    }
+  }
+}

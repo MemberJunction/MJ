@@ -107,6 +107,60 @@ import { UserInfo } from '@memberjunction/core';
       background: rgba(255,255,255,0.1);
       color: white;
     }
+    .sidebar-toggle {
+      display: flex;
+    }
+
+    /* Mobile adjustments: 481px - 768px */
+    @media (max-width: 768px) {
+      .conversation-navigation {
+        padding: 0 12px;
+        gap: 12px;
+      }
+      .sidebar-toggle {
+        display: flex;
+      }
+      .nav-tab {
+        padding: 0 12px;
+        font-size: 13px;
+        gap: 6px;
+      }
+      .nav-tab span {
+        display: none;
+      }
+      .nav-tab i {
+        font-size: 16px;
+      }
+      .nav-btn {
+        width: 32px;
+        height: 32px;
+      }
+      .nav-right {
+        gap: 4px;
+      }
+    }
+
+    /* Small Phone adjustments: <= 480px */
+    @media (max-width: 480px) {
+      .conversation-navigation {
+        padding: 0 8px;
+        gap: 8px;
+      }
+      .nav-tab {
+        padding: 0 8px;
+        font-size: 12px;
+      }
+      .nav-btn {
+        width: 28px;
+        height: 28px;
+      }
+      .nav-btn i {
+        font-size: 14px;
+      }
+      .nav-right .nav-btn:last-child {
+        display: none;
+      }
+    }
   `]
 })
 export class ConversationNavigationComponent {

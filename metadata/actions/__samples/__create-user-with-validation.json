@@ -1,0 +1,96 @@
+{
+  "$comment": "Example: Entity CRUD with Custom Validation",
+  "Name": "Create User with Validation",
+  "Type": "Generated",
+  "Category": "Examples",
+  "Status": "Active",
+  "CodeApprovalStatus": "Pending",
+  "CodeLocked": false,
+  "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+  "Description": "Creates a new User record with custom validation rules applied before invoking the parent action. Demonstrates validation + CRUD pattern.",
+  "UserPrompt": "Create a record in the Users entity. Before creating, validate that: (1) Email is in valid email format (contains @ and .), (2) Password is at least 8 characters long. If validation fails, return ValidationError with specific message explaining which validation failed. Use parameters from this action and map to the parent Create Record action. On success, return the new UserID.",
+  "UserComments": "This demonstrates the validation + CRUD pattern. The AI generates validation logic before calling the parent action. Note how the UserPrompt explicitly describes each validation rule - this results in clear error messages and proper validation code.",
+  "ForceCodeGeneration": false,
+  "ExpectedOutcome": {
+    "Parameters": [
+      {
+        "Name": "Email",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": true,
+        "Description": "User's email address (must be valid format)"
+      },
+      {
+        "Name": "Password",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": true,
+        "Description": "User's password (minimum 8 characters)"
+      },
+      {
+        "Name": "FirstName",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": false,
+        "Description": "User's first name (optional)"
+      },
+      {
+        "Name": "LastName",
+        "Type": "Input",
+        "ValueType": "Scalar",
+        "IsRequired": false,
+        "Description": "User's last name (optional)"
+      },
+      {
+        "Note": "... other Users entity fields ...",
+        "Comment": "AI generates parameters for all entity fields"
+      },
+      {
+        "Name": "UserID",
+        "Type": "Output",
+        "ValueType": "Scalar",
+        "IsRequired": false,
+        "Description": "The ID of the newly created user"
+      }
+    ],
+    "ResultCodes": [
+      {
+        "ResultCode": "Success",
+        "IsSuccess": true,
+        "Description": "User created successfully"
+      },
+      {
+        "ResultCode": "ValidationError",
+        "IsSuccess": false,
+        "Description": "One or more validation rules failed (email format or password length)"
+      },
+      {
+        "ResultCode": "ParentActionFailed",
+        "IsSuccess": false,
+        "Description": "Parent Create Record action failed"
+      },
+      {
+        "ResultCode": "ParentActionError",
+        "IsSuccess": false,
+        "Description": "Error invoking parent action"
+      }
+    ],
+    "GeneratedCodePattern": {
+      "Step1": "Extract email and password parameters",
+      "Step2": "Validate email format (contains @ and .)",
+      "Step3": "Validate password length (>= 8 characters)",
+      "Step4": "Return ValidationError if validation fails (with specific message)",
+      "Step5": "Extract other user parameters",
+      "Step6": "Map all parameters to Fields object",
+      "Step7": "Invoke parent Create Record action with EntityName='Users'",
+      "Step8": "Extract UserID from parent result",
+      "Step9": "Return success with UserID output"
+    },
+    "KeyFeatures": [
+      "Custom validation logic before CRUD",
+      "Specific error messages for each validation rule",
+      "Demonstrates how to add business logic to child actions",
+      "Clean separation: validate → map → invoke → return"
+    ]
+  }
+}

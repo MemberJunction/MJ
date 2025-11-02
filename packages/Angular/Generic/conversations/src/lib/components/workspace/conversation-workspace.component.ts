@@ -6,7 +6,8 @@ import {
   OnInit,
   OnDestroy,
   DoCheck,
-  ChangeDetectorRef
+  ChangeDetectorRef,
+  HostListener
 } from '@angular/core';
 import { ConversationEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
@@ -15,6 +16,7 @@ import { ConversationStateService } from '../../services/conversation-state.serv
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
@@ -100,10 +102,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isSidebarVisible: boolean = true;
   public isArtifactPanelOpen: boolean = false;
   public isSearchPanelOpen: boolean = false;
+  public isWorkspaceReady: boolean = false;
   public renamedConversationId: string | null = null;
   public activeArtifactId: string | null = null;
   public activeVersionNumber: number | null = null;
   public activeVersionId: string | null = null;
+  public isMobileView: boolean = false;
 
   // Artifact permissions
   public canShareActiveArtifact: boolean = false;
@@ -143,6 +147,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
+    private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private cdr: ChangeDetectorRef
   ) {
@@ -150,6 +155,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async ngOnInit() {
+    // Check initial mobile state
+    this.checkMobileView();
+
     // Load saved widths from localStorage
     this.loadSidebarWidth();
     this.loadArtifactPanelWidth();
@@ -158,13 +166,31 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     window.addEventListener('mousemove', this.onResizeMove.bind(this));
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
 
-    // Initialize AI Engine to load agent metadata cache
-    // This ensures agent names and icons are available for display
+    // Setup touch listeners for mobile
+    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+
+    // CRITICAL: Initialize AI Engine FIRST before rendering any UI
+    // The isWorkspaceReady flag blocks all child components from rendering
+    // until agents are fully loaded and ready
     try {
       await AIEngineBase.Instance.Config(false);
       console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+
+      // Initialize mention autocomplete service immediately after AI engine
+      // This ensures the cache is built from the fully-loaded agent list
+      await this.mentionAutocompleteService.initialize(this.currentUser);
+      console.log('✅ Mention autocomplete initialized');
+
+      // Mark workspace as ready - this allows UI to render
+      this.isWorkspaceReady = true;
+      this.cdr.detectChanges();
+      console.log('✅ Workspace ready - UI can now render');
     } catch (error) {
       console.error('❌ Failed to initialize AI Engine:', error);
+      // Still mark as ready so UI isn't blocked forever
+      this.isWorkspaceReady = true;
+      this.cdr.detectChanges();
     }
 
     // Subscribe to artifact panel state
@@ -298,6 +324,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
     window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.checkMobileView();
+  }
+
+  private checkMobileView(): void {
+    const wasMobile = this.isMobileView;
+    this.isMobileView = window.innerWidth < 768;
+
+    if (this.isMobileView && !wasMobile) {
+      this.isSidebarVisible = false;
+    } else if (!this.isMobileView && wasMobile) {
+      this.isSidebarVisible = true;
+    }
   }
 
   onTabChanged(tab: NavigationTab): void {
@@ -342,6 +386,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.isSidebarVisible = !this.isSidebarVisible;
   }
 
+  closeSidebar(): void {
+    if (this.isMobileView && this.isSidebarVisible) {
+      this.isSidebarVisible = false;
+    }
+  }
+
   closeArtifactPanel(): void {
     this.artifactState.closeArtifact();
   }
@@ -357,6 +407,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   async onRefreshAgentCache(): Promise<void> {
     try {
       await AIEngineBase.Instance.Config(true);
+
+      // Refresh the mention autocomplete service to pick up new agents
+      await this.mentionAutocompleteService.refresh(this.currentUser);
+
       const agentCount = AIEngineBase.Instance.Agents?.length || 0;
       this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();
@@ -492,6 +546,58 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.isArtifactPanelResizing = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      this.saveArtifactPanelWidth();
+    }
+  }
+
+  /**
+   * Touch event handlers for mobile resize support
+   */
+  onSidebarResizeTouchStart(event: TouchEvent): void {
+    this.isSidebarResizing = true;
+    const touch = event.touches[0];
+    this.sidebarResizeStartX = touch.clientX;
+    this.sidebarResizeStartWidth = this.sidebarWidth;
+    event.preventDefault();
+  }
+
+  onArtifactPanelResizeTouchStart(event: TouchEvent): void {
+    this.isArtifactPanelResizing = true;
+    const touch = event.touches[0];
+    this.artifactPanelResizeStartX = touch.clientX;
+    this.artifactPanelResizeStartWidth = this.artifactPanelWidth;
+    event.preventDefault();
+  }
+
+  private onResizeTouchMove(event: TouchEvent): void {
+    if (this.isSidebarResizing) {
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - this.sidebarResizeStartX;
+      let newWidth = this.sidebarResizeStartWidth + deltaX;
+
+      newWidth = Math.max(200, Math.min(500, newWidth));
+      this.sidebarWidth = newWidth;
+    } else if (this.isArtifactPanelResizing) {
+      const container = document.querySelector('.workspace-content') as HTMLElement;
+      if (!container) return;
+
+      const touch = event.touches[0];
+      const containerWidth = container.offsetWidth;
+      const deltaX = touch.clientX - this.artifactPanelResizeStartX;
+      const deltaPercent = (deltaX / containerWidth) * -100;
+      let newWidth = this.artifactPanelResizeStartWidth + deltaPercent;
+
+      newWidth = Math.max(20, Math.min(70, newWidth));
+      this.artifactPanelWidth = newWidth;
+    }
+  }
+
+  private onResizeTouchEnd(event: TouchEvent): void {
+    if (this.isSidebarResizing) {
+      this.isSidebarResizing = false;
+      this.saveSidebarWidth();
+    } else if (this.isArtifactPanelResizing) {
+      this.isArtifactPanelResizing = false;
       this.saveArtifactPanelWidth();
     }
   }

@@ -1,15 +1,106 @@
 # Action Code Generation
 
+{#
+ABOUT THIS PROMPT:
+This prompt is used by MemberJunction to automatically generate action implementations from natural language descriptions.
+
+WHEN IT RUNS:
+- Triggered when saving an Action record with Type='Generated' and a UserPrompt
+- Executed by ActionEntityServerEntity.GenerateCode() method
+- Location: /packages/MJCoreEntitiesServer/src/custom/ActionEntity.server.ts
+
+WHAT IT RECEIVES:
+- userPrompt: Natural language description of what the action should do
+- entityInfo: Complete database schema (all entities and their fields)
+- availableLibraries: Documentation for available MJ packages
+- IsChildAction: Boolean flag indicating if this extends a parent action
+- parentAction: (if child) Parent action metadata including parameters
+
+WHAT IT RETURNS (JSON):
+{
+  "code": "TypeScript code for InternalRunAction method body",
+  "explanation": "Plain English explanation of implementation",
+  "parameters": [...],  // Action parameter definitions
+  "resultCodes": [...], // Result code definitions
+  "libraries": [...]    // Used library references
+}
+
+POST-GENERATION:
+- Generated code saved to Action.Code field in database
+- Parameters saved to ActionParam entity
+- Result codes saved to ActionResultCode entity
+- Libraries saved to ActionLibrary entity
+- Code wrapped in BaseAction template during CodeGen build step
+- Output: /packages/Actions/CoreActions/src/generated/action_subclasses.ts
+
+DOCUMENTATION:
+See /packages/Actions/GENERATED-ACTIONS.md for complete documentation
+#}
+
 You are an expert TypeScript developer specializing in MemberJunction Actions. You take great pride in writing clean, well-commented, and properly formatted code.
 
 ## System Entities
+{#
+The entityInfo variable contains the complete database schema with all entities (tables) and their fields (columns).
+This is critical for generating accurate data access code.
+
+Structure:
+[
+  {
+    Name: "EntityName",          // Exact entity name (including "MJ: " prefix where applicable)
+    Description: "...",           // Entity description
+    Fields: [
+      {
+        Name: "FieldName",        // Column name
+        Type: "datatype",         // SQL data type
+        NeedsQuotes: true/false,  // True for string/date types
+        ReadOnly: true/false,     // True for computed/identity columns
+        AllowsNull: true/false,   // Nullability
+        IsRequired: true/false    // Required for inserts
+      }
+    ]
+  }
+]
+
+IMPORTANT:
+- Always use exact entity names from this list (case-sensitive)
+- Newer entities use "MJ: " prefix (e.g., "MJ: AI Model Costs")
+- Older entities have no prefix (e.g., "Conversations")
+- Never make up entity or field names - reference this schema
+#}
 Entities are tables and have unique names and columns. You **must** refer to this list of entities and fields whenever relevant in building actions. Many user requests deal with data and you must not make up entity names or column names, that will result in failure!
- 
+
 {{ entityInfo | dump | safe }}
 
-## Your Task  
+## Your Task
 
 {% if IsChildAction %}
+{#
+CHILD ACTION PATTERN:
+A child action is a specialized wrapper around a generic parent action.
+
+Common Examples:
+- Parent: "Create Record" (requires EntityName parameter)
+  Child: "Create Conversation Record" (hardcodes EntityName='Conversations')
+
+- Parent: "Get Record" (requires EntityName + PrimaryKey parameters)
+  Child: "Get AI Model Cost" (hardcodes EntityName='MJ: AI Model Costs', simple ID parameter)
+
+Value Proposition:
+1. Simpler Interface: Entity-specific parameters instead of generic Fields object
+2. Type Safety: Each field is a distinct parameter with proper type
+3. Discoverability: Users see "Create Conversation Record" not generic "Create Record"
+4. Validation: Entity-specific required field validation
+5. Better UX: Workflow designers don't need to know entity names
+
+Implementation Pattern:
+1. Extract child parameters (entity-specific fields)
+2. Validate required fields
+3. Map to parent format (EntityName + Fields object)
+4. Invoke parent action by ID
+5. Extract outputs from parent result
+6. Return entity-specific output parameters
+#}
 You will be creating a **child action** that orchestrates and extends a parent action. Child actions add value by:
 - Providing a more specific, user-friendly interface
 - Pre-processing inputs into the parent's expected format
@@ -19,13 +110,13 @@ You will be creating a **child action** that orchestrates and extends a parent a
 
 **Parent Action Context:**
 {{ ChildActionInfo | safe }}
- 
+
 Your child action should invoke the parent action using this code:
 ```typescript
 // Invoke parent action, We always look up by ID for accuracy, for code readability, here's the category and name:
 //   Category: {{ parentAction.Category }}
 //   Action Name: {{ parentAction.Name }}
-const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '{{ parentAction.ID }}');  
+const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '{{ parentAction.ID }}');
 parentResult = await ActionEngineServer.Instance.RunAction({
     Action: a,
     Params: mappedParams,
@@ -34,6 +125,17 @@ parentResult = await ActionEngineServer.Instance.RunAction({
 });
 ```
 {% else %}
+{#
+STANDALONE ACTION:
+You are creating an action that performs a specific business operation.
+It does NOT wrap a parent action - it implements all logic directly.
+
+Use this mode for:
+- Custom business logic not covered by existing actions
+- External API integrations
+- Complex multi-step operations
+- Actions that combine multiple data sources
+#}
 You will be creating an action based on the user's requirements. Actions are "verbs" in the MemberJunction framework that perform specific business operations.
 {% endif %}
 
@@ -54,16 +156,65 @@ Your action should return one of these result codes:
 {% endif %}
 
 ### Optional Libraries
+{#
+The availableLibraries variable contains documentation for MJ packages that can be imported.
+
+Structure:
+{
+  "LibraryName": {
+    Items: [
+      {
+        Name: "ClassName or function",
+        Content: "HTML documentation explaining usage"
+      }
+    ]
+  }
+}
+
+Common Libraries:
+- @memberjunction/ai-prompts: AIPromptRunner for executing AI prompts
+- @memberjunction/communication: EmailEngine for sending emails
+- @memberjunction/ai: AIEngine for AI operations
+
+Usage:
+1. Import items from library in your code
+2. Add to "libraries" array in JSON response:
+   {
+     "LibraryName": "@memberjunction/ai-prompts",
+     "ItemsUsed": ["AIPromptRunner"]
+   }
+
+This tracks dependencies and ensures imports are included in generated file.
+#}
 These libraries are already imported and available for use. If you use any of these you must add the appropriate info to the `libraries` array in your JSON response.
 {{ availableLibraries | dump | safe }}
 
 ### System Libraries
+{#
+These libraries are ALWAYS imported and available - you don't need to add them to your JSON response.
+
+Available Classes/Interfaces:
+- ActionResultSimple: Return type for actions {Success, ResultCode, Message}
+- RunActionParams: Parameter object passed to InternalRunAction
+- ActionParam: Parameter definition {Name, Type, Value}
+- BaseAction: Base class for all actions
+- ActionEngineServer: Server-side action execution engine
+- RegisterClass: Decorator for registering classes (not used in generated code)
+- MJGlobal: Global utilities
+- Metadata: Metadata access and entity creation
+- RunView: Entity query execution
+- RunQuery: Raw SQL query execution
+
+WARNING:
+Only use these when actually needed - each import/usage has a cost.
+Don't add unnecessary complexity just because libraries are available.
+#}
 These MemberJunction system libraries/classes are **always** imported and can be used. For these system libraries/classes **DO NOT** add them to the `libraries` array in your JSON response as they are always imported. The existence of the following libraries does **NOT** mean you should find use for them, they're only to be used when needed as each has a **cost** associated with it!
 ```typescript
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction, ActionEngineServer } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { MJGlobal } from "@memberjunction/global"; 
+import { MJGlobal } from "@memberjunction/global";
 import { Metadata, RunView, RunQuery } from "@memberjunction/core";
 ```
 

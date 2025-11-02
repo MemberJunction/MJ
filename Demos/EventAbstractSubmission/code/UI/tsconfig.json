@@ -30,6 +30,8 @@
     "exclude": [
       "src/**/EXAMPLE-*.ts",
       "src/**/*.example.ts",
+      "src/dashboards/**/*",
+      "src/dashboards.disabled/**/*",
       "node_modules"
     ]
   }

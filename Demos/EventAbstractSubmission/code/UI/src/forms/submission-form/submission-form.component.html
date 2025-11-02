@@ -1,245 +1,226 @@
-<div class="modern-submission-form">
-  <!-- Header with Progress -->
-  <div class="form-header">
-    <div class="header-content">
-      <div class="header-text">
-        <h1 class="form-title">
-          <span class="title-icon">📝</span>
-          {{ isEditing ? 'Edit Submission' : 'Create New Submission' }}
-        </h1>
-        <p class="form-subtitle">
-          {{ isEditing ? 'Update your abstract submission details' : 'Share your expertise with the community' }}
-        </p>
-      </div>
-      <div class="progress-indicator">
-        <div class="progress-circle">
-          <svg width="60" height="60">
-            <circle cx="30" cy="30" r="25" stroke="#e0e0e0" stroke-width="5" fill="none"/>
-            <circle cx="30" cy="30" r="25" stroke="#3b82f6" stroke-width="5" fill="none"
-                    attr.stroke-dasharray="157" 
-                    attr.stroke-dashoffset="{{157 - (157 * formProgress / 100)}}"
-                    transform="rotate(-90 30 30)"/>
-          </svg>
-          <div class="progress-text">{{ formProgress }}%</div>
-        </div>
-        <div class="progress-label">Complete</div>
-      </div>
-    </div>
-  </div>
+<div class="record-form-container">
+  <form *ngIf="isRecordReady" class="record-form" #form="ngForm">
+    <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-  <form [formGroup]="submissionForm" class="submission-form">
-    
-    <!-- Basic Information Section -->
-    <div class="form-section" [class.expanded]="expandedSections.basic">
-      <div class="section-header" (click)="toggleSection('basic')">
-        <div class="section-info">
-          <span class="section-icon">🎯</span>
-          <h3 class="section-title">Basic Information</h3>
-          <span class="section-description">Title and format of your submission</span>
+    <!-- Header Card -->
+    <div class="form-card">
+      <div class="form-header">
+        <div class="header-content">
+          <h3>{{ eventName }}</h3>
+          <p class="header-subtitle">{{ record.SubmissionTitle || 'New Submission' }}</p>
         </div>
-        <div class="section-toggle">
-          <span class="toggle-icon" [class.rotated]="expandedSections.basic">▼</span>
-        </div>
-      </div>
-      
-      <div class="section-content" [@slideToggle]="expandedSections.basic ? 'open' : 'closed'">
-        <div class="form-grid">
-          <!-- Title -->
-          <div class="form-field full-width">
-            <label class="field-label">Submission Title *</label>
-            <input kendoTextBox
-                   formControlName="SubmissionTitle" 
-                   placeholder="Give your submission a compelling title"
-                   class="modern-input">
-            <div class="field-hint">Make it catchy and descriptive</div>
-            <div class="error-message" *ngIf="hasError('SubmissionTitle', 'required')">
-              Title is required
-            </div>
-            <div class="error-message" *ngIf="hasError('SubmissionTitle', 'maxlength')">
-              {{ getErrorMessage('SubmissionTitle') }}
-            </div>
-          </div>
-
-          <!-- Session Format -->
-          <div class="form-field full-width">
-            <label class="field-label">Session Format *</label>
-            <div class="format-grid">
-              <div class="format-option" 
-                   *ngFor="let format of sessionFormats"
-                   [class.selected]="submissionForm.get('SessionFormat')?.value === format.value"
-                   (click)="submissionForm.get('SessionFormat')?.setValue(format.value)">
-                <div class="format-icon">{{ format.icon }}</div>
-                <div class="format-info">
-                  <div class="format-name">{{ format.label }}</div>
-                  <div class="format-desc">{{ format.description }}</div>
-                </div>
-              </div>
-            </div>
-            <div class="error-message" *ngIf="hasError('SessionFormat', 'required')">
-              Please select a session format
-            </div>
+        <div class="header-actions">
+          <button type="button" class="btn-dashboard" (click)="goToDashboard()">
+            <i class="fa fa-th-large"></i>
+            Dashboard
+          </button>
+          <div class="header-meta" *ngIf="record.ID">
+            <span class="status-badge" [ngClass]="statusBadgeClass">{{ record.Status }}</span>
+            <span class="submission-date">{{ record.SubmittedAt | date:'MMM d, y' }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Content Section with Tabs -->
-    <div class="form-section" [class.expanded]="expandedSections.content">
-      <div class="section-header" (click)="toggleSection('content')">
-        <div class="section-info">
-          <span class="section-icon">📄</span>
-          <h3 class="section-title">Content</h3>
-          <span class="section-description">Abstract and learning objectives</span>
+    <!-- Basic Information Section - Collapsible -->
+    <div class="form-card collapsible-card">
+      <div class="collapsible-header" (click)="toggleSection('basicInfo')" role="button" tabindex="0">
+        <div class="collapsible-title">
+          <i class="fa fa-info-circle"></i>
+          <h3>Basic Information</h3>
         </div>
-        <div class="section-toggle">
-          <span class="toggle-icon" [class.rotated]="expandedSections.content">▼</span>
+        <div class="collapse-icon">
+          <i [class]="sectionsExpanded.basicInfo ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
         </div>
       </div>
-      
-      <div class="section-content" [@slideToggle]="expandedSections.content ? 'open' : 'closed'">
-        <!-- Tab Navigation -->
-        <div class="tab-navigation">
-          <div class="tab-item" 
-               [class.active]="activeContentTab === 'abstract'"
-               (click)="activeContentTab = 'abstract'">
-            <span class="tab-icon">📝</span>
-            Abstract
+
+      <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.basicInfo">
+        <div class="form-body">
+          <div class="form-section">
+
+          <div class="form-group">
+            <label for="event" class="form-label required">
+              Event
+              <a *ngIf="record.EventID"
+                 (click)="openEventRecord()"
+                 class="entity-link-icon"
+                 title="Open event record">
+                <i class="fa fa-external-link-alt"></i>
+              </a>
+            </label>
+            <select
+              id="event"
+              name="event"
+              class="form-control"
+              [(ngModel)]="record.EventID"
+              [disabled]="!EditMode"
+              required>
+              <option [value]="null" disabled>Select an event...</option>
+              <option *ngFor="let event of events" [value]="event.ID">
+                {{ event.Name }} ({{ event.StartDate | date:'MMM d, y' }})
+              </option>
+            </select>
           </div>
-          <div class="tab-item" 
-               [class.active]="activeContentTab === 'objectives'"
-               (click)="activeContentTab = 'objectives'">
-            <span class="tab-icon">🎯</span>
-            Learning Objectives
+
+          <div class="form-group">
+            <label for="title" class="form-label required">Submission Title</label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              class="form-control"
+              [(ngModel)]="record.SubmissionTitle"
+              [disabled]="!EditMode"
+              placeholder="Enter the title of your session or talk"
+              maxlength="500"
+              required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="sessionFormat" class="form-label">Session Format</label>
+              <select
+                id="sessionFormat"
+                name="sessionFormat"
+                class="form-control"
+                [(ngModel)]="record.SessionFormat"
+                [disabled]="!EditMode">
+                <option [value]="null">Select format...</option>
+                <option *ngFor="let format of sessionFormatOptions" [value]="format">
+                  {{ format }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="duration" class="form-label">Duration (minutes)</label>
+              <input
+                type="number"
+                id="duration"
+                name="duration"
+                class="form-control"
+                [(ngModel)]="record.Duration"
+                [disabled]="!EditMode"
+                placeholder="e.g., 45"
+                min="0">
+            </div>
+
+            <div class="form-group">
+              <label for="audienceLevel" class="form-label">Audience Level</label>
+              <select
+                id="audienceLevel"
+                name="audienceLevel"
+                class="form-control"
+                [(ngModel)]="record.TargetAudienceLevel"
+                [disabled]="!EditMode">
+                <option [value]="null">Select level...</option>
+                <option *ngFor="let level of audienceLevelOptions" [value]="level">
+                  {{ level }}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
+        </div>
+      </div>
+    </div>
 
-        <!-- Tab Content -->
-        <div class="tab-content">
-          <!-- Abstract Tab -->
-          <div class="tab-pane" [class.active]="activeContentTab === 'abstract'">
-            <div class="markdown-editor">
-              <div class="editor-header">
-                <div class="editor-title">Abstract *</div>
-                <div class="editor-toolbar">
-                  <button type="button" 
-                          class="toolbar-btn"
-                          [class.active]="!abstractPreview"
-                          (click)="abstractPreview = false">
-                    <span class="btn-icon">✏️</span>
-                    Edit
-                  </button>
-                  <button type="button" 
-                          class="toolbar-btn"
-                          [class.active]="abstractPreview"
-                          (click)="abstractPreview = true">
-                    <span class="btn-icon">👁️</span>
-                    Preview
-                  </button>
-                </div>
-              </div>
-              
-              <div class="editor-content" [class.preview-mode]="abstractPreview">
-                <textarea kendoTextArea
-                          formControlName="SubmissionAbstract" 
-                          placeholder="## What's your session about?
+    <!-- AI Evaluation Section - Collapsible with special styling -->
+    <div class="form-card collapsible-card ai-evaluation-card">
+      <div class="collapsible-header ai-card-header" (click)="toggleSection('aiEvaluation')" role="button" tabindex="0">
+        <div class="ai-header-icon">
+          <i class="fa fa-robot"></i>
+        </div>
+        <div class="ai-header-content">
+          <h3>AI Evaluation</h3>
+          <p>Automated analysis and scoring</p>
+        </div>
+        <div class="ai-status-indicator" [class.processed]="showAIEvaluation" [class.pending]="!showAIEvaluation">
+          <i [class]="showAIEvaluation ? 'fa fa-check-circle' : 'fa fa-clock'"></i>
+          <span>{{ showAIEvaluation ? 'Processed' : 'Not Yet Processed' }}</span>
+        </div>
+        <div class="collapse-icon">
+          <i [class]="sectionsExpanded.aiEvaluation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+        </div>
+      </div>
 
-### Key Takeaways
-- Point 1
-- Point 2
-- Point 3
+      <div class="collapsible-body ai-card-body" [class.collapsed]="!sectionsExpanded.aiEvaluation">
+        <!-- Not Processed State -->
+        <div *ngIf="!showAIEvaluation" class="ai-empty-state">
+          <div class="empty-state-icon">
+            <i class="fa fa-brain"></i>
+          </div>
+          <h4>Awaiting AI Analysis</h4>
+          <p>This submission has not been evaluated by the AI system yet. Evaluation includes scoring, topic extraction, and quality assessment.</p>
+        </div>
 
-### Target Audience
-Who will benefit most from this session?
-
-### Prerequisites
-What should attendees know beforehand?
-
-**Pro tip:** Use markdown formatting to make your abstract more readable!"
-                          [rows]="12"
-                          class="markdown-textarea"
-                          *ngIf="!abstractPreview">
-                </textarea>
-                
-                <div class="markdown-preview" 
-                     [innerHTML]="markdownToHtml(submissionForm.get('SubmissionAbstract')?.value || '')"
-                     *ngIf="abstractPreview">
-                </div>
-              </div>
-              
-              <div class="editor-footer">
-                <div class="word-count">
-                  {{ getAbstractWordCount() }} words • {{ getAbstractCharacterCount() }} characters
-                </div>
-                <div class="markdown-help">
-                  <span class="help-text">💡 Supports **bold**, *italic*, `code`, ## headers, and lists</span>
-                </div>
-              </div>
+        <!-- Processed State -->
+        <div *ngIf="showAIEvaluation" class="ai-content-grid">
+          <!-- Score Card -->
+          <div class="ai-metric-card" *ngIf="record.AIEvaluationScore != null">
+            <div class="metric-header">
+              <i class="fa fa-star"></i>
+              <span>Overall Score</span>
             </div>
-            
-            <div class="error-message" *ngIf="hasError('SubmissionAbstract', 'required')">
-              Abstract is required
+            <div class="score-display-large" [ngClass]="aiScoreClass">
+              <div class="score-number">{{ record.AIEvaluationScore }}</div>
+              <div class="score-label">/100</div>
             </div>
-            <div class="error-message" *ngIf="hasError('SubmissionAbstract', 'minlength')">
-              Abstract must be at least 100 words
+            <div class="screening-result">
+              <span class="result-badge" [ngClass]="record.PassedInitialScreening ? 'passed' : 'failed'">
+                <i [class]="record.PassedInitialScreening ? 'fa fa-check-circle' : 'fa fa-times-circle'"></i>
+                {{ record.PassedInitialScreening ? 'Passed Screening' : 'Failed Screening' }}
+              </span>
+              <span *ngIf="!record.PassedInitialScreening && record.IsFixable" class="fixable-tag">
+                <i class="fa fa-wrench"></i> Fixable
+              </span>
             </div>
           </div>
 
-          <!-- Learning Objectives Tab -->
-          <div class="tab-pane" [class.active]="activeContentTab === 'objectives'">
-            <div class="markdown-editor">
-              <div class="editor-header">
-                <div class="editor-title">Learning Objectives</div>
-                <div class="editor-toolbar">
-                  <button type="button" 
-                          class="toolbar-btn"
-                          [class.active]="!objectivesPreview"
-                          (click)="objectivesPreview = false">
-                    <span class="btn-icon">✏️</span>
-                    Edit
-                  </button>
-                  <button type="button" 
-                          class="toolbar-btn"
-                          [class.active]="objectivesPreview"
-                          (click)="objectivesPreview = true">
-                    <span class="btn-icon">👁️</span>
-                    Preview
-                  </button>
-                </div>
+          <!-- Summary Card -->
+          <div class="ai-content-card" *ngIf="record.SubmissionSummary">
+            <div class="content-card-header">
+              <i class="fa fa-file-alt"></i>
+              <span>AI Summary</span>
+            </div>
+            <div class="content-card-body">{{ record.SubmissionSummary }}</div>
+          </div>
+
+          <!-- Key Topics Card -->
+          <div class="ai-content-card" *ngIf="record.KeyTopics">
+            <div class="content-card-header">
+              <i class="fa fa-tags"></i>
+              <span>Key Topics</span>
+            </div>
+            <div class="content-card-body">
+              <div class="topics-container">
+                <span *ngFor="let topic of parseJsonArray(record.KeyTopics)" class="topic-badge">
+                  {{ topic }}
+                </span>
               </div>
-              
-              <div class="editor-content" [class.preview-mode]="objectivesPreview">
-                <textarea kendoTextArea
-                          formControlName="LearningObjectives" 
-                          placeholder="## What will attendees learn?
+            </div>
+          </div>
 
-After this session, participants will be able to:
+          <!-- Reasoning Card -->
+          <div class="ai-content-card" *ngIf="record.AIEvaluationReasoning">
+            <div class="content-card-header">
+              <i class="fa fa-brain"></i>
+              <span>Evaluation Reasoning</span>
+            </div>
+            <div class="content-card-body">{{ record.AIEvaluationReasoning }}</div>
+          </div>
 
-- **Understand** key concepts and principles
-- **Apply** practical techniques and methods
-- **Implement** solutions in their own projects
-- **Evaluate** different approaches and trade-offs
-
-### Skill Level
-- Beginner | Intermediate | Advanced
-
-### Takeaway Materials
-- Code samples and templates
-- Documentation and resources
-- Follow-up exercises"
-                          [rows]="10"
-                          class="markdown-textarea"
-                          *ngIf="!objectivesPreview">
-                </textarea>
-                
-                <div class="markdown-preview" 
-                     [innerHTML]="markdownToHtml(submissionForm.get('LearningObjectives')?.value || '')"
-                     *ngIf="objectivesPreview">
-                </div>
-              </div>
-              
-              <div class="editor-footer">
-                <div class="markdown-help">
-                  <span class="help-text">💡 Clearly articulate what participants will gain from your session</span>
+          <!-- Failure Reasons Card -->
+          <div class="ai-content-card failure-card" *ngIf="record.FailureReasons">
+            <div class="content-card-header">
+              <i class="fa fa-exclamation-triangle"></i>
+              <span>Issues Identified</span>
+            </div>
+            <div class="content-card-body">
+              <div class="failure-list">
+                <div *ngFor="let reason of parseJsonArray(record.FailureReasons)" class="failure-item">
+                  <i class="fa fa-times-circle"></i>
+                  <span>{{ reason }}</span>
                 </div>
               </div>
             </div>
@@ -248,130 +229,211 @@ After this session, participants will be able to:
       </div>
     </div>
 
-    <!-- Details Section -->
-    <div class="form-section" [class.expanded]="expandedSections.details">
-      <div class="section-header" (click)="toggleSection('details')">
-        <div class="section-info">
-          <span class="section-icon">👥</span>
-          <h3 class="section-title">Audience Details</h3>
-          <span class="section-description">Target audience and prerequisites</span>
+    <!-- Submission Content Section - Collapsible -->
+    <div class="form-card collapsible-card">
+      <div class="collapsible-header" (click)="toggleSection('content')" role="button" tabindex="0">
+        <div class="collapsible-title">
+          <i class="fa fa-file-text"></i>
+          <h3>Submission Content</h3>
         </div>
-        <div class="section-toggle">
-          <span class="toggle-icon" [class.rotated]="expandedSections.details">▼</span>
+        <div class="collapse-icon">
+          <i [class]="sectionsExpanded.content ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
         </div>
       </div>
-      
-      <div class="section-content" [@slideToggle]="expandedSections.details ? 'open' : 'closed'">
-        <div class="form-grid">
-          <!-- Target Audience -->
-          <div class="form-field">
-            <label class="field-label">Target Audience</label>
-            <textarea kendoTextArea
-                      formControlName="TargetAudience" 
-                      placeholder="Who is this session for? (e.g., developers, designers, product managers, skill level)"
-                      [rows]="4"
-                      class="modern-textarea">
-            </textarea>
-            <div class="field-hint">Be specific about who will benefit most</div>
-          </div>
 
-          <!-- Prerequisites -->
-          <div class="form-field">
-            <label class="field-label">Prerequisites</label>
-            <textarea kendoTextArea
-                      formControlName="Prerequisites" 
-                      placeholder="What should attendees know or bring? (e.g., basic JavaScript, laptop with specific software)"
-                      [rows]="4"
-                      class="modern-textarea">
-            </textarea>
-            <div class="field-hint">List any required knowledge, tools, or preparation</div>
+      <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.content">
+        <div class="form-body">
+          <div class="form-group">
+            <label for="abstract" class="form-label required">Abstract</label>
+            <textarea
+              id="abstract"
+              name="abstract"
+              class="form-control textarea-large"
+              [(ngModel)]="record.SubmissionAbstract"
+              [disabled]="!EditMode"
+              placeholder="Enter the full abstract or proposal text"
+              rows="10"
+              required></textarea>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Additional Information Section -->
-    <div class="form-section" [class.expanded]="expandedSections.additional">
-      <div class="section-header" (click)="toggleSection('additional')">
-        <div class="section-info">
-          <span class="section-icon">🏷️</span>
-          <h3 class="section-title">Additional Information</h3>
-          <span class="section-description">Keywords and extra notes</span>
+    <!-- Supporting Materials Section - Collapsible -->
+    <div class="form-card collapsible-card">
+      <div class="collapsible-header" (click)="toggleSection('materials')" role="button" tabindex="0">
+        <div class="collapsible-title">
+          <i class="fa fa-paperclip"></i>
+          <h3>Supporting Materials</h3>
         </div>
-        <div class="section-toggle">
-          <span class="toggle-icon" [class.rotated]="expandedSections.additional">▼</span>
+        <div class="collapse-icon">
+          <i [class]="sectionsExpanded.materials ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
         </div>
       </div>
-      
-      <div class="section-content" [@slideToggle]="expandedSections.additional ? 'open' : 'closed'">
-        <div class="form-grid">
-          <!-- Keywords -->
-          <div class="form-field">
-            <label class="field-label">Keywords</label>
-            <input kendoTextBox
-                   formControlName="Keywords" 
-                   placeholder="e.g., JavaScript, React, Performance, UX Design"
-                   class="modern-input">
-            <div class="field-hint">Separate with commas to help attendees find your session</div>
+
+      <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.materials">
+        <div class="form-body">
+          <div class="form-group">
+            <label for="presentationUrl" class="form-label">Presentation File URL</label>
+            <div class="url-input-group">
+              <input
+                type="url"
+                id="presentationUrl"
+                name="presentationUrl"
+                class="form-control"
+                [(ngModel)]="record.PresentationFileURL"
+                [disabled]="!EditMode"
+                placeholder="https://box.com/...">
+              <a *ngIf="record.PresentationFileURL && !EditMode"
+                 [href]="record.PresentationFileURL"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 class="url-link-button"
+                 title="Open in new tab">
+                <i class="fa fa-external-link-alt"></i>
+              </a>
+            </div>
           </div>
 
-          <!-- Additional Notes -->
-          <div class="form-field">
-            <label class="field-label">Additional Notes</label>
-            <textarea kendoTextArea
-                      formControlName="AdditionalNotes" 
-                      placeholder="Any other information reviewers should know about your submission"
-                      [rows]="3"
-                      class="modern-textarea">
-            </textarea>
-            <div class="field-hint">Optional: special requirements, equipment needs, etc.</div>
+          <div class="form-group" *ngIf="record.PresentationFileSummary">
+            <label class="form-label">Presentation Summary</label>
+            <div class="summary-box">{{ record.PresentationFileSummary }}</div>
+          </div>
+
+          <div class="form-group">
+            <label for="specialReqs" class="form-label">Special Requirements</label>
+            <textarea
+              id="specialReqs"
+              name="specialReqs"
+              class="form-control"
+              [(ngModel)]="record.SpecialRequirements"
+              [disabled]="!EditMode"
+              placeholder="Any AV equipment, accessibility needs, etc."
+              rows="3"></textarea>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Hidden fields -->
-    <input type="hidden" formControlName="SpeakerID">
-    <input type="hidden" formControlName="EventID">
-    <input type="hidden" formControlName="Status">
+    <!-- Review and Decision Section - Collapsible -->
+    <div class="form-card collapsible-card" *ngIf="EditMode || record.ReviewNotes || showFinalDecision">
+      <div class="collapsible-header" (click)="toggleSection('reviewDecision')" role="button" tabindex="0">
+        <div class="collapsible-title">
+          <i class="fa fa-gavel"></i>
+          <h3>Review & Decision</h3>
+        </div>
+        <div class="collapse-icon">
+          <i [class]="sectionsExpanded.reviewDecision ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+        </div>
+      </div>
 
+      <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.reviewDecision">
+        <div class="form-body">
+          <!-- Human Review Section -->
+          <div class="form-section" *ngIf="EditMode || record.ReviewNotes">
+            <div class="form-section-title">Human Review Notes</div>
+
+            <div class="form-group">
+              <label for="reviewNotes" class="form-label">Review Notes</label>
+              <textarea
+                id="reviewNotes"
+                name="reviewNotes"
+                class="form-control"
+                [(ngModel)]="record.ReviewNotes"
+                [disabled]="!EditMode"
+                placeholder="Notes added by human reviewers during evaluation"
+                rows="4"></textarea>
+            </div>
+          </div>
+
+          <!-- Final Decision Section -->
+          <div class="form-section" *ngIf="EditMode || showFinalDecision">
+            <div class="form-section-title">Final Decision</div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="finalDecision" class="form-label">Decision</label>
+                <select
+                  id="finalDecision"
+                  name="finalDecision"
+                  class="form-control"
+                  [(ngModel)]="record.FinalDecision"
+                  [disabled]="!EditMode">
+                  <option [value]="null">No decision yet...</option>
+                  <option *ngFor="let decision of finalDecisionOptions" [value]="decision">
+                    {{ decision }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="decisionDate" class="form-label">Decision Date</label>
+                <input
+                  type="datetime-local"
+                  id="decisionDate"
+                  name="decisionDate"
+                  class="form-control"
+                  [ngModel]="record.FinalDecisionDate | date:'yyyy-MM-ddTHH:mm'"
+                  (ngModelChange)="onDecisionDateChange($event)"
+                  [disabled]="!EditMode">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="decisionReasoning" class="form-label">Decision Reasoning</label>
+              <textarea
+                id="decisionReasoning"
+                name="decisionReasoning"
+                class="form-control"
+                [(ngModel)]="record.FinalDecisionReasoning"
+                [disabled]="!EditMode"
+                placeholder="Explanation for the final decision"
+                rows="4"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Section - Collapsible -->
+    <div class="form-card collapsible-card metadata-card" *ngIf="record.ID">
+      <div class="collapsible-header" (click)="toggleSection('metadata')" role="button" tabindex="0">
+        <div class="collapsible-title">
+          <i class="fa fa-database"></i>
+          <h3>Metadata</h3>
+        </div>
+        <div class="collapse-icon">
+          <i [class]="sectionsExpanded.metadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+        </div>
+      </div>
+
+      <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.metadata">
+        <div class="form-body">
+        <div class="metadata-grid">
+          <div class="metadata-item">
+            <span class="metadata-label">Submitted:</span>
+            <span class="metadata-value">{{ record.SubmittedAt | date:'medium' }}</span>
+          </div>
+          <div class="metadata-item" *ngIf="record.TypeformResponseID">
+            <span class="metadata-label">Typeform ID:</span>
+            <span class="metadata-value">{{ record.TypeformResponseID }}</span>
+          </div>
+          <div class="metadata-item">
+            <span class="metadata-label">Created:</span>
+            <span class="metadata-value">{{ record.__mj_CreatedAt | date:'medium' }}</span>
+          </div>
+          <div class="metadata-item">
+            <span class="metadata-label">Updated:</span>
+            <span class="metadata-value">{{ record.__mj_UpdatedAt | date:'medium' }}</span>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
   </form>
 
-  <!-- Action Bar -->
-  <div class="action-bar">
-    <div class="action-content">
-      <div class="action-left">
-        <button kendoButton 
-                type="button" 
-                class="action-btn secondary"
-                (click)="cancel()"
-                [disabled]="isSaving">
-          <span class="btn-icon">❌</span>
-          Cancel
-        </button>
-      </div>
-      
-      <div class="action-right">
-        <button kendoButton 
-                type="button" 
-                class="action-btn primary"
-                (click)="saveSubmission()"
-                [disabled]="isSaving || submissionForm.invalid">
-          <span class="btn-icon" *ngIf="!isSaving">💾</span>
-          <span class="btn-icon spinning" *ngIf="isSaving">⏳</span>
-          {{ isSaving ? 'Saving...' : (isEditing ? 'Update' : 'Save Draft') }}
-        </button>
-        
-        <button kendoButton 
-                type="button" 
-                class="action-btn accent"
-                (click)="submitForReview()"
-                [disabled]="isSaving || submissionForm.invalid">
-          <span class="btn-icon" *ngIf="!isSaving">🚀</span>
-          <span class="btn-icon spinning" *ngIf="isSaving">⏳</span>
-          {{ isSaving ? 'Submitting...' : 'Submit for Review' }}
-        </button>
-      </div>
-    </div>
+  <div *ngIf="!isRecordReady" class="loading-container">
+    <div class="loading-spinner"></div>
+    <p>Loading submission data...</p>
   </div>
 </div>

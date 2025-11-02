@@ -137,11 +137,42 @@ export class GetDataResolver {
                         const result = await request.query(query);
                         return { result: result.recordset, error: null };
                     } catch (err) {
-                        return { result: null, error: err };
+                        // Extract clean SQL error message
+                        let errorMessage = err instanceof Error ? err.message : String(err);
+
+                        // SQL Server errors often have additional context in properties
+                        // Try to get more context from the error object
+                        if (err && typeof err === 'object') {
+                            const sqlError = err as any;
+
+                            // SQL Server error objects may have a 'procName' with the problematic token
+                            // or 'lineNumber' and other useful properties
+                            if (sqlError.precedingErrors && sqlError.precedingErrors.length > 0) {
+                                // Sometimes the error has preceding errors with better context
+                                const precedingError = sqlError.precedingErrors[0];
+                                if (precedingError.message) {
+                                    errorMessage = precedingError.message;
+                                }
+                            }
+
+                            // Enhance error message with line number if available
+                            if (sqlError.lineNumber && sqlError.lineNumber > 0) {
+                                errorMessage = `${errorMessage} (Line ${sqlError.lineNumber})`;
+                            }
+                        }
+
+                        // SQL Server errors often have the format "message\nstatement"
+                        // Extract just the first line which contains the actual error
+                        const firstLine = errorMessage.split('\n')[0];
+                        if (firstLine) {
+                            errorMessage = firstLine.trim();
+                        }
+
+                        return { result: null, error: errorMessage };
                     }
                 })
             );
-            
+
             // Extract results and errors from the promises
             const processedResults = results.map((res) => res.status === "fulfilled" ? res.value.result : null);
             const errorMessages = results.map((res) => res.status === "fulfilled" ? res.value.error : res.reason);

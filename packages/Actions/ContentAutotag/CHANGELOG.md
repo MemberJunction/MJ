@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 2.115.0
+
+### Patch Changes
+
+- Updated dependencies [c29e21b]
+- Updated dependencies [2e0fe8b]
+  - @memberjunction/core-actions@2.115.0
+  - @memberjunction/actions@2.115.0
+  - @memberjunction/content-autotagging@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- Updated dependencies [3e2fe1d]
+  - @memberjunction/core-actions@2.114.0
+  - @memberjunction/actions@2.114.0
+  - @memberjunction/content-autotagging@2.114.0
+  - @memberjunction/core@2.114.0
+  - @memberjunction/core-entities@2.114.0
+  - @memberjunction/global@2.114.0
+
 ## 2.113.2
 
 ### Patch Changes

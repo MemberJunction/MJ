@@ -21,7 +21,7 @@
             "ID": "F351BD35-165A-4356-A439-4768120EB0A9"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.433Z",
+            "lastModified": "2025-11-01T15:39:38.981Z",
             "checksum": "69aa35cc41c7c2b9f59f19566e8e2d557c3fc4dbcedea5a4723b3febeaba34a1"
           }
         },
@@ -35,7 +35,7 @@
             "ID": "799EC1A3-17A5-43AB-A6DA-065F655CB8D2"
           },
           "sync": {
-            "lastModified": "2025-10-30T21:12:14.315Z",
+            "lastModified": "2025-11-01T15:39:38.994Z",
             "checksum": "df1be674a0bab35106c0da849ac708368740b297dee5d6fd60dae743e8e40d90"
           }
         },
@@ -49,8 +49,22 @@
             "ID": "2AA1DA43-3A8B-49AC-877B-85C4B56E3CD9"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:05:50.029Z",
+            "lastModified": "2025-11-01T15:39:39.009Z",
             "checksum": "ed41243f44831cc3446179f52d70ea9417ff9ad88b2a3d26ab543f8274a533a6"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Records",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "143B3145-0D66-40F1-9F7C-B3D93E7BFB05"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T17:54:29.790Z",
+            "checksum": "4146c35256704b866c1905be7d5bffa30875108bed1452e7109b21da8ae38bb4"
           }
         }
       ],
@@ -58,9 +72,37 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Get File Content",
+            "Name": "Check If Response Exists",
             "StepType": "Action",
             "StartingStep": true,
+            "ActionID": "@lookup:Actions.Name=Get Records",
+            "ActionInputMapping": {
+              "EntityName": "Submissions",
+              "Filter": "TypeformResponseID = '{{payload.responseId}}'",
+              "MaxRows": 1
+            },
+            "ActionOutputMapping": {
+              "Records": "existingSubmission"
+            },
+            "Description": "Check if this Typeform response has already been imported to prevent duplicates",
+            "Status": "Active",
+            "PositionX": 50,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "CCCB138F-4776-4524-866E-3D3DF4CDE69F"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T17:54:29.808Z",
+            "checksum": "d24accb02701e81cd3ad89a486bee28517e6555f8657ae0e2c7649102444120f"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Get File Content",
+            "StepType": "Action",
+            "StartingStep": false,
             "ActionID": "@lookup:Actions.Name=Typeform Get File Content",
             "ActionInputMapping": {
               "CompanyID": "data.companyId",
@@ -72,15 +114,15 @@
               "Format": "payload.fileFormat"
             },
             "Status": "Active",
-            "PositionX": 100,
+            "PositionX": 150,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "E4FE92F0-4FE7-4175-AD3A-714CCE1A7CC7"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.610Z",
-            "checksum": "220a3dcdee1cddb196f7ab4f6e758aa3dac129a915f0d6b7133f2e48d6b678de"
+            "lastModified": "2025-11-01T17:54:29.827Z",
+            "checksum": "5b3a25775a284f5b6a9155089359884330b891a9fc618bd6bb705b85b7d09d35"
           }
         },
         {
@@ -98,7 +140,7 @@
             "ID": "3AC1F543-4E9B-42F3-84D3-DF34D3330E0A"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.625Z",
+            "lastModified": "2025-11-01T15:39:39.041Z",
             "checksum": "9fa141760769e31b30ac180816c8e95cf18186fe2a4b67b2b236dd43bc1d9bce"
           }
         },
@@ -132,7 +174,7 @@
             "ID": "D8D2D8C0-0AF0-4BC2-B095-34747E39E48A"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.640Z",
+            "lastModified": "2025-11-01T15:39:39.056Z",
             "checksum": "9e0b9e804c94a318b288c5ff7d26c189cd8f7a2aff999ab58462ca5a60306d11"
           }
         },
@@ -149,11 +191,18 @@
                 "EventID": "data.eventId",
                 "TypeformResponseID": "payload.responseId",
                 "SubmittedAt": "payload.submittedAt",
-                "Status": "New",
+                "Status": "payload.passedInitialScreening ? 'Passed Initial' : 'Failed Initial'",
                 "SubmissionTitle": "payload.answers.What is your proposed session topic",
                 "SubmissionAbstract": "payload.answers.Please share a brief biography about yourself",
                 "SubmissionSummary": "payload.generatedSummary",
-                "PresentationFileURL": "payload.answers.Please upload your detailed session proposal required"
+                "KeyTopics": "payload.keyTopics",
+                "PresentationFileURL": "payload.answers.Please upload your detailed session proposal required",
+                "AIEvaluationScore": "payload.aiEvaluationScore",
+                "AIEvaluationReasoning": "payload.aiEvaluationReasoning",
+                "AIEvaluationDimensions": "payload.aiEvaluationDimensions",
+                "PassedInitialScreening": "payload.passedInitialScreening",
+                "FailureReasons": "payload.failureReasons",
+                "IsFixable": "payload.isFixable"
               }
             },
             "ActionOutputMapping": {
@@ -167,8 +216,8 @@
             "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.654Z",
-            "checksum": "ebeda45211708bdb4fc3907a07a39dceec46ed9dff1e1c06b571aa54e7984e39"
+            "lastModified": "2025-11-01T17:39:47.759Z",
+            "checksum": "4ac0895ea2860b0c3db8dfbc131bdd63f6cc4a69756a01290cc41627694ab8b9"
           }
         },
         {
@@ -194,31 +243,31 @@
             "ID": "AE81C6DB-B304-4899-B051-383C602D1EC7"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.668Z",
+            "lastModified": "2025-11-01T15:39:39.084Z",
             "checksum": "d55b251163fa50cd6e9041f57b45d0fdb3fe2514d751feb50e2ea3ddb9f349a4"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "Name": "Complete",
-            "StepType": "Prompt",
-            "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Process Single Submission - Complete",
-            "Status": "Active",
-            "PositionX": 500,
-            "PositionY": 100
-          },
-          "primaryKey": {
-            "ID": "0435DF48-50D2-404E-97E1-B04B21183550"
-          },
-          "sync": {
-            "lastModified": "2025-10-30T22:33:09.681Z",
-            "checksum": "f202907bdd5006dbbc10f4055afde6a39c8a1283f161cb10c9144749e8bbf268"
           }
         }
       ],
       "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Check If Response Exists&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Get File Content&AgentID=@parent:ID",
+            "Condition": "payload.existingSubmission.length === 0",
+            "Priority": 1,
+            "Description": "Only process if response has not already been imported",
+            "OutputMapping": {
+              "processingResult": "new"
+            }
+          },
+          "primaryKey": {
+            "ID": "46AFE63A-25E1-4F67-A28C-93C56613C026"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T17:54:29.881Z",
+            "checksum": "2e3451797079313f0753bb9cb8d2085260f1f41ef793623fe99b1acaa87a0db1"
+          }
+        },
         {
           "fields": {
             "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Get File Content&AgentID=@parent:ID",
@@ -231,7 +280,7 @@
             "ID": "D4CFDE93-DDB2-4876-B475-9C80DD509EEC"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.765Z",
+            "lastModified": "2025-11-01T15:39:39.161Z",
             "checksum": "5a67c65851bc0fcf0e2f9c723b684324ae78949b5f69b7d8a048ebcf85a9a6bc"
           }
         },
@@ -247,7 +296,7 @@
             "ID": "C99BAEF2-B559-498A-A18E-2B6420094820"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.775Z",
+            "lastModified": "2025-11-01T15:39:39.172Z",
             "checksum": "d01606a256ac37a6461d4aafac9c6de6816e2481e8ffa14c40ff343fbf25c141"
           }
         },
@@ -263,24 +312,8 @@
             "ID": "5285C2F3-EF48-4597-9A5C-5F514D39677E"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.785Z",
+            "lastModified": "2025-11-01T15:39:39.184Z",
             "checksum": "ccba42fd7b8277e5f6305160fc3af5e414646698997dca5be53534397bcd7f30"
-          }
-        },
-        {
-          "fields": {
-            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
-            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Complete&AgentID=@parent:ID",
-            "Condition": "payload.answers.What is your full name == null",
-            "Priority": 2,
-            "Description": "Skip speaker processing if none provided"
-          },
-          "primaryKey": {
-            "ID": "B63BA465-EFE8-4E4E-AB5B-6E19AC13FEED"
-          },
-          "sync": {
-            "lastModified": "2025-10-30T22:33:09.794Z",
-            "checksum": "eb149c8dd6a14b5a8a6b57bc44a9f1b0f64770dee1007875efd6c81629c393f4"
           }
         },
         {
@@ -295,24 +328,8 @@
             "ID": "EAD197BE-24D2-47E1-8B5F-FD5B51C3CC26"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:33:09.802Z",
+            "lastModified": "2025-11-01T15:39:39.195Z",
             "checksum": "0c7f49f9016649f0202244f58caaca477857100ca228352f8688100bbb8b8dbc"
-          }
-        },
-        {
-          "fields": {
-            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Link Speakers to Submission&AgentID=@parent:ID",
-            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Complete&AgentID=@parent:ID",
-            "Condition": null,
-            "Priority": 1,
-            "Description": "Complete after linking all speakers"
-          },
-          "primaryKey": {
-            "ID": "CCEA59FC-09EE-40B3-A324-BBB62F457FD4"
-          },
-          "sync": {
-            "lastModified": "2025-10-30T22:33:09.811Z",
-            "checksum": "9a6b99028abb06cc0555b89798802a3faa8e702313364ab185c6b4a241171a90"
           }
         }
       ]
@@ -321,7 +338,7 @@
       "ID": "7F12A577-EFE1-4C11-965B-C1D03908F138"
     },
     "sync": {
-      "lastModified": "2025-10-30T01:28:20.322Z",
+      "lastModified": "2025-11-01T15:39:38.878Z",
       "checksum": "93e72c2293589cd4af7381cf5c655091deb79d04351b9dcc37ab272d173312ac"
     }
   },
@@ -348,7 +365,7 @@
             "ID": "7A428131-8808-471E-8ECF-084F38586244"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.501Z",
+            "lastModified": "2025-11-01T15:39:39.095Z",
             "checksum": "6e0da71beb9748ba7ac036186631c86ff7b0aaaef45655f39c00c7d41229372a"
           }
         }
@@ -370,7 +387,7 @@
             "ID": "1E0B681E-77C5-474E-B298-87C064D21498"
           },
           "sync": {
-            "lastModified": "2025-10-30T15:30:30.055Z",
+            "lastModified": "2025-11-01T15:39:38.957Z",
             "checksum": "966005262657183636075dc038dd3a5f685be5a93d91689c3257bc08c128beca"
           }
         }
@@ -401,7 +418,7 @@
             "ID": "E3DF9398-E3C2-43F6-96E9-C324D4A86A0C"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:51:05.612Z",
+            "lastModified": "2025-11-01T15:39:39.117Z",
             "checksum": "edcb3308e63b194b3281868073fa1a43d2ce4e1008c717e6d1306c671f71dec6"
           }
         },
@@ -430,7 +447,7 @@
             "ID": "D92593AB-1638-4112-A1CA-670D7F01235B"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:37:52.411Z",
+            "lastModified": "2025-11-01T15:39:39.133Z",
             "checksum": "27429e46ba741d042e79a14c9368446130cf09a2557ed8159ccb43ea28efa808"
           }
         }
@@ -448,7 +465,7 @@
             "ID": "67F75258-8D92-43A7-8B29-2279903F273B"
           },
           "sync": {
-            "lastModified": "2025-10-30T22:37:52.448Z",
+            "lastModified": "2025-11-01T15:39:39.204Z",
             "checksum": "a657bb72eae6c0e86219fb38ecd9b3a1259e3426a7be465a990b53626599ab9a"
           }
         }
@@ -458,7 +475,7 @@
       "ID": "1E1343B2-09B9-49B3-808E-8915D9769E51"
     },
     "sync": {
-      "lastModified": "2025-10-30T19:03:56.537Z",
+      "lastModified": "2025-11-01T15:39:38.896Z",
       "checksum": "40b59ec64b409b31c2ad978ab010d85b7e43fd917b28ea6f1707288b067326ad"
     }
   }

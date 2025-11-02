@@ -1,5 +1,73 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.115.0
+
+### Patch Changes
+
+- Updated dependencies [751e3d1]
+- Updated dependencies [dffe12f]
+- Updated dependencies [1a96840]
+- Updated dependencies [5b7d788]
+  - @memberjunction/ng-conversations@2.115.0
+  - @memberjunction/ng-ask-skip@2.115.0
+  - @memberjunction/ng-auth-services@2.115.0
+  - @memberjunction/ng-base-forms@2.115.0
+  - @memberjunction/ng-compare-records@2.115.0
+  - @memberjunction/ng-dashboards@2.115.0
+  - @memberjunction/ng-entity-form-dialog@2.115.0
+  - @memberjunction/ng-explorer-settings@2.115.0
+  - @memberjunction/ng-record-changes@2.115.0
+  - @memberjunction/ng-shared@2.115.0
+  - @memberjunction/ng-user-view-grid@2.115.0
+  - @memberjunction/ng-user-view-properties@2.115.0
+  - @memberjunction/ng-container-directives@2.115.0
+  - @memberjunction/ng-file-storage@2.115.0
+  - @memberjunction/ng-query-grid@2.115.0
+  - @memberjunction/ng-record-selector@2.115.0
+  - @memberjunction/ng-resource-permissions@2.115.0
+  - @memberjunction/ng-skip-chat@2.115.0
+  - @memberjunction/ng-tabstrip@2.115.0
+  - @memberjunction/ng-user-avatar@2.115.0
+  - @memberjunction/communication-types@2.115.0
+  - @memberjunction/entity-communications-client@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+  - @memberjunction/templates-base-types@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- Updated dependencies [12ae685]
+- Updated dependencies [a17ec8e]
+  - @memberjunction/ng-conversations@2.114.0
+  - @memberjunction/ng-ask-skip@2.114.0
+  - @memberjunction/ng-auth-services@2.114.0
+  - @memberjunction/ng-base-forms@2.114.0
+  - @memberjunction/ng-compare-records@2.114.0
+  - @memberjunction/ng-dashboards@2.114.0
+  - @memberjunction/ng-entity-form-dialog@2.114.0
+  - @memberjunction/ng-explorer-settings@2.114.0
+  - @memberjunction/ng-record-changes@2.114.0
+  - @memberjunction/ng-shared@2.114.0
+  - @memberjunction/ng-user-view-grid@2.114.0
+  - @memberjunction/ng-user-view-properties@2.114.0
+  - @memberjunction/ng-container-directives@2.114.0
+  - @memberjunction/ng-file-storage@2.114.0
+  - @memberjunction/ng-query-grid@2.114.0
+  - @memberjunction/ng-record-selector@2.114.0
+  - @memberjunction/ng-resource-permissions@2.114.0
+  - @memberjunction/ng-skip-chat@2.114.0
+  - @memberjunction/ng-tabstrip@2.114.0
+  - @memberjunction/ng-user-avatar@2.114.0
+  - @memberjunction/communication-types@2.114.0
+  - @memberjunction/entity-communications-client@2.114.0
+  - @memberjunction/core@2.114.0
+  - @memberjunction/core-entities@2.114.0
+  - @memberjunction/global@2.114.0
+  - @memberjunction/templates-base-types@2.114.0
+
 ## 2.113.2
 
 ### Patch Changes

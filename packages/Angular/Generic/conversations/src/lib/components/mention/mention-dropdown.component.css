@@ -56,6 +56,13 @@
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
 }
 
+.suggestion-icon .suggestion-image {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
 .suggestion-content {
   flex: 1;
   min-width: 0;

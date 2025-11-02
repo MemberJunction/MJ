@@ -18,6 +18,40 @@ import { attemptDeleteFile, logIf } from "../Misc/util";
 const execAsync = promisify(exec);
 
 /**
+ * Escapes special characters in a string for safe use as a shell command argument.
+ * Handles both Unix-like shells (bash/sh) and Windows (cmd.exe).
+ * @param value The string to escape
+ * @returns The escaped string safe for shell use
+ */
+function escapeShellArg(value: string): string {
+    const isWindows = process.platform === 'win32';
+
+    if (isWindows) {
+        // Windows cmd.exe escaping
+        return value
+            .replace(/"/g, '""')      // Double quotes -> doubled
+            .replace(/\^/g, '^^')     // Caret escape
+            .replace(/%/g, '%%')      // Percent for environment vars
+            .replace(/&/g, '^&')      // Ampersand
+            .replace(/\|/g, '^|')     // Pipe
+            .replace(/</g, '^<')      // Less than
+            .replace(/>/g, '^>')      // Greater than
+            .replace(/\(/g, '^(')     // Left paren
+            .replace(/\)/g, '^)');    // Right paren
+    } else {
+        // Unix-like shell escaping
+        return value
+            .replace(/\\/g, '\\\\')   // Backslash first (escape the escape char)
+            .replace(/"/g, '\\"')     // Double quotes
+            .replace(/\$/g, '\\$')    // Dollar signs (variable expansion)
+            .replace(/`/g, '\\`')     // Backticks (command substitution)
+            .replace(/!/g, '\\!')     // Exclamation (history expansion)
+            .replace(/\n/g, '\\n')    // Newlines
+            .replace(/\r/g, '\\r');   // Carriage returns
+    }
+}
+
+/**
  * Base class for SQL Utility functions, you can sub-class this class to create your own SQL Utility functions/override existing functionality.
  */
 export class SQLUtilityBase {
@@ -303,19 +337,19 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     }
 
     // Construct the sqlcmd command with optional port and instance
-    let command = `sqlcmd -S ${sqlConfig.server}`;
+    let command = `sqlcmd -S "${escapeShellArg(sqlConfig.server)}"`;
     if (sqlConfig.port) {
       command += `,${sqlConfig.port}`;
     }
     if (sqlConfig.options?.instanceName) {
-      const escapedInstanceName = `"${sqlConfig.options.instanceName.replace(/"/g, '\\"')}"`;
+      const escapedInstanceName = `"${escapeShellArg(sqlConfig.options.instanceName)}"`;
       command += `\\${escapedInstanceName}`;
     }
 
-    // Escape and wrap user and password in double quotes
-    const escapedUser = `"${sqlConfig.user.replace(/"/g, '\\"')}"`;
-    const escapedPassword = `"${sqlConfig.password.replace(/"/g, '\\"')}"`;
-    const escapedDatabase = `"${sqlConfig.database.replace(/"/g, '\\"')}"`;
+    // Escape credentials and database name for safe shell usage
+    const escapedUser = `"${escapeShellArg(sqlConfig.user)}"`;
+    const escapedPassword = `"${escapeShellArg(sqlConfig.password)}"`;
+    const escapedDatabase = `"${escapeShellArg(sqlConfig.database)}"`;
 
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
@@ -345,7 +379,16 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     }
   }
   catch (e) {
-    const message = (e as any).message || e;
+    let message = (e as any).message || e;
+
+    // Include stdout and stderr if available from exec error
+    if ((e as any).stdout) {
+      message += `\n SQL Server message: ${(e as any).stdout}`;
+    }
+    if ((e as any).stderr) {
+      message += `\n SQL Server error: ${(e as any).stderr}`;
+    }
+
     const errorMessage = sqlConfig.password ? this.maskPassword(message, sqlConfig.password) : message;
     logError("Error executing batch SQL file: " + errorMessage);
     return false;

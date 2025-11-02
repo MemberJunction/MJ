@@ -1,5 +1,25 @@
 # @memberjunction/component-registry-server
 
+## 2.115.0
+
+### Patch Changes
+
+- @memberjunction/sqlserver-dataprovider@2.115.0
+- @memberjunction/interactive-component-types@2.115.0
+- @memberjunction/core@2.115.0
+- @memberjunction/core-entities@2.115.0
+- @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.114.0
+- @memberjunction/core@2.114.0
+- @memberjunction/core-entities@2.114.0
+- @memberjunction/global@2.114.0
+- @memberjunction/sqlserver-dataprovider@2.114.0
+
 ## 2.113.2
 
 ### Patch Changes
