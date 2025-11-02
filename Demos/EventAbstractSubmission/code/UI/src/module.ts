@@ -16,12 +16,6 @@ import { EventFormComponent } from './forms/event-form/event-form.component';
 import { SubmissionFormComponent } from './forms/submission-form/submission-form.component';
 import { SpeakerFormComponent } from './forms/speaker-form/speaker-form.component';
 
-// Shared Components - temporarily disabled due to Kendo dependencies
-// import { KpiCardComponent } from './dashboards/components/kpi-card.component';
-// import { StatusBadgeComponent } from './dashboards/components/status-badge.component';
-// import { SubmissionListComponent } from './dashboards/components/submission-list.component';
-// import { SpeakerListComponent } from './dashboards/components/speaker-list.component';
-
 // Services
 import { EventService } from './services/event.service';
 import { SubmissionService } from './services/submission.service';
