@@ -2,6 +2,7 @@
 
 **Status:** Planning
 **Created:** 2025-11-02
+**Updated:** 2025-11-02
 **Author:** AI Assistant
 **Target Package:** `@memberjunction/codegen-lib`
 
@@ -11,7 +12,7 @@
 
 This plan extends the existing Advanced Generation system in CodeGen to add intelligent, LLM-powered metadata inference capabilities. Instead of relying solely on heuristics (like "a field named 'Name' is the name field"), we'll use semantic analysis to make smarter decisions about entity metadata, relationships, and UI generation.
 
-The system is designed as **optional, plugin-based enhancements** that augment but don't replace the existing CodeGen pipeline. When disabled, CodeGen continues to work exactly as it does today.
+The system uses MemberJunction's **AI Prompts architecture** (`AIPromptRunner` + metadata-driven prompts) and is **fully optional** - when disabled, CodeGen continues to work exactly as it does today.
 
 ---
 
@@ -19,15 +20,15 @@ The system is designed as **optional, plugin-based enhancements** that augment b
 
 1. [Current State Analysis](#current-state-analysis)
 2. [Goals and Non-Goals](#goals-and-non-goals)
-3. [Proposed Architecture](#proposed-architecture)
+3. [Architecture Overview](#architecture-overview)
 4. [New Advanced Generation Features](#new-advanced-generation-features)
-5. [Implementation Details](#implementation-details)
-6. [Configuration Schema Updates](#configuration-schema-updates)
-7. [Plugin System Design](#plugin-system-design)
-8. [Migration and Backwards Compatibility](#migration-and-backwards-compatibility)
+5. [Prompt Design](#prompt-design)
+6. [Implementation Details](#implementation-details)
+7. [Database Schema Changes](#database-schema-changes)
+8. [Configuration](#configuration)
 9. [Testing Strategy](#testing-strategy)
 10. [Timeline and Phases](#timeline-and-phases)
-11. [Future Extensibility](#future-extensibility)
+11. [Risk Mitigation](#risk-mitigation)
 
 ---
 
@@ -52,33 +53,16 @@ public get enabled(): boolean {
 }
 ```
 
-**Configuration Structure:**
-```typescript
-type AdvancedGenerationFeature = {
-  name: string;
-  enabled: boolean;
-  description?: string;
-  systemPrompt?: string;
-  userMessage?: string;
-  options?: { name: string, value: unknown }[];
-}
-```
+**Current Approach:**
+- Direct `BaseLLM.ChatCompletion()` calls
+- Hardcoded prompts in code
+- Simple string template substitution
+- No model failover or retry logic
+- No execution tracking
 
-**Usage Pattern:**
-```typescript
-const ag = new AdvancedGeneration();
-if (ag.featureEnabled('EntityDescriptions')) {
-    const llm = ag.LLM;
-    const prompt = ag.getPrompt('EntityDescriptions');
-    // ... invoke LLM and process results
-}
-```
-
-### Current Metadata Heuristics
+### Problems with Current Metadata Heuristics
 
 **File:** `/packages/CodeGenLib/src/Database/manage-metadata.ts`
-
-**Problems with Current Approach:**
 
 1. **Name Field Detection** - Assumes field called "Name" or "Title"
    - Fails on: `ProductSKU`, `CustomerCode`, `EmployeeNumber`
@@ -89,7 +73,7 @@ if (ag.featureEnabled('EntityDescriptions')) {
 
 3. **Join Field Selection** - Can't handle transitive relationships
    - Example: `TableX → UserRole → User, Role`
-   - Current system can't determine to include User/Role fields when joining to UserRole
+   - Current system can't determine to include User/Role fields
 
 4. **Form Layout** - Fields dumped sequentially
    - No logical grouping
@@ -102,89 +86,79 @@ if (ag.featureEnabled('EntityDescriptions')) {
 
 ### Goals
 
+✅ **Use MJ's AI Prompts architecture** - `AIPromptRunner` with metadata-driven prompts
 ✅ **Add intelligent metadata inference** using LLM semantic analysis
 ✅ **Preserve existing CodeGen functionality** - system works without LLM features
-✅ **Plugin-based architecture** - easy to add new AI-powered features
 ✅ **Respect user modifications** - never override manual changes
 ✅ **Improve UI generation** - modern collapsible sections with icons
-✅ **Handle complex relationships** - transitive join intelligence
-✅ **Batch processing** - efficient LLM usage with combined prompts
-✅ **Extensible design** - foundation for future AI-powered features
+✅ **Handle transitive relationships** - smart join field inclusion
+✅ **Proper error handling** - timeouts, fallbacks, retry logic
+✅ **Execution tracking** - link to CodeGen runs for auditing
 
 ### Non-Goals
 
 ❌ Require LLM for basic CodeGen operation
 ❌ Override existing working heuristics (augment, don't replace)
-❌ Change existing configuration format (extend it)
+❌ Build complex plugin architecture (keep it simple)
 ❌ Generate code that requires LLM at runtime
 ❌ Replace human decision-making for critical business logic
 
 ---
 
-## Proposed Architecture
+## Architecture Overview
 
-### High-Level Flow
+### High-Level Approach
+
+**Simple Enhancement Pattern:**
 
 ```
 Database Schema Changes Detected
          ↓
 [Metadata Management]
          ↓
-    [FORK based on config]
+   [Check if Advanced Generation enabled]
          ↓
-   ╔════════════════════════════════╗
-   ║ Advanced Generation Enabled?   ║
-   ╚════════════════════════════════╝
-         ↓                ↓
-       YES              NO
-         ↓                ↓
-   ┌─────────┐    ┌──────────┐
-   │ Plugin  │    │ Simple   │
-   │ System  │    │ Heuristic│
-   └─────────┘    └──────────┘
-         ↓                ↓
-   [LLM Analysis]   [Pattern Match]
-         ↓                ↓
-   [Batch Decisions]    [Return]
-         ↓                ↓
-   [Update Metadata]    [Return]
-         ↓                ↓
-         └────────┬───────┘
-                  ↓
+       YES ──────────────────────> NO
+         ↓                          ↓
+   [Create AIPromptParams]    [Use Heuristics]
+         ↓                          ↓
+   [AIPromptRunner.ExecutePrompt]  │
+         ↓                          │
+   [Parse JSON Response]            │
+         ↓                          │
+   [Apply if not user-modified]    │
+         ↓                          │
+         └──────────┬───────────────┘
+                    ↓
+          [Update Metadata]
+                    ↓
           [Generate Code]
-                  ↓
-    [TypeScript, SQL, Angular, etc.]
 ```
 
-### Plugin Architecture
+### Key Components
 
-```typescript
-// Base class for all Advanced Generation plugins
-abstract class AdvancedGenerationPlugin {
-  abstract name: string;
-  abstract description: string;
+1. **AI Prompts** (metadata/prompts)
+   - Structured prompt definitions in JSON
+   - Template files with Nunjucks syntax
+   - Model/vendor configuration
+   - Response format validation
 
-  abstract isEnabled(config: AdvancedGeneration): boolean;
+2. **AIPromptRunner** (packages/AI/Prompts)
+   - Executes prompts with model selection
+   - Handles failover and retries
+   - Validates JSON responses
+   - Tracks execution history
 
-  abstract execute(
-    context: GenerationContext,
-    llm: BaseLLM
-  ): Promise<PluginResult>;
+3. **AdvancedGeneration** (packages/CodeGenLib)
+   - Orchestrates prompt execution
+   - Loads prompts from metadata
+   - Applies results to entity metadata
+   - Respects user modifications
 
-  // Hook for when to run (metadata, codegen, post-gen, etc.)
-  abstract runPhase: 'metadata' | 'codegen' | 'post-gen';
-}
-
-// Plugin registration system
-class AdvancedGenerationPluginRegistry {
-  private plugins: Map<string, AdvancedGenerationPlugin> = new Map();
-
-  register(plugin: AdvancedGenerationPlugin): void;
-  getPlugin(name: string): AdvancedGenerationPlugin | undefined;
-  getPluginsForPhase(phase: string): AdvancedGenerationPlugin[];
-  executePlugins(phase: string, context: GenerationContext): Promise<void>;
-}
-```
+4. **ManageMetadata** (packages/CodeGenLib)
+   - Integration point for features
+   - Calls AdvancedGeneration methods
+   - Updates database records
 
 ---
 
@@ -194,66 +168,27 @@ class AdvancedGenerationPluginRegistry {
 
 **Feature Name:** `SmartFieldIdentification`
 
-**Purpose:** Use LLM to determine which fields should be marked as name fields and default in view, based on semantic analysis of the entire entity context.
+**Purpose:** Use LLM to determine which fields should be marked as name fields and default in view.
 
 **Inputs:**
 - Entity name and description
-- All field names, types, and descriptions
+- All field names, types, descriptions
 - Relationships to other entities
-- Existing values (to detect user modifications)
 
 **Outputs:**
-- `NameField` - The human-readable identifier field
-- `DefaultInView` - What to show in dropdowns/lists
-- `SortPriority` - Logical sort order for fields
-
-**LLM Prompt Structure:**
-```json
-{
-  "systemPrompt": "You are a database metadata analyst...",
-  "userMessage": {
-    "entity": {
-      "name": "Products",
-      "description": "Catalog of products available for sale",
-      "fields": [
-        { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
-        { "name": "ProductSKU", "type": "nvarchar(50)", "description": "Stock keeping unit" },
-        { "name": "ProductTitle", "type": "nvarchar(200)", "description": "Display name for product" },
-        { "name": "InternalCode", "type": "nvarchar(20)", "description": "Internal reference code" }
-      ]
-    },
-    "task": "Determine: (1) NameField, (2) DefaultInView"
-  }
-}
-```
-
-**Expected LLM Response:**
 ```json
 {
   "nameField": "ProductTitle",
-  "nameFieldReason": "Most user-friendly identifier for display purposes",
+  "nameFieldReason": "Most user-friendly identifier",
   "defaultInView": "ProductSKU",
-  "defaultInViewReason": "Unique identifier users will recognize and search for",
-  "sortPriority": {
-    "ProductSKU": 1,
-    "ProductTitle": 2,
-    "InternalCode": 3,
-    "ID": 4
-  }
+  "defaultInViewReason": "Unique identifier users search for",
+  "confidence": "high"
 }
 ```
 
-**Implementation Location:**
-- Plugin: `/packages/CodeGenLib/src/Misc/plugins/SmartFieldIdentificationPlugin.ts`
-- Called from: `ManageMetadataBase.manageEntityFields()`
+**When to Run:** During metadata management for new entities or when explicitly requested
 
-**Protection Against Overwriting:**
-```typescript
-// Only apply if not already set by user
-if (!entityField.IsNameField && !entityField._IsNameField_UserModified) {
-  entityField.IsNameField = llmResult.nameField === entityField.Name;
-}
-```
+**Implementation:** New prompt + integration in `ManageMetadataBase.manageEntityFields()`
 
 ---
 
@@ -261,7 +196,7 @@ if (!entityField.IsNameField && !entityField._IsNameField_UserModified) {
 
 **Feature Name:** `TransitiveJoinIntelligence`
 
-**Purpose:** Automatically determine which additional fields to include when joining through junction tables or intermediate entities.
+**Purpose:** Automatically determine which additional fields to include when joining through junction tables.
 
 **Problem Scenario:**
 ```
@@ -271,166 +206,75 @@ TableX (FK: UserRoleID)
     → Role (Name)
 ```
 
-When `TableX` joins to `UserRole`, we should also bring in `User.Name` and `Role.Name` because `UserRole` is semantically meaningless without them.
+When `TableX` joins to `UserRole`, we should also bring in `User` and `Role` because `UserRole` has no semantic meaning without them.
 
 **Inputs:**
 - Source entity
-- Target entity (relationship)
-- Target entity's relationships
-- Field metadata for all involved entities
+- Target entity (relationship target)
+- Target entity's fields and relationships
+- All entities in schema (for context)
 
 **Outputs:**
-- List of additional fields to include in view
-- List of additional relationships to auto-create
-
-**LLM Prompt Structure:**
-```json
-{
-  "entity": "TableX",
-  "relationship": {
-    "targetEntity": "UserRole",
-    "foreignKey": "UserRoleID"
-  },
-  "targetEntityDetails": {
-    "name": "UserRole",
-    "fields": [
-      { "name": "ID", "type": "uniqueidentifier" },
-      { "name": "UserID", "type": "uniqueidentifier" },
-      { "name": "RoleID", "type": "uniqueidentifier" }
-    ],
-    "relationships": [
-      { "name": "User", "field": "UserID", "targetEntity": "Users" },
-      { "name": "Role", "field": "RoleID", "targetEntity": "Roles" }
-    ]
-  },
-  "task": "Determine if UserRole is a junction table and if so, which transitive fields should be included when TableX joins to it."
-}
-```
-
-**Expected LLM Response:**
 ```json
 {
   "isJunctionTable": true,
-  "reason": "UserRole has only FK fields and no meaningful data of its own",
-  "additionalFieldsToInclude": [
-    { "fieldName": "UserID", "include": true },
-    { "fieldName": "RoleID", "include": true },
-    { "fieldName": "User", "include": true, "type": "virtual" },
-    { "fieldName": "Role", "include": true, "type": "virtual" }
-  ],
-  "suggestedVirtualFields": [
+  "reason": "UserRole has only FK fields and minimal other data",
+  "additionalFields": [
     {
-      "name": "User",
-      "sourceFieldName": "UserID",
-      "targetEntity": "Users",
-      "displayField": "Name"
+      "fieldName": "User",
+      "fieldType": "virtual",
+      "includeInView": true,
+      "displayFields": ["Name", "Email"]
     },
     {
-      "name": "Role",
-      "sourceFieldName": "RoleID",
-      "targetEntity": "Roles",
-      "displayField": "Name"
+      "fieldName": "Role",
+      "fieldType": "virtual",
+      "includeInView": true,
+      "displayFields": ["Name"]
     }
-  ]
+  ],
+  "confidence": "high"
 }
 ```
 
-**Implementation:**
-- Plugin: `/packages/CodeGenLib/src/Misc/plugins/TransitiveJoinPlugin.ts`
-- Called from: `ManageMetadataBase.manageEntityRelationships()`
-- Updates: `EntityRelationship.AdditionalFieldsToInclude` (new field in metadata)
+**When to Run:** During relationship creation/update
 
-**Metadata Schema Change:**
-```sql
--- New column in __mj.EntityRelationship
-ALTER TABLE __mj.EntityRelationship
-ADD AdditionalFieldsToInclude NVARCHAR(MAX) NULL;
--- JSON array of field names to include in joins
--- Example: ["UserID", "RoleID", "User", "Role"]
-```
+**Implementation:** New prompt + integration in `ManageMetadataBase.manageEntityRelationships()`
 
 ---
 
-### 3. Form Layout Generation with Collapsible Sections
+### 3. Form Layout Generation
 
 **Feature Name:** `FormLayoutGeneration`
 
-**Purpose:** Generate modern, semantically-grouped form layouts with collapsible sections and appropriate icons, replacing the current flat tab-based approach.
-
-**Current State:**
-- Fields dumped in sequential order
-- Generic tabs with no semantic grouping
-- No visual icons or organizational structure
-
-**Target State:**
-- Logical field grouping by category
-- Collapsible sections with icons (like AI Agent form)
-- Priority-based ordering
-- Metadata-driven (stored in `EntityField.Category`)
+**Purpose:** Generate semantic field groupings with icons for modern collapsible section layouts.
 
 **Inputs:**
 - Entity name and description
 - All fields with names, types, descriptions
 - Relationships
-- Business context (if available)
 
 **Outputs:**
-- Category assignments for each field
-- Icon recommendations for each category
-- Section ordering priority
-- Recommended default expanded/collapsed state
-
-**LLM Prompt Structure:**
-```json
-{
-  "entity": {
-    "name": "Customers",
-    "description": "Customer master data",
-    "fields": [
-      { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
-      { "name": "CustomerName", "type": "nvarchar(200)", "description": "Full name" },
-      { "name": "Email", "type": "nvarchar(100)", "description": "Email address" },
-      { "name": "Phone", "type": "nvarchar(20)", "description": "Phone number" },
-      { "name": "BillingAddress", "type": "nvarchar(500)", "description": "Billing address" },
-      { "name": "PaymentMethodID", "type": "uniqueidentifier", "description": "Default payment method" },
-      { "name": "PreferredLanguage", "type": "nvarchar(10)", "description": "Language preference" },
-      { "name": "NewsletterOptIn", "type": "bit", "description": "Newsletter subscription" },
-      { "name": "__mj_CreatedAt", "type": "datetime", "description": "Record creation timestamp" },
-      { "name": "__mj_UpdatedAt", "type": "datetime", "description": "Last update timestamp" }
-    ]
-  },
-  "task": "Group these fields into logical categories with appropriate icons. Use Font Awesome icon classes (fa-solid, fa-user, etc.)"
-}
-```
-
-**Expected LLM Response:**
 ```json
 {
   "categories": [
     {
       "name": "Basic Information",
-      "icon": "fa-solid fa-user",
+      "icon": "user",
       "priority": 1,
       "defaultExpanded": true,
       "fields": ["CustomerName", "Email", "Phone"]
     },
     {
       "name": "Billing Details",
-      "icon": "fa-solid fa-credit-card",
+      "icon": "credit-card",
       "priority": 2,
       "defaultExpanded": false,
       "fields": ["BillingAddress", "PaymentMethodID"]
     },
     {
-      "name": "Preferences",
-      "icon": "fa-solid fa-sliders",
-      "priority": 3,
-      "defaultExpanded": false,
-      "fields": ["PreferredLanguage", "NewsletterOptIn"]
-    },
-    {
       "name": "System Information",
-      "icon": "fa-solid fa-info-circle",
+      "icon": "info-circle",
       "priority": 4,
       "defaultExpanded": false,
       "fields": ["ID", "__mj_CreatedAt", "__mj_UpdatedAt"]
@@ -439,418 +283,1199 @@ ADD AdditionalFieldsToInclude NVARCHAR(MAX) NULL;
 }
 ```
 
-**Implementation:**
-- Plugin: `/packages/CodeGenLib/src/Misc/plugins/FormLayoutGenerationPlugin.ts`
-- Called from: Either metadata phase OR Angular generation phase (TBD)
-- Updates: `EntityField.Category` and new `EntityFieldCategory` table (see schema below)
+**When to Run:** During metadata management (categories are semantic, not UI-specific)
 
-**Metadata Schema Changes:**
-
-```sql
--- New table for category definitions
-CREATE TABLE __mj.EntityFieldCategory (
-    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    EntityID UNIQUEIDENTIFIER NOT NULL,
-    Name NVARCHAR(100) NOT NULL,
-    Icon NVARCHAR(100) NULL,  -- Font Awesome class
-    Priority INT NOT NULL DEFAULT 100,
-    DefaultExpanded BIT NOT NULL DEFAULT 1,
-    __mj_CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
-    __mj_UpdatedAt DATETIME NOT NULL DEFAULT GETDATE(),
-    FOREIGN KEY (EntityID) REFERENCES __mj.Entity(ID)
-);
-
--- Update EntityField to reference category
-ALTER TABLE __mj.EntityField
-ADD CategoryID UNIQUEIDENTIFIER NULL,
-    FOREIGN KEY (CategoryID) REFERENCES __mj.EntityFieldCategory(ID);
-```
-
-**Angular Generation Changes:**
-
-```typescript
-// In AngularClientGeneratorBase
-protected generateFormHTML(entity: EntityInfo): string {
-  const categories = this.getCategoriesForEntity(entity);
-
-  if (categories.length > 0) {
-    return this.generateCollapsibleSectionLayout(entity, categories);
-  } else {
-    return this.generateTraditionalTabLayout(entity);
-  }
-}
-
-protected generateCollapsibleSectionLayout(
-  entity: EntityInfo,
-  categories: CategoryInfo[]
-): string {
-  return `
-    <div class="entity-form-container">
-      ${categories.map(category => `
-        <mj-collapsible-section
-          title="${category.Name}"
-          icon="${category.Icon}"
-          [defaultExpanded]="${category.DefaultExpanded}">
-          ${this.generateFieldsForCategory(entity, category)}
-        </mj-collapsible-section>
-      `).join('\n')}
-    </div>
-  `;
-}
-```
-
-**Reference Implementation:**
-- Study existing: `/packages/Angular/Explorer/core-entity-forms/src/lib/ai-agent-form/ai-agent-form.component.html`
-- Reusable component: Create `CollapsibleSectionComponent` in shared library
+**Implementation:** New prompt + new metadata tables + Angular generation updates
 
 ---
 
-### 4. Batch Processing for Efficiency
+## Prompt Design
 
-**Feature Name:** Built-in to all plugins
+### Prompt Metadata Files
 
-**Purpose:** Reduce LLM API calls by combining multiple decisions into single prompts.
+**Location:** `/metadata/prompts/`
 
-**Strategy:**
+Each feature gets a prompt definition file following MJ conventions:
 
-Instead of:
-```typescript
-// Bad: Multiple LLM calls
-for (const field of entity.Fields) {
-  const isNameField = await llm.determineNameField(field);
-  const category = await llm.determineCategory(field);
+#### Smart Field Identification Prompt
+
+**File:** `.codegen-smart-field-identification.json`
+
+```json
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Smart Field Identification",
+      "Description": "Analyzes entity structure to intelligently identify name fields and default view fields",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/smart-field-identification.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          }
+        }
+      ]
+    }
+  }
+]
+```
+
+#### Transitive Join Intelligence Prompt
+
+**File:** `.codegen-transitive-join-intelligence.json`
+
+```json
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Transitive Join Intelligence",
+      "Description": "Analyzes entity relationships to determine which additional fields should be included in transitive joins through junction tables",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/transitive-join-intelligence.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          }
+        }
+      ]
+    }
+  }
+]
+```
+
+#### Form Layout Generation Prompt
+
+**File:** `.codegen-form-layout-generation.json`
+
+```json
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Form Layout Generation",
+      "Description": "Analyzes entity fields to generate semantic categories with icons for collapsible section layouts",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/form-layout-generation.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          }
+        }
+      ]
+    }
+  }
+]
+```
+
+### Prompt Templates
+
+**Location:** `/metadata/prompts/templates/codegen/`
+
+#### Smart Field Identification Template
+
+**File:** `smart-field-identification.template.md`
+
+```markdown
+# Entity Field Analyzer
+
+You are an expert database analyst specializing in identifying the most appropriate fields for user-facing displays and semantic naming.
+
+## Your Task
+
+Analyze the provided entity structure and determine:
+1. Which field should be the **Name Field** (primary human-readable identifier)
+2. Which field should be **Default in View** (shown in dropdowns/lists)
+
+## Entity Information
+
+### Entity Name
+{{ entityName }}
+
+{% if entityDescription %}
+### Description
+{{ entityDescription }}
+{% endif %}
+
+### Fields
+{% for field in fields %}
+- **{{ field.Name }}** ({{ field.Type }}){% if field.IsNullable %} - Nullable{% endif %}
+  {% if field.Description %}
+  Description: {{ field.Description }}
+  {% endif %}
+  {% if field.IsPrimaryKey %}
+  **Primary Key**
+  {% endif %}
+  {% if field.IsUnique %}
+  **Unique**
+  {% endif %}
+{% endfor %}
+
+{% if relationships %}
+### Relationships
+{% for rel in relationships %}
+- {{ rel.Name }} → {{ rel.RelatedEntity }}
+{% endfor %}
+{% endif %}
+
+## Analysis Guidelines
+
+### Name Field Selection
+
+The Name Field should be:
+- **User-friendly** - What humans naturally call this record
+- **Readable** - Contains actual names/titles, not codes
+- **Descriptive** - Provides semantic meaning
+- **Unique or near-unique** - Helps distinguish records
+
+Good candidates:
+- Fields with "name", "title", "label" in the name
+- String fields that are UNIQUE NOT NULL
+- Fields that would appear in a heading or title
+
+Bad candidates:
+- Primary keys (UUIDs, integers)
+- Internal codes (SKU, unless that's what users actually use)
+- Technical fields (__mj_*, ID, CreatedAt)
+- Overly long text fields (descriptions, notes)
+
+### Default in View Selection
+
+The Default in View field should be:
+- **Recognizable** - What users search for or reference
+- **Unique** - Helps identify the specific record
+- **Concise** - Short enough for dropdown display
+- **Practical** - What users actually use day-to-day
+
+This might be:
+- The same as Name Field (common case)
+- A unique code if that's how users reference items (e.g., ProductSKU, OrderNumber)
+- A composite display (but single field only - we'll concatenate elsewhere if needed)
+
+## Output Format
+
+Return a JSON object with this exact structure:
+
+```json
+{
+  "nameField": "FieldName",
+  "nameFieldReason": "Brief explanation of why this field is best for human-readable identification",
+  "defaultInView": "FieldName",
+  "defaultInViewReason": "Brief explanation of why this field should appear in dropdowns",
+  "confidence": "high|medium|low"
 }
 ```
 
-Do this:
-```typescript
-// Good: Single combined call
-const prompt = `
-Analyze this entity and determine:
-1. Which field is the NameField?
-2. Which field is DefaultInView?
-3. What categories should fields be grouped into?
-4. What icons should each category have?
+### Confidence Levels
+- **high**: Clear, obvious choice (e.g., "CustomerName" in Customers table)
+- **medium**: Reasonable choice but alternatives exist (e.g., "Title" vs "Name")
+- **low**: No strong candidate, best guess (e.g., all fields are codes/IDs)
 
-Entity: ${entity.Name}
-Fields: ${JSON.stringify(entity.Fields)}
-`;
+## Important Rules
 
-const decisions = await llm.analyze(prompt);
-// Parse all decisions from single response
+- You **must** return ONLY the JSON object, no other text before or after
+- Field names must exactly match the provided field list
+- If no good candidate exists, choose the best available and explain in reason
+- Consider business context from field and entity names
+- Prefer semantic fields over technical fields
+
+## Example
+
+For entity "Products" with fields: ID, ProductSKU, ProductTitle, InternalCode, Price
+
+```json
+{
+  "nameField": "ProductTitle",
+  "nameFieldReason": "Most user-friendly identifier for display purposes - describes what the product is",
+  "defaultInView": "ProductSKU",
+  "defaultInViewReason": "Unique identifier that users recognize and search for when looking up products",
+  "confidence": "high"
+}
+```
 ```
 
-**Configuration:**
-```typescript
+#### Transitive Join Intelligence Template
+
+**File:** `transitive-join-intelligence.template.md`
+
+```markdown
+# Junction Table and Transitive Relationship Analyzer
+
+You are an expert database architect specializing in relationship analysis and view optimization.
+
+## Your Task
+
+Analyze the provided entity relationship to determine:
+1. Whether the target entity is a **junction table** (linking table with minimal semantic value)
+2. If so, which **additional fields** should be included when joining through it
+
+## Relationship Context
+
+### Source Entity
+{{ sourceEntityName }}
+
+### Target Entity (Relationship Target)
+{{ targetEntityName }}
+
+{% if targetEntityDescription %}
+**Description:** {{ targetEntityDescription }}
+{% endif %}
+
+### Target Entity Fields
+{% for field in targetFields %}
+- **{{ field.Name }}** ({{ field.Type }}){% if field.IsPrimaryKey %} - PK{% endif %}{% if field.IsForeignKey %} - FK{% endif %}
+  {% if field.Description %}
+  {{ field.Description }}
+  {% endif %}
+{% endfor %}
+
+### Target Entity Relationships
+{% for rel in targetRelationships %}
+- **{{ rel.FieldName }}** → {{ rel.RelatedEntity }}.{{ rel.RelatedEntityNameField }}
+{% endfor %}
+
+## Junction Table Detection
+
+A junction table typically has these characteristics:
+- **2+ foreign keys** to other entities
+- **Few or no other fields** beyond FKs and metadata
+- **No significant business data** of its own
+- **Name suggests linkage** (e.g., UserRole, OrderProduct, StudentCourse)
+- **Purpose is to connect** two entities in a many-to-many relationship
+
+Common patterns:
+- EntityA + EntityB (e.g., "UserRole", "ProductCategory")
+- EntityA + Verb + EntityB (e.g., "PersonOwnsAsset")
+- Just a linking concept (e.g., "Assignment", "Membership")
+
+## Analysis Guidelines
+
+### If Junction Table
+
+Recommend including:
+1. **All FK fields** - Users need to see what's linked
+2. **Virtual fields** for related entities - Include the name fields from related entities
+3. **Any status/date fields** - If junction has metadata like "AssignedDate", include it
+
+### If NOT Junction Table
+
+If the target entity has significant business data of its own (beyond just linking), it should be treated as a normal entity and no additional transitive fields are needed.
+
+## Output Format
+
+Return a JSON object with this exact structure:
+
+```json
 {
-  name: "SmartFieldIdentification",
-  enabled: true,
-  options: [
-    { name: "batchDecisions", value: true },
-    { name: "combinedWithFormLayout", value: true }
+  "isJunctionTable": true,
+  "reason": "Clear explanation of why this is or isn't a junction table",
+  "additionalFields": [
+    {
+      "fieldName": "User",
+      "fieldType": "virtual",
+      "includeInView": true,
+      "displayFields": ["Name", "Email"],
+      "reason": "Users need to see which user is linked"
+    }
+  ],
+  "confidence": "high|medium|low"
+}
+```
+
+### Field Types
+- **virtual** - Field created by CodeGen based on FK relationship
+- **existing** - Field already exists in the target entity
+
+### Confidence Levels
+- **high**: Clear junction table with obvious transitive fields needed
+- **medium**: Likely junction but could go either way
+- **low**: Uncertain, more information would help
+
+## Important Rules
+
+- You **must** return ONLY the JSON object, no other text before or after
+- If not a junction table, set `isJunctionTable: false` and `additionalFields: []`
+- Field names must be actual field names from the relationship list
+- Virtual fields should use the relationship name (e.g., "User" not "UserID")
+- Focus on fields that add semantic value to the view
+
+## Example 1: Clear Junction Table
+
+**Target Entity:** UserRole (UserID FK, RoleID FK)
+
+```json
+{
+  "isJunctionTable": true,
+  "reason": "UserRole contains only foreign keys to User and Role with no additional business data - it exists solely to link users to roles",
+  "additionalFields": [
+    {
+      "fieldName": "User",
+      "fieldType": "virtual",
+      "includeInView": true,
+      "displayFields": ["Name", "Email"],
+      "reason": "Need to see which user is assigned to the role"
+    },
+    {
+      "fieldName": "Role",
+      "fieldType": "virtual",
+      "includeInView": true,
+      "displayFields": ["Name"],
+      "reason": "Need to see which role is assigned to the user"
+    }
+  ],
+  "confidence": "high"
+}
+```
+
+## Example 2: Not a Junction Table
+
+**Target Entity:** Order (CustomerID FK, but also OrderNumber, OrderDate, TotalAmount, Status, etc.)
+
+```json
+{
+  "isJunctionTable": false,
+  "reason": "Order is a substantial business entity with significant data beyond just linking Customer to Products - it has order numbers, dates, amounts, status, and represents a real business transaction",
+  "additionalFields": [],
+  "confidence": "high"
+}
+```
+```
+
+#### Form Layout Generation Template
+
+**File:** `form-layout-generation.template.md`
+
+```markdown
+# Entity Form Layout Designer
+
+You are a UX expert specializing in data entry form design and field organization.
+
+## Your Task
+
+Analyze the provided entity and create semantic field groupings with appropriate icons for a collapsible section layout.
+
+## Entity Information
+
+### Entity Name
+{{ entityName }}
+
+{% if entityDescription %}
+### Description
+{{ entityDescription }}
+{% endif %}
+
+### Fields
+{% for field in fields %}
+- **{{ field.Name }}** ({{ field.Type }}){% if field.IsNullable %} - Nullable{% endif %}
+  {% if field.Description %}
+  {{ field.Description }}
+  {% endif %}
+  {% if field.IsPrimaryKey %}
+  **Primary Key**
+  {% endif %}
+  {% if field.IsForeignKey %}
+  **Foreign Key** → {{ field.RelatedEntity }}
+  {% endif %}
+{% endfor %}
+
+## Categorization Guidelines
+
+### Create Logical Groupings
+
+Group fields into categories that make semantic sense:
+
+1. **Basic/Core Information** - Primary identifying fields users always need
+   - Icon: `user`, `file-text`, `box`, `tag`
+   - Examples: Name, Title, Code, Status
+   - Default: Expanded
+
+2. **Contact/Communication** - Communication channels and addresses
+   - Icon: `envelope`, `phone`, `map-marker`
+   - Examples: Email, Phone, Address, Website
+   - Default: Expanded if entity is person/organization
+
+3. **Financial/Billing** - Money, payments, accounting
+   - Icon: `credit-card`, `dollar-sign`, `receipt`
+   - Examples: Price, Cost, PaymentMethod, BillingAddress
+   - Default: Collapsed
+
+4. **Dates/Timeline** - Time-related fields
+   - Icon: `calendar`, `clock`, `history`
+   - Examples: CreatedDate, ModifiedDate, DueDate, StartDate
+   - Default: Collapsed
+
+5. **Settings/Preferences** - Configuration and options
+   - Icon: `sliders`, `cog`, `toggle-on`
+   - Examples: Theme, Language, Timezone, Notifications
+   - Default: Collapsed
+
+6. **Relationships** - Foreign keys to other entities
+   - Icon: `link`, `sitemap`, `arrows-alt`
+   - Examples: CustomerID, CategoryID, AssignedTo
+   - Default: Expanded if critical, otherwise collapsed
+
+7. **Metadata/System** - Technical fields
+   - Icon: `info-circle`, `database`, `code`
+   - Examples: ID, __mj_CreatedAt, __mj_UpdatedAt, GUID
+   - Default: Collapsed
+
+### Icon Selection
+
+Use semantic, recognizable icons from Font Awesome. Format: just the icon name without prefixes.
+
+Good icons:
+- `user`, `users` - People
+- `building`, `home` - Places
+- `envelope`, `phone` - Contact
+- `credit-card`, `dollar-sign` - Financial
+- `calendar`, `clock` - Time
+- `cog`, `sliders` - Settings
+- `info-circle`, `database` - System
+- `tag`, `tags` - Categories
+- `file-text`, `file-alt` - Documents
+- `box`, `cube` - Products/Items
+
+### Priority Order
+
+1 = Highest priority (appears first)
+- Core identifying information
+- Most frequently accessed fields
+
+2-3 = Medium priority
+- Important but not always needed
+- Context-specific fields
+
+4+ = Lower priority
+- Technical fields
+- Rarely modified fields
+- System metadata
+
+### Default Expansion
+
+- **Expanded** - Categories users need immediately (core info)
+- **Collapsed** - Secondary information or rarely accessed fields
+
+## Output Format
+
+Return a JSON object with this exact structure:
+
+```json
+{
+  "categories": [
+    {
+      "name": "Basic Information",
+      "icon": "user",
+      "priority": 1,
+      "defaultExpanded": true,
+      "fields": ["CustomerName", "Email", "Phone"],
+      "reason": "Core identifying fields users need immediately"
+    }
   ]
 }
+```
+
+### Constraints
+
+- Each field must appear in exactly ONE category
+- ALL fields must be assigned to a category
+- Field names must exactly match the provided field list
+- Create 2-6 categories (not too many, not too few)
+- Icon must be a valid Font Awesome icon name (without `fa-` prefix)
+- Priority must be 1-10 (lower number = higher priority)
+
+## Important Rules
+
+- You **must** return ONLY the JSON object, no other text before or after
+- Every field in the input must appear in exactly one category
+- Use clear, user-friendly category names (not technical jargon)
+- Consider the business context from entity and field names
+- Keep related fields together
+
+## Example
+
+For entity "Customers" with fields: ID, CustomerName, Email, Phone, BillingAddress, PaymentMethodID, PreferredLanguage, NewsletterOptIn, __mj_CreatedAt, __mj_UpdatedAt
+
+```json
+{
+  "categories": [
+    {
+      "name": "Basic Information",
+      "icon": "user",
+      "priority": 1,
+      "defaultExpanded": true,
+      "fields": ["CustomerName", "Email", "Phone"],
+      "reason": "Core customer identification fields accessed most frequently"
+    },
+    {
+      "name": "Billing Details",
+      "icon": "credit-card",
+      "priority": 2,
+      "defaultExpanded": false,
+      "fields": ["BillingAddress", "PaymentMethodID"],
+      "reason": "Financial information needed for transactions but not constantly viewed"
+    },
+    {
+      "name": "Preferences",
+      "icon": "sliders",
+      "priority": 3,
+      "defaultExpanded": false,
+      "fields": ["PreferredLanguage", "NewsletterOptIn"],
+      "reason": "User preferences and settings that are configured occasionally"
+    },
+    {
+      "name": "System Information",
+      "icon": "info-circle",
+      "priority": 4,
+      "defaultExpanded": false,
+      "fields": ["ID", "__mj_CreatedAt", "__mj_UpdatedAt"],
+      "reason": "Technical metadata primarily for administrators and debugging"
+    }
+  ]
+}
+```
 ```
 
 ---
 
 ## Implementation Details
 
-### Plugin System Architecture
+### Updated AdvancedGeneration Class
 
-**File:** `/packages/CodeGenLib/src/Misc/plugins/PluginBase.ts`
-
-```typescript
-import { BaseLLM } from "@memberjunction/ai";
-import { EntityInfo } from "@memberjunction/core";
-import { AdvancedGenerationFeature } from "../../Config/config";
-
-export type GenerationPhase = 'metadata' | 'sql' | 'typescript' | 'angular' | 'graphql' | 'post-gen';
-
-export interface PluginContext {
-  entity: EntityInfo;
-  allEntities: EntityInfo[];
-  phase: GenerationPhase;
-  pool: any; // SQL connection pool
-  metadata: any; // Metadata instance
-  currentUser: any;
-}
-
-export interface PluginResult {
-  success: boolean;
-  modified: boolean;
-  changes?: any;
-  error?: string;
-}
-
-export abstract class AdvancedGenerationPlugin {
-  abstract readonly name: string;
-  abstract readonly description: string;
-  abstract readonly runPhase: GenerationPhase;
-
-  /**
-   * Check if plugin is enabled based on config
-   */
-  abstract isEnabled(feature: AdvancedGenerationFeature): boolean;
-
-  /**
-   * Execute the plugin's logic
-   */
-  abstract execute(
-    context: PluginContext,
-    llm: BaseLLM
-  ): Promise<PluginResult>;
-
-  /**
-   * Validate plugin can run (dependencies, prerequisites, etc.)
-   */
-  validate(context: PluginContext): Promise<boolean> {
-    return Promise.resolve(true);
-  }
-
-  /**
-   * Cleanup after execution
-   */
-  async cleanup(): Promise<void> {
-    // Default: no-op
-  }
-}
-```
-
-**File:** `/packages/CodeGenLib/src/Misc/plugins/PluginRegistry.ts`
+**File:** `/packages/CodeGenLib/src/Misc/advanced_generation.ts`
 
 ```typescript
+import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
+import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
-import { AdvancedGenerationPlugin, GenerationPhase, PluginContext } from "./PluginBase";
-import { BaseLLM } from "@memberjunction/ai";
-import { configInfo } from "../../Config/config";
+import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { AIPromptRunner, AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-prompts";
+import { AIPromptEntityExtended } from "@memberjunction/core-entities";
 
-export class AdvancedGenerationPluginRegistry {
-  private static _instance: AdvancedGenerationPluginRegistry;
-  private plugins: Map<string, AdvancedGenerationPlugin> = new Map();
+export type EntityNameResult = { entityName: string, tableName: string }
+export type EntityDescriptionResult = { entityDescription: string, tableName: string }
+export type SmartFieldIdentificationResult = {
+    nameField: string;
+    nameFieldReason: string;
+    defaultInView: string;
+    defaultInViewReason: string;
+    confidence: 'high' | 'medium' | 'low';
+}
+export type TransitiveJoinResult = {
+    isJunctionTable: boolean;
+    reason: string;
+    additionalFields: Array<{
+        fieldName: string;
+        fieldType: 'virtual' | 'existing';
+        includeInView: boolean;
+        displayFields?: string[];
+        reason: string;
+    }>;
+    confidence: 'high' | 'medium' | 'low';
+}
+export type FormLayoutResult = {
+    categories: Array<{
+        name: string;
+        icon: string;
+        priority: number;
+        defaultExpanded: boolean;
+        fields: string[];
+        reason: string;
+    }>;
+}
 
-  private constructor() {
-    this.discoverPlugins();
-  }
+/**
+ * Enhanced Advanced Generation system using MJ's AI Prompts architecture
+ */
+export class AdvancedGeneration {
+    private _metadata: Metadata;
+    private _promptRunner: AIPromptRunner;
+    private _promptCache: Map<string, AIPromptEntityExtended> = new Map();
 
-  public static get Instance(): AdvancedGenerationPluginRegistry {
-    if (!this._instance) {
-      this._instance = new AdvancedGenerationPluginRegistry();
+    constructor() {
+        this._metadata = new Metadata();
+        this._promptRunner = new AIPromptRunner();
     }
-    return this._instance;
-  }
 
-  /**
-   * Discover and register all plugins using ClassFactory
-   */
-  private discoverPlugins(): void {
-    // Use ClassFactory to discover all AdvancedGenerationPlugin subclasses
-    const pluginClasses = MJGlobal.Instance.ClassFactory.GetRegistrations(AdvancedGenerationPlugin);
-
-    for (const registration of pluginClasses) {
-      const plugin = MJGlobal.Instance.ClassFactory.CreateInstance<AdvancedGenerationPlugin>(
-        AdvancedGenerationPlugin,
-        registration.ClassName
-      );
-
-      if (plugin) {
-        this.plugins.set(plugin.name, plugin);
-      }
+    public get enabled(): boolean {
+        return configInfo.advancedGeneration?.enableAdvancedGeneration ?? false;
     }
-  }
 
-  /**
-   * Get all plugins for a specific phase
-   */
-  public getPluginsForPhase(phase: GenerationPhase): AdvancedGenerationPlugin[] {
-    return Array.from(this.plugins.values())
-      .filter(p => p.runPhase === phase);
-  }
+    public featureEnabled(featureName: string): boolean {
+        return this.enabled && this.getFeature(featureName)?.enabled === true;
+    }
 
-  /**
-   * Execute all enabled plugins for a phase
-   */
-  public async executePhase(
-    phase: GenerationPhase,
-    context: PluginContext,
-    llm: BaseLLM
-  ): Promise<void> {
-    const plugins = this.getPluginsForPhase(phase);
+    public getFeature(featureName: string): AdvancedGenerationFeature | undefined {
+        return configInfo.advancedGeneration?.features?.find(f => f.name === featureName);
+    }
 
-    for (const plugin of plugins) {
-      const feature = configInfo.advancedGeneration?.features?.find(
-        f => f.name === plugin.name
-      );
-
-      if (!feature || !plugin.isEnabled(feature)) {
-        continue; // Skip disabled plugins
-      }
-
-      // Validate before running
-      const valid = await plugin.validate(context);
-      if (!valid) {
-        console.warn(`Plugin ${plugin.name} validation failed, skipping`);
-        continue;
-      }
-
-      // Execute plugin
-      try {
-        const result = await plugin.execute(context, llm);
-
-        if (!result.success) {
-          console.error(`Plugin ${plugin.name} failed:`, result.error);
+    /**
+     * Load a prompt by name from metadata
+     */
+    private async getPrompt(promptName: string, contextUser: UserInfo): Promise<AIPromptEntityExtended> {
+        if (this._promptCache.has(promptName)) {
+            return this._promptCache.get(promptName)!;
         }
-      } catch (error) {
-        console.error(`Plugin ${plugin.name} threw error:`, error);
-      } finally {
-        await plugin.cleanup();
-      }
+
+        const prompt = await this._metadata.GetEntityObject<AIPromptEntityExtended>(
+            'AI Prompts',
+            contextUser
+        );
+
+        const loaded = await prompt.Load(promptName, ['MJ: AI Prompt Models']);
+        if (!loaded) {
+            throw new Error(`Prompt '${promptName}' not found`);
+        }
+
+        this._promptCache.set(promptName, prompt);
+        return prompt;
     }
-  }
+
+    /**
+     * Execute a prompt with proper error handling and timeout
+     */
+    private async executePromptWithTimeout<T>(
+        params: AIPromptParams,
+        timeoutMs: number = 10000
+    ): Promise<AIPromptRunResult<T>> {
+        const timeoutPromise = new Promise<AIPromptRunResult<T>>((_, reject) => {
+            setTimeout(() => reject(new Error('Prompt execution timeout')), timeoutMs);
+        });
+
+        try {
+            const result = await Promise.race([
+                this._promptRunner.ExecutePrompt<T>(params),
+                timeoutPromise
+            ]);
+            return result;
+        } catch (error) {
+            LogError('AdvancedGeneration', `Prompt execution failed: ${error}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Smart Field Identification - determine name field and default in view
+     */
+    public async identifyFields(
+        entity: any,
+        contextUser: UserInfo
+    ): Promise<SmartFieldIdentificationResult | null> {
+        if (!this.featureEnabled('SmartFieldIdentification')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPrompt('CodeGen: Smart Field Identification', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                entityName: entity.Name,
+                entityDescription: entity.Description,
+                fields: entity.Fields.map((f: any) => ({
+                    Name: f.Name,
+                    Type: f.Type,
+                    IsNullable: f.AllowsNull,
+                    IsPrimaryKey: f.IsPrimaryKey,
+                    IsUnique: f.IsUnique,
+                    Description: f.Description
+                })),
+                relationships: entity.RelatedEntities?.map((r: any) => ({
+                    Name: r.Name,
+                    RelatedEntity: r.RelatedEntity
+                })) || []
+            };
+            params.contextUser = contextUser;
+
+            const result = await this.executePromptWithTimeout<SmartFieldIdentificationResult>(
+                params,
+                10000 // 10 second timeout
+            );
+
+            if (result.success && result.result) {
+                LogStatus(`Smart field identification for ${entity.Name}: ${result.result.nameField} (confidence: ${result.result.confidence})`);
+                return result.result;
+            } else {
+                LogError('AdvancedGeneration', `Smart field identification failed: ${result.errorMessage}`);
+                return null;
+            }
+        } catch (error) {
+            LogError('AdvancedGeneration', `Error in identifyFields: ${error}`);
+            return null; // Graceful fallback
+        }
+    }
+
+    /**
+     * Transitive Join Intelligence - detect junction tables and recommend additional fields
+     */
+    public async analyzeTransitiveJoin(
+        sourceEntity: any,
+        targetEntity: any,
+        contextUser: UserInfo
+    ): Promise<TransitiveJoinResult | null> {
+        if (!this.featureEnabled('TransitiveJoinIntelligence')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPrompt('CodeGen: Transitive Join Intelligence', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                sourceEntityName: sourceEntity.Name,
+                targetEntityName: targetEntity.Name,
+                targetEntityDescription: targetEntity.Description,
+                targetFields: targetEntity.Fields.map((f: any) => ({
+                    Name: f.Name,
+                    Type: f.Type,
+                    IsPrimaryKey: f.IsPrimaryKey,
+                    IsForeignKey: f.EntityIDFieldName != null,
+                    Description: f.Description
+                })),
+                targetRelationships: targetEntity.RelatedEntities?.map((r: any) => ({
+                    FieldName: r.FieldName,
+                    RelatedEntity: r.RelatedEntity,
+                    RelatedEntityNameField: r.RelatedEntityNameField
+                })) || []
+            };
+            params.contextUser = contextUser;
+
+            const result = await this.executePromptWithTimeout<TransitiveJoinResult>(
+                params,
+                10000
+            );
+
+            if (result.success && result.result) {
+                LogStatus(`Transitive join analysis for ${sourceEntity.Name} → ${targetEntity.Name}: Junction=${result.result.isJunctionTable}`);
+                return result.result;
+            } else {
+                LogError('AdvancedGeneration', `Transitive join analysis failed: ${result.errorMessage}`);
+                return null;
+            }
+        } catch (error) {
+            LogError('AdvancedGeneration', `Error in analyzeTransitiveJoin: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Form Layout Generation - create semantic field categories with icons
+     */
+    public async generateFormLayout(
+        entity: any,
+        contextUser: UserInfo
+    ): Promise<FormLayoutResult | null> {
+        if (!this.featureEnabled('FormLayoutGeneration')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPrompt('CodeGen: Form Layout Generation', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                entityName: entity.Name,
+                entityDescription: entity.Description,
+                fields: entity.Fields.map((f: any) => ({
+                    Name: f.Name,
+                    Type: f.Type,
+                    IsNullable: f.AllowsNull,
+                    IsPrimaryKey: f.IsPrimaryKey,
+                    IsForeignKey: f.EntityIDFieldName != null,
+                    RelatedEntity: f.RelatedEntityName,
+                    Description: f.Description
+                }))
+            };
+            params.contextUser = contextUser;
+
+            const result = await this.executePromptWithTimeout<FormLayoutResult>(
+                params,
+                15000 // 15 seconds - more complex task
+            );
+
+            if (result.success && result.result) {
+                LogStatus(`Form layout generated for ${entity.Name}: ${result.result.categories.length} categories`);
+                return result.result;
+            } else {
+                LogError('AdvancedGeneration', `Form layout generation failed: ${result.errorMessage}`);
+                return null;
+            }
+        } catch (error) {
+            LogError('AdvancedGeneration', `Error in generateFormLayout: ${error}`);
+            return null;
+        }
+    }
 }
 ```
 
-### Example Plugin Implementation
-
-**File:** `/packages/CodeGenLib/src/Misc/plugins/SmartFieldIdentificationPlugin.ts`
-
-```typescript
-import { RegisterClass } from "@memberjunction/global";
-import { AdvancedGenerationPlugin, PluginContext, PluginResult } from "./PluginBase";
-import { BaseLLM } from "@memberjunction/ai";
-import { AdvancedGenerationFeature } from "../../Config/config";
-
-@RegisterClass(AdvancedGenerationPlugin, 'SmartFieldIdentification')
-export class SmartFieldIdentificationPlugin extends AdvancedGenerationPlugin {
-  readonly name = 'SmartFieldIdentification';
-  readonly description = 'Use LLM to intelligently identify name fields and default view fields';
-  readonly runPhase = 'metadata' as const;
-
-  isEnabled(feature: AdvancedGenerationFeature): boolean {
-    return feature.enabled === true;
-  }
-
-  async execute(context: PluginContext, llm: BaseLLM): Promise<PluginResult> {
-    const { entity } = context;
-
-    // Build prompt
-    const systemPrompt = this.getSystemPrompt();
-    const userMessage = this.buildUserMessage(entity);
-
-    // Call LLM
-    const response = await llm.ChatCompletion([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage }
-    ]);
-
-    // Parse response
-    const decisions = JSON.parse(response);
-
-    // Apply decisions (only if not user-modified)
-    let modified = false;
-    for (const field of entity.Fields) {
-      if (field.Name === decisions.nameField && !field._IsNameField_UserModified) {
-        field.IsNameField = true;
-        modified = true;
-      }
-
-      if (field.Name === decisions.defaultInView && !field._DefaultInView_UserModified) {
-        field.DefaultInView = true;
-        modified = true;
-      }
-    }
-
-    return {
-      success: true,
-      modified,
-      changes: decisions
-    };
-  }
-
-  private getSystemPrompt(): string {
-    return `You are a database metadata analyst. Analyze entity structures and determine the most appropriate fields for user identification and display.
-
-Return JSON in this exact format:
-{
-  "nameField": "FieldName",
-  "nameFieldReason": "Brief explanation",
-  "defaultInView": "FieldName",
-  "defaultInViewReason": "Brief explanation"
-}`;
-  }
-
-  private buildUserMessage(entity: any): string {
-    return `
-Entity: ${entity.Name}
-Description: ${entity.Description || 'N/A'}
-
-Fields:
-${entity.Fields.map((f: any) =>
-  `  - ${f.Name} (${f.Type}): ${f.Description || 'N/A'}`
-).join('\n')}
-
-Determine:
-1. Which field should be marked as "NameField" (human-readable identifier)?
-2. Which field should be "DefaultInView" (shown in dropdowns)?
-`;
-  }
-}
-```
-
-### Integration into CodeGen Pipeline
+### Integration into ManageMetadata
 
 **File:** `/packages/CodeGenLib/src/Database/manage-metadata.ts`
 
+Add imports:
 ```typescript
 import { AdvancedGeneration } from "../Misc/advanced_generation";
-import { AdvancedGenerationPluginRegistry } from "../Misc/plugins/PluginRegistry";
+```
 
-export class ManageMetadataBase {
+Update `manageEntityFields` method:
 
-  protected async manageEntityFields(
+```typescript
+protected async manageEntityFields(
     pool: sql.ConnectionPool,
     entity: EntityInfo,
     currentUser: any
-  ): Promise<void> {
-
+): Promise<void> {
     // ... existing field management code ...
 
-    // Execute Advanced Generation plugins for metadata phase
+    // After fields are created/updated, run advanced generation
     const ag = new AdvancedGeneration();
     if (ag.enabled) {
-      const registry = AdvancedGenerationPluginRegistry.Instance;
-      const context = {
-        entity,
-        allEntities: await this.getAllEntities(pool),
-        phase: 'metadata' as const,
-        pool,
-        metadata: this.metadata,
-        currentUser
-      };
+        try {
+            // Smart Field Identification
+            const fieldAnalysis = await ag.identifyFields(entity, currentUser);
+            if (fieldAnalysis) {
+                await this.applyFieldIdentification(entity, fieldAnalysis, pool);
+            }
 
-      await registry.executePhase('metadata', context, ag.LLM);
+            // Form Layout Generation
+            const layoutAnalysis = await ag.generateFormLayout(entity, currentUser);
+            if (layoutAnalysis) {
+                await this.applyFormLayout(entity, layoutAnalysis, pool);
+            }
+        } catch (error) {
+            // Non-fatal - log and continue
+            LogError('ManageMetadata', `Advanced generation failed for ${entity.Name}: ${error}`);
+        }
+    }
+}
+
+/**
+ * Apply smart field identification results to entity metadata
+ */
+private async applyFieldIdentification(
+    entity: EntityInfo,
+    analysis: SmartFieldIdentificationResult,
+    pool: sql.ConnectionPool
+): Promise<void> {
+    // Update NameField if not user-modified
+    const nameFieldResult = await pool.request().query(`
+        SELECT _IsNameField_UserModified
+        FROM [${mj_core_schema()}].EntityField
+        WHERE EntityID = '${entity.ID}' AND Name = '${analysis.nameField}'
+    `);
+
+    if (nameFieldResult.recordset.length > 0 &&
+        !nameFieldResult.recordset[0]._IsNameField_UserModified) {
+
+        // Clear other name fields first
+        await pool.request().query(`
+            UPDATE [${mj_core_schema()}].EntityField
+            SET IsNameField = 0
+            WHERE EntityID = '${entity.ID}' AND IsNameField = 1
+        `);
+
+        // Set new name field
+        await pool.request().query(`
+            UPDATE [${mj_core_schema()}].EntityField
+            SET IsNameField = 1
+            WHERE EntityID = '${entity.ID}' AND Name = '${analysis.nameField}'
+        `);
+
+        LogStatus(`Set name field for ${entity.Name}: ${analysis.nameField} (${analysis.nameFieldReason})`);
     }
 
-    // ... continue with field creation/update ...
-  }
+    // Similar logic for DefaultInView...
+}
+
+/**
+ * Apply form layout analysis to create categories
+ */
+private async applyFormLayout(
+    entity: EntityInfo,
+    layout: FormLayoutResult,
+    pool: sql.ConnectionPool
+): Promise<void> {
+    // Create EntityFieldCategory records
+    for (const category of layout.categories) {
+        // Check if category already exists
+        const existingCategory = await pool.request().query(`
+            SELECT ID
+            FROM [${mj_core_schema()}].EntityFieldCategory
+            WHERE EntityID = '${entity.ID}' AND Name = '${category.name}'
+        `);
+
+        let categoryId: string;
+
+        if (existingCategory.recordset.length > 0) {
+            categoryId = existingCategory.recordset[0].ID;
+
+            // Update existing category
+            await pool.request().query(`
+                UPDATE [${mj_core_schema()}].EntityFieldCategory
+                SET Icon = '${category.icon}',
+                    Priority = ${category.priority},
+                    DefaultExpanded = ${category.defaultExpanded ? 1 : 0},
+                    __mj_UpdatedAt = GETDATE()
+                WHERE ID = '${categoryId}'
+            `);
+        } else {
+            // Create new category
+            categoryId = uuidv4();
+            await pool.request().query(`
+                INSERT INTO [${mj_core_schema()}].EntityFieldCategory
+                (ID, EntityID, Name, Icon, Priority, DefaultExpanded)
+                VALUES
+                ('${categoryId}', '${entity.ID}', '${category.name}', '${category.icon}', ${category.priority}, ${category.defaultExpanded ? 1 : 0})
+            `);
+        }
+
+        // Assign fields to category (only if not user-modified)
+        for (const fieldName of category.fields) {
+            await pool.request().query(`
+                UPDATE [${mj_core_schema()}].EntityField
+                SET CategoryID = '${categoryId}'
+                WHERE EntityID = '${entity.ID}'
+                  AND Name = '${fieldName}'
+                  AND (_CategoryID_UserModified IS NULL OR _CategoryID_UserModified = 0)
+            `);
+        }
+    }
+
+    LogStatus(`Applied form layout for ${entity.Name}: ${layout.categories.length} categories created`);
+}
+```
+
+Update `manageEntityRelationships` method:
+
+```typescript
+protected async manageEntityRelationships(
+    pool: sql.ConnectionPool,
+    entity: EntityInfo,
+    currentUser: any
+): Promise<void> {
+    // ... existing relationship management code ...
+
+    // After relationships are created, analyze for transitive joins
+    const ag = new AdvancedGeneration();
+    if (ag.enabled) {
+        for (const relationship of entity.RelatedEntities) {
+            const targetEntity = await this.getEntityByName(relationship.RelatedEntity, pool);
+
+            const analysis = await ag.analyzeTransitiveJoin(entity, targetEntity, currentUser);
+            if (analysis && analysis.isJunctionTable) {
+                await this.applyTransitiveJoinAnalysis(relationship, analysis, pool);
+            }
+        }
+    }
+}
+
+/**
+ * Apply transitive join analysis to relationship metadata
+ */
+private async applyTransitiveJoinAnalysis(
+    relationship: any,
+    analysis: TransitiveJoinResult,
+    pool: sql.ConnectionPool
+): Promise<void> {
+    // Store additional fields in JSON format
+    const additionalFields = JSON.stringify(analysis.additionalFields);
+
+    await pool.request().query(`
+        UPDATE [${mj_core_schema()}].EntityRelationship
+        SET AdditionalFieldsToInclude = '${additionalFields.replace(/'/g, "''")}'
+        WHERE ID = '${relationship.ID}'
+    `);
+
+    LogStatus(`Applied transitive join analysis: ${analysis.additionalFields.length} additional fields for ${relationship.RelatedEntity}`);
 }
 ```
 
 ---
 
-## Configuration Schema Updates
+## Database Schema Changes
+
+### Migration File
+
+**File:** `migrations/v2/V202511020001__v2.x_Advanced_Generation_Metadata.sql`
+
+```sql
+-- Add user modification tracking columns to EntityField
+ALTER TABLE [${flyway:defaultSchema}].EntityField
+ADD _IsNameField_UserModified BIT NOT NULL DEFAULT 0,
+    _DefaultInView_UserModified BIT NOT NULL DEFAULT 0,
+    _CategoryID_UserModified BIT NOT NULL DEFAULT 0;
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Tracks whether IsNameField was manually set by user (1) or by system/LLM (0)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'EntityField',
+    @level2type = N'COLUMN', @level2name = '_IsNameField_UserModified';
+
+-- Create global FieldCategory table for reusable categories
+CREATE TABLE [${flyway:defaultSchema}].FieldCategory (
+    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
+    Name NVARCHAR(100) UNIQUE NOT NULL,
+    Icon NVARCHAR(100) NULL,
+    Description NVARCHAR(500) NULL,
+    __mj_CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    __mj_UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Global dictionary of field categories that can be reused across entities (e.g., Basic Information, Billing Details)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'FieldCategory';
+
+-- Create EntityFieldCategory for entity-specific category instances
+CREATE TABLE [${flyway:defaultSchema}].EntityFieldCategory (
+    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
+    EntityID UNIQUEIDENTIFIER NOT NULL,
+    CategoryID UNIQUEIDENTIFIER NULL, -- Optional link to global category
+    Name NVARCHAR(100) NOT NULL,
+    Icon NVARCHAR(100) NULL,
+    Priority INT NOT NULL DEFAULT 100,
+    DefaultExpanded BIT NOT NULL DEFAULT 1,
+    __mj_CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    __mj_UpdatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT FK_EntityFieldCategory_Entity
+        FOREIGN KEY (EntityID) REFERENCES [${flyway:defaultSchema}].Entity(ID),
+    CONSTRAINT FK_EntityFieldCategory_FieldCategory
+        FOREIGN KEY (CategoryID) REFERENCES [${flyway:defaultSchema}].FieldCategory(ID)
+);
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Entity-specific instances of field categories with display properties like icon and priority',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'EntityFieldCategory';
+
+-- Add CategoryID to EntityField
+ALTER TABLE [${flyway:defaultSchema}].EntityField
+ADD CategoryID UNIQUEIDENTIFIER NULL,
+    CONSTRAINT FK_EntityField_EntityFieldCategory
+        FOREIGN KEY (CategoryID) REFERENCES [${flyway:defaultSchema}].EntityFieldCategory(ID);
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Links field to a category for form layout grouping',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'EntityField',
+    @level2type = N'COLUMN', @level2name = 'CategoryID';
+
+-- Add transitive join metadata to EntityRelationship
+ALTER TABLE [${flyway:defaultSchema}].EntityRelationship
+ADD AdditionalFieldsToInclude NVARCHAR(MAX) NULL;
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'JSON array of additional field names to include when joining through this relationship (for junction tables)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'EntityRelationship',
+    @level2type = N'COLUMN', @level2name = 'AdditionalFieldsToInclude';
+
+-- Insert common global categories
+INSERT INTO [${flyway:defaultSchema}].FieldCategory (ID, Name, Icon, Description)
+VALUES
+    (NEWID(), 'Basic Information', 'user', 'Core identifying fields'),
+    (NEWID(), 'Contact Information', 'envelope', 'Communication channels and addresses'),
+    (NEWID(), 'Financial Information', 'credit-card', 'Money, payments, and billing'),
+    (NEWID(), 'Dates and Timeline', 'calendar', 'Time-related fields'),
+    (NEWID(), 'Settings and Preferences', 'sliders', 'Configuration and user preferences'),
+    (NEWID(), 'Relationships', 'link', 'Foreign keys to other entities'),
+    (NEWID(), 'System Metadata', 'info-circle', 'Technical fields and audit information');
+```
+
+---
+
+## Configuration
+
+### CodeGen Config Update
 
 **File:** `/packages/CodeGenLib/src/Config/config.ts`
 
 ```typescript
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
-  enableAdvancedGeneration: z.boolean().default(true),
-  AIVendor: z.enum(['openai', 'anthropic', 'mistral', 'groq']).default('anthropic'),
-  AIModel: z.string().default('claude-sonnet-4'),
+  enableAdvancedGeneration: z.boolean().default(false),
 
   features: advancedGenerationFeatureSchema.array().default([
-    // Existing features
     {
       name: 'EntityNames',
       description: 'Use AI to generate better entity names when creating new entities',
@@ -862,283 +1487,58 @@ const advancedGenerationSchema = z.object({
       enabled: false,
     },
     {
-      name: 'CheckConstraintParser',
-      description: 'Parse CHECK constraints into TypeScript validation code',
-      enabled: false,
-    },
-
-    // NEW FEATURES
-    {
       name: 'SmartFieldIdentification',
       description: 'Intelligently identify name fields and default view fields using semantic analysis',
       enabled: false,
-      options: [
-        { name: 'batchDecisions', value: true },
-        { name: 'respectUserModifications', value: true }
-      ]
     },
     {
       name: 'TransitiveJoinIntelligence',
-      description: 'Automatically determine additional fields to include for transitive relationships',
+      description: 'Automatically determine additional fields to include for transitive relationships through junction tables',
       enabled: false,
-      options: [
-        { name: 'detectJunctionTables', value: true },
-        { name: 'maxDepth', value: 2 } // How many levels deep to traverse
-      ]
     },
     {
       name: 'FormLayoutGeneration',
       description: 'Generate modern form layouts with collapsible sections and icons',
       enabled: false,
-      options: [
-        { name: 'useCollapsibleSections', value: true },
-        { name: 'generateIcons', value: true },
-        { name: 'iconLibrary', value: 'font-awesome' }
-      ]
     }
   ]),
 
-  // NEW: Plugin-specific settings
-  pluginSettings: z.object({
-    allowReanalysis: z.boolean().default(false), // Re-run on existing entities
-    respectUserModifications: z.boolean().default(true),
-    batchProcessing: z.boolean().default(true),
-    maxBatchSize: z.number().default(10),
-  }).nullish(),
+  // Settings
+  allowReanalysis: z.boolean().default(false), // Re-run on existing entities
+  timeout: z.number().default(10000), // 10 seconds per prompt
+  fallbackToHeuristics: z.boolean().default(true), // Use heuristics if LLM fails
 });
 ```
 
-**Example Configuration File:**
+### Example mj.config.cjs
 
 ```javascript
-// mj.config.cjs
 module.exports = {
   // ... existing config ...
 
   advancedGeneration: {
     enableAdvancedGeneration: true,
-    AIVendor: 'anthropic',
-    AIModel: 'claude-sonnet-4',
 
     features: [
       {
         name: 'SmartFieldIdentification',
-        enabled: true,
-        options: [
-          { name: 'batchDecisions', value: true }
-        ]
+        enabled: true
       },
       {
         name: 'TransitiveJoinIntelligence',
-        enabled: true,
-        options: [
-          { name: 'maxDepth', value: 2 }
-        ]
+        enabled: true
       },
       {
         name: 'FormLayoutGeneration',
-        enabled: true,
-        options: [
-          { name: 'useCollapsibleSections', value: true },
-          { name: 'generateIcons', value: true }
-        ]
+        enabled: true
       }
     ],
 
-    pluginSettings: {
-      allowReanalysis: false, // Only run on new entities
-      respectUserModifications: true,
-      batchProcessing: true
-    }
+    allowReanalysis: false, // Only run on new entities
+    timeout: 15000, // 15 seconds
+    fallbackToHeuristics: true
   }
 };
-```
-
----
-
-## Plugin System Design
-
-### Directory Structure
-
-```
-packages/CodeGenLib/src/Misc/
-├── advanced_generation.ts          # Existing base class
-└── plugins/
-    ├── PluginBase.ts               # Abstract base class
-    ├── PluginRegistry.ts           # Discovery and execution
-    ├── SmartFieldIdentificationPlugin.ts
-    ├── TransitiveJoinPlugin.ts
-    ├── FormLayoutGenerationPlugin.ts
-    └── index.ts                    # Exports
-```
-
-### Plugin Lifecycle
-
-```
-1. Discovery Phase (on CodeGen startup)
-   ↓
-   [PluginRegistry scans ClassFactory]
-   ↓
-   [Finds all @RegisterClass(AdvancedGenerationPlugin) classes]
-   ↓
-   [Stores in registry Map]
-
-2. Execution Phase (during CodeGen pipeline)
-   ↓
-   [CodeGen reaches a phase: 'metadata', 'sql', 'angular', etc.]
-   ↓
-   [Registry.executePhase(phase) called]
-   ↓
-   [Get all plugins for that phase]
-   ↓
-   [Filter: only enabled plugins]
-   ↓
-   [For each plugin:]
-     ↓
-     [Validate prerequisites]
-     ↓
-     [Execute plugin.execute(context, llm)]
-     ↓
-     [Handle result/errors]
-     ↓
-     [Cleanup]
-
-3. Post-Execution
-   ↓
-   [Continue with normal CodeGen flow]
-```
-
-### Plugin Registration Pattern
-
-```typescript
-// Each plugin auto-registers via decorator
-@RegisterClass(AdvancedGenerationPlugin, 'MyCustomPlugin')
-export class MyCustomPlugin extends AdvancedGenerationPlugin {
-  // Implementation
-}
-
-// Discovery happens automatically via ClassFactory
-// No manual registration needed!
-```
-
-### Adding New Plugins (Developer Guide)
-
-To add a new plugin in the future:
-
-1. **Create plugin file:**
-   ```typescript
-   // packages/CodeGenLib/src/Misc/plugins/MyFeaturePlugin.ts
-   import { RegisterClass } from "@memberjunction/global";
-   import { AdvancedGenerationPlugin, PluginContext, PluginResult } from "./PluginBase";
-
-   @RegisterClass(AdvancedGenerationPlugin, 'MyFeature')
-   export class MyFeaturePlugin extends AdvancedGenerationPlugin {
-     readonly name = 'MyFeature';
-     readonly description = 'What my feature does';
-     readonly runPhase = 'metadata'; // or 'sql', 'angular', etc.
-
-     isEnabled(feature) { return feature.enabled; }
-
-     async execute(context, llm) {
-       // Your logic here
-       return { success: true, modified: false };
-     }
-   }
-   ```
-
-2. **Add to config schema:**
-   ```typescript
-   // In config.ts features array
-   {
-     name: 'MyFeature',
-     description: 'What my feature does',
-     enabled: false
-   }
-   ```
-
-3. **Export from index:**
-   ```typescript
-   // plugins/index.ts
-   export * from './MyFeaturePlugin';
-   ```
-
-4. **Done!** Plugin auto-discovered and available.
-
----
-
-## Migration and Backwards Compatibility
-
-### Database Schema Migration
-
-**File:** `migrations/v2/VYYYYMMDDHHmm__v2.x_Advanced_Generation_Metadata.sql`
-
-```sql
--- Add user modification tracking columns to EntityField
-ALTER TABLE [${flyway:defaultSchema}].EntityField
-ADD _IsNameField_UserModified BIT NOT NULL DEFAULT 0,
-    _DefaultInView_UserModified BIT NOT NULL DEFAULT 0,
-    CategoryID UNIQUEIDENTIFIER NULL;
-
--- Create EntityFieldCategory table
-CREATE TABLE [${flyway:defaultSchema}].EntityFieldCategory (
-    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    EntityID UNIQUEIDENTIFIER NOT NULL,
-    Name NVARCHAR(100) NOT NULL,
-    Icon NVARCHAR(100) NULL,
-    Priority INT NOT NULL DEFAULT 100,
-    DefaultExpanded BIT NOT NULL DEFAULT 1,
-    __mj_CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
-    __mj_UpdatedAt DATETIME NOT NULL DEFAULT GETDATE(),
-    CONSTRAINT FK_EntityFieldCategory_Entity
-        FOREIGN KEY (EntityID) REFERENCES [${flyway:defaultSchema}].Entity(ID)
-);
-
--- Add foreign key for Category
-ALTER TABLE [${flyway:defaultSchema}].EntityField
-ADD CONSTRAINT FK_EntityField_Category
-    FOREIGN KEY (CategoryID) REFERENCES [${flyway:defaultSchema}].EntityFieldCategory(ID);
-
--- Add transitive join metadata
-ALTER TABLE [${flyway:defaultSchema}].EntityRelationship
-ADD AdditionalFieldsToInclude NVARCHAR(MAX) NULL;
-
-EXEC sys.sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'JSON array of additional field names to include when joining through this relationship',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'EntityRelationship',
-    @level2type = N'COLUMN', @level2name = 'AdditionalFieldsToInclude';
-```
-
-### Backwards Compatibility Strategy
-
-**No Breaking Changes:**
-- All new features are opt-in via configuration
-- Existing CodeGen behavior unchanged when features disabled
-- New database columns allow NULL
-- Tracking columns default to 0 (not user-modified)
-
-**Safe Defaults:**
-```typescript
-// In config.ts - all new features default to disabled
-features: [
-  {
-    name: 'SmartFieldIdentification',
-    enabled: false, // Must explicitly enable
-  }
-]
-```
-
-**Fallback Behavior:**
-```typescript
-// In plugin execution
-if (ag.featureEnabled('SmartFieldIdentification')) {
-  // Use LLM-based detection
-  return await smartDetection(entity);
-} else {
-  // Use existing heuristic
-  return entity.Fields.find(f => f.Name === 'Name');
-}
 ```
 
 ---
@@ -1147,72 +1547,116 @@ if (ag.featureEnabled('SmartFieldIdentification')) {
 
 ### Unit Tests
 
-**File:** `/packages/CodeGenLib/src/__tests__/plugins/SmartFieldIdentification.test.ts`
+**File:** `/packages/CodeGenLib/src/__tests__/advanced-generation.test.ts`
 
 ```typescript
-describe('SmartFieldIdentificationPlugin', () => {
-  let plugin: SmartFieldIdentificationPlugin;
-  let mockLLM: jest.Mocked<BaseLLM>;
+describe('AdvancedGeneration', () => {
+  let ag: AdvancedGeneration;
+  let mockContextUser: UserInfo;
 
   beforeEach(() => {
-    plugin = new SmartFieldIdentificationPlugin();
-    mockLLM = createMockLLM();
+    ag = new AdvancedGeneration();
+    mockContextUser = createMockUser();
   });
 
-  test('identifies correct name field from LLM response', async () => {
-    // Arrange
-    mockLLM.ChatCompletion.mockResolvedValue(JSON.stringify({
-      nameField: 'ProductTitle',
-      defaultInView: 'ProductSKU'
-    }));
-
-    const context = createMockContext({
-      entity: {
+  describe('Smart Field Identification', () => {
+    test('identifies name field correctly for standard entity', async () => {
+      const entity = {
         Name: 'Products',
         Fields: [
-          { Name: 'ID', Type: 'uniqueidentifier' },
-          { Name: 'ProductSKU', Type: 'nvarchar(50)' },
+          { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
+          { Name: 'ProductSKU', Type: 'nvarchar(50)', IsUnique: true },
           { Name: 'ProductTitle', Type: 'nvarchar(200)' }
         ]
-      }
+      };
+
+      const result = await ag.identifyFields(entity, mockContextUser);
+
+      expect(result).not.toBeNull();
+      expect(result?.nameField).toBe('ProductTitle');
+      expect(result?.defaultInView).toBe('ProductSKU');
+      expect(result?.confidence).toBe('high');
     });
 
-    // Act
-    const result = await plugin.execute(context, mockLLM);
+    test('handles timeout gracefully', async () => {
+      // Mock slow LLM response
+      jest.spyOn(ag as any, 'executePromptWithTimeout')
+        .mockRejectedValue(new Error('Timeout'));
 
-    // Assert
-    expect(result.success).toBe(true);
-    expect(result.modified).toBe(true);
-    expect(context.entity.Fields[2].IsNameField).toBe(true);
-    expect(context.entity.Fields[1].DefaultInView).toBe(true);
+      const result = await ag.identifyFields(mockEntity, mockContextUser);
+
+      expect(result).toBeNull(); // Graceful fallback
+    });
   });
 
-  test('respects user modifications', async () => {
-    // Test that fields with _UserModified flag are not changed
-  });
+  describe('Transitive Join Intelligence', () => {
+    test('detects junction table correctly', async () => {
+      const sourceEntity = { Name: 'Tasks' };
+      const targetEntity = {
+        Name: 'UserRole',
+        Fields: [
+          { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
+          { Name: 'UserID', Type: 'uniqueidentifier', EntityIDFieldName: 'UserID' },
+          { Name: 'RoleID', Type: 'uniqueidentifier', EntityIDFieldName: 'RoleID' }
+        ],
+        RelatedEntities: [
+          { FieldName: 'UserID', RelatedEntity: 'Users' },
+          { FieldName: 'RoleID', RelatedEntity: 'Roles' }
+        ]
+      };
 
-  test('handles LLM errors gracefully', async () => {
-    // Test error handling when LLM fails
+      const result = await ag.analyzeTransitiveJoin(
+        sourceEntity,
+        targetEntity,
+        mockContextUser
+      );
+
+      expect(result?.isJunctionTable).toBe(true);
+      expect(result?.additionalFields.length).toBeGreaterThan(0);
+    });
   });
 });
 ```
 
-### Integration Tests
+### Integration Tests with Real LLMs
 
-**File:** `/packages/CodeGenLib/src/__tests__/integration/plugin-pipeline.test.ts`
+**File:** `/packages/CodeGenLib/src/__tests__/integration/llm-prompts.test.ts`
 
 ```typescript
-describe('Plugin Pipeline Integration', () => {
-  test('executes all metadata phase plugins in order', async () => {
-    // Test full pipeline execution
+describe('Advanced Generation Prompts (Integration)', () => {
+  // These tests require actual LLM API keys
+  // Only run in CI/CD with proper environment variables
+
+  const runner = new AIPromptRunner();
+
+  test('Smart Field Identification prompt produces valid JSON', async () => {
+    const prompt = await loadPrompt('CodeGen: Smart Field Identification');
+    const params = new AIPromptParams();
+    params.prompt = prompt;
+    params.data = {
+      entityName: 'Customers',
+      fields: [
+        { Name: 'ID', Type: 'uniqueidentifier' },
+        { Name: 'CustomerName', Type: 'nvarchar(200)' },
+        { Name: 'Email', Type: 'nvarchar(100)' }
+      ]
+    };
+
+    const result = await runner.ExecutePrompt(params);
+
+    expect(result.success).toBe(true);
+    expect(result.result).toHaveProperty('nameField');
+    expect(result.result).toHaveProperty('defaultInView');
+    expect(result.result).toHaveProperty('confidence');
   });
 
-  test('skips disabled plugins', async () => {
-    // Test configuration filtering
-  });
-
-  test('handles plugin failures without breaking pipeline', async () => {
-    // Test error isolation
+  // Snapshot testing for prompt stability
+  test('Smart Field Identification prompt matches snapshot', () => {
+    const template = fs.readFileSync(
+      'metadata/prompts/templates/codegen/smart-field-identification.template.md',
+      'utf-8'
+    );
+    expect(template).toMatchSnapshot();
   });
 });
 ```
@@ -1221,153 +1665,80 @@ describe('Plugin Pipeline Integration', () => {
 
 - [ ] Create new entity with non-standard name field (e.g., `ProductSKU`)
 - [ ] Verify LLM correctly identifies name field
-- [ ] Manually set a name field, verify not overwritten
-- [ ] Create entity with junction table relationship
-- [ ] Verify transitive fields added to view
+- [ ] Manually set a name field in database, set `_IsNameField_UserModified = 1`
+- [ ] Verify LLM does NOT overwrite user-modified field
+- [ ] Create entity with junction table relationship (e.g., TaskAssignments)
+- [ ] Verify transitive fields are identified
 - [ ] Check generated Angular form has collapsible sections
 - [ ] Verify icons display correctly
 - [ ] Disable features, verify fallback to heuristics
-- [ ] Test with different LLM vendors (OpenAI, Anthropic, etc.)
-- [ ] Performance test: batch processing vs. individual calls
+- [ ] Test timeout scenario (mock slow LLM)
+- [ ] Verify prompt execution tracking in `MJ: AI Prompt Runs`
 
 ---
 
 ## Timeline and Phases
 
-### Phase 1: Foundation (Week 1-2)
+### Phase 1: Infrastructure (Days 1-3)
 
 **Goals:**
-- ✅ Plugin system architecture
-- ✅ Registry and discovery mechanism
-- ✅ Integration points in CodeGen pipeline
-- ✅ Configuration schema updates
-- ✅ Database migrations
+- Create prompt metadata files
+- Create prompt templates
+- Update AdvancedGeneration class
+- Database migrations
 
 **Deliverables:**
-- `PluginBase.ts` and `PluginRegistry.ts`
-- Updated `config.ts` with new feature definitions
-- Migration SQL for metadata changes
-- Unit tests for plugin system
+- 3 prompt JSON files in `/metadata/prompts`
+- 3 prompt template files in `/metadata/prompts/templates/codegen`
+- Updated `AdvancedGeneration.ts` with `AIPromptRunner` integration
+- Migration SQL file
 
-### Phase 2: Smart Field Identification (Week 2-3)
+### Phase 2: Smart Field Identification (Days 4-5)
 
 **Goals:**
-- ✅ Implement `SmartFieldIdentificationPlugin`
-- ✅ LLM prompts and response parsing
-- ✅ User modification tracking
-- ✅ Integration with metadata management
+- Integration into `manage-metadata.ts`
+- User modification tracking
+- Unit tests
 
 **Deliverables:**
-- Working plugin that identifies name fields
-- Tests and documentation
+- Working smart field identification
+- Tests passing
 - Example configurations
 
-### Phase 3: Transitive Join Intelligence (Week 3-4)
+### Phase 3: Transitive Join Intelligence (Days 6-7)
 
 **Goals:**
-- ✅ Implement `TransitiveJoinPlugin`
-- ✅ Junction table detection logic
-- ✅ Additional field metadata storage
-- ✅ SQL view generation updates
+- Junction table detection
+- Additional field metadata storage
+- SQL view generation updates (if needed)
 
 **Deliverables:**
-- Plugin that adds transitive fields
-- Updated SQL generation to use metadata
+- Working transitive join analysis
 - Tests for complex relationship scenarios
 
-### Phase 4: Form Layout Generation (Week 4-6)
+### Phase 4: Form Layout Generation (Days 8-10)
 
 **Goals:**
-- ✅ Implement `FormLayoutGenerationPlugin`
-- ✅ Category and icon generation
-- ✅ Collapsible section component
-- ✅ Angular generation updates
+- Category generation and storage
+- Angular collapsible section component
+- Angular generation updates
 
 **Deliverables:**
-- Plugin that generates form categories
+- Category metadata in database
 - Reusable Angular component
 - Updated Angular generator
-- Migration of existing forms (optional)
 
-### Phase 5: Refinement and Documentation (Week 6-7)
+### Phase 5: Testing and Documentation (Days 11-12)
 
 **Goals:**
-- ✅ Performance optimization (batching)
-- ✅ Error handling improvements
-- ✅ Comprehensive documentation
-- ✅ Example configurations
+- Integration tests with real LLMs
+- Performance testing
+- Documentation updates
 
 **Deliverables:**
-- Optimized plugin execution
-- Developer guide for adding plugins
-- User guide for configuration
-- Real-world examples
-
----
-
-## Future Extensibility
-
-### Potential Future Plugins
-
-**1. RelationshipSuggestionPlugin**
-- Analyze schema and suggest missing relationships
-- Detect denormalization opportunities
-- Recommend indexes based on query patterns
-
-**2. ValidationRuleGenerationPlugin**
-- Beyond CHECK constraints
-- Business rule inference from field names/types
-- Cross-field validation suggestions
-
-**3. SecurityPolicyPlugin**
-- Suggest role-based permissions
-- Detect PII fields and recommend encryption
-- Generate audit trail recommendations
-
-**4. PerformanceOptimizationPlugin**
-- Suggest indexes based on relationships
-- Detect N+1 query patterns
-- Recommend caching strategies
-
-**5. DocumentationGenerationPlugin**
-- Generate comprehensive entity documentation
-- Create ER diagrams automatically
-- Build API documentation
-
-**6. TestDataGenerationPlugin**
-- Generate realistic test data
-- Respect constraints and relationships
-- Create data migration scripts
-
-### Plugin Hooks (Future)
-
-```typescript
-// Pre/post hooks for plugins
-export abstract class AdvancedGenerationPlugin {
-  async beforeExecute?(context: PluginContext): Promise<void>;
-  async afterExecute?(result: PluginResult): Promise<void>;
-  async onError?(error: Error): Promise<void>;
-}
-```
-
-### Plugin Dependencies (Future)
-
-```typescript
-export abstract class AdvancedGenerationPlugin {
-  // Declare dependencies on other plugins
-  readonly dependencies?: string[];
-
-  // Example:
-  dependencies = ['SmartFieldIdentification']; // Must run first
-}
-```
-
-### Plugin Configuration UI (Future)
-
-- Web-based configuration editor
-- Real-time preview of LLM suggestions
-- Approval workflow for metadata changes
-- Rollback capability
+- Full test suite
+- Developer guide
+- Configuration examples
 
 ---
 
@@ -1376,34 +1747,42 @@ export abstract class AdvancedGenerationPlugin {
 ### Risk: LLM Hallucinations
 
 **Mitigation:**
-- Always validate LLM responses against schema
-- Provide rollback mechanism
-- User approval for significant changes
-- Logging of all LLM decisions
+- JSON validation in `AIPromptRunner`
+- Confidence scoring in responses
+- User can review and modify results
+- Track changes via `_UserModified` flags
 
 ### Risk: Performance Impact
 
 **Mitigation:**
-- Batch processing by default
-- Caching of LLM responses
-- Optional features (can disable)
-- Parallel plugin execution where possible
+- 10-15 second timeout per prompt
+- Graceful fallback to heuristics on failure
+- Only run on new entities by default
+- Skip if `advancedGeneration.enabled = false`
 
 ### Risk: API Costs
 
 **Mitigation:**
-- Batch decisions to minimize calls
-- Cache results for similar entities
-- Configuration option to limit LLM usage
-- Fallback to heuristics on error
+- GPT-OSS-120B via Groq/Cerebras is cheap ($0.13-0.30 per 1M tokens)
+- Typical entity = ~1K tokens = $0.0001-0.0003 per entity
+- 200 entities × 3 prompts = ~$0.20 per full CodeGen run
+- Option to disable features individually
+
+### Risk: Prompt Quality
+
+**Mitigation:**
+- Detailed prompt templates with examples
+- Snapshot testing to detect regressions
+- Integration tests with real LLMs in CI/CD
+- Easy to update templates via metadata system
 
 ### Risk: Breaking Changes
 
 **Mitigation:**
-- All features opt-in
+- All features opt-in via config
+- Database columns allow NULL
 - User modification tracking prevents overwrites
-- Comprehensive testing
-- Migration guides
+- Fallback to heuristics if LLM unavailable
 
 ---
 
@@ -1411,43 +1790,56 @@ export abstract class AdvancedGenerationPlugin {
 
 ### Quantitative Metrics
 
-- **Accuracy:** % of name fields correctly identified (target: >90%)
-- **Performance:** Time to run CodeGen with features enabled vs. disabled (target: <20% increase)
-- **API Usage:** Number of LLM calls per entity (target: <3 calls via batching)
-- **Adoption:** % of entities using generated categories (track over time)
+- **Accuracy**: % of name fields correctly identified (target: >85%)
+- **Performance**: Additional time per entity with features enabled (target: <5 seconds)
+- **API Cost**: Average cost per CodeGen run (target: <$0.50)
+- **Adoption**: % of entities with LLM-generated categories after 3 months
 
 ### Qualitative Metrics
 
-- **Developer Feedback:** Survey on ease of adding new plugins
-- **User Satisfaction:** Feedback on generated form layouts
-- **Code Quality:** Review of generated code vs. manual code
-- **Extensibility:** Number of custom plugins created by users
+- **Developer Feedback**: Survey on usefulness of smart field identification
+- **User Satisfaction**: Feedback on generated form layouts
+- **Time Savings**: Reduced manual metadata configuration time
 
 ---
 
 ## Conclusion
 
-This plan provides a comprehensive, extensible architecture for adding LLM-powered intelligence to MemberJunction's CodeGen system. The plugin-based approach ensures:
+This updated plan uses MemberJunction's established AI Prompts architecture for a clean, maintainable implementation. The approach is:
 
-✅ **Backwards Compatibility** - Existing functionality preserved
-✅ **Opt-In Features** - Users choose what to enable
-✅ **Extensibility** - Easy to add new capabilities
-✅ **Performance** - Batching and caching minimize overhead
-✅ **Safety** - User modifications protected
-✅ **Future-Proof** - Foundation for many advanced features
-
-The implementation follows MemberJunction's existing patterns (ClassFactory, RegisterClass, Zod config) and integrates seamlessly into the current CodeGen pipeline.
+✅ **Architecture-compliant** - Uses `AIPromptRunner`, metadata-driven prompts
+✅ **Simple** - No complex plugin system, direct integration
+✅ **Cost-effective** - GPT-OSS-120B via Groq/Cerebras
+✅ **Backwards Compatible** - Opt-in, graceful fallbacks
+✅ **Testable** - Unit tests, integration tests, snapshot tests
+✅ **Safe** - User modification tracking, timeouts, error handling
 
 ---
 
-## Appendix: References
+## Appendix: File Locations
 
-- **Existing AdvancedGeneration:** `/packages/CodeGenLib/src/Misc/advanced_generation.ts`
-- **Metadata Management:** `/packages/CodeGenLib/src/Database/manage-metadata.ts`
-- **Config Schema:** `/packages/CodeGenLib/src/Config/config.ts`
-- **Angular Forms Example:** `/packages/Angular/Explorer/core-entity-forms/src/lib/ai-agent-form/`
-- **ClassFactory Pattern:** `/packages/MJGlobal/src/`
+**Prompts:**
+- `/metadata/prompts/.codegen-smart-field-identification.json`
+- `/metadata/prompts/.codegen-transitive-join-intelligence.json`
+- `/metadata/prompts/.codegen-form-layout-generation.json`
+
+**Templates:**
+- `/metadata/prompts/templates/codegen/smart-field-identification.template.md`
+- `/metadata/prompts/templates/codegen/transitive-join-intelligence.template.md`
+- `/metadata/prompts/templates/codegen/form-layout-generation.template.md`
+
+**Code:**
+- `/packages/CodeGenLib/src/Misc/advanced_generation.ts`
+- `/packages/CodeGenLib/src/Database/manage-metadata.ts`
+- `/packages/CodeGenLib/src/Config/config.ts`
+
+**Migrations:**
+- `/migrations/v2/V202511020001__v2.x_Advanced_Generation_Metadata.sql`
 
 ---
 
-**Next Steps:** Review this plan, discuss any modifications, then proceed with Phase 1 implementation.
+**Next Steps:**
+1. Review plan
+2. Implement Phase 1 (infrastructure)
+3. Test with real prompts
+4. Iterate based on results
