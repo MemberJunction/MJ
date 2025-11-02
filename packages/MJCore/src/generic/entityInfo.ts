@@ -6,6 +6,7 @@ import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityIn
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
+import { DeprecationWarningManager } from "./deprecationTracker"
 
 /**
  * The possible status values for a record change
@@ -700,8 +701,12 @@ export class EntityFieldInfo extends BaseInfo {
         }
 
         if (entityField.Status?.trim().toLowerCase() === 'deprecated') {
-            // warning
-            console.warn(`${callerName}: Entity Field ${entityField.Entity}.${entityField.Name} is deprecated and should not be used as it could be removed in the future.`);
+            // Record deprecation warning - will be batched and displayed after debounce period
+            DeprecationWarningManager.Instance.RecordFieldWarning(
+                entityField.Entity,
+                entityField.Name,
+                callerName
+            );
         }
         else if (entityField.Status?.trim().toLowerCase() === 'disabled') {
             // console.error and throw the exception
@@ -1193,8 +1198,11 @@ export class EntityInfo extends BaseInfo {
             throw new Error(`Entity must be provided to call AssertEntityActiveStatus. Caller: ${callerName}`);
         }
         if (entity.Status?.trim().toLowerCase() === 'deprecated') {
-            // warning
-            console.warn(`${callerName}: Entity ${entity.Name} is deprecated and should not be used as it could be removed in the future.`);
+            // Record deprecation warning - will be batched and displayed after debounce period
+            DeprecationWarningManager.Instance.RecordEntityWarning(
+                entity.Name,
+                callerName
+            );
         }
         else if (entity.Status?.trim().toLowerCase() === 'disabled') {
             // console.error and throw the exception
