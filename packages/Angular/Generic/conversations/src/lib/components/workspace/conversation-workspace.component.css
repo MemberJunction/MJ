@@ -145,6 +145,30 @@
   }
 }
 
+/* Desktop sidebar toggle animation */
+@media (min-width: 769px) {
+  .workspace-sidebar {
+    transition: width 0.3s ease, min-width 0.3s ease;
+    overflow: hidden;
+  }
+
+  .workspace-sidebar:not(.open) {
+    width: 0 !important;
+    min-width: 0;
+    border-right: none;
+  }
+
+  .sidebar-resize-handle {
+    transition: opacity 0.3s ease, width 0.3s ease;
+  }
+
+  .workspace-sidebar:not(.open) ~ .sidebar-resize-handle {
+    opacity: 0;
+    width: 0;
+    pointer-events: none;
+  }
+}
+
 /* Mobile adjustments: 481px - 768px */
 @media (max-width: 768px) {
   .workspace-sidebar {
@@ -206,4 +230,27 @@
   .workspace-sidebar {
     width: 100%;
   }
+}
+
+/* Loading spinner (shown while initializing agents) */
+.workspace-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+  background: #FFF;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  font-size: 3rem;
+  color: #0078d4;
+}
+
+.workspace-loading p {
+  font-size: 1rem;
+  color: #666;
+  margin: 0;
 }

@@ -16,6 +16,7 @@ import { ConversationStateService } from '../../services/conversation-state.serv
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
@@ -101,6 +102,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isSidebarVisible: boolean = true;
   public isArtifactPanelOpen: boolean = false;
   public isSearchPanelOpen: boolean = false;
+  public isWorkspaceReady: boolean = false;
   public renamedConversationId: string | null = null;
   public activeArtifactId: string | null = null;
   public activeVersionNumber: number | null = null;
@@ -145,6 +147,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
+    private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private cdr: ChangeDetectorRef
   ) {
@@ -167,13 +170,27 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
 
-    // Initialize AI Engine to load agent metadata cache
-    // This ensures agent names and icons are available for display
+    // CRITICAL: Initialize AI Engine FIRST before rendering any UI
+    // The isWorkspaceReady flag blocks all child components from rendering
+    // until agents are fully loaded and ready
     try {
       await AIEngineBase.Instance.Config(false);
       console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+
+      // Initialize mention autocomplete service immediately after AI engine
+      // This ensures the cache is built from the fully-loaded agent list
+      await this.mentionAutocompleteService.initialize(this.currentUser);
+      console.log('✅ Mention autocomplete initialized');
+
+      // Mark workspace as ready - this allows UI to render
+      this.isWorkspaceReady = true;
+      this.cdr.detectChanges();
+      console.log('✅ Workspace ready - UI can now render');
     } catch (error) {
       console.error('❌ Failed to initialize AI Engine:', error);
+      // Still mark as ready so UI isn't blocked forever
+      this.isWorkspaceReady = true;
+      this.cdr.detectChanges();
     }
 
     // Subscribe to artifact panel state
@@ -390,6 +407,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   async onRefreshAgentCache(): Promise<void> {
     try {
       await AIEngineBase.Instance.Config(true);
+
+      // Refresh the mention autocomplete service to pick up new agents
+      await this.mentionAutocompleteService.refresh(this.currentUser);
+
       const agentCount = AIEngineBase.Instance.Agents?.length || 0;
       this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();

@@ -145,17 +145,17 @@ export class FlowAgentType extends BaseAgentType {
             
             // Get current step to check if it was a Prompt step
             const currentStep = await this.getStepById(flowState.currentStepId);
-            
+
             // If current step was a Prompt, update payload with the prompt result
             if (currentStep?.StepType === 'Prompt' && promptResult) {
-                
+
                 // Parse the prompt result as JSON
                 const promptResponse = this.parseJSONResponse<any>(promptResult);
-                
+
                 if (promptResponse) {
                     // Check if the prompt response contains a Chat step request
                     // This handles the case where a Prompt step wants to return a message to the user
-                    if (promptResponse.nextStep?.type === 'Chat' || 
+                    if (promptResponse.nextStep?.type === 'Chat' ||
                         (promptResponse.taskComplete && promptResponse.message)) {
                         // Return a Chat step to bubble the message back to the user
                         return this.createNextStep('Chat', {
@@ -176,8 +176,26 @@ export class FlowAgentType extends BaseAgentType {
                     // Copy merged result back to payload reference (modifying in place for consistency)
                     Object.assign(payload, mergedPayload);
                 }
+
+                // Store the prompt step result so path conditions can access it
+                // Create a result object with Success: true (prompt executed successfully)
+                const promptStepResult = {
+                    Success: true,
+                    step: 'Success',
+                    result: promptResponse,
+                    rawResult: promptResult
+                };
+                flowState.stepResults.set(flowState.currentStepId, promptStepResult);
+
+                // Add to execution path if not already present
+                if (!flowState.executionPath.includes(flowState.currentStepId)) {
+                    flowState.executionPath.push(flowState.currentStepId);
+                }
+
+                // Mark step as completed
+                flowState.completedStepIds.add(flowState.currentStepId);
             }
-            
+
             // Find valid paths from current step
             const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState);
             
@@ -363,8 +381,44 @@ export class FlowAgentType extends BaseAgentType {
     }
     
     /**
+     * Helper to set a value on a target object, supporting array append syntax.
+     * If key ends with '[]', the value is pushed to an array (auto-initialized if needed).
+     *
+     * @private
+     */
+    private setMappedValue(
+        target: Record<string, unknown>,
+        key: string,
+        value: unknown
+    ): void {
+        const isArrayAppend = key.endsWith('[]');
+        const actualKey = isArrayAppend ? key.slice(0, -2) : key;
+
+        if (isArrayAppend) {
+            // Initialize array if it doesn't exist
+            if (!(actualKey in target)) {
+                target[actualKey] = [];
+            }
+
+            // Validate it's actually an array
+            if (!Array.isArray(target[actualKey])) {
+                throw new Error(
+                    `Cannot append to '${actualKey}': target is not an array. ` +
+                    `Use '${actualKey}' without [] suffix for property update.`
+                );
+            }
+
+            // Append the value
+            (target[actualKey] as unknown[]).push(value);
+        } else {
+            // Standard property assignment
+            target[actualKey] = value;
+        }
+    }
+
+    /**
      * Applies action output mapping to update the payload
-     * 
+     *
      * @private
      */
     private applyActionOutputMapping<P>(
@@ -411,16 +465,19 @@ export class FlowAgentType extends BaseAgentType {
                     // Parse the path and build nested object
                     const pathParts = payloadPath.split('.');
                     let current = updateObj;
-                    
+
                     for (let i = 0; i < pathParts.length - 1; i++) {
                         const part = pathParts[i];
-                        if (!(part in current)) {
-                            current[part] = {};
+                        // Remove [] suffix for intermediate path parts
+                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
+                        if (!(cleanPart in current)) {
+                            current[cleanPart] = {};
                         }
-                        current = current[part] as Record<string, unknown>;
+                        current = current[cleanPart] as Record<string, unknown>;
                     }
-                    
-                    current[pathParts[pathParts.length - 1]] = value;
+
+                    // Use helper to support array append on final path part
+                    this.setMappedValue(current, pathParts[pathParts.length - 1], value);
                 }
             }
             
@@ -945,7 +1002,19 @@ export class FlowAgentType extends BaseAgentType {
                 previousPayload: currentPayload
             });
         }
-        
+
+        // Store the step result so path conditions can access it via stepResult
+        // The step parameter contains the result from the just-completed step (Sub-Agent, Action, or Prompt)
+        flowState.stepResults.set(flowState.currentStepId, step);
+
+        // Add to execution path if not already present
+        if (!flowState.executionPath.includes(flowState.currentStepId)) {
+            flowState.executionPath.push(flowState.currentStepId);
+        }
+
+        // Mark step as completed
+        flowState.completedStepIds.add(flowState.currentStepId);
+
         // Find valid paths from current step using updated payload
         const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
         

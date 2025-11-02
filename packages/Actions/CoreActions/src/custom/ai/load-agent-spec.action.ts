@@ -96,15 +96,15 @@ export class LoadAgentSpecAction extends BaseAction {
                 agentSpec.TechnicalDesign = null;
             }
 
-            // Add ONLY AgentSpec output parameter
+            // Create truncated version for both output param and Message
+            const truncatedSpec = this.truncatePromptTexts(agentSpec);
+
+            // Add truncated AgentSpec as output parameter
             params.Params.push({
                 Name: 'AgentSpec',
                 Type: 'Output',
-                Value: agentSpec
+                Value: truncatedSpec
             });
-
-            // Create truncated version for Message (to avoid super long outputs)
-            const truncatedSpec = this.truncatePromptTexts(agentSpec);
 
             return {
                 Success: true,
@@ -143,14 +143,15 @@ export class LoadAgentSpecAction extends BaseAction {
     }
 
     /**
-     * Truncates PromptText fields in SubAgents (and nested SubAgents) to avoid super long Message outputs.
-     * Only truncates in the returned Message - the AgentSpec output parameter retains full content.
+     * Truncates PromptText fields in SubAgents (and nested SubAgents) recursively.
+     * Top-level agent prompts are NOT truncated - only subagent prompts.
+     * Applied to both the AgentSpec output parameter and Message to avoid super long outputs.
      */
     private truncatePromptTexts(spec: any, maxLength: number = 100): any {
         // Deep clone to avoid modifying the original
         const truncated = JSON.parse(JSON.stringify(spec));
 
-        // Recursively truncate SubAgents
+        // Recursively truncate SubAgents only (not top-level prompts)
         if (truncated.SubAgents && Array.isArray(truncated.SubAgents)) {
             for (const subAgentWrapper of truncated.SubAgents) {
                 if (subAgentWrapper.SubAgent) {

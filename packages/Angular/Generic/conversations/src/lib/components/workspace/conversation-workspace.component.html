@@ -11,11 +11,23 @@
     </mj-conversation-navigation>
   </div>
 
-  <div class="workspace-content">
-    <!-- Mobile sidebar backdrop -->
-    @if (isMobileView && isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks') {
-      <div class="mobile-sidebar-backdrop visible" (click)="closeSidebar()"></div>
-    }
+  <!-- Loading spinner while initializing agents -->
+  @if (!isWorkspaceReady) {
+    <div class="workspace-loading">
+      <div class="loading-spinner">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+      </div>
+      <p>Loading agents...</p>
+    </div>
+  }
+
+  <!-- Main workspace content - only renders when agents are ready -->
+  @if (isWorkspaceReady) {
+    <div class="workspace-content">
+      <!-- Mobile sidebar backdrop -->
+      @if (isMobileView && isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks') {
+        <div class="mobile-sidebar-backdrop visible" (click)="closeSidebar()"></div>
+      }
 
     <!-- Left Sidebar (hidden when Collections or Tasks view is active) -->
     <div class="workspace-sidebar"
@@ -85,7 +97,8 @@
         </mj-artifact-viewer-panel>
       </div>
     }
-  </div>
+    </div>
+  }
 
   <!-- Global Search Panel -->
   <mj-search-panel

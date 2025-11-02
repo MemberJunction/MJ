@@ -220,6 +220,44 @@ Return a JSON object with this exact structure:
 }
 ```
 
+### Example 9: User Affirms Running Newly Created Agent (NO)
+**Previous Agent**: Agent Manager (creates and modifies AI agents)
+
+**Conversation Context**:
+- Agent Manager just created "Data Cleanup Agent"
+- Agent Manager asked: "Would you like me to run the Data Cleanup Agent to test it?"
+
+**Latest Message**: "Yes"
+
+**Output**:
+```json
+{
+  "continuesWith": "NO",
+  "reasoning": "User is affirming they want to run the newly created Data Cleanup Agent. This should route to the Data Cleanup Agent, not continue with Agent Manager.",
+  "modifyingArtifact": false,
+  "targetArtifactVersionId": null
+}
+```
+
+### Example 10: User Invokes Newly Created Agent Directly (NO)
+**Previous Agent**: Agent Manager (creates and modifies AI agents)
+
+**Conversation Context**:
+- Agent Manager just created "Report Generator Agent"
+- Agent Manager suggested: "You can invoke it by typing @Report Generator can you..."
+
+**Latest Message**: "Run this agent and ask it to create a sales report for Q4."
+
+**Output**:
+```json
+{
+  "continuesWith": "NO",
+  "reasoning": "User is asking to run the newly created Report Generator Agent with a task. This is a context shift to the new agent, not continuation with Agent Manager.",
+  "modifyingArtifact": false,
+  "targetArtifactVersionId": null
+}
+```
+
 ## Important Notes
 
 - **Speed is critical** - Make quick, confident decisions based on clear signals

@@ -2,6 +2,7 @@ import { LogError, Metadata, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { NewUserBase, configInfo } from '@memberjunction/server';
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserEntity } from "@memberjunction/core-entities";
 
 /**
  * This example class subclasses the @NewUserBase class and overrides the createNewUser method to create a new person record and then call the base class to create the user record. In this example there is an entity
@@ -11,7 +12,7 @@ import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 // -- COMMENTED OUT AS DEFAULT CONFIG - if you want to use this as an example sub-class uncomment the below line
 //@RegisterClass(NewUserBase, undefined, 1) /*by putting 1 into the priority setting, MJGlobal ClassFactory will use this instead of the base class as that registration had no priority*/
 export class ExampleNewUserSubClass extends NewUserBase {
-    public override async createNewUser(firstName: string, lastName: string, email: string) {
+    public override async createNewUser(firstName: string, lastName: string, email: string): Promise<UserEntity | null> {
         try {
             const md = new Metadata();
             const contextUser = UserCache.Instance.Users.find(u => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase())

@@ -141,10 +141,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   ) {}
 
   async ngOnInit() {
-    // CRITICAL: Initialize AI Engine and mention service BEFORE loading any messages
-    // This ensures agents are loaded and available for @mention parsing in existing messages
-    // Without this, @mentions won't be highlighted when reloading existing conversations
-    await this.mentionAutocompleteService.initialize(this.currentUser);
+    // The workspace component initializes AI Engine and mention service before
+    // any child components render, so we can safely skip duplicate initialization.
+    // This prevents race conditions and ensures agents are fully loaded.
+
+    // Fallback: If workspace didn't initialize (shouldn't happen), initialize now
+    if (!this.mentionAutocompleteService['isInitialized']) {
+      console.warn('⚠️ Mention autocomplete not initialized by workspace, initializing now...');
+      await this.mentionAutocompleteService.initialize(this.currentUser);
+    }
 
     // Load saved artifact pane width
     this.loadArtifactPaneWidth();
