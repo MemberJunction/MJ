@@ -2079,9 +2079,9 @@ NumberedRows AS (
                      ef.IsPrimaryKey,
                      ef.IsUnique,
                      ef.Description,
-                     ef._IsNameField_UserModified,
-                     ef._DefaultInView_UserModified,
-                     ef._CategoryID_UserModified
+                     ef.AutoUpdateIsNameField,
+                     ef.AutoUpdateDefaultInView,
+                     ef.AutoUpdateCategory
                   FROM
                      [${mj_core_schema()}].vwEntityFields ef
                   WHERE
@@ -2094,7 +2094,8 @@ NumberedRows AS (
                const fields = fieldsResult.recordset;
 
                // Smart Field Identification
-               if (!fields.some((f: any) => f._IsNameField_UserModified || f._DefaultInView_UserModified)) {
+               // Only run if at least one field allows auto-update
+               if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView)) {
                   const fieldAnalysis = await ag.identifyFields({
                      Name: entity.Name,
                      Description: entity.Description,
@@ -2108,7 +2109,8 @@ NumberedRows AS (
                }
 
                // Form Layout Generation
-               if (!fields.some((f: any) => f._CategoryID_UserModified)) {
+               // Only run if at least one field allows auto-update
+               if (fields.some((f: any) => f.AutoUpdateCategory)) {
                   const layoutAnalysis = await ag.generateFormLayout({
                      Name: entity.Name,
                      Description: entity.Description,
@@ -2116,7 +2118,7 @@ NumberedRows AS (
                   }, currentUser);
 
                   if (layoutAnalysis) {
-                     await this.applyFormLayout(pool, entity.ID, entity.Name, fields, layoutAnalysis);
+                     await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis);
                      logStatus(`         Applied form layout for ${entity.Name}`);
                   }
                }
@@ -2145,95 +2147,52 @@ NumberedRows AS (
       fields: any[],
       result: SmartFieldIdentificationResult
    ): Promise<void> {
-      // Find the field IDs for the identified fields
-      const nameFieldId = fields.find(f => f.Name === result.nameField)?.ID;
-      const defaultInViewFieldId = fields.find(f => f.Name === result.defaultInView)?.ID;
+      // Find the fields for the identified results
+      const nameField = fields.find(f => f.Name === result.nameField);
+      const defaultInViewField = fields.find(f => f.Name === result.defaultInView);
 
-      if (nameFieldId) {
+      if (nameField && nameField.AutoUpdateIsNameField) {
          const updateSQL = `
             UPDATE [${mj_core_schema()}].EntityField
             SET IsNameField = 1
-            WHERE ID = '${nameFieldId}'
-            AND _IsNameField_UserModified = 0
+            WHERE ID = '${nameField.ID}'
+            AND AutoUpdateIsNameField = 1
          `;
          await this.LogSQLAndExecute(pool, updateSQL, `Set IsNameField for ${result.nameField}`, false);
       }
 
-      if (defaultInViewFieldId) {
+      if (defaultInViewField && defaultInViewField.AutoUpdateDefaultInView) {
          const updateSQL = `
             UPDATE [${mj_core_schema()}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '${defaultInViewFieldId}'
-            AND _DefaultInView_UserModified = 0
+            WHERE ID = '${defaultInViewField.ID}'
+            AND AutoUpdateDefaultInView = 1
          `;
          await this.LogSQLAndExecute(pool, updateSQL, `Set DefaultInView for ${result.defaultInView}`, false);
       }
    }
 
    /**
-    * Apply form layout generation results to create entity field categories
+    * Apply form layout generation results to set category on entity fields
     */
    protected async applyFormLayout(
       pool: sql.ConnectionPool,
       entityId: string,
-      entityName: string,
       fields: any[],
       result: FormLayoutResult
    ): Promise<void> {
-      // First, check if global categories exist and create them if needed
-      for (const category of result.categories) {
-         const checkCategorySQL = `
-            SELECT ID FROM [${mj_core_schema()}].FieldCategory
-            WHERE Name = '${category.name.replace(/'/g, "''")}'
-         `;
-         const categoryResult = await pool.request().query(checkCategorySQL);
+      // Assign category to each field
+      for (const fieldCategory of result.fieldCategories) {
+         const field = fields.find(f => f.Name === fieldCategory.fieldName);
 
-         let globalCategoryId: string;
-         if (categoryResult.recordset.length === 0) {
-            // Create global category
-            globalCategoryId = uuidv4();
-            const createCategorySQL = `
-               INSERT INTO [${mj_core_schema()}].FieldCategory (ID, Name, Icon, Description)
-               VALUES (
-                  '${globalCategoryId}',
-                  '${category.name.replace(/'/g, "''")}',
-                  '${category.icon}',
-                  'Generated category for ${entityName}'
-               )
+         if (field && field.AutoUpdateCategory) {
+            const updateSQL = `
+               UPDATE [${mj_core_schema()}].EntityField
+               SET Category = '${fieldCategory.category.replace(/'/g, "''")}'
+               WHERE ID = '${field.ID}'
+               AND AutoUpdateCategory = 1
             `;
-            await this.LogSQLAndExecute(pool, createCategorySQL, `Create global category ${category.name}`, false);
-         } else {
-            globalCategoryId = categoryResult.recordset[0].ID;
-         }
-
-         // Create entity-specific category
-         const entityCategoryId = uuidv4();
-         const createEntityCategorySQL = `
-            INSERT INTO [${mj_core_schema()}].EntityFieldCategory (ID, EntityID, CategoryID, Name, Icon, Priority, DefaultExpanded)
-            VALUES (
-               '${entityCategoryId}',
-               '${entityId}',
-               '${globalCategoryId}',
-               '${category.name.replace(/'/g, "''")}',
-               '${category.icon}',
-               ${category.priority},
-               ${category.defaultExpanded ? 1 : 0}
-            )
-         `;
-         await this.LogSQLAndExecute(pool, createEntityCategorySQL, `Create entity category ${category.name} for ${entityName}`, false);
-
-         // Assign fields to this category
-         for (const fieldName of category.fields) {
-            const field = fields.find(f => f.Name === fieldName);
-            if (field && !field._CategoryID_UserModified) {
-               const updateFieldSQL = `
-                  UPDATE [${mj_core_schema()}].EntityField
-                  SET CategoryID = '${entityCategoryId}'
-                  WHERE ID = '${field.ID}'
-                  AND _CategoryID_UserModified = 0
-               `;
-               await this.LogSQLAndExecute(pool, updateFieldSQL, `Assign ${fieldName} to category ${category.name}`, false);
-            }
+            await this.LogSQLAndExecute(pool, updateSQL, `Set Category '${fieldCategory.category}' for ${fieldCategory.fieldName}`, false);
          }
       }
    }

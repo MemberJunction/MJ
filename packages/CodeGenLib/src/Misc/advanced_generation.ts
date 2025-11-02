@@ -32,12 +32,9 @@ export type TransitiveJoinResult = {
 }
 
 export type FormLayoutResult = {
-    categories: Array<{
-        name: string;
-        icon: string;
-        priority: number;
-        defaultExpanded: boolean;
-        fields: string[];
+    fieldCategories: Array<{
+        fieldName: string;
+        category: string;
         reason: string;
     }>;
 }

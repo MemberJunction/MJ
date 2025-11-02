@@ -1373,94 +1373,88 @@ private async applyTransitiveJoinAnalysis(
 
 **File:** `migrations/v2/V202511020001__v2.x_Advanced_Generation_Metadata.sql`
 
+### Design Philosophy
+
+Following MemberJunction's existing pattern with `AutoUpdateDescription` on Entity and EntityField tables, we use an **opt-out whitelist approach** with `AutoUpdate*` boolean flags that default to `1` (true), allowing system/LLM updates unless explicitly locked by the user.
+
+### Existing Pattern in MJ
+
 ```sql
--- Add user modification tracking columns to EntityField
+-- Entity and EntityField tables already have:
+AutoUpdateDescription BIT NOT NULL DEFAULT 1
+
+-- Usage in stored procedures:
+Description = IIF(ef.AutoUpdateDescription=1, <new_value_from_system>, ef.Description)
+```
+
+### New Schema Changes
+
+```sql
+-- =============================================
+-- Advanced Generation: Metadata Intelligence
+-- Version: 2.x
+-- Date: 2025-11-02
+-- =============================================
+
+-- Add AutoUpdate flags to EntityField for Smart Field Identification
 ALTER TABLE [${flyway:defaultSchema}].EntityField
-ADD _IsNameField_UserModified BIT NOT NULL DEFAULT 0,
-    _DefaultInView_UserModified BIT NOT NULL DEFAULT 0,
-    _CategoryID_UserModified BIT NOT NULL DEFAULT 0;
+ADD AutoUpdateIsNameField BIT NOT NULL DEFAULT 1,
+    AutoUpdateDefaultInView BIT NOT NULL DEFAULT 1,
+    AutoUpdateCategory BIT NOT NULL DEFAULT 1;
 
 EXEC sys.sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Tracks whether IsNameField was manually set by user (1) or by system/LLM (0)',
+    @value = N'When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'EntityField',
-    @level2type = N'COLUMN', @level2name = '_IsNameField_UserModified';
-
--- Create global FieldCategory table for reusable categories
-CREATE TABLE [${flyway:defaultSchema}].FieldCategory (
-    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    Name NVARCHAR(100) UNIQUE NOT NULL,
-    Icon NVARCHAR(100) NULL,
-    Description NVARCHAR(500) NULL,
-    __mj_CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
-    __mj_UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
-);
+    @level2type = N'COLUMN', @level2name = 'AutoUpdateIsNameField';
 
 EXEC sys.sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Global dictionary of field categories that can be reused across entities (e.g., Basic Information, Billing Details)',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'FieldCategory';
-
--- Create EntityFieldCategory for entity-specific category instances
-CREATE TABLE [${flyway:defaultSchema}].EntityFieldCategory (
-    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    EntityID UNIQUEIDENTIFIER NOT NULL,
-    CategoryID UNIQUEIDENTIFIER NULL, -- Optional link to global category
-    Name NVARCHAR(100) NOT NULL,
-    Icon NVARCHAR(100) NULL,
-    Priority INT NOT NULL DEFAULT 100,
-    DefaultExpanded BIT NOT NULL DEFAULT 1,
-    __mj_CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
-    __mj_UpdatedAt DATETIME NOT NULL DEFAULT GETDATE(),
-    CONSTRAINT FK_EntityFieldCategory_Entity
-        FOREIGN KEY (EntityID) REFERENCES [${flyway:defaultSchema}].Entity(ID),
-    CONSTRAINT FK_EntityFieldCategory_FieldCategory
-        FOREIGN KEY (CategoryID) REFERENCES [${flyway:defaultSchema}].FieldCategory(ID)
-);
-
-EXEC sys.sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Entity-specific instances of field categories with display properties like icon and priority',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'EntityFieldCategory';
-
--- Add CategoryID to EntityField
-ALTER TABLE [${flyway:defaultSchema}].EntityField
-ADD CategoryID UNIQUEIDENTIFIER NULL,
-    CONSTRAINT FK_EntityField_EntityFieldCategory
-        FOREIGN KEY (CategoryID) REFERENCES [${flyway:defaultSchema}].EntityFieldCategory(ID);
-
-EXEC sys.sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Links field to a category for form layout grouping',
+    @value = N'When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'EntityField',
-    @level2type = N'COLUMN', @level2name = 'CategoryID';
+    @level2type = N'COLUMN', @level2name = 'AutoUpdateDefaultInView';
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'When 1, allows system/LLM to auto-update Category; when 0, user has locked this field',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'EntityField',
+    @level2type = N'COLUMN', @level2name = 'AutoUpdateCategory';
 
 -- Add transitive join metadata to EntityRelationship
 ALTER TABLE [${flyway:defaultSchema}].EntityRelationship
-ADD AdditionalFieldsToInclude NVARCHAR(MAX) NULL;
+ADD AdditionalFieldsToInclude NVARCHAR(MAX) NULL,
+    AutoUpdateAdditionalFieldsToInclude BIT NOT NULL DEFAULT 1;
 
 EXEC sys.sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'JSON array of additional field names to include when joining through this relationship (for junction tables)',
+    @value = N'JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'EntityRelationship',
     @level2type = N'COLUMN', @level2name = 'AdditionalFieldsToInclude';
 
--- Insert common global categories
-INSERT INTO [${flyway:defaultSchema}].FieldCategory (ID, Name, Icon, Description)
-VALUES
-    (NEWID(), 'Basic Information', 'user', 'Core identifying fields'),
-    (NEWID(), 'Contact Information', 'envelope', 'Communication channels and addresses'),
-    (NEWID(), 'Financial Information', 'credit-card', 'Money, payments, and billing'),
-    (NEWID(), 'Dates and Timeline', 'calendar', 'Time-related fields'),
-    (NEWID(), 'Settings and Preferences', 'sliders', 'Configuration and user preferences'),
-    (NEWID(), 'Relationships', 'link', 'Foreign keys to other entities'),
-    (NEWID(), 'System Metadata', 'info-circle', 'Technical fields and audit information');
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'EntityRelationship',
+    @level2type = N'COLUMN', @level2name = 'AutoUpdateAdditionalFieldsToInclude';
 ```
+
+### Key Design Decisions
+
+1. **No Global Categories Table** - EntityField.Category already exists as text field for domain-specific categories per entity (e.g., "Bill To Address", "Ship To Address", "Product Details")
+
+2. **AutoUpdate* Pattern** - Consistent with existing MJ architecture:
+   - Default = 1 (allow auto-updates)
+   - User sets to 0 to lock field
+   - System checks flag before updating
+
+3. **Per-Field Granularity** - User can lock Category but allow IsNameField updates
+
+4. **No Data Seeding** - CodeGen will handle creating/updating metadata records
 
 ---
 
