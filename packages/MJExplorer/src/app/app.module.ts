@@ -53,9 +53,14 @@ import { environment } from 'src/environments/environment';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { NavigationItemDemoComponent } from './demo/navigation-item.component';
 import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
+import { LoadEventFormComponent, LoadEventsDashboardComponent, LoadSubmissionFormComponent } from 'event-abstract-submission-ui';
 
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
+
+LoadEventFormComponent();
+LoadEventsDashboardComponent();
+LoadSubmissionFormComponent();
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
