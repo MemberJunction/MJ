@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
+import { MJEventType, MJGlobal, uuidv4, WarningManager } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
@@ -932,8 +932,14 @@ export abstract class BaseEntity<T = unknown> {
                     // if we get here, we have a field that doesn't match either the field name or the code name, so throw an error
                     if (!ignoreNonExistentFields)
                         throw new Error(`Field ${key} does not exist on ${this.EntityInfo.Name}`);
-                    else
-                        console.warn(`Field ${key} does not exist on ${this.EntityInfo.Name}, ignoring because ignoreNonExistentFields was set to true`);
+                    else {
+                        // Record field-not-found warning - will be batched and displayed after debounce period
+                        WarningManager.Instance.RecordFieldNotFoundWarning(
+                            this.EntityInfo.Name,
+                            key,
+                            'BaseEntity::SetMany'
+                        );
+                    }
                 }
             }
         }

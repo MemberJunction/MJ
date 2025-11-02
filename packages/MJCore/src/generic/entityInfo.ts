@@ -6,7 +6,7 @@ import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityIn
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { DeprecationWarningManager } from "./deprecationTracker"
+import { WarningManager } from "@memberjunction/global"
 
 /**
  * The possible status values for a record change
@@ -702,7 +702,7 @@ export class EntityFieldInfo extends BaseInfo {
 
         if (entityField.Status?.trim().toLowerCase() === 'deprecated') {
             // Record deprecation warning - will be batched and displayed after debounce period
-            DeprecationWarningManager.Instance.RecordFieldWarning(
+            WarningManager.Instance.RecordFieldDeprecationWarning(
                 entityField.Entity,
                 entityField.Name,
                 callerName
@@ -1199,7 +1199,7 @@ export class EntityInfo extends BaseInfo {
         }
         if (entity.Status?.trim().toLowerCase() === 'deprecated') {
             // Record deprecation warning - will be batched and displayed after debounce period
-            DeprecationWarningManager.Instance.RecordEntityWarning(
+            WarningManager.Instance.RecordEntityDeprecationWarning(
                 entity.Name,
                 callerName
             );
