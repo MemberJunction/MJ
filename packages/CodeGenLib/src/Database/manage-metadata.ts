@@ -3,7 +3,7 @@ import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Confi
 import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult } from "../Misc/advanced_generation";
 import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -564,6 +564,14 @@ export class ManageMetadataBase {
          }
          logStatus(`      Managed entity field values in ${(new Date().getTime() - step6StartTime.getTime()) / 1000} seconds`);
       }
+
+      // Advanced Generation - Smart field identification and form layout
+      const step7StartTime: Date = new Date();
+      if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
+         logError('Error applying advanced generation features');
+         // Don't fail the entire process - advanced generation is optional
+      }
+      logStatus(`      Applied advanced generation features in ${(new Date().getTime() - step7StartTime.getTime()) / 1000} seconds`);
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 
@@ -2022,6 +2030,213 @@ NumberedRows AS (
    }
 
 
+
+   /**
+    * Apply Advanced Generation features - Smart Field Identification and Form Layout Generation
+    */
+   protected async applyAdvancedGeneration(pool: sql.ConnectionPool, excludeSchemas: string[], currentUser: UserInfo): Promise<boolean> {
+      try {
+         const ag = new AdvancedGeneration();
+         if (!ag.enabled) {
+            logStatus('      Advanced Generation is disabled, skipping...');
+            return true;
+         }
+
+         logStatus('      Advanced Generation enabled, processing entities...');
+
+         // Get all non-virtual entities that are not in excluded schemas
+         const entitiesSQL = `
+            SELECT
+               e.ID,
+               e.Name,
+               e.Description,
+               e.SchemaName,
+               e.BaseTable
+            FROM
+               [${mj_core_schema()}].vwEntities e
+            WHERE
+               e.VirtualEntity = 0
+               AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
+            ORDER BY
+               e.Name
+         `;
+
+         const entitiesResult = await pool.request().query(entitiesSQL);
+         const entities = entitiesResult.recordset;
+
+         let processedCount = 0;
+         let errorCount = 0;
+
+         for (const entity of entities) {
+            try {
+               // Get entity fields for analysis
+               const fieldsSQL = `
+                  SELECT
+                     ef.ID,
+                     ef.Name,
+                     ef.Type,
+                     ef.AllowsNull,
+                     ef.IsPrimaryKey,
+                     ef.IsUnique,
+                     ef.Description,
+                     ef._IsNameField_UserModified,
+                     ef._DefaultInView_UserModified,
+                     ef._CategoryID_UserModified
+                  FROM
+                     [${mj_core_schema()}].vwEntityFields ef
+                  WHERE
+                     ef.EntityID = '${entity.ID}'
+                  ORDER BY
+                     ef.Sequence
+               `;
+
+               const fieldsResult = await pool.request().query(fieldsSQL);
+               const fields = fieldsResult.recordset;
+
+               // Smart Field Identification
+               if (!fields.some((f: any) => f._IsNameField_UserModified || f._DefaultInView_UserModified)) {
+                  const fieldAnalysis = await ag.identifyFields({
+                     Name: entity.Name,
+                     Description: entity.Description,
+                     Fields: fields
+                  }, currentUser);
+
+                  if (fieldAnalysis) {
+                     await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+                     logStatus(`         Applied smart field identification for ${entity.Name}`);
+                  }
+               }
+
+               // Form Layout Generation
+               if (!fields.some((f: any) => f._CategoryID_UserModified)) {
+                  const layoutAnalysis = await ag.generateFormLayout({
+                     Name: entity.Name,
+                     Description: entity.Description,
+                     Fields: fields
+                  }, currentUser);
+
+                  if (layoutAnalysis) {
+                     await this.applyFormLayout(pool, entity.ID, entity.Name, fields, layoutAnalysis);
+                     logStatus(`         Applied form layout for ${entity.Name}`);
+                  }
+               }
+
+               processedCount++;
+            } catch (error) {
+               logError(`         Error processing entity ${entity.Name}: ${error}`);
+               errorCount++;
+            }
+         }
+
+         logStatus(`      Advanced Generation complete: ${processedCount} entities processed, ${errorCount} errors`);
+         return errorCount === 0;
+      } catch (error) {
+         logError(`Advanced Generation failed: ${error}`);
+         return false;
+      }
+   }
+
+   /**
+    * Apply smart field identification results to entity fields
+    */
+   protected async applySmartFieldIdentification(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      fields: any[],
+      result: SmartFieldIdentificationResult
+   ): Promise<void> {
+      // Find the field IDs for the identified fields
+      const nameFieldId = fields.find(f => f.Name === result.nameField)?.ID;
+      const defaultInViewFieldId = fields.find(f => f.Name === result.defaultInView)?.ID;
+
+      if (nameFieldId) {
+         const updateSQL = `
+            UPDATE [${mj_core_schema()}].EntityField
+            SET IsNameField = 1
+            WHERE ID = '${nameFieldId}'
+            AND _IsNameField_UserModified = 0
+         `;
+         await this.LogSQLAndExecute(pool, updateSQL, `Set IsNameField for ${result.nameField}`, false);
+      }
+
+      if (defaultInViewFieldId) {
+         const updateSQL = `
+            UPDATE [${mj_core_schema()}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '${defaultInViewFieldId}'
+            AND _DefaultInView_UserModified = 0
+         `;
+         await this.LogSQLAndExecute(pool, updateSQL, `Set DefaultInView for ${result.defaultInView}`, false);
+      }
+   }
+
+   /**
+    * Apply form layout generation results to create entity field categories
+    */
+   protected async applyFormLayout(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      entityName: string,
+      fields: any[],
+      result: FormLayoutResult
+   ): Promise<void> {
+      // First, check if global categories exist and create them if needed
+      for (const category of result.categories) {
+         const checkCategorySQL = `
+            SELECT ID FROM [${mj_core_schema()}].FieldCategory
+            WHERE Name = '${category.name.replace(/'/g, "''")}'
+         `;
+         const categoryResult = await pool.request().query(checkCategorySQL);
+
+         let globalCategoryId: string;
+         if (categoryResult.recordset.length === 0) {
+            // Create global category
+            globalCategoryId = uuidv4();
+            const createCategorySQL = `
+               INSERT INTO [${mj_core_schema()}].FieldCategory (ID, Name, Icon, Description)
+               VALUES (
+                  '${globalCategoryId}',
+                  '${category.name.replace(/'/g, "''")}',
+                  '${category.icon}',
+                  'Generated category for ${entityName}'
+               )
+            `;
+            await this.LogSQLAndExecute(pool, createCategorySQL, `Create global category ${category.name}`, false);
+         } else {
+            globalCategoryId = categoryResult.recordset[0].ID;
+         }
+
+         // Create entity-specific category
+         const entityCategoryId = uuidv4();
+         const createEntityCategorySQL = `
+            INSERT INTO [${mj_core_schema()}].EntityFieldCategory (ID, EntityID, CategoryID, Name, Icon, Priority, DefaultExpanded)
+            VALUES (
+               '${entityCategoryId}',
+               '${entityId}',
+               '${globalCategoryId}',
+               '${category.name.replace(/'/g, "''")}',
+               '${category.icon}',
+               ${category.priority},
+               ${category.defaultExpanded ? 1 : 0}
+            )
+         `;
+         await this.LogSQLAndExecute(pool, createEntityCategorySQL, `Create entity category ${category.name} for ${entityName}`, false);
+
+         // Assign fields to this category
+         for (const fieldName of category.fields) {
+            const field = fields.find(f => f.Name === fieldName);
+            if (field && !field._CategoryID_UserModified) {
+               const updateFieldSQL = `
+                  UPDATE [${mj_core_schema()}].EntityField
+                  SET CategoryID = '${entityCategoryId}'
+                  WHERE ID = '${field.ID}'
+                  AND _CategoryID_UserModified = 0
+               `;
+               await this.LogSQLAndExecute(pool, updateFieldSQL, `Assign ${fieldName} to category ${category.name}`, false);
+            }
+         }
+      }
+   }
 
    /**
     * Executes the given SQL query using the given ConnectionPool object.

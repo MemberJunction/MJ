@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Form Layout Generation",
+      "Description": "Analyzes entity fields to generate semantic categories with icons for collapsible section layouts",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/form-layout-generation.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "1E04F987-6H8G-7I23-F65H-3J87E1G9I235"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "2F15G098-7I9H-8J34-G76I-4K98F2H0J346"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7H13F876-4G6D-6E90-C32F-0H65C9F6F9C8"
+    }
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Smart Field Identification",
+      "Description": "Analyzes entity structure to intelligently identify name fields and default view fields",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/smart-field-identification.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "8A71B432-3F5C-4E89-B21D-9F43A7C5E891"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "7B82C543-4G6D-5F90-C32E-0G54B8D6F902"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5F91D654-2E4B-4C78-A10F-8E32C9B4D7A6"
+    }
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Transitive Join Intelligence",
+      "Description": "Analyzes entity relationships to determine which additional fields should be included in transitive joins through junction tables",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/transitive-join-intelligence.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "9C82D765-4F6E-5G01-D43F-1H65C9E7G013"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "0D93E876-5G7F-6H12-E54G-2I76D0F8H124"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6G02E765-3F5C-5D89-B21E-9G54B8D5E8B7"
+    }
+  }
+]
