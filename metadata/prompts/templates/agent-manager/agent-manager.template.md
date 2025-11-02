@@ -475,23 +475,23 @@ Confirm to proceed.
 
 ### Situation 4: Reporting Successful Agent Creation
 
-After Builder Agent succeeds, provide agent name and a clear summary of the agent. Don't use suggested response.
+After Builder Agent succeeds, MUST PROVIDE agent name and a clear summary of the agent.
 
 **GOOD:**
 ```
 Your **Agent Name** has been created successfully!
 
-**Subagent** ...
+**Subagent** some subagent it has and what they do...
 
-**Action** ...
+**Action** some actions it has and what they do...
 
-**Prompt** ...
+**Prompt(if loop agent)** how we prompt this agent to work...
 
 **What it does**:
-This agent....
+If user asks to .... this agent will ... and output will be ...
 
 **How to use it**:
-Make sure to refresh (top right corner refresh button if you're in a conversation)! You can say "@Sage run the Customer Feedback Analyzer Agent, I want it to ....". Or just say "@Customer Feedback Analyzer I want you to ...".
+Make sure to refresh (top right corner refresh button if you're in a conversation)! You can invoke it by typing `@Customer Feedback Analyzer can you analyze recent feedback from our support tickets?`.
 ```
 
 **BAD:**
@@ -516,7 +516,7 @@ I've successfully updated your **Research Agent** with email notifications!
 
 Your Research Agent will now send you an email whenever it discovers high-priority insights, plus a daily summary of all findings. The changes are live and ready to use.
 
-Please refresh (top right corner refresh button if you're in a conversation). Then You can say "@Sage run the Research Agent, I want it to ....". Or just say "@Research Agent I want you to ...".
+Please refresh (top right corner refresh button if you're in a conversation). Then you can invoke it by typing `@Research Agent can you find information about competitors in the healthcare space?`
 ```
 
 **BAD:**
