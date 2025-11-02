@@ -145,17 +145,17 @@ export class FlowAgentType extends BaseAgentType {
             
             // Get current step to check if it was a Prompt step
             const currentStep = await this.getStepById(flowState.currentStepId);
-            
+
             // If current step was a Prompt, update payload with the prompt result
             if (currentStep?.StepType === 'Prompt' && promptResult) {
-                
+
                 // Parse the prompt result as JSON
                 const promptResponse = this.parseJSONResponse<any>(promptResult);
-                
+
                 if (promptResponse) {
                     // Check if the prompt response contains a Chat step request
                     // This handles the case where a Prompt step wants to return a message to the user
-                    if (promptResponse.nextStep?.type === 'Chat' || 
+                    if (promptResponse.nextStep?.type === 'Chat' ||
                         (promptResponse.taskComplete && promptResponse.message)) {
                         // Return a Chat step to bubble the message back to the user
                         return this.createNextStep('Chat', {
@@ -176,8 +176,26 @@ export class FlowAgentType extends BaseAgentType {
                     // Copy merged result back to payload reference (modifying in place for consistency)
                     Object.assign(payload, mergedPayload);
                 }
+
+                // Store the prompt step result so path conditions can access it
+                // Create a result object with Success: true (prompt executed successfully)
+                const promptStepResult = {
+                    Success: true,
+                    step: 'Success',
+                    result: promptResponse,
+                    rawResult: promptResult
+                };
+                flowState.stepResults.set(flowState.currentStepId, promptStepResult);
+
+                // Add to execution path if not already present
+                if (!flowState.executionPath.includes(flowState.currentStepId)) {
+                    flowState.executionPath.push(flowState.currentStepId);
+                }
+
+                // Mark step as completed
+                flowState.completedStepIds.add(flowState.currentStepId);
             }
-            
+
             // Find valid paths from current step
             const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState);
             
@@ -945,7 +963,19 @@ export class FlowAgentType extends BaseAgentType {
                 previousPayload: currentPayload
             });
         }
-        
+
+        // Store the step result so path conditions can access it via stepResult
+        // The step parameter contains the result from the just-completed step (Sub-Agent, Action, or Prompt)
+        flowState.stepResults.set(flowState.currentStepId, step);
+
+        // Add to execution path if not already present
+        if (!flowState.executionPath.includes(flowState.currentStepId)) {
+            flowState.executionPath.push(flowState.currentStepId);
+        }
+
+        // Mark step as completed
+        flowState.completedStepIds.add(flowState.currentStepId);
+
         // Find valid paths from current step using updated payload
         const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
         
