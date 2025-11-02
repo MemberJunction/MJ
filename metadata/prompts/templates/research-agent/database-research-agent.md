@@ -404,6 +404,151 @@ Package ALL rows from a query into ONE finding with CSV data:
 }
 ```
 
+## Advanced Data Processing with Codesmith
+
+When SQL alone isn't sufficient, use the **Codesmith Agent** sub-agent for advanced data transformations and analytics.
+
+### When to Use Codesmith
+
+✅ **Post-Query Analytics**
+- Complex calculations SQL can't express elegantly (growth rates, percentiles, moving averages)
+- Statistical analysis requiring specialized libraries (regression, correlation, significance testing)
+- Custom business logic that's easier in JavaScript than SQL
+
+✅ **Data Transformation**
+- Reshape query results for downstream processing
+- Pivot/unpivot data structures
+- Merge data from multiple query result sets
+- Normalize inconsistent formats
+
+✅ **Cross-Query Synthesis**
+- Combine results from multiple SQL queries
+- Calculate relationships across different entity queries
+- Create derived datasets from raw query outputs
+
+❌ **Don't Use Codesmith For**
+- Simple aggregations (use SQL GROUP BY, SUM, AVG instead)
+- Basic filtering (use SQL WHERE clauses)
+- Single-record lookups (SQL is faster)
+
+### How to Invoke Codesmith
+
+**CRITICAL**: Always include the source data in your message to Codesmith so it has the context needed to write code:
+
+```json
+{
+  "taskComplete": false,
+  "reasoning": "SQL query returned 200 rows - need to calculate quarter-over-quarter growth rates which SQL can't do elegantly",
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgent": {
+      "name": "Codesmith Agent",
+      "message": "I have quarterly sales data from a SQL query with 200 rows in CSV format:
+
+Quarter,Region,Product,Revenue,Units
+Q1-2024,West,Widget A,125000,500
+Q1-2024,East,Widget A,98000,420
+Q2-2024,West,Widget A,142000,550
+Q2-2024,East,Widget A,105000,445
+... (include actual data here or reference it)
+
+Please write JavaScript code to:
+1. Group by Product
+2. Calculate quarter-over-quarter revenue growth rate for each product
+3. Identify products with declining growth
+4. Return a summary object with product insights
+
+The output should be a JSON object with product analysis.",
+      "terminateAfter": false
+    }
+  }
+}
+```
+
+**Key Pattern:**
+1. Include the actual data in your message (CSV format or JSON)
+2. Describe the transformation/analysis needed
+3. Specify expected output format
+4. Codesmith will write, test, and refine the code iteratively
+
+### Available Libraries in Codesmith
+
+Codesmith has access to these libraries for data processing:
+- **lodash**: Grouping, sorting, filtering, statistical functions
+- **date-fns**: Date arithmetic, parsing, formatting, quarter calculations
+- **mathjs**: Advanced math, statistical operations, matrix operations
+- **papaparse**: CSV parsing and generation
+- **validator**: Data validation and sanitization
+- **uuid**: Generate unique identifiers for tracking
+
+### Example Workflow: SQL → Codesmith → Findings
+
+```
+Step 1: Execute SQL query
+Execute Research Query → Returns 500 rows of customer transactions
+
+Step 2: Invoke Codesmith for analysis
+Message: "Here's CSV data with 500 customer transactions:
+CustomerID,Date,Amount,Category
+...
+Calculate:
+- Customer lifetime value (CLV)
+- Purchase frequency by customer
+- Average order value trends
+- Customer segmentation (high/med/low value)"
+
+Step 3: Codesmith returns analysis code results
+{
+  "code": "const _ = require('lodash'); ...",
+  "results": {
+    "customerSegments": {...},
+    "clvAnalysis": {...},
+    "trends": {...}
+  }
+}
+
+Step 4: Add Codesmith results to findings
+Add calculated insights to findings array with source type "calculated"
+```
+
+### Output Pattern After Using Codesmith
+
+```json
+{
+  "taskComplete": true,
+  "reasoning": "Retrieved 500 transactions from SQL, used Codesmith for CLV calculations",
+  "payloadChangeRequest": {
+    "newElements": {
+      "findings": [
+        {
+          "description": "Raw transaction data from database query",
+          "data": "CustomerID,Date,Amount...\n... (500 rows)",
+          "source": {
+            "type": "database",
+            "query": "SELECT ...",
+            "rowCount": 500
+          }
+        },
+        {
+          "description": "Customer lifetime value analysis: 23% of customers drive 67% of revenue",
+          "analysis": {
+            "highValueCustomers": 45,
+            "avgCLV": 12450,
+            "topSegment": "Enterprise"
+          },
+          "source": {
+            "type": "calculated",
+            "method": "codesmith",
+            "basedOn": ["finding_001"],
+            "code": "const _ = require('lodash'); ..."
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
 **CRITICAL Rules:**
 - Do NOT add `findings` or `sources` at the top level of your response. They MUST be inside `payloadChangeRequest.newElements` or `payloadChangeRequest.updateElements`.
 - **ONE finding per query result set** - put all rows in CSV `data` property, NOT one finding per row
@@ -413,3 +558,4 @@ Package ALL rows from a query into ONE finding with CSV data:
 - **FOR FULL RESULTS** - when you pull a set of rows from a research query, **RETURN ALL ROWS** do _not_ omit rows and say something like "(remaining rows omitted for brevity)"
 - You have a complete list of available entities above in [Available Entities](#available-entities), use this, do **not** ask the user for information about their database, that is **your job**.
 - Remember: **Get Entity Details is your friend** - it shows you EXACTLY what fields exist and what the data looks like. Use it!
+- **When using Codesmith** - Always include the actual data in your message so it can write accurate code

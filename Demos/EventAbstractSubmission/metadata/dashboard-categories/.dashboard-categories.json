@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Events",
+      "Description": "Dashboards for managing Events",
+      "UserID": "@lookup:Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "4BECB5D7-E1ED-4D1B-BAF3-A3A753A14F2E"
+    },
+    "sync": {
+      "lastModified": "2025-11-01T17:25:24.832Z",
+      "checksum": "1ff2f88916d1917064488503f22bfb59a0c7424174368cbf211d1c1b66d6c026"
+    }
+  }
+]
