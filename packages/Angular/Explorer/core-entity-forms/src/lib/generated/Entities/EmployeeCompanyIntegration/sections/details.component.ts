@@ -55,6 +55,13 @@ import { EmployeeCompanyIntegrationEntity } from '@memberjunction/core-entities'
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CompanyIntegration"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

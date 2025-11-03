@@ -19,9 +19,10 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@google/genai": "^1.16.0",
+    "@google/generative-ai": "^0.24.1",
     "@memberjunction/ai": "2.112.0",
-    "@memberjunction/global": "2.112.0",
-    "@google/genai": "^1.16.0"
+    "@memberjunction/global": "2.112.0"
   },
   "repository": {
     "type": "git",

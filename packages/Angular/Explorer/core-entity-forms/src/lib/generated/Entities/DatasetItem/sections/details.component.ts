@@ -86,14 +86,14 @@ import { DatasetItemEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Entity"
+            FieldName="Dataset"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Dataset"
+            FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

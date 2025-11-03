@@ -49,13 +49,6 @@ import { ListDetailEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="List"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
@@ -65,6 +58,13 @@ import { ListDetailEntity } from '@memberjunction/core-entities';
             [ShowLabel]="true"
             FieldName="AdditionalData"
             Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="List"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
