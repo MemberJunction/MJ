@@ -5548,7 +5548,9 @@ The context is now within limits. Please retry your request with the recovered c
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
             newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
-            suggestedResponses: previousDecision.suggestedResponses
+            responseForm: previousDecision.responseForm,
+            actionableCommands: previousDecision.actionableCommands,
+            automaticCommands: previousDecision.automaticCommands
         };
     }
 
@@ -6353,7 +6355,9 @@ The context is now within limits. Please retry your request with the recovered c
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
             agentRun: this._agentRun!,
-            suggestedResponses: finalStep.suggestedResponses,
+            responseForm: finalStep.responseForm,
+            actionableCommands: finalStep.actionableCommands,
+            automaticCommands: finalStep.automaticCommands,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined
