@@ -1,0 +1,169 @@
+<div class="form-question" [class.required]="question.required">
+  <!-- Label -->
+  <label *ngIf="question.label" class="question-label">
+    {{ question.label }}
+    <span *ngIf="question.required" class="required-indicator">*</span>
+  </label>
+
+  <!-- Help Text -->
+  <div *ngIf="question.helpText" class="help-text">
+    {{ question.helpText }}
+  </div>
+
+  <!-- Text Input -->
+  <input
+    *ngIf="questionType === 'text'"
+    type="text"
+    kendoTextBox
+    [value]="value || ''"
+    [placeholder]="placeholder"
+    [disabled]="disabled"
+    (input)="onValueChange($any($event.target).value)"
+    class="question-input"
+  />
+
+  <!-- Email Input -->
+  <input
+    *ngIf="questionType === 'email'"
+    type="email"
+    kendoTextBox
+    [value]="value || ''"
+    [placeholder]="placeholder"
+    [disabled]="disabled"
+    (input)="onValueChange($any($event.target).value)"
+    class="question-input"
+  />
+
+  <!-- Textarea -->
+  <textarea
+    *ngIf="questionType === 'textarea'"
+    kendoTextArea
+    [value]="value || ''"
+    [placeholder]="placeholder"
+    [disabled]="disabled"
+    (input)="onValueChange($any($event.target).value)"
+    class="question-textarea"
+    rows="3"
+  ></textarea>
+
+  <!-- Number Input -->
+  <kendo-numerictextbox
+    *ngIf="questionType === 'number'"
+    [value]="value"
+    [min]="min"
+    [max]="max"
+    [step]="step"
+    [disabled]="disabled"
+    (valueChange)="onValueChange($event)"
+    class="question-input"
+  ></kendo-numerictextbox>
+
+  <!-- Currency Input -->
+  <kendo-numerictextbox
+    *ngIf="questionType === 'currency'"
+    [value]="value"
+    [min]="min"
+    [max]="max"
+    [step]="step || 0.01"
+    [format]="'c2'"
+    [disabled]="disabled"
+    (valueChange)="onValueChange($event)"
+    class="question-input"
+  ></kendo-numerictextbox>
+
+  <!-- Date Picker -->
+  <kendo-datepicker
+    *ngIf="questionType === 'date'"
+    [value]="value"
+    [disabled]="disabled"
+    (valueChange)="onValueChange($event)"
+    class="question-input"
+  ></kendo-datepicker>
+
+  <!-- DateTime Picker -->
+  <kendo-datetimepicker
+    *ngIf="questionType === 'datetime'"
+    [value]="value"
+    [disabled]="disabled"
+    (valueChange)="onValueChange($event)"
+    class="question-input"
+  ></kendo-datetimepicker>
+
+  <!-- Button Group -->
+  <kendo-buttongroup
+    *ngIf="questionType === 'buttongroup'"
+    [selection]="'single'"
+    class="question-buttongroup"
+  >
+    <button
+      *ngFor="let option of options; trackBy: trackByValue"
+      kendoButton
+      [toggleable]="true"
+      [selected]="value === option.value"
+      [disabled]="disabled"
+      (click)="onValueChange(option.value)"
+      class="buttongroup-option"
+    >
+      <i *ngIf="option.icon" class="fa {{ option.icon }}" aria-hidden="true"></i>
+      {{ option.label }}
+    </button>
+  </kendo-buttongroup>
+
+  <!-- Radio Buttons -->
+  <div *ngIf="questionType === 'radio'" class="question-radio-group">
+    <div *ngFor="let option of options; trackBy: trackByValue" class="radio-option">
+      <input
+        type="radio"
+        kendoRadioButton
+        [name]="question.id"
+        [value]="option.value"
+        [checked]="value === option.value"
+        [disabled]="disabled"
+        (change)="onValueChange(option.value)"
+        [id]="question.id + '_' + option.value"
+      />
+      <label [for]="question.id + '_' + option.value" class="radio-label">
+        <i *ngIf="option.icon" class="fa {{ option.icon }}" aria-hidden="true"></i>
+        {{ option.label }}
+      </label>
+    </div>
+  </div>
+
+  <!-- Dropdown -->
+  <kendo-dropdownlist
+    *ngIf="questionType === 'dropdown'"
+    [data]="options"
+    [textField]="'label'"
+    [valueField]="'value'"
+    [value]="value"
+    [disabled]="disabled"
+    (valueChange)="onValueChange($event)"
+    class="question-dropdown"
+  ></kendo-dropdownlist>
+
+  <!-- Checkboxes -->
+  <div *ngIf="questionType === 'checkbox'" class="question-checkbox-group">
+    <div *ngFor="let option of options; trackBy: trackByValue" class="checkbox-option">
+      <input
+        type="checkbox"
+        kendoCheckBox
+        [checked]="isChecked(option)"
+        [disabled]="disabled"
+        (change)="toggleCheckbox(option)"
+        [id]="question.id + '_' + option.value"
+      />
+      <label [for]="question.id + '_' + option.value" class="checkbox-label">
+        <i *ngIf="option.icon" class="fa {{ option.icon }}" aria-hidden="true"></i>
+        {{ option.label }}
+      </label>
+    </div>
+  </div>
+
+  <!-- Validation Error -->
+  <div *ngIf="control?.invalid && control?.touched" class="validation-error">
+    <span *ngIf="control?.errors?.['required']">This field is required</span>
+    <span *ngIf="control?.errors?.['email']">Please enter a valid email address</span>
+    <span *ngIf="control?.errors?.['min']">Value must be at least {{ min }}</span>
+    <span *ngIf="control?.errors?.['max']">Value must be at most {{ max }}</span>
+  </div>
+</div>

@@ -82,6 +82,28 @@
             (responseSelected)="onSuggestedResponseSelected($event)">
           </mj-suggested-responses>
         }
+
+        <!-- Agent Response Form (shown only for last message by owner) -->
+        @if (isLastMessageInConversation && isConversationOwner && responseForm) {
+          <mj-agent-response-form
+            [responseForm]="responseForm"
+            [disabled]="isProcessing"
+            [isLastMessage]="isLastMessageInConversation"
+            [isConversationOwner]="isConversationOwner"
+            (formSubmitted)="onFormSubmitted($event)">
+          </mj-agent-response-form>
+        }
+
+        <!-- Actionable Commands (shown only for last message by owner) -->
+        @if (isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
+          <mj-actionable-commands
+            [commands]="actionableCommands"
+            [disabled]="isProcessing"
+            [isLastMessage]="isLastMessageInConversation"
+            [isConversationOwner]="isConversationOwner"
+            (commandExecuted)="onCommandExecuted($event)">
+          </mj-actionable-commands>
+        }
       }
 
       @if (isEditing) {

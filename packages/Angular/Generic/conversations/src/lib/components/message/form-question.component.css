@@ -1,0 +1,88 @@
+.form-question {
+  margin-bottom: 16px;
+}
+
+.question-label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: #333;
+  font-size: 14px;
+}
+
+.required-indicator {
+  color: #d9534f;
+  margin-left: 2px;
+}
+
+.help-text {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.question-input,
+.question-textarea,
+.question-dropdown {
+  width: 100%;
+}
+
+.question-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.question-buttongroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.buttongroup-option {
+  flex: 0 1 auto;
+}
+
+.buttongroup-option i {
+  margin-right: 6px;
+}
+
+.question-radio-group,
+.question-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radio-option,
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.radio-label,
+.checkbox-label {
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radio-label i,
+.checkbox-label i {
+  color: #666;
+}
+
+.validation-error {
+  color: #d9534f;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Required field styling */
+.form-question.required .question-label {
+  font-weight: 600;
+}
