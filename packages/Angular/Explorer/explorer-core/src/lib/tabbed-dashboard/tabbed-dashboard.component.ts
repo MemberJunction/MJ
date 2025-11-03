@@ -8,6 +8,8 @@ import { Router } from '@angular/router';
 import { DashboardPreferencesDialogComponent, DashboardPreferencesResult } from '../dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
 import { SharedService } from '@memberjunction/ng-shared';
+import { DashboardResolverService } from '../services/dashboard-resolver.service';
+import { InteractiveDashboardComponent } from '@memberjunction/ng-dashboards';
 
 @Component({
   selector: 'mj-tabbed-dashboard',
@@ -43,7 +45,10 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
   private dashboardInstances: Map<string, BaseDashboard> = new Map();
   private dashboardComponentRefs: Map<string, ComponentRef<BaseDashboard>> = new Map();
   
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private dashboardResolver: DashboardResolverService
+  ) {}
 
   async ngOnInit(): Promise<void> {
   }
@@ -168,37 +173,49 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
         // Create instance of the appropriate dashboard class
         const dashboardEntity = this.dashboards.find(d => d.ID === dashboardId);
         if (dashboardEntity && this.tabstripContainer) {
-          // Use the type of the dashboard to determine which class to instantiate
+          // Use DashboardResolverService to determine which dashboard implementation to use
           let instance: BaseDashboard | undefined;
           let componentRef: ComponentRef<BaseDashboard>;
-          if (dashboardEntity.Type === 'Code') {
-            const classInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseDashboard, dashboardEntity.DriverClass!);
-            if (!classInfo || !classInfo.SubClass) {
-              // Class not found error
-              const errorMsg = `Dashboard class '${dashboardEntity.DriverClass}' not found`;
-              console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
-              this.displayDashboardError(dashboardId, `Dashboard component not available: ${dashboardEntity.DriverClass}`, 'The dashboard class is not registered. Please contact your system administrator.');
-              return undefined;
-            }
 
-            // Create the component dynamically
-            componentRef = this.tabstripContainer.createComponent<BaseDashboard>(classInfo.SubClass);
-            instance = componentRef.instance as BaseDashboard;
+          try {
+            const dashboardResolution = this.dashboardResolver.resolveDashboardComponent(dashboardEntity);
+
+            if (dashboardResolution.type === 'Interactive') {
+              // Create Interactive Dashboard component
+              componentRef = this.tabstripContainer.createComponent<BaseDashboard>(InteractiveDashboardComponent);
+              instance = componentRef.instance as InteractiveDashboardComponent;
+              (instance as InteractiveDashboardComponent).componentSpec = dashboardResolution.componentSpec!;
+            }
+            else if (dashboardResolution.type === 'Code' && dashboardResolution.componentClass) {
+              // Create code-based dashboard component
+              componentRef = this.tabstripContainer.createComponent<BaseDashboard>(dashboardResolution.componentClass);
+              instance = componentRef.instance as BaseDashboard;
+            }
+            else {
+              // Configuration type dashboard (Config or fallback)
+              componentRef = this.tabstripContainer.createComponent<BaseDashboard>(SingleDashboardComponent);
+              instance = componentRef.instance as BaseDashboard;
+              // Set the DashboardID for config dashboards
+              const resData = new ResourceData();
+              resData.ResourceRecordID = dashboardId;
+              (instance as SingleDashboardComponent).ResourceData = resData;
+            }
+          } catch (resolutionError) {
+            // Handle resolution errors (e.g., missing ComponentSpec, invalid DriverClass)
+            const errorMsg = resolutionError instanceof Error ? resolutionError.message : String(resolutionError);
+            console.error(`Error resolving dashboard '${dashboardEntity.Name}': ${errorMsg}`);
+            this.displayDashboardError(
+              dashboardId,
+              'Dashboard configuration error',
+              errorMsg
+            );
+            return undefined;
           }
-          else {
-            // configuration type dashboard, so we can use the 
-            // Create the component dynamically
-            componentRef = this.tabstripContainer.createComponent<BaseDashboard>(SingleDashboardComponent);
-            instance = componentRef.instance as BaseDashboard;
-            // get the single dashboard component to set the DashboardID
-            const resData = new ResourceData();
-            resData.ResourceRecordID = dashboardId;
-            (instance as SingleDashboardComponent).ResourceData = resData;  
-          }
+
           if (!instance) {
             // Instance creation failed error
-            const errorMsg = `Failed to create instance of dashboard class '${dashboardEntity.DriverClass}'`;
-            console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
+            const errorMsg = `Failed to create instance of dashboard '${dashboardEntity.Name}'`;
+            console.error(errorMsg);
             this.displayDashboardError(dashboardId, 'Dashboard failed to initialize', 'The dashboard could not be created. Please contact your system administrator.');
             return undefined;
           }
