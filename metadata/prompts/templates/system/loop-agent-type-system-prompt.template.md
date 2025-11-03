@@ -281,7 +281,233 @@ Loop results appear in a temporary message for ONE turn only, then are removed t
 {{ _CURRENT_PAYLOAD | dump | safe }}
 ```
 
+## User Input Collection with Response Forms
+
+When you need information from the user, use `responseForm` to collect structured input:
+
+### Simple Choice (Renders as Buttons)
+
+For quick selections, use a single question with button options:
+
+```json
+{
+  "taskComplete": false,
+  "message": "I found 3 customers matching that name.",
+  "responseForm": {
+    "questions": [
+      {
+        "id": "selection",
+        "label": "Which customer did you mean?",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "cust-123", "label": "Acme Corp (New York)" },
+            { "value": "cust-456", "label": "Acme Industries (Texas)" },
+            { "value": "none", "label": "Neither - search again" }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+### Collecting Multiple Pieces of Information
+
+When you need several data points, create a full form:
+
+```json
+{
+  "taskComplete": false,
+  "message": "I'll help you create a new customer. Please provide the details:",
+  "responseForm": {
+    "title": "New Customer",
+    "submitLabel": "Create Customer",
+    "questions": [
+      {
+        "id": "name",
+        "label": "Company Name",
+        "type": { "type": "text", "placeholder": "Acme Corp" },
+        "required": true
+      },
+      {
+        "id": "industry",
+        "label": "Industry",
+        "type": {
+          "type": "dropdown",
+          "options": [
+            { "value": "tech", "label": "Technology" },
+            { "value": "finance", "label": "Finance" },
+            { "value": "retail", "label": "Retail" },
+            { "value": "other", "label": "Other" }
+          ]
+        },
+        "required": true
+      },
+      {
+        "id": "revenue",
+        "label": "Annual Revenue (optional)",
+        "type": { "type": "currency", "prefix": "$" },
+        "required": false,
+        "helpText": "Estimated annual revenue in USD"
+      },
+      {
+        "id": "startDate",
+        "label": "Expected Start Date",
+        "type": { "type": "date" },
+        "required": false
+      }
+    ]
+  }
+}
+```
+
+### Question Types Available
+
+- **Text:** `{ "type": "text", "placeholder": "..." }`, `{ "type": "textarea" }`, `{ "type": "email" }`
+- **Numbers:** `{ "type": "number", "min": 0, "max": 100 }`, `{ "type": "currency", "prefix": "$" }`
+- **Dates:** `{ "type": "date" }`, `{ "type": "datetime" }`
+- **Choices:** `{ "type": "buttongroup", "options": [...] }`, `{ "type": "radio", "options": [...] }`, `{ "type": "dropdown", "options": [...] }`, `{ "type": "checkbox", "options": [...], "multiple": true }`
+
+## Providing Actions After Completion
+
+When you complete work, provide easy navigation to what you created:
+
+### Opening Resources
+
+```json
+{
+  "taskComplete": true,
+  "message": "Customer record created successfully!",
+  "actionableCommands": [
+    {
+      "type": "open:resource",
+      "label": "Open Customer Record",
+      "icon": "fa-user",
+      "resourceType": "Record",
+      "resourceId": "abc-123",
+      "mode": "view"
+    }
+  ],
+  "automaticCommands": [
+    {
+      "type": "notification",
+      "message": "Customer 'Acme Corp' created successfully",
+      "severity": "success"
+    }
+  ]
+}
+```
+
+### Opening Dashboards
+
+```json
+{
+  "taskComplete": true,
+  "message": "Created 'Sales Metrics Dashboard' with 6 widgets showing revenue, pipeline, and conversions.",
+  "actionableCommands": [
+    {
+      "type": "open:resource",
+      "label": "View Dashboard",
+      "icon": "fa-chart-line",
+      "resourceType": "Dashboard",
+      "resourceId": "dash-456"
+    }
+  ]
+}
+```
+
+### Opening External URLs
+
+```json
+{
+  "taskComplete": true,
+  "message": "Here's the company information I found.",
+  "actionableCommands": [
+    {
+      "type": "open:url",
+      "label": "Visit Company Website",
+      "icon": "fa-external-link",
+      "url": "https://example.com",
+      "newTab": true
+    }
+  ]
+}
+```
+
+## Refreshing UI After Changes
+
+When you modify system configuration or entity data, tell the UI to refresh:
+
+### Refresh Specific Entities
+
+```json
+{
+  "automaticCommands": [
+    {
+      "type": "refresh:data",
+      "scope": "entity",
+      "entityNames": ["Customers", "Contacts"]
+    }
+  ]
+}
+```
+
+### Refresh AI Cache (After Modifying Agents/Prompts)
+
+```json
+{
+  "automaticCommands": [
+    {
+      "type": "refresh:data",
+      "scope": "cache",
+      "cacheName": "AI"
+    }
+  ]
+}
+```
+
+### Cache Names Available
+
+- `"Core"` - Core metadata (entities, fields, etc.)
+- `"AI"` - AI metadata (agents, prompts, models, etc.)
+- `"Actions"` - Action metadata (actions, params, etc.)
+
+## Complete Example: Agent Manager Creating New Agent
+
+```json
+{
+  "taskComplete": true,
+  "message": "Successfully created 'Customer Service Agent' with 3 sub-agents and 12 actions.",
+  "reasoning": "Agent architecture designed, database records created, configuration validated",
+  "actionableCommands": [
+    {
+      "type": "open:resource",
+      "label": "View New Agent",
+      "icon": "fa-robot",
+      "resourceType": "Record",
+      "resourceId": "agent-789",
+      "mode": "view"
+    }
+  ],
+  "automaticCommands": [
+    {
+      "type": "refresh:data",
+      "scope": "cache",
+      "cacheName": "AI"
+    },
+    {
+      "type": "notification",
+      "message": "Agent 'Customer Service Agent' created",
+      "severity": "success"
+    }
+  ]
+}
+```
+
 # **CRITICAL**
 - Your **entire** response must be only JSON with no leading or trailing characters!
 - Must adhere to [LoopAgentResponse](#response-format)
-- When responding with `Chat` as the next step, if it make sense, you can include some `suggestedResponses` which the UI can use to make it easier for the user to reply. Don't overdo this, only use this feature if there are a natural set of options to present the user.
+- Use `responseForm` when you need user input (replaces old suggestedResponses pattern)
+- Use `actionableCommands` to provide navigation buttons after completing work
+- Use `automaticCommands` to refresh data or show notifications
