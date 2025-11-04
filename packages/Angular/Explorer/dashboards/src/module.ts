@@ -65,6 +65,8 @@ import { SchedulingHistoryComponent } from './Scheduling/components/scheduling-h
 import { SchedulingTypesComponent } from './Scheduling/components/scheduling-types.component';
 import { SchedulingHealthComponent } from './Scheduling/components/scheduling-health.component';
 import { SchedulingInstrumentationService } from './Scheduling/services/scheduling-instrumentation.service';
+// Interactive Dashboard Component
+import { InteractiveDashboardComponent } from './generic/interactive-dashboard.component';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -110,7 +112,9 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     SchedulingJobsComponent,
     SchedulingHistoryComponent,
     SchedulingTypesComponent,
-    SchedulingHealthComponent
+    SchedulingHealthComponent,
+    // Interactive Dashboard Component
+    InteractiveDashboardComponent
   ],
   imports: [
     CommonModule,
@@ -146,7 +150,8 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     AIDashboardComponent,
     ActionsManagementDashboardComponent,
     ComponentStudioDashboardComponent,
-    SchedulingDashboardComponent
+    SchedulingDashboardComponent,
+    InteractiveDashboardComponent
   ]
 })
 export class DashboardsModule { }

@@ -5,6 +5,8 @@ import { Subscription } from 'rxjs';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { FormResolverService } from '../services/form-resolver.service';
+import { InteractiveFormComponent } from '@memberjunction/ng-base-forms';
 
 
 @Component({
@@ -21,7 +23,10 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
 
-  constructor (private route: ActivatedRoute) {
+  constructor (
+    private route: ActivatedRoute,
+    private formResolver: FormResolverService
+  ) {
 
   }
 
@@ -42,7 +47,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public async LoadForm(primaryKey: CompositeKey, entityName: string) {
-    
+
     // Perform any necessary actions with the ViewID, such as fetching data
     if (!entityName || entityName.trim().length === 0) {
       return; // not ready to load
@@ -58,50 +63,71 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
       this.PrimaryKey = new CompositeKey();
     }
 
-    const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
-    
     const md = new Metadata();
     const entity = md.Entities.find(e => {
       return e.Name === entityName
     });
     const permissions = entity?.GetUserPermisions(md.CurrentUser);
 
-    if (formReg) {
-      const record = await md.GetEntityObject<BaseEntity>(entityName);
-      if (record) {
-        if (primaryKey.HasValue) {
-          await record.InnerLoad(primaryKey);
-        }
-        else {
-          record.NewRecord();
-          this.SetNewRecordValues(record);          
-        }
+    // Use FormResolverService to determine which form implementation to use
+    const formResolution = await this.formResolver.resolveFormComponent(entityName, md.CurrentUser);
 
-        // CRITICAL: Track the event handler subscription for cleanup
-        this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
-          if (eventType.type === 'save')
-            this.recordSaved.emit(record);
-        });
-        
-        const viewContainerRef = this.formContainer.viewContainerRef;
-        viewContainerRef.clear();
-
-        const componentRef = viewContainerRef.createComponent<typeof formReg.SubClass>(formReg.SubClass);
-        
-        // Track component and record for cleanup
-        this._formComponentRef = componentRef;
-        this._currentRecord = record;
-        
-        componentRef.instance.record = record
-        componentRef.instance.userPermissions = permissions
-        componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
-
-        this.useGenericForm = false;
-        this.loadComplete.emit();
-      }
-      else
-        throw new Error(`Unable to load entity ${entityName} with primary key values: ${primaryKey.ToString()}`);
+    // Load the entity record
+    const record = await md.GetEntityObject<BaseEntity>(entityName, md.CurrentUser);
+    if (!record) {
+      throw new Error(`Unable to load entity ${entityName}`);
     }
+
+    if (primaryKey.HasValue) {
+      await record.InnerLoad(primaryKey);
+    }
+    else {
+      record.NewRecord();
+      this.SetNewRecordValues(record);
+    }
+
+    // CRITICAL: Track the event handler subscription for cleanup
+    this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
+      if (eventType.type === 'save')
+        this.recordSaved.emit(record);
+    });
+
+    const viewContainerRef = this.formContainer.viewContainerRef;
+    viewContainerRef.clear();
+
+    // Create the appropriate component based on resolution result
+    let componentRef: ComponentRef<any>;
+
+    if (formResolution.type === 'Interactive') {
+      // Create Interactive Form component
+      componentRef = viewContainerRef.createComponent(InteractiveFormComponent);
+      componentRef.instance.componentSpec = formResolution.componentSpec;
+    }
+    else if (formResolution.type === 'CodeBased' && formResolution.componentClass) {
+      // Create code-based form component
+      componentRef = viewContainerRef.createComponent(formResolution.componentClass);
+    }
+    else {
+      // For 'Generated' or fallback, use ClassFactory (existing behavior)
+      const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
+      if (formReg) {
+        componentRef = viewContainerRef.createComponent(formReg.SubClass);
+      } else {
+        throw new Error(`No form implementation found for entity ${entityName}`);
+      }
+    }
+
+    // Track component and record for cleanup
+    this._formComponentRef = componentRef;
+    this._currentRecord = record;
+
+    // Set common properties on all form components
+    componentRef.instance.record = record;
+    componentRef.instance.userPermissions = permissions;
+    componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
+
+    this.useGenericForm = false;
+    this.loadComplete.emit();
 
     this.loading = false;
   }

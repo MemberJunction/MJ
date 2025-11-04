@@ -19,16 +19,19 @@ import { MJFormField } from './lib/base-field-component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { MJReactModule } from '@memberjunction/ng-react';
 
 // Markdown
 import { MarkdownModule } from 'ngx-markdown';
 import { MJLinkField } from './lib/link-field.component';
+import { InteractiveFormComponent } from './lib/interactive-form.component';
 
 @NgModule({
   declarations: [
     SectionLoaderComponent,
     MJFormField,
-    MJLinkField
+    MJLinkField,
+    InteractiveFormComponent
   ],
   imports: [
     CommonModule,
@@ -45,12 +48,14 @@ import { MJLinkField } from './lib/link-field.component';
     ContainerDirectivesModule,
     MemberJunctionSharedModule,
     CodeEditorModule,
-    MarkdownModule.forRoot()
+    MarkdownModule.forRoot(),
+    MJReactModule
   ],
   exports: [
     SectionLoaderComponent,
     MJFormField,
-    MJLinkField
+    MJLinkField,
+    InteractiveFormComponent
   ]
 })
 export class BaseFormsModule { }
