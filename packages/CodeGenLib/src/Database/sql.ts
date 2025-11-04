@@ -9,13 +9,14 @@ import { RegisterClass } from "@memberjunction/global";
 import { SQLCodeGenBase } from './sql_codegen';
 import { sqlConfig } from "../Config/db-connection";
 
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
 import { mkdirSync } from "fs-extra";
 import { attemptDeleteFile, logIf } from "../Misc/util";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Escapes special characters in a string for safe use as a shell command argument.
@@ -371,17 +372,10 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
 
  private static _batchScriptCounter: number = 0;
  public async executeSQLFile(filePath: string): Promise<boolean> {
-  let escapedUser: string = '';
-  let escapedPassword: string = '';
-  let escapedDatabase: string = '';
-
   try {
     if (sqlConfig.user === undefined || sqlConfig.password === undefined || sqlConfig.database === undefined) {
       throw new Error("SQL Server user, password, and database must be provided in the configuration");
     }
-
-    const isWindows = process.platform === 'win32';
-    const quoteChar = isWindows ? '"' : "'";
 
     // Build the server specification string (server[,port][\instance])
     let serverSpec = sqlConfig.server;
@@ -392,28 +386,25 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       serverSpec += `\\${sqlConfig.options.instanceName}`;
     }
 
-    // Construct the sqlcmd command with properly quoted server specification
-    let command = `sqlcmd -S ${quoteChar}${escapeShellArg(serverSpec)}${quoteChar}`;
-
-    // Escape credentials and database name for sqlcmd parameter usage
-    // Use single quotes on Unix-like systems to prevent ALL shell expansion including history expansion (!)
-    // Use double quotes on Windows as cmd.exe doesn't support single quotes
-    // Use escapeSqlcmdParam instead of escapeShellArg because we're passing to sqlcmd, not directly to shell
-    escapedUser = `${quoteChar}${escapeSqlcmdParam(sqlConfig.user)}${quoteChar}`;
-    escapedPassword = `${quoteChar}${escapeSqlcmdParam(sqlConfig.password)}${quoteChar}`;
-    escapedDatabase = `${quoteChar}${escapeSqlcmdParam(sqlConfig.database)}${quoteChar}`;
-
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
-    // Add -I flag to enable QUOTED_IDENTIFIER (required for indexed views, computed columns, etc.)
-    // Add -V 17 to only fail on severity >= 17 (system errors), allowing informational messages and warnings
-    command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -I -V 17 -i "${absoluteFilePath}"`;
 
-    // Execute the command
+    // Build arguments array for execFile (bypasses shell, no escaping needed!)
+    const args = [
+      '-S', serverSpec,
+      '-U', sqlConfig.user,
+      '-P', sqlConfig.password,
+      '-d', sqlConfig.database,
+      '-I',  // Enable QUOTED_IDENTIFIER (required for indexed views, computed columns, etc.)
+      '-V', '17',  // Only fail on severity >= 17 (system errors)
+      '-i', absoluteFilePath
+    ];
+
+    // Execute the command using execFile to bypass shell escaping issues
     logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);
 
     try {
-      const { stdout, stderr } = await execAsync(command);
+      const { stdout, stderr } = await execFileAsync('sqlcmd', args);
 
       // Log any output as warnings (they're non-fatal since we didn't throw)
       if (stdout && stdout.trim().length > 0) {
@@ -441,7 +432,8 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       message += `\n SQL Server error: ${(e as any).stderr}`;
     }
 
-    const errorMessage = sqlConfig.password ? this.maskPassword(message, escapedPassword) : message;
+    // Mask password in error messages
+    const errorMessage = sqlConfig.password ? this.maskPassword(message, sqlConfig.password) : message;
     logError("Error executing batch SQL file: " + errorMessage);
     return false;
   }
