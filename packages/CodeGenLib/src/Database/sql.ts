@@ -54,6 +54,33 @@ function escapeShellArg(value: string): string {
 }
 
 /**
+ * Escapes special characters in a string specifically for use as sqlcmd parameter values.
+ * When values are passed to sqlcmd wrapped in quotes, the quotes protect most special characters
+ * from cmd.exe interpretation. We only need to handle:
+ * - Double quotes (must be escaped as "") on Windows
+ * - Single quotes (must be escaped as '') on Unix
+ * - Backslashes before quotes to prevent escape sequence interpretation
+ *
+ * @param value The string to escape for sqlcmd parameter
+ * @returns The escaped string safe for use in sqlcmd parameters
+ */
+function escapeSqlcmdParam(value: string): string {
+    const isWindows = process.platform === 'win32';
+
+    if (isWindows) {
+        // For Windows sqlcmd parameters in double quotes:
+        // Only escape double quotes (doubled) and backslashes before quotes
+        return value
+            .replace(/\\/g, '\\\\')   // Backslash -> double backslash
+            .replace(/"/g, '""');      // Double quote -> doubled
+    } else {
+        // For Unix sqlcmd parameters in single quotes:
+        // Only single quotes need escaping
+        return value.replace(/'/g, "'\\''");
+    }
+}
+
+/**
  * Base class for SQL Utility functions, you can sub-class this class to create your own SQL Utility functions/override existing functionality.
  */
 export class SQLUtilityBase {
@@ -357,12 +384,13 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     // Construct the sqlcmd command with properly quoted server specification
     let command = `sqlcmd -S ${quoteChar}${escapeShellArg(serverSpec)}${quoteChar}`;
 
-    // Escape credentials and database name for safe shell usage
+    // Escape credentials and database name for sqlcmd parameter usage
     // Use single quotes on Unix-like systems to prevent ALL shell expansion including history expansion (!)
     // Use double quotes on Windows as cmd.exe doesn't support single quotes
-    escapedUser = `${quoteChar}${escapeShellArg(sqlConfig.user)}${quoteChar}`;
-    escapedPassword = `${quoteChar}${escapeShellArg(sqlConfig.password)}${quoteChar}`;
-    escapedDatabase = `${quoteChar}${escapeShellArg(sqlConfig.database)}${quoteChar}`;
+    // Use escapeSqlcmdParam instead of escapeShellArg because we're passing to sqlcmd, not directly to shell
+    escapedUser = `${quoteChar}${escapeSqlcmdParam(sqlConfig.user)}${quoteChar}`;
+    escapedPassword = `${quoteChar}${escapeSqlcmdParam(sqlConfig.password)}${quoteChar}`;
+    escapedDatabase = `${quoteChar}${escapeSqlcmdParam(sqlConfig.database)}${quoteChar}`;
 
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
