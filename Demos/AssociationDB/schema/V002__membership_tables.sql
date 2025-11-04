@@ -18,6 +18,9 @@ CREATE TABLE [membership].[Organization] (
     [Industry] NVARCHAR(100),
     [EmployeeCount] INT,
     [AnnualRevenue] DECIMAL(18,2),
+    [MarketCapitalization] DECIMAL(18,2),
+    [TickerSymbol] NVARCHAR(10),
+    [Exchange] NVARCHAR(50),
     [Website] NVARCHAR(500),
     [Description] NVARCHAR(MAX),
     [YearFounded] INT,
@@ -59,6 +62,24 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'membership',
     @level1type = N'TABLE', @level1name = 'Organization',
     @level2type = N'COLUMN', @level2name = 'AnnualRevenue';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Market capitalization in USD (for public companies)',
+    @level0type = N'SCHEMA', @level0name = 'membership',
+    @level1type = N'TABLE', @level1name = 'Organization',
+    @level2type = N'COLUMN', @level2name = 'MarketCapitalization';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Stock ticker symbol (for public companies)',
+    @level0type = N'SCHEMA', @level0name = 'membership',
+    @level1type = N'TABLE', @level1name = 'Organization',
+    @level2type = N'COLUMN', @level2name = 'TickerSymbol';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Stock exchange (NYSE, NASDAQ, etc. for public companies)',
+    @level0type = N'SCHEMA', @level0name = 'membership',
+    @level1type = N'TABLE', @level1name = 'Organization',
+    @level2type = N'COLUMN', @level2name = 'Exchange';
 GO
 
 -- ============================================================================
