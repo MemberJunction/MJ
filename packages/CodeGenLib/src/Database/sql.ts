@@ -9,7 +9,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { SQLCodeGenBase } from './sql_codegen';
 import { sqlConfig } from "../Config/db-connection";
 
-import { exec, execFile } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
 import { mkdirSync } from "fs-extra";
@@ -400,18 +400,64 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       '-i', absoluteFilePath
     ];
 
-    // Execute the command using execFile to bypass shell escaping issues
+    // Execute the command using spawn to completely bypass shell escaping issues
     logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);
 
+    // Debug logging for Windows password issues
+    if (process.platform === 'win32' && configInfo.verboseOutput) {
+      const maskedArgs = args.map((arg, i) =>
+        args[i-1] === '-P' ? '[MASKED]' : arg
+      );
+      logMessage(`sqlcmd args (password masked): ${JSON.stringify(maskedArgs)}`, 'Info');
+      logMessage(`Password length: ${sqlConfig.password.length}, contains special chars: ${/[^a-zA-Z0-9]/.test(sqlConfig.password)}`, 'Info');
+    }
+
     try {
-      const { stdout, stderr } = await execFileAsync('sqlcmd', args);
+      // Use spawn instead of execFile for better Windows compatibility
+      // spawn with shell:false ensures no cmd.exe interpretation of arguments
+      const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        const isWindows = process.platform === 'win32';
+        const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
+
+        const child = spawn(sqlcmdCommand, args, {
+          shell: false,  // Critical: bypass shell entirely on all platforms
+          windowsVerbatimArguments: true  // Windows: pass args exactly as-is, no quoting
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('error', (error) => {
+          reject(error);
+        });
+
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve({ stdout, stderr });
+          } else {
+            const error: any = new Error(`sqlcmd exited with code ${code}`);
+            error.stdout = stdout;
+            error.stderr = stderr;
+            error.code = code;
+            reject(error);
+          }
+        });
+      });
 
       // Log any output as warnings (they're non-fatal since we didn't throw)
-      if (stdout && stdout.trim().length > 0) {
-        logWarning(`SQL Server message: ${stdout.trim()}`);
+      if (result.stdout && result.stdout.trim().length > 0) {
+        logWarning(`SQL Server message: ${result.stdout.trim()}`);
       }
-      if (stderr && stderr.trim().length > 0) {
-        logWarning(`SQL Server stderr: ${stderr.trim()}`);
+      if (result.stderr && result.stderr.trim().length > 0) {
+        logWarning(`SQL Server stderr: ${result.stderr.trim()}`);
       }
 
       return true;
