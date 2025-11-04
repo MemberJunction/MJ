@@ -20,6 +20,12 @@ const execAsync = promisify(exec);
 /**
  * Escapes special characters in a string for safe use as a shell command argument.
  * Handles both Unix-like shells (bash/sh) and Windows (cmd.exe).
+ *
+ * For Unix systems: Designed to work with single quotes, which prevent all shell expansion.
+ * Only single quotes themselves need escaping (by ending the quoted string, adding an escaped quote, and starting a new quoted string).
+ *
+ * For Windows: Uses standard cmd.exe escaping for double-quoted strings.
+ *
  * @param value The string to escape
  * @returns The escaped string safe for shell use
  */
@@ -27,7 +33,7 @@ function escapeShellArg(value: string): string {
     const isWindows = process.platform === 'win32';
 
     if (isWindows) {
-        // Windows cmd.exe escaping
+        // Windows cmd.exe escaping for double-quoted strings
         return value
             .replace(/"/g, '""')      // Double quotes -> doubled
             .replace(/\^/g, '^^')     // Caret escape
@@ -39,15 +45,11 @@ function escapeShellArg(value: string): string {
             .replace(/\(/g, '^(')     // Left paren
             .replace(/\)/g, '^)');    // Right paren
     } else {
-        // Unix-like shell escaping
-        return value
-            .replace(/\\/g, '\\\\')   // Backslash first (escape the escape char)
-            .replace(/"/g, '\\"')     // Double quotes
-            .replace(/\$/g, '\\$')    // Dollar signs (variable expansion)
-            .replace(/`/g, '\\`')     // Backticks (command substitution)
-            .replace(/!/g, '\\!')     // Exclamation (history expansion)
-            .replace(/\n/g, '\\n')    // Newlines
-            .replace(/\r/g, '\\r');   // Carriage returns
+        // Unix-like shell escaping for single-quoted strings
+        // In single quotes, everything is literal except single quotes themselves
+        // To include a single quote: end the quoted string, add an escaped single quote, start a new quoted string
+        // Example: 'It'\''s working' produces: It's working
+        return value.replace(/'/g, "'\\''");
     }
 }
 
@@ -331,25 +333,34 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
 
  private static _batchScriptCounter: number = 0;
  public async executeSQLFile(filePath: string): Promise<boolean> {
+  let escapedUser: string = '';
+  let escapedPassword: string = '';
+  let escapedDatabase: string = '';
+
   try {
     if (sqlConfig.user === undefined || sqlConfig.password === undefined || sqlConfig.database === undefined) {
       throw new Error("SQL Server user, password, and database must be provided in the configuration");
     }
 
+    const isWindows = process.platform === 'win32';
+    const quoteChar = isWindows ? '"' : "'";
+
     // Construct the sqlcmd command with optional port and instance
-    let command = `sqlcmd -S "${escapeShellArg(sqlConfig.server)}"`;
+    let command = `sqlcmd -S ${quoteChar}${escapeShellArg(sqlConfig.server)}${quoteChar}`;
     if (sqlConfig.port) {
       command += `,${sqlConfig.port}`;
     }
     if (sqlConfig.options?.instanceName) {
-      const escapedInstanceName = `"${escapeShellArg(sqlConfig.options.instanceName)}"`;
+      const escapedInstanceName = `${quoteChar}${escapeShellArg(sqlConfig.options.instanceName)}${quoteChar}`;
       command += `\\${escapedInstanceName}`;
     }
 
     // Escape credentials and database name for safe shell usage
-    const escapedUser = `"${escapeShellArg(sqlConfig.user)}"`;
-    const escapedPassword = `"${escapeShellArg(sqlConfig.password)}"`;
-    const escapedDatabase = `"${escapeShellArg(sqlConfig.database)}"`;
+    // Use single quotes on Unix-like systems to prevent ALL shell expansion including history expansion (!)
+    // Use double quotes on Windows as cmd.exe doesn't support single quotes
+    escapedUser = `${quoteChar}${escapeShellArg(sqlConfig.user)}${quoteChar}`;
+    escapedPassword = `${quoteChar}${escapeShellArg(sqlConfig.password)}${quoteChar}`;
+    escapedDatabase = `${quoteChar}${escapeShellArg(sqlConfig.database)}${quoteChar}`;
 
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
@@ -389,7 +400,7 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       message += `\n SQL Server error: ${(e as any).stderr}`;
     }
 
-    const errorMessage = sqlConfig.password ? this.maskPassword(message, sqlConfig.password) : message;
+    const errorMessage = sqlConfig.password ? this.maskPassword(message, escapedPassword) : message;
     logError("Error executing batch SQL file: " + errorMessage);
     return false;
   }
