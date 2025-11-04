@@ -345,15 +345,17 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     const isWindows = process.platform === 'win32';
     const quoteChar = isWindows ? '"' : "'";
 
-    // Construct the sqlcmd command with optional port and instance
-    let command = `sqlcmd -S ${quoteChar}${escapeShellArg(sqlConfig.server)}${quoteChar}`;
+    // Build the server specification string (server[,port][\instance])
+    let serverSpec = sqlConfig.server;
     if (sqlConfig.port) {
-      command += `,${sqlConfig.port}`;
+      serverSpec += `,${sqlConfig.port}`;
     }
     if (sqlConfig.options?.instanceName) {
-      const escapedInstanceName = `${quoteChar}${escapeShellArg(sqlConfig.options.instanceName)}${quoteChar}`;
-      command += `\\${escapedInstanceName}`;
+      serverSpec += `\\${sqlConfig.options.instanceName}`;
     }
+
+    // Construct the sqlcmd command with properly quoted server specification
+    let command = `sqlcmd -S ${quoteChar}${escapeShellArg(serverSpec)}${quoteChar}`;
 
     // Escape credentials and database name for safe shell usage
     // Use single quotes on Unix-like systems to prevent ALL shell expansion including history expansion (!)
