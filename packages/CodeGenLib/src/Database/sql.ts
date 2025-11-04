@@ -389,7 +389,7 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
 
-    // Build arguments array for execFile (bypasses shell, no escaping needed!)
+    // Build arguments array for spawn (bypasses shell, no escaping needed!)
     const args = [
       '-S', serverSpec,
       '-U', sqlConfig.user,
@@ -420,8 +420,9 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
         const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
 
         const child = spawn(sqlcmdCommand, args, {
-          shell: false,  // Critical: bypass shell entirely on all platforms
-          windowsVerbatimArguments: true  // Windows: pass args exactly as-is, no quoting
+          shell: false  // Critical: bypass shell entirely on all platforms
+          // Note: NOT using windowsVerbatimArguments - let Node.js handle quoting
+          // This allows file paths with spaces to work while still bypassing cmd.exe
         });
 
         let stdout = '';
