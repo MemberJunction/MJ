@@ -56,10 +56,14 @@ function escapeShellArg(value: string): string {
 /**
  * Escapes special characters in a string specifically for use as sqlcmd parameter values.
  * When values are passed to sqlcmd wrapped in quotes, the quotes protect most special characters
- * from cmd.exe interpretation. We only need to handle:
- * - Double quotes (must be escaped as "") on Windows
- * - Single quotes (must be escaped as '') on Unix
- * - Backslashes before quotes to prevent escape sequence interpretation
+ * from cmd.exe interpretation.
+ *
+ * For Windows: Double quotes inside a double-quoted string need special handling.
+ * The cmd.exe rule: """ (three quotes) = one literal quote in the output
+ * This is because "" (two quotes) ends one quoted section and starts another,
+ * and the third quote starts the next quoted section with a literal quote.
+ *
+ * For Unix: Single quotes protect everything except single quotes themselves.
  *
  * @param value The string to escape for sqlcmd parameter
  * @returns The escaped string safe for use in sqlcmd parameters
@@ -68,11 +72,9 @@ function escapeSqlcmdParam(value: string): string {
     const isWindows = process.platform === 'win32';
 
     if (isWindows) {
-        // For Windows sqlcmd parameters in double quotes:
-        // Only escape double quotes (doubled) and backslashes before quotes
-        return value
-            .replace(/\\/g, '\\\\')   // Backslash -> double backslash
-            .replace(/"/g, '""');      // Double quote -> doubled
+        // For Windows cmd.exe with double-quoted strings:
+        // Replace each " with """ to get a literal quote in the output
+        return value.replace(/"/g, '"""');
     } else {
         // For Unix sqlcmd parameters in single quotes:
         // Only single quotes need escaping
