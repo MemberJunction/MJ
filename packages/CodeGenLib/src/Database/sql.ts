@@ -387,7 +387,28 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     }
 
     const cwd = path.resolve(process.cwd());
-    const absoluteFilePath = path.resolve(cwd, filePath);
+    let absoluteFilePath = path.resolve(cwd, filePath);
+
+    // On Windows, convert to short path (8.3 format) if the path contains spaces
+    // This avoids quoting issues when using windowsVerbatimArguments
+    const isWindows = process.platform === 'win32';
+    if (isWindows && absoluteFilePath.includes(' ')) {
+      try {
+        // Use fsutil to get the short path name on Windows
+        const { execSync } = require('child_process');
+        const result = execSync(`for %I in ("${absoluteFilePath}") do @echo %~sI`, {
+          encoding: 'utf8',
+          shell: 'cmd.exe'
+        }).trim();
+        if (result && !result.includes('ERROR') && !result.includes('%~sI')) {
+          absoluteFilePath = result;
+          logIf(configInfo.verboseOutput, `Converted path to short format: ${absoluteFilePath}`);
+        }
+      } catch (e) {
+        // If short path conversion fails, we'll try with the original path
+        logIf(configInfo.verboseOutput, `Could not convert to short path, using original: ${e}`);
+      }
+    }
 
     // Build arguments array for spawn (bypasses shell, no escaping needed!)
     const args = [
@@ -416,14 +437,19 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       // Use spawn instead of execFile for better Windows compatibility
       // spawn with shell:false ensures no cmd.exe interpretation of arguments
       const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-        const isWindows = process.platform === 'win32';
         const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
 
-        const child = spawn(sqlcmdCommand, args, {
+        const spawnOptions: any = {
           shell: false  // Critical: bypass shell entirely on all platforms
-          // Note: NOT using windowsVerbatimArguments - let Node.js handle quoting
-          // This allows file paths with spaces to work while still bypassing cmd.exe
-        });
+        };
+
+        // On Windows, use windowsVerbatimArguments to pass args exactly as-is
+        // File paths with spaces are handled by converting to 8.3 short format above
+        if (isWindows) {
+          spawnOptions.windowsVerbatimArguments = true;
+        }
+
+        const child = spawn(sqlcmdCommand, args, spawnOptions);
 
         let stdout = '';
         let stderr = '';
