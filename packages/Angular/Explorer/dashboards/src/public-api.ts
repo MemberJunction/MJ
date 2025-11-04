@@ -10,6 +10,7 @@ import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.compo
 
 // Base Dashboard
 export * from './generic/base-dashboard';
+export * from './generic/interactive-dashboard.component';
 
 // Dashboards
 export * from './EntityAdmin/entity-admin-dashboard.component';
