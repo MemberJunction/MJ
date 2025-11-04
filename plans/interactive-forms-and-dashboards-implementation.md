@@ -1571,8 +1571,9 @@ GO
 - [x] Implement InteractiveDashboardComponent
 - [x] Add event handling for save, cancel, delete
 - [x] Add proper error handling and loading states
-- [x] Export components from modules (requires module updates)
-- [ ] Add components to declarations (requires module updates)
+- [x] Export components from modules
+- [x] Add components to declarations
+- [x] Add components to public API exports
 
 ### Phase 5: Integration ✅ COMPLETE
 - [x] Update SingleRecordComponent to use FormResolverService
