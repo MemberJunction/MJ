@@ -39,11 +39,11 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TextBody';
 
 EXEC sp_addextendedproperty
-    @name = N'MS_Description', @value = N'Template category (Welcome, Renewal, Event, Newsletter, etc.)',
+    @name = N'MS_Description', @value = N'Template catery (Welcome, Renewal, Event, Newsletter, etc.)',
     @level0type = N'SCHEMA', @level0name = 'email',
     @level1type = N'TABLE', @level1name = 'EmailTemplate',
-    @level2type = N'COLUMN', @level2name = 'Category';
-GO
+    @level2type = N'COLUMN', @level2name = 'Catery';
+
 
 -- ============================================================================
 -- Extended properties for EmailSend
@@ -112,7 +112,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'email',
     @level1type = N'TABLE', @level1name = 'EmailSend',
     @level2type = N'COLUMN', @level2name = 'Status';
-GO
+
 
 -- ============================================================================
 -- Extended properties for EmailClick
@@ -145,7 +145,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'email',
     @level1type = N'TABLE', @level1name = 'EmailClick',
     @level2type = N'COLUMN', @level2name = 'LinkName';
-GO
+
 
 PRINT 'Email schema documentation added successfully!';
-GO
+

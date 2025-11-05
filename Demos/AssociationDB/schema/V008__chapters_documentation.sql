@@ -43,7 +43,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'chapters',
     @level1type = N'TABLE', @level1name = 'Chapter',
     @level2type = N'COLUMN', @level2name = 'MemberCount';
-GO
+
 
 -- ============================================================================
 -- Extended properties for ChapterMembership
@@ -82,7 +82,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'chapters',
     @level1type = N'TABLE', @level1name = 'ChapterMembership',
     @level2type = N'COLUMN', @level2name = 'Role';
-GO
+
 
 -- ============================================================================
 -- Extended properties for ChapterOfficer
@@ -121,7 +121,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'chapters',
     @level1type = N'TABLE', @level1name = 'ChapterOfficer',
     @level2type = N'COLUMN', @level2name = 'EndDate';
-GO
+
 
 PRINT 'Chapters schema documentation added successfully!';
-GO
+

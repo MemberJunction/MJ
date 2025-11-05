@@ -67,7 +67,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'events',
     @level1type = N'TABLE', @level1name = 'Event',
     @level2type = N'COLUMN', @level2name = 'Status';
-GO
+
 
 -- ============================================================================
 -- Extended properties for EventSession
@@ -94,7 +94,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'events',
     @level1type = N'TABLE', @level1name = 'EventSession',
     @level2type = N'COLUMN', @level2name = 'SessionType';
-GO
+
 
 -- ============================================================================
 -- Extended properties for EventRegistration
@@ -145,7 +145,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'events',
     @level1type = N'TABLE', @level1name = 'EventRegistration',
     @level2type = N'COLUMN', @level2name = 'CEUAwarded';
-GO
+
 
 PRINT 'Events schema documentation added successfully!';
-GO
+

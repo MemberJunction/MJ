@@ -55,7 +55,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'learning',
     @level1type = N'TABLE', @level1name = 'Course',
     @level2type = N'COLUMN', @level2name = 'MemberPrice';
-GO
+
 
 -- ============================================================================
 -- Extended properties for Enrollment
@@ -106,7 +106,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'learning',
     @level1type = N'TABLE', @level1name = 'Enrollment',
     @level2type = N'COLUMN', @level2name = 'Passed';
-GO
+
 
 -- ============================================================================
 -- Extended properties for Certificate
@@ -145,7 +145,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'learning',
     @level1type = N'TABLE', @level1name = 'Certificate',
     @level2type = N'COLUMN', @level2name = 'VerificationCode';
-GO
+
 
 PRINT 'Learning schema documentation added successfully!';
-GO
+

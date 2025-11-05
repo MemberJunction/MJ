@@ -15,8 +15,7 @@ PRINT 'POPULATING EVENTS DATA';
 PRINT '=================================================================';
 PRINT '';
 
--- Load parameters
-:r data/00_parameters.sql
+-- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
 -- EVENTS (35 Events over 5 years)

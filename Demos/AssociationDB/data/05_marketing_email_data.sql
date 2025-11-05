@@ -12,7 +12,7 @@ PRINT 'POPULATING MARKETING & EMAIL DATA';
 PRINT '=================================================================';
 PRINT '';
 
-:r data/00_parameters.sql
+-- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
 -- MARKETING SEGMENTS (80 segments)

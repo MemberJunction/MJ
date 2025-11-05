@@ -12,7 +12,7 @@ EXEC sp_addextendedproperty
     @value = N'Core membership management including organizations, individual members, membership types, and membership records with renewal tracking',
     @level0type = N'SCHEMA',
     @level0name = 'membership';
-GO
+
 
 -- Documentation for events schema
 EXEC sp_addextendedproperty
@@ -20,7 +20,7 @@ EXEC sp_addextendedproperty
     @value = N'Event management system for conferences, webinars, workshops, and chapter meetings including registration and attendance tracking',
     @level0type = N'SCHEMA',
     @level0name = 'events';
-GO
+
 
 -- Documentation for learning schema
 EXEC sp_addextendedproperty
@@ -28,7 +28,7 @@ EXEC sp_addextendedproperty
     @value = N'Learning management system (LMS) for educational courses, certifications, member enrollments, progress tracking, and certificate issuance',
     @level0type = N'SCHEMA',
     @level0name = 'learning';
-GO
+
 
 -- Documentation for finance schema
 EXEC sp_addextendedproperty
@@ -36,7 +36,7 @@ EXEC sp_addextendedproperty
     @value = N'Financial management including invoicing for dues and services, detailed line items, payment processing, and transaction tracking',
     @level0type = N'SCHEMA',
     @level0name = 'finance';
-GO
+
 
 -- Documentation for marketing schema
 EXEC sp_addextendedproperty
@@ -44,7 +44,7 @@ EXEC sp_addextendedproperty
     @value = N'Marketing campaign management, member segmentation, targeted communications, and campaign performance tracking',
     @level0type = N'SCHEMA',
     @level0name = 'marketing';
-GO
+
 
 -- Documentation for email schema
 EXEC sp_addextendedproperty
@@ -52,7 +52,7 @@ EXEC sp_addextendedproperty
     @value = N'Email communication system with reusable templates, send tracking, delivery metrics, click tracking, and engagement analytics',
     @level0type = N'SCHEMA',
     @level0name = 'email';
-GO
+
 
 -- Documentation for chapters schema
 EXEC sp_addextendedproperty
@@ -60,15 +60,15 @@ EXEC sp_addextendedproperty
     @value = N'Local chapters and special interest groups including geographic chapters, chapter memberships, and leadership positions',
     @level0type = N'SCHEMA',
     @level0name = 'chapters';
-GO
 
--- Documentation for governance schema
+
+-- Documentation for vernance schema
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Association governance structures including committees, task forces, board positions, and volunteer leadership tracking',
+    @value = N'Association vernance structures including committees, task forces, board positions, and volunteer leadership tracking',
     @level0type = N'SCHEMA',
-    @level0name = 'governance';
-GO
+    @level0name = 'vernance';
+
 
 PRINT 'Schema documentation added successfully!';
-GO
+

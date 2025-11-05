@@ -13,7 +13,7 @@ PRINT 'POPULATING LEARNING DATA';
 PRINT '=================================================================';
 PRINT '';
 
-:r data/00_parameters.sql
+-- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
 -- COURSES (60 Courses across categories and levels)

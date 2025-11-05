@@ -55,7 +55,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'marketing',
     @level1type = N'TABLE', @level1name = 'Campaign',
     @level2type = N'COLUMN', @level2name = 'ActualCost';
-GO
+
 
 -- ============================================================================
 -- Extended properties for Segment
@@ -88,7 +88,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'marketing',
     @level1type = N'TABLE', @level1name = 'Segment',
     @level2type = N'COLUMN', @level2name = 'MemberCount';
-GO
+
 
 -- ============================================================================
 -- Extended properties for CampaignMember
@@ -133,7 +133,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'marketing',
     @level1type = N'TABLE', @level1name = 'CampaignMember',
     @level2type = N'COLUMN', @level2name = 'ConversionValue';
-GO
+
 
 PRINT 'Marketing schema documentation added successfully!';
-GO
+

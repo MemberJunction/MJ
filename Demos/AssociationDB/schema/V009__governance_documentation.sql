@@ -55,7 +55,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'governance',
     @level1type = N'TABLE', @level1name = 'Committee',
     @level2type = N'COLUMN', @level2name = 'MaxMembers';
-GO
+
 
 -- ============================================================================
 -- Extended properties for CommitteeMembership
@@ -100,7 +100,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'governance',
     @level1type = N'TABLE', @level1name = 'CommitteeMembership',
     @level2type = N'COLUMN', @level2name = 'AppointedBy';
-GO
+
 
 -- ============================================================================
 -- Extended properties for BoardPosition
@@ -133,7 +133,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'governance',
     @level1type = N'TABLE', @level1name = 'BoardPosition',
     @level2type = N'COLUMN', @level2name = 'IsOfficer';
-GO
+
 
 -- ============================================================================
 -- Extended properties for BoardMember
@@ -172,7 +172,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'governance',
     @level1type = N'TABLE', @level1name = 'BoardMember',
     @level2type = N'COLUMN', @level2name = 'ElectionDate';
-GO
+
 
 PRINT 'Governance schema documentation added successfully!';
-GO
+

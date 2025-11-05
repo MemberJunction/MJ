@@ -67,7 +67,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'finance',
     @level1type = N'TABLE', @level1name = 'Invoice',
     @level2type = N'COLUMN', @level2name = 'Status';
-GO
+
 
 -- ============================================================================
 -- Extended properties for InvoiceLineItem
@@ -106,7 +106,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'finance',
     @level1type = N'TABLE', @level1name = 'InvoiceLineItem',
     @level2type = N'COLUMN', @level2name = 'RelatedEntityID';
-GO
+
 
 -- ============================================================================
 -- Extended properties for Payment
@@ -151,7 +151,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'finance',
     @level1type = N'TABLE', @level1name = 'Payment',
     @level2type = N'COLUMN', @level2name = 'Status';
-GO
+
 
 PRINT 'Finance schema documentation added successfully!';
-GO
+

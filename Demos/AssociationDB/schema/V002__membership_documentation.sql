@@ -55,7 +55,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'membership',
     @level1type = N'TABLE', @level1name = 'Organization',
     @level2type = N'COLUMN', @level2name = 'Exchange';
-GO
+
 
 -- ============================================================================
 -- Extended properties for MembershipType
@@ -94,7 +94,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'membership',
     @level1type = N'TABLE', @level1name = 'MembershipType',
     @level2type = N'COLUMN', @level2name = 'RequiresApproval';
-GO
+
 
 -- ============================================================================
 -- Extended properties for Member
@@ -145,7 +145,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'membership',
     @level1type = N'TABLE', @level1name = 'Member',
     @level2type = N'COLUMN', @level2name = 'EngagementScore';
-GO
+
 
 -- ============================================================================
 -- Extended properties for Membership
@@ -190,7 +190,3 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = 'membership',
     @level1type = N'TABLE', @level1name = 'Membership',
     @level2type = N'COLUMN', @level2name = 'AutoRenew';
-GO
-
-PRINT 'Membership schema documentation added successfully!';
-GO

@@ -220,6 +220,9 @@ PRINT 'NOTE: Data generation includes randomization and may produce';
 PRINT 'slightly different results on each execution.';
 PRINT '';
 
+-- Load parameters (date calculations and UUID declarations used by all data files)
+:r data/00_parameters.sql
+
 -- Membership data (foundation - must run first)
 :r data/01_membership_data.sql
 

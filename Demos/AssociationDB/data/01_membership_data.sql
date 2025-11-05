@@ -16,8 +16,7 @@ PRINT 'POPULATING MEMBERSHIP DATA';
 PRINT '=================================================================';
 PRINT '';
 
--- Load parameters from 00_parameters.sql
-:r data/00_parameters.sql
+-- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
 -- MEMBERSHIP TYPES (8 Types)

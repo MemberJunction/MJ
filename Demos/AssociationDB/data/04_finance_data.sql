@@ -15,7 +15,7 @@ PRINT 'POPULATING FINANCE DATA';
 PRINT '=================================================================';
 PRINT '';
 
-:r data/00_parameters.sql
+-- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
 -- INVOICES - Generated Programmatically
