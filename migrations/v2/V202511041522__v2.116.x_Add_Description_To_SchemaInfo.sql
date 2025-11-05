@@ -13,6 +13,126 @@ ALTER TABLE [${flyway:defaultSchema}].[SchemaInfo]
 ADD [Description] NVARCHAR(MAX) NULL;
 GO
 
+-- =============================================
+-- __mj Schema - MemberJunction Core Platform
+-- =============================================
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'MemberJunction Core Platform Schema - A comprehensive metadata-driven application development platform that provides unified data management, business logic orchestration, and automated UI generation. This schema contains the foundational infrastructure for entities, fields, relationships, permissions, AI integration, communication framework, actions system, query management, templates, workflows, and versioning. MemberJunction serves as the Common Data Platform (CDP) enabling organizations to integrate data from multiple sources, auto-generate APIs and forms, implement enterprise security, and build scalable applications with minimal custom code.',
+    @level0type = N'SCHEMA',
+    @level0name = N'__mj';
+GO
+
+-----------------------------------------------------------------
+-- Create view to query schemas with their extended properties
+-----------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwSQLSchemas]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwSQLSchemas];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwSQLSchemas]
+AS
+SELECT
+    s.schema_id AS SchemaID,
+    s.name AS SchemaName,
+    CAST(EP.value AS NVARCHAR(MAX)) AS SchemaDescription
+FROM
+    sys.schemas s
+LEFT OUTER JOIN
+    sys.extended_properties EP
+ON
+    EP.major_id = s.schema_id
+    AND EP.minor_id = 0
+    AND EP.class = 3  -- SCHEMA class
+    AND EP.name = 'MS_Description'
+LEFT OUTER JOIN
+    sys.database_principals dp
+ON
+    s.principal_id = dp.principal_id
+WHERE
+    s.schema_id > 4  -- Exclude system schemas (sys, INFORMATION_SCHEMA, guest, db_*)
+    AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
+    AND (dp.type IS NULL OR dp.type <> 'R')  -- Exclude database role schemas (type 'R' = database role)
+    AND (dp.is_fixed_role IS NULL OR dp.is_fixed_role = 0)  -- Exclude fixed database roles like db_owner, db_datareader, etc.
+GO
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwSQLSchemas] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+GO
+
+-----------------------------------------------------------------
+-- Create stored procedure to sync Schema Info from database schemas
+-----------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateSchemaInfoFromDatabase]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateSchemaInfoFromDatabase];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateSchemaInfoFromDatabase]
+    @ExcludedSchemaNames NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Parse excluded schema names into a table variable
+    DECLARE @ExcludedSchemas TABLE (SchemaName NVARCHAR(128))
+
+    IF @ExcludedSchemaNames IS NOT NULL AND LEN(@ExcludedSchemaNames) > 0
+    BEGIN
+        INSERT INTO @ExcludedSchemas (SchemaName)
+        SELECT TRIM(value) FROM STRING_SPLIT(@ExcludedSchemaNames, ',')
+        WHERE TRIM(value) <> ''
+    END
+
+    -- Update descriptions for existing SchemaInfo records from extended properties
+    UPDATE si
+    SET si.Description = ss.SchemaDescription
+    FROM [${flyway:defaultSchema}].SchemaInfo si
+    INNER JOIN [${flyway:defaultSchema}].vwSQLSchemas ss
+        ON si.SchemaName = ss.SchemaName
+    WHERE
+        (si.Description IS NULL OR si.Description <> ISNULL(ss.SchemaDescription, ''))
+        AND ss.SchemaName NOT IN (SELECT SchemaName FROM @ExcludedSchemas)
+
+    -- Insert new SchemaInfo records for schemas that don't exist yet
+    -- We'll use default entity ID ranges that can be updated later by administrators
+    INSERT INTO [${flyway:defaultSchema}].SchemaInfo
+    (
+        SchemaName,
+        EntityIDMin,
+        EntityIDMax,
+        Comments,
+        Description
+    )
+    SELECT
+        ss.SchemaName,
+        1,  -- Default min ID, must be > 0 per CHECK constraint. Should be updated by administrator.
+        999999999,  -- Default max ID, must be > 0 per CHECK constraint. Should be updated by administrator.
+        'Auto-created by CodeGen. Please update EntityIDMin and EntityIDMax to appropriate values for this schema.',
+        ss.SchemaDescription
+    FROM
+        [${flyway:defaultSchema}].vwSQLSchemas ss
+    LEFT OUTER JOIN
+        [${flyway:defaultSchema}].SchemaInfo si ON ss.SchemaName = si.SchemaName
+    WHERE
+        si.ID IS NULL  -- Schema doesn't exist in SchemaInfo yet
+        AND ss.SchemaName NOT IN (SELECT SchemaName FROM @ExcludedSchemas)
+
+    -- Return the updated/inserted records
+    SELECT
+        si.*
+    FROM
+        [${flyway:defaultSchema}].SchemaInfo si
+    INNER JOIN
+        [${flyway:defaultSchema}].vwSQLSchemas ss ON si.SchemaName = ss.SchemaName
+    WHERE
+        ss.SchemaName NOT IN (SELECT SchemaName FROM @ExcludedSchemas)
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSchemaInfoFromDatabase] TO [cdp_Developer], [cdp_Integration]
+GO
+
+/******* CODEGEN RUN ********/
+
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
