@@ -8,10 +8,6 @@
  * - 650 Certificates (generated for completions)
  ******************************************************************************/
 
-PRINT '================================================================';
-PRINT 'POPULATING LEARNING DATA';
-PRINT '=================================================================';
-PRINT '';
 
 -- Parameters are loaded by MASTER_BUILD script before this file
 
@@ -19,7 +15,6 @@ PRINT '';
 -- COURSES (60 Courses across categories and levels)
 -- ============================================================================
 
-PRINT 'Inserting Courses...';
 
 INSERT INTO [learning].[Course] (ID, Code, Title, Description, Category, Level, DurationHours, CEUCredits, Price, MemberPrice, IsActive, PublishedDate, InstructorName)
 VALUES
@@ -97,14 +92,11 @@ VALUES
     (NEWID(), 'BUS-203', 'Vendor Management and Procurement', 'Technology vendor relationships', 'Business', 'Intermediate', 16.0, 4.0, 449.00, 329.00, 1, DATEADD(DAY, -250, @EndDate), 'David Martinez'),
     (NEWID(), 'BUS-302', 'Technology Portfolio Management', 'Managing technology investments', 'Business', 'Advanced', 24.0, 6.0, 649.00, 479.00, 1, DATEADD(DAY, -180, @EndDate), 'Lisa Brown');
 
-PRINT '  Courses: 60 inserted';
-PRINT '';
 
 -- ============================================================================
 -- ENROLLMENTS (900 enrollments - Generated Programmatically)
 -- ============================================================================
 
-PRINT 'Generating Course Enrollments (900 records)...';
 
 -- Generate enrollments with realistic patterns
 DECLARE @TotalEnrollments INT = 0;
@@ -147,14 +139,11 @@ ORDER BY NEWID();
 
 SET @TotalEnrollments = @@ROWCOUNT;
 
-PRINT '  Enrollments: ' + CAST(@TotalEnrollments AS VARCHAR) + ' generated';
-PRINT '';
 
 -- ============================================================================
 -- CERTIFICATES (Generated for completed enrollments)
 -- ============================================================================
 
-PRINT 'Generating Certificates for Completed Enrollments...';
 
 INSERT INTO [learning].[Certificate] (ID, EnrollmentID, CertificateNumber, IssuedDate, ExpirationDate, CertificatePDFURL, VerificationCode)
 SELECT
@@ -174,15 +163,5 @@ WHERE e.Status = 'Completed' AND e.Passed = 1;
 
 SET @CompletedEnrollments = @@ROWCOUNT;
 
-PRINT '  Certificates: ' + CAST(@CompletedEnrollments AS VARCHAR) + ' generated';
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'LEARNING DATA POPULATION COMPLETE';
-PRINT 'Summary:';
-PRINT '  - Courses: 60';
-PRINT '  - Enrollments: ' + CAST(@TotalEnrollments AS VARCHAR);
-PRINT '  - Certificates: ' + CAST(@CompletedEnrollments AS VARCHAR);
-PRINT '=================================================================';
-PRINT '';
 -- Note: No GO statement here - variables must persist within transaction

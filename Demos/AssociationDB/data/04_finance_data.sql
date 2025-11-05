@@ -10,10 +10,6 @@
  * Uses programmatic generation for realistic transaction history
  ******************************************************************************/
 
-PRINT '=================================================================';
-PRINT 'POPULATING FINANCE DATA';
-PRINT '=================================================================';
-PRINT '';
 
 -- Parameters are loaded by MASTER_BUILD script before this file
 
@@ -21,7 +17,6 @@ PRINT '';
 -- INVOICES - Generated Programmatically
 -- ============================================================================
 
-PRINT 'Generating Invoices...';
 
 DECLARE @InvoiceCounter INT = 1;
 DECLARE @TotalInvoices INT = 0;
@@ -55,7 +50,6 @@ FROM [membership].[Membership] ms
 INNER JOIN [membership].[MembershipType] mt ON ms.MembershipTypeID = mt.ID;
 
 SET @TotalInvoices = @@ROWCOUNT;
-PRINT '  Membership Dues Invoices: ' + CAST(@TotalInvoices AS VARCHAR);
 
 -- Generate event registration invoices
 INSERT INTO [finance].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
@@ -76,7 +70,6 @@ INNER JOIN [events].[Event] e ON er.EventID = e.ID
 WHERE e.MemberPrice > 0;
 
 SET @TotalInvoices = @TotalInvoices + @@ROWCOUNT;
-PRINT '  Event Registration Invoices: ' + CAST(@@ROWCOUNT AS VARCHAR);
 
 -- Generate course enrollment invoices
 INSERT INTO [finance].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
@@ -100,15 +93,11 @@ FROM [learning].[Enrollment] en
 INNER JOIN [learning].[Course] c ON en.CourseID = c.ID;
 
 SET @TotalInvoices = @TotalInvoices + @@ROWCOUNT;
-PRINT '  Course Enrollment Invoices: ' + CAST(@@ROWCOUNT AS VARCHAR);
-PRINT '  Total Invoices: ' + CAST(@TotalInvoices AS VARCHAR);
-PRINT '';
 
 -- ============================================================================
 -- INVOICE LINE ITEMS
 -- ============================================================================
 
-PRINT 'Generating Invoice Line Items...';
 
 DECLARE @TotalLineItems INT = 0;
 
@@ -171,14 +160,11 @@ INNER JOIN [learning].[Course] c ON en.CourseID = c.ID;
 
 SET @TotalLineItems = @TotalLineItems + @@ROWCOUNT;
 
-PRINT '  Invoice Line Items: ' + CAST(@TotalLineItems AS VARCHAR);
-PRINT '';
 
 -- ============================================================================
 -- PAYMENTS
 -- ============================================================================
 
-PRINT 'Generating Payments...';
 
 -- Generate payments for paid invoices
 INSERT INTO [finance].[Payment] (ID, InvoiceID, PaymentDate, Amount, PaymentMethod, TransactionID, Status, ProcessedDate)
@@ -204,15 +190,5 @@ FROM [finance].[Invoice] i
 WHERE i.Status = 'Paid';
 
 DECLARE @TotalPayments INT = @@ROWCOUNT;
-PRINT '  Payments: ' + CAST(@TotalPayments AS VARCHAR);
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'FINANCE DATA POPULATION COMPLETE';
-PRINT 'Summary:';
-PRINT '  - Invoices: ' + CAST(@TotalInvoices AS VARCHAR);
-PRINT '  - Invoice Line Items: ' + CAST(@TotalLineItems AS VARCHAR);
-PRINT '  - Payments: ' + CAST(@TotalPayments AS VARCHAR);
-PRINT '=================================================================';
-PRINT '';
 -- Note: No GO statement here - variables must persist within transaction

@@ -147,5 +147,4 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'LinkName';
 
 
-PRINT 'Email schema documentation added successfully!';
 

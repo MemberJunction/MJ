@@ -7,10 +7,6 @@
  * - Governance: Committees, Committee Memberships, Board Positions & Members
  ******************************************************************************/
 
-PRINT '=================================================================';
-PRINT 'POPULATING CHAPTERS & GOVERNANCE DATA';
-PRINT '=================================================================';
-PRINT '';
 
 -- Parameters are loaded by MASTER_BUILD script before this file
 
@@ -18,7 +14,6 @@ PRINT '';
 -- CHAPTERS (15 chapters)
 -- ============================================================================
 
-PRINT 'Inserting Chapters...';
 
 INSERT INTO [chapters].[Chapter] (ID, Name, ChapterType, Region, City, State, Country, FoundedDate, IsActive, MeetingFrequency, Description)
 VALUES
@@ -53,14 +48,11 @@ VALUES
     (NEWID(), 'Toronto Chapter', 'Geographic', 'Canada', 'Toronto', 'Ontario', 'Canada',
      DATEADD(YEAR, -6, @EndDate), 1, 'Quarterly', 'Canadian technology leaders');
 
-PRINT '  Chapters: 15 inserted';
-PRINT '';
 
 -- ============================================================================
 -- CHAPTER MEMBERSHIPS & OFFICERS (Generated Programmatically)
 -- ============================================================================
 
-PRINT 'Generating Chapter Memberships...';
 
 -- Random chapter memberships
 INSERT INTO [chapters].[ChapterMembership] (ID, ChapterID, MemberID, JoinDate, Status, Role)
@@ -75,7 +67,6 @@ FROM [chapters].[Chapter] c
 CROSS JOIN [membership].[Member] m
 ORDER BY NEWID();
 
-PRINT '  Chapter Memberships: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' generated';
 
 -- Chapter officers (3 per chapter = 45 total)
 INSERT INTO [chapters].[ChapterOfficer] (ID, ChapterID, MemberID, Position, StartDate, IsActive)
@@ -98,14 +89,11 @@ CROSS APPLY (
     ORDER BY NEWID()
 ) cm;
 
-PRINT '  Chapter Officers: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' generated';
-PRINT '';
 
 -- ============================================================================
 -- GOVERNANCE - COMMITTEES
 -- ============================================================================
 
-PRINT 'Inserting Committees...';
 
 INSERT INTO [governance].[Committee] (ID, Name, CommitteeType, Purpose, MeetingFrequency, IsActive, FormedDate, MaxMembers)
 VALUES
@@ -122,14 +110,11 @@ VALUES
     (NEWID(), 'DEI Initiative Committee', 'Ad Hoc', 'Diversity, equity, and inclusion programs', 'Monthly', 1, DATEADD(MONTH, -12, @EndDate), 7),
     (NEWID(), 'Sponsorship Committee', 'Standing', 'Corporate sponsorship relationships', 'Quarterly', 1, DATEADD(YEAR, -8, @EndDate), 5);
 
-PRINT '  Committees: 12 inserted';
-PRINT '';
 
 -- ============================================================================
 -- COMMITTEE MEMBERSHIPS (Generated Programmatically)
 -- ============================================================================
 
-PRINT 'Generating Committee Memberships...';
 
 -- Random committee assignments (5-8 members per committee)
 INSERT INTO [governance].[CommitteeMembership] (ID, CommitteeID, MemberID, Role, StartDate, IsActive)
@@ -151,14 +136,11 @@ CROSS APPLY (
     ORDER BY NEWID()
 ) m;
 
-PRINT '  Committee Memberships: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' generated';
-PRINT '';
 
 -- ============================================================================
 -- BOARD POSITIONS & MEMBERS
 -- ============================================================================
 
-PRINT 'Inserting Board Positions...';
 
 INSERT INTO [governance].[BoardPosition] (ID, PositionTitle, PositionOrder, TermLengthYears, IsOfficer, IsActive)
 VALUES
@@ -172,7 +154,6 @@ VALUES
     (@BoardPos_Director4, 'Director at Large #4', 8, 3, 0, 1),
     (@BoardPos_Director5, 'Director at Large #5', 9, 3, 0, 1);
 
-PRINT '  Board Positions: 9 inserted';
 
 -- Current board members
 INSERT INTO [governance].[BoardMember] (ID, BoardPositionID, MemberID, StartDate, IsActive, ElectionDate)
@@ -190,11 +171,5 @@ CROSS APPLY (
     ORDER BY NEWID()
 ) m;
 
-PRINT '  Board Members: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' generated';
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'CHAPTERS & GOVERNANCE DATA POPULATION COMPLETE';
-PRINT '=================================================================';
-PRINT '';
 -- Note: No GO statement here - variables must persist within transaction

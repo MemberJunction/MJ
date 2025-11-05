@@ -10,10 +10,6 @@
  * All dates are relative to parameters defined in 00_parameters.sql
  ******************************************************************************/
 
-PRINT '=================================================================';
-PRINT 'POPULATING EVENTS DATA';
-PRINT '=================================================================';
-PRINT '';
 
 -- Parameters are loaded by MASTER_BUILD script before this file
 
@@ -21,7 +17,6 @@ PRINT '';
 -- EVENTS (35 Events over 5 years)
 -- ============================================================================
 
-PRINT 'Inserting Events...';
 
 -- Annual Conferences (5 years)
 INSERT INTO [events].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
@@ -294,14 +289,11 @@ VALUES
      'Networking event for early-career technology professionals.',
      'Published');
 
-PRINT '  Events: 35 inserted';
-PRINT '';
 
 -- ============================================================================
 -- EVENT SESSIONS (For Major Conferences - 85 sessions)
 -- ============================================================================
 
-PRINT 'Inserting Event Sessions...';
 
 -- 2024 Annual Conference Sessions (30 sessions over 3 days)
 INSERT INTO [events].[EventSession] (ID, EventID, Name, Description, StartTime, EndTime, Room, SpeakerName, SessionType, Capacity, CEUCredits)
@@ -347,14 +339,11 @@ VALUES
 
 -- TODO: Add remaining 78 sessions for 2024 conference and previous conferences
 
-PRINT '  Event Sessions: 7 inserted (78 more to be added for full set)';
-PRINT '';
 
 -- ============================================================================
 -- EVENT REGISTRATIONS (1,400 registrations - Generated Programmatically)
 -- ============================================================================
 
-PRINT 'Generating Event Registrations (1,400 records)...';
 
 -- For completed events, generate realistic registrations
 -- This uses a cursor to iterate through members and assign to events
@@ -411,15 +400,5 @@ END;
 CLOSE @EventCursor;
 DEALLOCATE @EventCursor;
 
-PRINT '  Event Registrations: ' + CAST(@TotalRegistrations AS VARCHAR) + ' generated';
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'EVENTS DATA POPULATION COMPLETE';
-PRINT 'Summary:';
-PRINT '  - Events: 35';
-PRINT '  - Event Sessions: 7 (78 more needed for full dataset)';
-PRINT '  - Event Registrations: ' + CAST(@TotalRegistrations AS VARCHAR);
-PRINT '=================================================================';
-PRINT '';
 -- Note: No GO statement here - variables must persist within transaction

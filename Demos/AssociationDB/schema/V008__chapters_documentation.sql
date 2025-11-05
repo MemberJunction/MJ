@@ -123,5 +123,4 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'EndDate';
 
 
-PRINT 'Chapters schema documentation added successfully!';
 

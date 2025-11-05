@@ -9,11 +9,6 @@
  *        All other dates will be calculated relative to this anchor.
  ******************************************************************************/
 
-PRINT '=================================================================';
-PRINT 'ASSOCIATION SAMPLE DATABASE - PARAMETERS';
-PRINT '=================================================================';
-PRINT '';
-
 -- ============================================================================
 -- DATE PARAMETERS (Modify these to control the data time window)
 -- ============================================================================
@@ -21,11 +16,6 @@ PRINT '';
 DECLARE @EndDate DATE = GETDATE();                              -- "Today"
 DECLARE @StartDate DATE = DATEADD(YEAR, -5, @EndDate);         -- 5 years of history
 
-PRINT 'Date Parameters:';
-PRINT '  Start Date: ' + CONVERT(VARCHAR, @StartDate, 101);
-PRINT '  End Date: ' + CONVERT(VARCHAR, @EndDate, 101);
-PRINT '  Data Window: ' + CAST(DATEDIFF(DAY, @StartDate, @EndDate) AS VARCHAR) + ' days';
-PRINT '';
 
 -- Derived date anchors for various data generation needs
 DECLARE @FiveYearsAgo DATE = DATEADD(YEAR, -5, @EndDate);
@@ -176,17 +166,5 @@ DECLARE @BoardPos_Director5 UNIQUEIDENTIFIER = 'C19F9A6C-D2B0-45E1-AA80-763CA8BD
 
 -- ============================================================================
 
-PRINT 'UUID Declarations: Loaded';
-PRINT '  Membership Types: 8';
-PRINT '  Key Organizations: 10';
-PRINT '  Key Members: 15';
-PRINT '  Key Events: 7';
-PRINT '  Key Courses: 6';
-PRINT '  Chapters: 7';
-PRINT '  Committees: 5';
-PRINT '  Board Positions: 9';
-PRINT '';
-PRINT 'Parameters file loaded successfully!';
-PRINT 'Ready to execute data population scripts.';
-PRINT '';
 -- Note: No GO statement here - variables must persist into parent script
+-- Note: No PRINT statements here - they cause syntax errors when included

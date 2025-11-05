@@ -70,5 +70,4 @@ EXEC sp_addextendedproperty
     @level0name = 'vernance';
 
 
-PRINT 'Schema documentation added successfully!';
 

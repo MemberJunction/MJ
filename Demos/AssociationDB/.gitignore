@@ -1,2 +1,5 @@
 # Build output file - generated during testing
 build_output.txt
+
+# Build script with credentials
+run_build.sh

@@ -135,5 +135,4 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'ConversionValue';
 
 
-PRINT 'Marketing schema documentation added successfully!';
 

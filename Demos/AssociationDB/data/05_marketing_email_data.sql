@@ -7,10 +7,6 @@
  * - Email: Templates, Email Sends, Clicks
  ******************************************************************************/
 
-PRINT '=================================================================';
-PRINT 'POPULATING MARKETING & EMAIL DATA';
-PRINT '=================================================================';
-PRINT '';
 
 -- Parameters are loaded by MASTER_BUILD script before this file
 
@@ -18,7 +14,6 @@ PRINT '';
 -- MARKETING SEGMENTS (80 segments)
 -- ============================================================================
 
-PRINT 'Inserting Marketing Segments...';
 
 INSERT INTO [marketing].[Segment] (ID, Name, Description, SegmentType, MemberCount, IsActive)
 VALUES
@@ -33,14 +28,11 @@ VALUES
     (NEWID(), 'Healthcare Industry', 'Members in healthcare sector', 'Industry', 0, 1),
     (NEWID(), 'West Coast Region', 'Members in CA, WA, OR', 'Geography', 0, 1);
 
-PRINT '  Segments: 10 inserted (70 more would be added for full dataset)';
-PRINT '';
 
 -- ============================================================================
 -- MARKETING CAMPAIGNS (45 campaigns)
 -- ============================================================================
 
-PRINT 'Inserting Marketing Campaigns...';
 
 INSERT INTO [marketing].[Campaign] (ID, Name, CampaignType, Status, StartDate, EndDate, Budget, Description)
 VALUES
@@ -55,14 +47,11 @@ VALUES
     (NEWID(), 'Cybersecurity Month Campaign', 'Member Engagement', 'Completed',
      DATEADD(DAY, -300, @EndDate), DATEADD(DAY, -270, @EndDate), 8000.00, 'October cybersecurity awareness campaign');
 
-PRINT '  Campaigns: 5 inserted (40 more would be added for full dataset)';
-PRINT '';
 
 -- ============================================================================
 -- EMAIL TEMPLATES (30 templates)
 -- ============================================================================
 
-PRINT 'Inserting Email Templates...';
 
 INSERT INTO [email].[EmailTemplate] (ID, Name, Subject, FromName, FromEmail, Category, IsActive, PreviewText)
 VALUES
@@ -77,14 +66,11 @@ VALUES
     (@Template_Newsletter, 'Monthly Newsletter Template', 'Technology Leadership Monthly - [MONTH]',
      'Technology Leadership Association', 'newsletter@association.org', 'Newsletter', 1, 'Your monthly update on industry trends');
 
-PRINT '  Email Templates: 5 inserted (25 more would be added for full dataset)';
-PRINT '';
 
 -- ============================================================================
 -- EMAIL SENDS & CLICKS (Programmatically Generated)
 -- ============================================================================
 
-PRINT 'Generating Email Sends (this will take a moment)...';
 
 -- Generate email sends with realistic engagement rates
 DECLARE @TotalEmailSends INT = 0;
@@ -145,8 +131,6 @@ END;
 CLOSE @EmailCursor;
 DEALLOCATE @EmailCursor;
 
-PRINT '  Email Sends: ' + CAST(@TotalEmailSends AS VARCHAR) + ' generated';
-PRINT '';
 
 -- Generate email clicks for clicked emails
 INSERT INTO [email].[EmailClick] (ID, EmailSendID, ClickDate, URL, LinkName)
@@ -167,11 +151,5 @@ SELECT
 FROM [email].[EmailSend] es
 WHERE es.Status = 'Clicked';
 
-PRINT '  Email Clicks: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' generated';
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'MARKETING & EMAIL DATA POPULATION COMPLETE';
-PRINT '=================================================================';
-PRINT '';
 -- Note: No GO statement here - variables must persist within transaction

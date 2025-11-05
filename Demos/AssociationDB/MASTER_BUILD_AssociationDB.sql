@@ -57,7 +57,6 @@ GO
 
 -- Begin transaction to enable rollback on error
 BEGIN TRANSACTION;
-GO
 
 PRINT '';
 PRINT '###################################################################';
@@ -130,95 +129,74 @@ PRINT '-------------------------------------------------------------------';
 PRINT 'PHASE 1A: Schema and table creation complete';
 PRINT '-------------------------------------------------------------------';
 PRINT '';
+GO
 
 /******************************************************************************
- * PHASE 1B: DOCUMENTATION (OPTIONAL)
+ * PHASE 1B: DOCUMENTATION
  * Adds extended properties for schema and table documentation
  ******************************************************************************/
 
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-BEGIN
-    PRINT '';
-    PRINT '-------------------------------------------------------------------';
-    PRINT 'PHASE 1B: ADDING DATABASE DOCUMENTATION';
-    PRINT '-------------------------------------------------------------------';
-    PRINT '';
-    PRINT 'Installing extended properties for schemas and tables...';
-    PRINT '';
-END
+PRINT '';
+PRINT '-------------------------------------------------------------------';
+PRINT 'PHASE 1B: ADDING DATABASE DOCUMENTATION';
+PRINT '-------------------------------------------------------------------';
+PRINT '';
+GO
 
 -- Schema documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V001__schemas_documentation.sql
+:r schema/V001__schemas_documentation.sql
+GO
 
 -- Membership documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V002__membership_documentation.sql
+:r schema/V002__membership_documentation.sql
+GO
 
 -- Events documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V003__events_documentation.sql
+:r schema/V003__events_documentation.sql
+GO
 
 -- Learning documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V004__learning_documentation.sql
+:r schema/V004__learning_documentation.sql
+GO
 
 -- Finance documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V005__finance_documentation.sql
+:r schema/V005__finance_documentation.sql
+GO
 
 -- Marketing documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V006__marketing_documentation.sql
+:r schema/V006__marketing_documentation.sql
+GO
 
 -- Email documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V007__email_documentation.sql
+:r schema/V007__email_documentation.sql
+GO
 
 -- Chapters documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V008__chapters_documentation.sql
+:r schema/V008__chapters_documentation.sql
+GO
 
 -- Governance documentation
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-    :r schema/V009__governance_documentation.sql
+:r schema/V009__governance_documentation.sql
+GO
 
-IF '$(INCLUDE_DOCUMENTATION)' = '1'
-BEGIN
-    PRINT '';
-    PRINT '-------------------------------------------------------------------';
-    PRINT 'PHASE 1B COMPLETE: Documentation added successfully';
-    PRINT '-------------------------------------------------------------------';
-    PRINT '';
-END
-ELSE
-BEGIN
-    PRINT '';
-    PRINT '-------------------------------------------------------------------';
-    PRINT 'PHASE 1B: SKIPPED (Documentation installation disabled)';
-    PRINT '-------------------------------------------------------------------';
-    PRINT '';
-END
+PRINT '';
+PRINT '-------------------------------------------------------------------';
+PRINT 'PHASE 1B COMPLETE: Documentation added successfully';
+PRINT '-------------------------------------------------------------------';
+PRINT '';
+GO
 
 PRINT '';
 PRINT '===================================================================';
 PRINT 'PHASE 1 COMPLETE: All schemas and tables created successfully';
 PRINT '===================================================================';
 PRINT '';
+GO
 
 /******************************************************************************
  * PHASE 2: SAMPLE DATA POPULATION
  * Inserts realistic sample data across all domains
  ******************************************************************************/
-
-PRINT '';
-PRINT '===================================================================';
-PRINT 'PHASE 2: POPULATING SAMPLE DATA';
-PRINT '===================================================================';
-PRINT '';
-PRINT 'NOTE: Data generation includes randomization and may produce';
-PRINT 'slightly different results on each execution.';
-PRINT '';
 
 -- Load parameters (date calculations and UUID declarations used by all data files)
 :r data/00_parameters.sql

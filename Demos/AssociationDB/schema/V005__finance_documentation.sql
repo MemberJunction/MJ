@@ -153,5 +153,4 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'Status';
 
 
-PRINT 'Finance schema documentation added successfully!';
 

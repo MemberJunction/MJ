@@ -11,10 +11,6 @@
  * All dates are relative to parameters defined in 00_parameters.sql
  ******************************************************************************/
 
-PRINT '=================================================================';
-PRINT 'POPULATING MEMBERSHIP DATA';
-PRINT '=================================================================';
-PRINT '';
 
 -- Parameters are loaded by MASTER_BUILD script before this file
 
@@ -22,7 +18,6 @@ PRINT '';
 -- MEMBERSHIP TYPES (8 Types)
 -- ============================================================================
 
-PRINT 'Inserting Membership Types...';
 
 INSERT INTO [membership].[MembershipType] (ID, Name, Description, AnnualDues, RenewalPeriodMonths, IsActive, AllowAutoRenew, RequiresApproval, Benefits, DisplayOrder)
 VALUES
@@ -35,14 +30,11 @@ VALUES
     (@MembershipType_International, 'International Member', 'Membership for professionals outside North America', 350.00, 12, 1, 1, 0, 'All Individual Professional benefits with international event access and global member directory.', 7),
     (@MembershipType_Honorary, 'Honorary Member', 'Complimentary membership for distinguished contributors', 0.00, 12, 1, 0, 1, 'Awarded by the board for outstanding contributions to the field. Includes all member benefits with special recognition.', 8);
 
-PRINT '  Membership Types: 8 inserted';
-PRINT '';
 
 -- ============================================================================
 -- ORGANIZATIONS (40 Organizations)
 -- ============================================================================
 
-PRINT 'Inserting Organizations...';
 
 INSERT INTO [membership].[Organization] (ID, Name, Industry, EmployeeCount, AnnualRevenue, MarketCapitalization, TickerSymbol, Exchange, Website, Description, YearFounded, City, State, Country, Phone)
 VALUES
@@ -94,14 +86,11 @@ VALUES
     (NEWID(), 'AIStartup Labs', 'Artificial Intelligence', 42, 8500000.00, NULL, NULL, NULL, 'https://www.aistartup.ai', 'Early-stage AI research and development', 2022, 'Palo Alto', 'CA', 'United States', '650-555-0136'),
     (NEWID(), 'GreenTech Innovations', 'Sustainability Tech', 35, 6800000.00, NULL, NULL, NULL, 'https://www.greentech.eco', 'Sustainable technology solutions for climate change', 2022, 'Portland', 'OR', 'United States', '503-555-0138');
 
-PRINT '  Organizations: 40 inserted';
-PRINT '';
 
 -- ============================================================================
 -- MEMBERS (500 Members)
 -- ============================================================================
 
-PRINT 'Inserting Members...';
 
 -- Key Members with Full Details (Mix of real executives from public companies and fictional members)
 INSERT INTO [membership].[Member] (ID, Email, FirstName, LastName, Title, OrganizationID, Industry, JobFunction, YearsInProfession, JoinDate, City, State, Country, Phone, LinkedInURL)
@@ -125,10 +114,8 @@ VALUES
     (@Member_AmandaClark, 'amanda.clark@nvidia.com', 'Amanda', 'Clark', 'Machine Learning Engineer', @Org_DataDriven, 'AI & Semiconductors', 'Machine Learning', 6, DATEADD(DAY, -550, @EndDate), 'Santa Clara', 'CA', 'United States', '408-555-1014', 'https://linkedin.com/in/amandaclark'),
     (@Member_DanielNguyen, 'daniel.nguyen@paloaltonetworks.com', 'Daniel', 'Nguyen', 'Security Operations Manager', @Org_CyberShield, 'Cybersecurity', 'Security Operations', 9, DATEADD(DAY, -820, @EndDate), 'Santa Clara', 'CA', 'United States', '408-555-1015', 'https://linkedin.com/in/danielnguyen');
 
-PRINT '  Key Members: 15 inserted';
 
 -- Remaining 485 members generated programmatically with realistic distributions
-DECLARE @MemberCount INT = 0;
 DECLARE @CurrentOrg UNIQUEIDENTIFIER;
 DECLARE @MemberJoinDaysAgo INT;
 DECLARE @FirstNames TABLE (FirstName NVARCHAR(50));
@@ -259,15 +246,11 @@ CROSS APPLY (
 ) o
 ORDER BY NEWID();
 
-PRINT '  Additional Members: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' inserted';
-PRINT '  Total Members: 500';
-PRINT '';
 
 -- ============================================================================
 -- MEMBERSHIPS (625 records including renewals)
 -- ============================================================================
 
-PRINT 'Inserting Memberships...';
 
 -- Key members with detailed renewal histories (17 records for the 15 key members)
 INSERT INTO [membership].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
@@ -299,7 +282,6 @@ VALUES
     -- Alex Taylor - Student Member (joined 6 months ago)
     (NEWID(), @Member_AlexTaylor, @MembershipType_Student, 'Active', DATEADD(DAY, -180, @EndDate), DATEADD(DAY, 185, @EndDate), NULL, 1);
 
-PRINT '  Key Member Memberships: 17 inserted';
 
 -- Generate memberships for all remaining members (608 more to reach 625)
 -- 80% will be Active, 15% Expired, 5% Cancelled
@@ -340,7 +322,6 @@ SELECT
 FROM [membership].[Member] m
 WHERE m.ID NOT IN (@Member_SarahChen, @Member_MichaelJohnson, @Member_EmilyRodriguez, @Member_DavidKim, @Member_AlexTaylor);
 
-PRINT '  Base Memberships: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' inserted';
 
 -- Additional renewal records for 25% of members (125 additional records to get to 625 total)
 INSERT INTO [membership].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
@@ -358,17 +339,5 @@ WHERE ms.MemberID NOT IN (@Member_SarahChen, @Member_MichaelJohnson, @Member_Emi
   AND ms.Status = 'Active'
 ORDER BY NEWID();
 
-PRINT '  Renewal History Records: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' inserted';
-PRINT '  Total Memberships: 625';
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'MEMBERSHIP DATA POPULATION COMPLETE';
-PRINT 'Summary:';
-PRINT '  - Membership Types: 8';
-PRINT '  - Organizations: 40';
-PRINT '  - Members: 500';
-PRINT '  - Membership Records: 625';
-PRINT '=================================================================';
-PRINT '';
 -- Note: No GO statement here - variables must persist within transaction

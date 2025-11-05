@@ -174,5 +174,4 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'ElectionDate';
 
 
-PRINT 'Governance schema documentation added successfully!';
 
