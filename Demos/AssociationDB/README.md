@@ -54,15 +54,30 @@ This sample database provides a fully functional, data-rich environment for test
    ```
 
 2. **Run the master build script**:
+
+   **Option A: With Documentation (Default)**
    ```sql
-   -- Option 1: Run from SSMS
-   :setvar DatabaseName "YourMJDatabase"
-   USE [$(DatabaseName)];
+   -- From SSMS (enable SQLCMD Mode: Query → SQLCMD Mode)
+   USE YourMJDatabase;
    GO
    :r MASTER_BUILD_AssociationDB.sql
 
-   -- Option 2: Run via sqlcmd
+   -- From sqlcmd
    sqlcmd -S localhost -d YourMJDatabase -i MASTER_BUILD_AssociationDB.sql
+   ```
+
+   **Option B: Without Documentation**
+
+   Useful for testing auto-documentation tools:
+   ```sql
+   -- From SSMS (enable SQLCMD Mode: Query → SQLCMD Mode)
+   :setvar INCLUDE_DOCUMENTATION 0
+   USE YourMJDatabase;
+   GO
+   :r MASTER_BUILD_AssociationDB.sql
+
+   -- From sqlcmd
+   sqlcmd -S localhost -d YourMJDatabase -v INCLUDE_DOCUMENTATION=0 -i MASTER_BUILD_AssociationDB.sql
    ```
 
 3. **Verify the installation**:
@@ -87,33 +102,42 @@ This sample database provides a fully functional, data-rich environment for test
 
 ```
 AssociationDB/
-├── README.md                          # This file
-├── MASTER_BUILD_AssociationDB.sql     # Master build script (runs everything)
+├── README.md                              # This file
+├── MASTER_BUILD_AssociationDB.sql         # Master build script (runs everything)
 │
-├── schema/                            # Schema definition files
-│   ├── V001__create_schemas.sql      # Creates 8 schemas
-│   ├── V002__membership_tables.sql   # Membership domain tables
-│   ├── V003__events_tables.sql       # Events domain tables
-│   ├── V004__learning_tables.sql     # Learning/LMS domain tables
-│   ├── V005__finance_tables.sql      # Finance domain tables
-│   ├── V006__marketing_tables.sql    # Marketing domain tables
-│   ├── V007__email_tables.sql        # Email/communications tables
-│   ├── V008__chapters_tables.sql     # Chapters domain tables
-│   └── V009__governance_tables.sql   # Governance domain tables
+├── schema/                                # Schema definition files
+│   ├── V001__create_schemas.sql          # Creates 8 schemas
+│   ├── V001__schemas_documentation.sql   # Schema descriptions (optional)
+│   ├── V002__membership_tables.sql       # Membership domain tables
+│   ├── V002__membership_documentation.sql # Membership table docs (optional)
+│   ├── V003__events_tables.sql           # Events domain tables
+│   ├── V003__events_documentation.sql    # Events table docs (optional)
+│   ├── V004__learning_tables.sql         # Learning/LMS domain tables
+│   ├── V004__learning_documentation.sql  # Learning table docs (optional)
+│   ├── V005__finance_tables.sql          # Finance domain tables
+│   ├── V005__finance_documentation.sql   # Finance table docs (optional)
+│   ├── V006__marketing_tables.sql        # Marketing domain tables
+│   ├── V006__marketing_documentation.sql # Marketing table docs (optional)
+│   ├── V007__email_tables.sql            # Email/communications tables
+│   ├── V007__email_documentation.sql     # Email table docs (optional)
+│   ├── V008__chapters_tables.sql         # Chapters domain tables
+│   ├── V008__chapters_documentation.sql  # Chapters table docs (optional)
+│   ├── V009__governance_tables.sql       # Governance domain tables
+│   └── V009__governance_documentation.sql # Governance table docs (optional)
 │
-├── data/                              # Sample data population files
-│   ├── 00_parameters.sql             # Date parameters and UUID declarations
-│   ├── 01_membership_data.sql        # 500 members, 40 orgs, memberships
-│   ├── 02_events_data.sql            # 35 events, sessions, 1400+ registrations
-│   ├── 03_learning_data.sql          # 60 courses, 900 enrollments, certificates
-│   ├── 04_finance_data.sql           # Invoices, payments for all transactions
-│   ├── 05_marketing_email_data.sql   # Campaigns, segments, email sends
-│   └── 06_chapters_governance_data.sql # Chapters, committees, board data
+├── data/                                  # Sample data population files
+│   ├── 00_parameters.sql                 # Date parameters and UUID declarations
+│   ├── 01_membership_data.sql            # 500 members, 40 orgs, memberships
+│   ├── 02_events_data.sql                # 35 events, sessions, 1400+ registrations
+│   ├── 03_learning_data.sql              # 60 courses, 900 enrollments, certificates
+│   ├── 04_finance_data.sql               # Invoices, payments for all transactions
+│   ├── 05_marketing_email_data.sql       # Campaigns, segments, email sends
+│   └── 06_chapters_governance_data.sql   # Chapters, committees, board data
 │
-└── docs/                              # Documentation
-    ├── SCHEMA_OVERVIEW.md            # Detailed schema documentation
-    ├── SAMPLE_QUERIES.md             # Example queries for common scenarios
-    └── BUSINESS_SCENARIOS.md         # Member journey documentation
+└── docs/                                  # Documentation
+    ├── SCHEMA_OVERVIEW.md                # Detailed schema documentation
+    ├── SAMPLE_QUERIES.md                 # Example queries for common scenarios
+    └── BUSINESS_SCENARIOS.md             # Member journey documentation
 ```
 
 ## 🗓️ Evergreen Date System
@@ -182,6 +206,71 @@ All foreign keys are properly defined with referential integrity constraints.
 - **[Schema Overview](docs/SCHEMA_OVERVIEW.md)**: Detailed documentation of all tables, columns, and relationships
 - **[Sample Queries](docs/SAMPLE_QUERIES.md)**: Common queries for reports, analytics, and data exploration
 - **[Business Scenarios](docs/BUSINESS_SCENARIOS.md)**: Member journey examples and use case walkthroughs
+
+## 📝 Database Documentation
+
+This sample database uses SQL Server Extended Properties for comprehensive database documentation. All schemas, tables, and columns include descriptive metadata accessible through SQL Server's metadata views.
+
+### Documentation Architecture
+
+The documentation is **separated from schema definitions** to support:
+- **Testing auto-documentation tools** by installing schema without docs
+- **Faster schema-only installations** when documentation isn't needed
+- **Easy comparison** between auto-generated and manual documentation
+
+Schema files contain only:
+- CREATE TABLE statements
+- Constraints and foreign keys
+- Indexes
+- PRINT statements
+
+Documentation files contain:
+- Extended properties for schemas (`V001__schemas_documentation.sql`)
+- Extended properties for tables and columns (`V00X__*_documentation.sql`)
+
+### Accessing Documentation
+
+Query extended properties to see documentation:
+
+```sql
+-- View schema descriptions
+SELECT
+    s.name AS SchemaName,
+    ep.value AS Description
+FROM sys.schemas s
+LEFT JOIN sys.extended_properties ep
+    ON ep.major_id = s.schema_id
+    AND ep.class = 3
+ORDER BY s.name;
+
+-- View table and column descriptions
+SELECT
+    SCHEMA_NAME(t.schema_id) AS SchemaName,
+    t.name AS TableName,
+    c.name AS ColumnName,
+    ep.value AS Description
+FROM sys.tables t
+INNER JOIN sys.columns c ON t.object_id = c.object_id
+LEFT JOIN sys.extended_properties ep
+    ON ep.major_id = c.object_id
+    AND ep.minor_id = c.column_id
+    AND ep.name = 'MS_Description'
+WHERE SCHEMA_NAME(t.schema_id) IN ('membership', 'events', 'learning', 'finance', 'marketing', 'email', 'chapters', 'governance')
+ORDER BY SchemaName, TableName, c.column_id;
+```
+
+### Installing Without Documentation
+
+To test auto-documentation tools, install the database without extended properties:
+
+```sql
+:setvar INCLUDE_DOCUMENTATION 0
+USE YourMJDatabase;
+GO
+:r MASTER_BUILD_AssociationDB.sql
+```
+
+Then run your auto-documentation tool and compare results against the `*_documentation.sql` files.
 
 ## ⚙️ Customization
 

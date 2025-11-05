@@ -31,13 +31,26 @@
  *   -- From sqlcmd:
  *   sqlcmd -S localhost -d YourDatabaseName -i MASTER_BUILD_AssociationDB.sql
  *
+ * CONFIGURATION:
+ *   -- To install WITHOUT documentation (extended properties):
+ *   :setvar INCLUDE_DOCUMENTATION 0
+ *   :r MASTER_BUILD_AssociationDB.sql
+ *
+ *   -- To install WITH documentation (default):
+ *   :setvar INCLUDE_DOCUMENTATION 1
+ *   :r MASTER_BUILD_AssociationDB.sql
+ *
  * NOTES:
  * - All dates are relative to execution time (evergreen data)
  * - Schema and table creation is idempotent (uses IF NOT EXISTS)
  * - Data inserts use NEWID() for randomization on each run
  * - Designed to work with MemberJunction CodeGen
+ * - Documentation installation is useful for testing auto-doc generation tools
  *
  ******************************************************************************/
+
+-- Default to including documentation if not specified
+:setvar INCLUDE_DOCUMENTATION 1
 
 SET NOCOUNT ON;
 GO
@@ -107,6 +120,81 @@ PRINT '';
 
 -- Governance schema tables
 :r schema/V009__governance_tables.sql
+
+PRINT '';
+PRINT '-------------------------------------------------------------------';
+PRINT 'PHASE 1A: Schema and table creation complete';
+PRINT '-------------------------------------------------------------------';
+PRINT '';
+
+/******************************************************************************
+ * PHASE 1B: DOCUMENTATION (OPTIONAL)
+ * Adds extended properties for schema and table documentation
+ ******************************************************************************/
+
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+BEGIN
+    PRINT '';
+    PRINT '-------------------------------------------------------------------';
+    PRINT 'PHASE 1B: ADDING DATABASE DOCUMENTATION';
+    PRINT '-------------------------------------------------------------------';
+    PRINT '';
+    PRINT 'Installing extended properties for schemas and tables...';
+    PRINT '';
+END
+
+-- Schema documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V001__schemas_documentation.sql
+
+-- Membership documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V002__membership_documentation.sql
+
+-- Events documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V003__events_documentation.sql
+
+-- Learning documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V004__learning_documentation.sql
+
+-- Finance documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V005__finance_documentation.sql
+
+-- Marketing documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V006__marketing_documentation.sql
+
+-- Email documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V007__email_documentation.sql
+
+-- Chapters documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V008__chapters_documentation.sql
+
+-- Governance documentation
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+    :r schema/V009__governance_documentation.sql
+
+IF '$(INCLUDE_DOCUMENTATION)' = '1'
+BEGIN
+    PRINT '';
+    PRINT '-------------------------------------------------------------------';
+    PRINT 'PHASE 1B COMPLETE: Documentation added successfully';
+    PRINT '-------------------------------------------------------------------';
+    PRINT '';
+END
+ELSE
+BEGIN
+    PRINT '';
+    PRINT '-------------------------------------------------------------------';
+    PRINT 'PHASE 1B: SKIPPED (Documentation installation disabled)';
+    PRINT '-------------------------------------------------------------------';
+    PRINT '';
+END
 
 PRINT '';
 PRINT '===================================================================';
