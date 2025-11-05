@@ -15,7 +15,7 @@ PRINT 'POPULATING FINANCE DATA';
 PRINT '=================================================================';
 PRINT '';
 
-:r 00_parameters.sql
+:r data/00_parameters.sql
 
 -- ============================================================================
 -- INVOICES - Generated Programmatically

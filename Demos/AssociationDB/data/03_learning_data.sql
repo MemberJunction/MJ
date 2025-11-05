@@ -13,7 +13,7 @@ PRINT 'POPULATING LEARNING DATA';
 PRINT '=================================================================';
 PRINT '';
 
-:r 00_parameters.sql
+:r data/00_parameters.sql
 
 -- ============================================================================
 -- COURSES (60 Courses across categories and levels)

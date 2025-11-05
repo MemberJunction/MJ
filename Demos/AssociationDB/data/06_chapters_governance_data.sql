@@ -12,7 +12,7 @@ PRINT 'POPULATING CHAPTERS & GOVERNANCE DATA';
 PRINT '=================================================================';
 PRINT '';
 
-:r 00_parameters.sql
+:r data/00_parameters.sql
 
 -- ============================================================================
 -- CHAPTERS (15 chapters)

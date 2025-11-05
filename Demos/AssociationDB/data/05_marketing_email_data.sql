@@ -12,7 +12,7 @@ PRINT 'POPULATING MARKETING & EMAIL DATA';
 PRINT '=================================================================';
 PRINT '';
 
-:r 00_parameters.sql
+:r data/00_parameters.sql
 
 -- ============================================================================
 -- MARKETING SEGMENTS (80 segments)

@@ -17,7 +17,7 @@ PRINT '=================================================================';
 PRINT '';
 
 -- Load parameters from 00_parameters.sql
-:r 00_parameters.sql
+:r data/00_parameters.sql
 
 -- ============================================================================
 -- MEMBERSHIP TYPES (8 Types)

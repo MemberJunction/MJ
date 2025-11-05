@@ -55,6 +55,10 @@
 SET NOCOUNT ON;
 GO
 
+-- Begin transaction to enable rollback on error
+BEGIN TRANSACTION;
+GO
+
 PRINT '';
 PRINT '###################################################################';
 PRINT '#                                                                 #';
@@ -415,6 +419,12 @@ PRINT '-------------------------------------------------------------------';
 PRINT '';
 PRINT 'For more information, see README.md';
 PRINT '';
+
+-- Commit the transaction
+COMMIT TRANSACTION;
+PRINT '';
+PRINT 'Transaction committed successfully!';
+GO
 
 SET NOCOUNT OFF;
 GO
