@@ -1,0 +1,10 @@
+{
+  "Name": "Evaluate Audio Prescreening",
+  "Description": "Evaluates audio conversation quality and transcript from prescreening interview, assessing communication skills, technical knowledge, and culture fit",
+  "CategoryID": "@lookup:AI Prompt Categories.Name=Recruiting & Hiring",
+  "UserID": null,
+  "IsActive": true,
+  "Prompt": "@file:templates/evaluate-audio-screening.md",
+  "Type": "Prompt",
+  "OutputType": "JSON"
+}
