@@ -1,0 +1,283 @@
+ 
+###################################################################
+#                                                                 #
+#     MemberJunction - Association Sample Database Builder       #
+#                                                                 #
+###################################################################
+ 
+This script will create a comprehensive association management
+database with realistic sample data across 8 business domains.
+ 
+Estimated completion time: 2-5 minutes
+ 
+-------------------------------------------------------------------
+ 
+Target Database: MJ_2_115_0
+Start Time: 2025-11-05 18:53:41
+ 
+===================================================================
+ 
+ 
+===================================================================
+PHASE 1: CREATING SCHEMAS AND TABLES
+===================================================================
+ 
+Created schema: membership
+Created schema: events
+Created schema: learning
+Created schema: finance
+Created schema: marketing
+Created schema: email
+Created schema: chapters
+Created schema: governance
+All schemas created successfully!
+Schemas: membership, events, learning, finance, marketing, email, chapters, governance
+Membership schema tables created successfully!
+Tables: Organization, MembershipType, Member, Membership
+Events schema tables created successfully!
+Tables: Event, EventSession, EventRegistration
+Learning schema tables created successfully!
+Tables: Course, Enrollment, Certificate
+Finance schema tables created successfully!
+Tables: Invoice, InvoiceLineItem, Payment
+Marketing schema tables created successfully!
+Tables: Campaign, Segment, CampaignMember
+Email schema tables created successfully!
+Tables: EmailTemplate, EmailSend, EmailClick
+Chapters schema tables created successfully!
+Tables: Chapter, ChapterMembership, ChapterOfficer
+Governance schema tables created successfully!
+Tables: Committee, CommitteeMembership, BoardPosition, BoardMember
+ 
+-------------------------------------------------------------------
+PHASE 1A: Schema and table creation complete
+-------------------------------------------------------------------
+ 
+ 
+-------------------------------------------------------------------
+PHASE 1B: ADDING DATABASE DOCUMENTATION
+-------------------------------------------------------------------
+ 
+Installing extended properties for schemas and tables...
+ 
+Schema documentation added successfully!
+Membership schema documentation added successfully!
+Events schema documentation added successfully!
+Learning schema documentation added successfully!
+Finance schema documentation added successfully!
+Marketing schema documentation added successfully!
+Email schema documentation added successfully!
+Chapters schema documentation added successfully!
+Governance schema documentation added successfully!
+ 
+-------------------------------------------------------------------
+PHASE 1B COMPLETE: Documentation added successfully
+-------------------------------------------------------------------
+ 
+ 
+===================================================================
+PHASE 1 COMPLETE: All schemas and tables created successfully
+===================================================================
+ 
+ 
+===================================================================
+PHASE 2: POPULATING SAMPLE DATA
+===================================================================
+ 
+NOTE: Data generation includes randomization and may produce
+slightly different results on each execution.
+ 
+=================================================================
+POPULATING MEMBERSHIP DATA
+=================================================================
+ 
+=================================================================
+ASSOCIATION SAMPLE DATABASE - PARAMETERS
+=================================================================
+ 
+Date Parameters:
+  Start Date: 11/05/2020
+  End Date: 11/05/2025
+  Data Window: 1826 days
+ 
+UUID Declarations: Loaded
+  Membership Types: 8
+  Key Organizations: 10
+  Key Members: 15
+  Key Events: 7
+  Key Courses: 6
+  Chapters: 7
+  Committees: 5
+  Board Positions: 9
+ 
+Parameters file loaded successfully!
+Ready to execute data population scripts.
+ 
+Inserting Membership Types...
+  Membership Types: 8 inserted
+ 
+Inserting Organizations...
+  Organizations: 40 inserted
+ 
+Inserting Members...
+  Key Members: 15 inserted
+  Additional Members: 485 inserted
+  Total Members: 500
+ 
+Inserting Memberships...
+  Key Member Memberships: 17 inserted
+Msg 515, Level 16, State 2, Server f11443085b15, Line 548
+Cannot insert the value NULL into column 'MembershipTypeID', table 'MJ_2_115_0.membership.Membership'; column does not allow nulls. INSERT fails.
+The statement has been terminated.
+  Base Memberships: 0 inserted
+  Renewal History Records: 0 inserted
+  Total Memberships: 625
+ 
+=================================================================
+MEMBERSHIP DATA POPULATION COMPLETE
+Summary:
+  - Membership Types: 8
+  - Organizations: 40
+  - Members: 500
+  - Membership Records: 625
+=================================================================
+ 
+Msg 156, Level 15, State 1, Server f11443085b15, Line 544
+Incorrect syntax near the keyword 'PRINT'.
+================================================================
+POPULATING LEARNING DATA
+=================================================================
+ 
+=================================================================
+ASSOCIATION SAMPLE DATABASE - PARAMETERS
+=================================================================
+ 
+Date Parameters:
+  Start Date: 11/05/2020
+  End Date: 11/05/2025
+  Data Window: 1826 days
+ 
+UUID Declarations: Loaded
+  Membership Types: 8
+  Key Organizations: 10
+  Key Members: 15
+  Key Events: 7
+  Key Courses: 6
+  Chapters: 7
+  Committees: 5
+  Board Positions: 9
+ 
+Parameters file loaded successfully!
+Ready to execute data population scripts.
+ 
+Inserting Courses...
+  Courses: 60 inserted
+ 
+Generating Course Enrollments (900 records)...
+  Enrollments: 900 generated
+ 
+Generating Certificates for Completed Enrollments...
+Msg 8170, Level 16, State 2, Server f11443085b15, Line 352
+Insufficient result space to convert uniqueidentifier value to char.
+=================================================================
+POPULATING FINANCE DATA
+=================================================================
+ 
+=================================================================
+ASSOCIATION SAMPLE DATABASE - PARAMETERS
+=================================================================
+ 
+Date Parameters:
+  Start Date: 11/05/2020
+  End Date: 11/05/2025
+  Data Window: 1826 days
+ 
+UUID Declarations: Loaded
+  Membership Types: 8
+  Key Organizations: 10
+  Key Members: 15
+  Key Events: 7
+  Key Courses: 6
+  Chapters: 7
+  Committees: 5
+  Board Positions: 9
+ 
+Parameters file loaded successfully!
+Ready to execute data population scripts.
+ 
+Generating Invoices...
+Msg 208, Level 16, State 1, Server f11443085b15, Line 223
+Invalid object name 'membership.Membership'.
+=================================================================
+POPULATING MARKETING & EMAIL DATA
+=================================================================
+ 
+=================================================================
+ASSOCIATION SAMPLE DATABASE - PARAMETERS
+=================================================================
+ 
+Date Parameters:
+  Start Date: 11/05/2020
+  End Date: 11/05/2025
+  Data Window: 1826 days
+ 
+UUID Declarations: Loaded
+  Membership Types: 8
+  Key Organizations: 10
+  Key Members: 15
+  Key Events: 7
+  Key Courses: 6
+  Chapters: 7
+  Committees: 5
+  Board Positions: 9
+ 
+Parameters file loaded successfully!
+Ready to execute data population scripts.
+ 
+Inserting Marketing Segments...
+Msg 208, Level 16, State 1, Server f11443085b15, Line 216
+Invalid object name 'marketing.Segment'.
+=================================================================
+POPULATING CHAPTERS & GOVERNANCE DATA
+=================================================================
+ 
+=================================================================
+ASSOCIATION SAMPLE DATABASE - PARAMETERS
+=================================================================
+ 
+Date Parameters:
+  Start Date: 11/05/2020
+  End Date: 11/05/2025
+  Data Window: 1826 days
+ 
+UUID Declarations: Loaded
+  Membership Types: 8
+  Key Organizations: 10
+  Key Members: 15
+  Key Events: 7
+  Key Courses: 6
+  Chapters: 7
+  Committees: 5
+  Board Positions: 9
+ 
+Parameters file loaded successfully!
+Ready to execute data population scripts.
+ 
+Inserting Chapters...
+Msg 208, Level 16, State 1, Server f11443085b15, Line 216
+Invalid object name 'chapters.Chapter'.
+ 
+===================================================================
+PHASE 2 COMPLETE: All sample data populated successfully
+===================================================================
+ 
+ 
+===================================================================
+PHASE 3: VERIFICATION AND SUMMARY
+===================================================================
+ 
+Record Counts by Domain:
+-------------------------------------------------------------------
+ 
+Msg 208, Level 16, State 1, Server f11443085b15, Line 34
+Invalid object name 'membership.Member'.

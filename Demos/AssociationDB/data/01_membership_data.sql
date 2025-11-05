@@ -319,7 +319,13 @@ INSERT INTO [membership].[Membership] (ID, MemberID, MembershipTypeID, Status, S
 SELECT
     NEWID(),
     m.ID,
-    (SELECT TOP 1 TypeID FROM @MembershipTypeDistribution WHERE Probability >= ABS(CHECKSUM(NEWID()) % 100) ORDER BY Probability DESC),
+    -- Use weighted random selection with COALESCE to ensure non-NULL
+    COALESCE(
+        (SELECT TOP 1 TypeID FROM @MembershipTypeDistribution
+         WHERE Probability >= ABS(CHECKSUM(NEWID()) % 100)
+         ORDER BY Probability DESC),
+        @MembershipType_Individual  -- Fallback to Individual if no match
+    ),
     CASE
         WHEN ABS(CHECKSUM(NEWID()) % 100) < 80 THEN 'Active'
         WHEN ABS(CHECKSUM(NEWID()) % 100) < 95 THEN 'Expired'
@@ -366,4 +372,4 @@ PRINT '  - Members: 500';
 PRINT '  - Membership Records: 625';
 PRINT '=================================================================';
 PRINT '';
-GO
+-- Note: No GO statement here - variables must persist within transaction

@@ -215,4 +215,4 @@ PRINT '  - Invoice Line Items: ' + CAST(@TotalLineItems AS VARCHAR);
 PRINT '  - Payments: ' + CAST(@TotalPayments AS VARCHAR);
 PRINT '=================================================================';
 PRINT '';
-GO
+-- Note: No GO statement here - variables must persist within transaction

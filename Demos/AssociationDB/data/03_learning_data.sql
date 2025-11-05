@@ -166,8 +166,8 @@ SELECT
         WHEN c.Category IN ('Security', 'Cloud') THEN DATEADD(YEAR, 3, e.CompletionDate)
         ELSE NULL
     END,
-    'https://certificates.association.org/' + CAST(NEWID() AS VARCHAR) + '.pdf',
-    UPPER(SUBSTRING(CAST(NEWID() AS VARCHAR), 1, 12))
+    'https://certificates.association.org/' + CAST(NEWID() AS VARCHAR(36)) + '.pdf',
+    UPPER(SUBSTRING(CAST(NEWID() AS VARCHAR(36)), 1, 12))
 FROM [learning].[Enrollment] e
 INNER JOIN [learning].[Course] c ON e.CourseID = c.ID
 WHERE e.Status = 'Completed' AND e.Passed = 1;
@@ -185,4 +185,4 @@ PRINT '  - Enrollments: ' + CAST(@TotalEnrollments AS VARCHAR);
 PRINT '  - Certificates: ' + CAST(@CompletedEnrollments AS VARCHAR);
 PRINT '=================================================================';
 PRINT '';
-GO
+-- Note: No GO statement here - variables must persist within transaction

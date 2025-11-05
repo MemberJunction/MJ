@@ -423,4 +423,4 @@ PRINT '  - Event Sessions: 7 (78 more needed for full dataset)';
 PRINT '  - Event Registrations: ' + CAST(@TotalRegistrations AS VARCHAR);
 PRINT '=================================================================';
 PRINT '';
-GO
+-- Note: No GO statement here - variables must persist within transaction

@@ -197,4 +197,4 @@ PRINT '=================================================================';
 PRINT 'CHAPTERS & GOVERNANCE DATA POPULATION COMPLETE';
 PRINT '=================================================================';
 PRINT '';
-GO
+-- Note: No GO statement here - variables must persist within transaction
