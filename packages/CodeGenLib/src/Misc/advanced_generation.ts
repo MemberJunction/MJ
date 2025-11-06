@@ -7,7 +7,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
-export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string }
+export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
 export type SmartFieldIdentificationResult = {
     nameField: string;
@@ -339,8 +339,18 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<CheckConstraintParserResult>(params);
 
             if (result.success && result.result) {
-                LogStatus(`CHECK constraint parsed successfully`);
-                return result.result;
+                const modelId = result.modelInfo?.modelId || result.modelSelectionInfo?.modelSelected?.ID;
+                if (!modelId) {
+                    // shuoldn't ever happen.
+                    LogError('AdvancedGeneration', 'Model ID not found');
+                    return null;
+                }
+                else {
+                    return {
+                        ...result.result,
+                        ModelID: modelId
+                    };
+                }
             } else {
                 LogError('AdvancedGeneration', `CHECK constraint parsing failed: ${result.errorMessage}`);
                 return null;

@@ -247,7 +247,7 @@ export class SQLCodeGenBase {
             }
             succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
 
-            succeedSpinner(`CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
 
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();

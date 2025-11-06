@@ -1422,7 +1422,7 @@ NumberedRows AS (
                returnResult.functionText = result.Code;
                returnResult.functionName = result.MethodName;
                returnResult.functionDescription = result.Description;
-               // Note: aiModelID will need to be retrieved from the prompt run if needed
+               returnResult.aiModelID = result.ModelID;
                returnResult.wasGenerated = true; // we just generated this code
                returnResult.success = true;
             }
@@ -2127,19 +2127,29 @@ NumberedRows AS (
       // Find the name field (exactly one)
       const nameField = fields.find(f => f.Name === result.nameField);
 
-      if (nameField && nameField.AutoUpdateIsNameField) {
+      if (nameField && nameField.AutoUpdateIsNameField && nameField.ID) {
          sqlStatements.push(`
             UPDATE [${mj_core_schema()}].EntityField
             SET IsNameField = 1
             WHERE ID = '${nameField.ID}'
             AND AutoUpdateIsNameField = 1
          `);
+      } else if (!nameField) {
+         logError(`Smart field identification returned invalid nameField: '${result.nameField}' not found in entity fields`);
       }
 
       // Find all default in view fields (one or more)
       const defaultInViewFields = fields.filter(f =>
-         result.defaultInView.includes(f.Name) && f.AutoUpdateDefaultInView
+         result.defaultInView.includes(f.Name) && f.AutoUpdateDefaultInView && f.ID
       );
+
+      // Warn about any fields that weren't found
+      const missingFields = result.defaultInView.filter(name =>
+         !fields.some(f => f.Name === name)
+      );
+      if (missingFields.length > 0) {
+         logError(`Smart field identification returned invalid defaultInView fields: ${missingFields.join(', ')} not found in entity`);
+      }
 
       // Build update statements for all default in view fields
       for (const field of defaultInViewFields) {
@@ -2171,7 +2181,7 @@ NumberedRows AS (
       for (const fieldCategory of result.fieldCategories) {
          const field = fields.find(f => f.Name === fieldCategory.fieldName);
 
-         if (field && field.AutoUpdateCategory) {
+         if (field && field.AutoUpdateCategory && field.ID) {
             const updateSQL = `
                UPDATE [${mj_core_schema()}].EntityField
                SET Category = '${fieldCategory.category.replace(/'/g, "''")}'
@@ -2179,6 +2189,8 @@ NumberedRows AS (
                AND AutoUpdateCategory = 1
             `;
             await this.LogSQLAndExecute(pool, updateSQL, `Set Category '${fieldCategory.category}' for ${fieldCategory.fieldName}`, false);
+         } else if (!field) {
+            logError(`Form layout generation returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
          }
       }
    }
