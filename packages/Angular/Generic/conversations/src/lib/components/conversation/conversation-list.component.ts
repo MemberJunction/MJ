@@ -4,7 +4,6 @@ import { ConversationEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
-import { ToastService } from '../../services/toast.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -42,10 +41,11 @@ import { takeUntil } from 'rxjs/operators';
                      [class.renamed]="conversation.ID === renamedConversationId"
                      (click)="selectConversation(conversation)">
                   <div class="conversation-icon-wrapper">
-                    <div class="conversation-icon" [class.has-tasks]="hasActiveTasks(conversation.ID)">
-                      <i *ngIf="!hasActiveTasks(conversation.ID)" class="fas fa-comments"></i>
-                      <i *ngIf="hasActiveTasks(conversation.ID)" class="fas fa-spinner fa-pulse"></i>
-                    </div>
+                    @if (hasActiveTasks(conversation.ID)) {
+                      <div class="conversation-icon has-tasks">
+                        <i class="fas fa-spinner fa-pulse"></i>
+                      </div>
+                    }
                     <div class="badge-overlay">
                       <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
                     </div>
@@ -97,10 +97,11 @@ import { takeUntil } from 'rxjs/operators';
                    [class.renamed]="conversation.ID === renamedConversationId"
                    (click)="selectConversation(conversation)">
                 <div class="conversation-icon-wrapper">
-                  <div class="conversation-icon" [class.has-tasks]="hasActiveTasks(conversation.ID)">
-                    <i *ngIf="!hasActiveTasks(conversation.ID)" class="fas fa-comments"></i>
-                    <i *ngIf="hasActiveTasks(conversation.ID)" class="fas fa-spinner fa-pulse"></i>
-                  </div>
+                  @if (hasActiveTasks(conversation.ID)) {
+                    <div class="conversation-icon has-tasks">
+                      <i class="fas fa-spinner fa-pulse"></i>
+                    </div>
+                  }
                   <div class="badge-overlay">
                     <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
                   </div>
@@ -443,7 +444,6 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     public conversationState: ConversationStateService,
     private dialogService: DialogService,
     private notificationService: NotificationService,
-    private toastService: ToastService,
     private activeTasksService: ActiveTasksService,
     private cdr: ChangeDetectorRef
   ) {}
