@@ -15,7 +15,7 @@
 -- ============================================================================
 
 
-INSERT INTO [chapters].[Chapter] (ID, Name, ChapterType, Region, City, State, Country, FoundedDate, IsActive, MeetingFrequency, Description)
+INSERT INTO [AssociationDemo].[Chapter] (ID, Name, ChapterType, Region, City, State, Country, FoundedDate, IsActive, MeetingFrequency, Description)
 VALUES
     (@Chapter_SiliconValley, 'Silicon Valley Chapter', 'Geographic', 'West Coast', 'Palo Alto', 'CA', 'United States',
      DATEADD(YEAR, -8, @EndDate), 1, 'Monthly', 'Serving technology leaders in the San Francisco Bay Area'),
@@ -55,7 +55,7 @@ VALUES
 
 
 -- Random chapter memberships
-INSERT INTO [chapters].[ChapterMembership] (ID, ChapterID, MemberID, JoinDate, Status, Role)
+INSERT INTO [AssociationDemo].[ChapterMembership] (ID, ChapterID, MemberID, JoinDate, Status, Role)
 SELECT TOP 275
     NEWID(),
     c.ID,
@@ -63,13 +63,13 @@ SELECT TOP 275
     DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 1000), @EndDate),
     'Active',
     'Member'
-FROM [chapters].[Chapter] c
-CROSS JOIN [membership].[Member] m
+FROM [AssociationDemo].[Chapter] c
+CROSS JOIN [AssociationDemo].[Member] m
 ORDER BY NEWID();
 
 
 -- Chapter officers (3 per chapter = 45 total)
-INSERT INTO [chapters].[ChapterOfficer] (ID, ChapterID, MemberID, Position, StartDate, IsActive)
+INSERT INTO [AssociationDemo].[ChapterOfficer] (ID, ChapterID, MemberID, Position, StartDate, IsActive)
 SELECT
     NEWID(),
     c.ID,
@@ -81,10 +81,10 @@ SELECT
     END,
     c.FoundedDate,
     1
-FROM [chapters].[Chapter] c
+FROM [AssociationDemo].[Chapter] c
 CROSS APPLY (
     SELECT TOP 3 MemberID
-    FROM [chapters].[ChapterMembership]
+    FROM [AssociationDemo].[ChapterMembership]
     WHERE ChapterID = c.ID
     ORDER BY NEWID()
 ) cm;
@@ -95,7 +95,7 @@ CROSS APPLY (
 -- ============================================================================
 
 
-INSERT INTO [governance].[Committee] (ID, Name, CommitteeType, Purpose, MeetingFrequency, IsActive, FormedDate, MaxMembers)
+INSERT INTO [AssociationDemo].[Committee] (ID, Name, CommitteeType, Purpose, MeetingFrequency, IsActive, FormedDate, MaxMembers)
 VALUES
     (@Committee_Executive, 'Executive Committee', 'Standing', 'Strategic direction and oversight of the association', 'Monthly', 1, DATEADD(YEAR, -15, @EndDate), 7),
     (@Committee_Finance, 'Finance Committee', 'Standing', 'Financial oversight and budget management', 'Quarterly', 1, DATEADD(YEAR, -15, @EndDate), 5),
@@ -117,7 +117,7 @@ VALUES
 
 
 -- Random committee assignments (5-8 members per committee)
-INSERT INTO [governance].[CommitteeMembership] (ID, CommitteeID, MemberID, Role, StartDate, IsActive)
+INSERT INTO [AssociationDemo].[CommitteeMembership] (ID, CommitteeID, MemberID, Role, StartDate, IsActive)
 SELECT
     NEWID(),
     com.ID,
@@ -129,10 +129,10 @@ SELECT
     END,
     com.FormedDate,
     1
-FROM [governance].[Committee] com
+FROM [AssociationDemo].[Committee] com
 CROSS APPLY (
     SELECT TOP (5 + ABS(CHECKSUM(NEWID()) % 4)) ID
-    FROM [membership].[Member]
+    FROM [AssociationDemo].[Member]
     ORDER BY NEWID()
 ) m;
 
@@ -142,7 +142,7 @@ CROSS APPLY (
 -- ============================================================================
 
 
-INSERT INTO [governance].[BoardPosition] (ID, PositionTitle, PositionOrder, TermLengthYears, IsOfficer, IsActive)
+INSERT INTO [AssociationDemo].[BoardPosition] (ID, PositionTitle, PositionOrder, TermLengthYears, IsOfficer, IsActive)
 VALUES
     (@BoardPos_President, 'President', 1, 2, 1, 1),
     (@BoardPos_VicePresident, 'Vice President', 2, 2, 1, 1),
@@ -156,7 +156,7 @@ VALUES
 
 
 -- Current board members
-INSERT INTO [governance].[BoardMember] (ID, BoardPositionID, MemberID, StartDate, IsActive, ElectionDate)
+INSERT INTO [AssociationDemo].[BoardMember] (ID, BoardPositionID, MemberID, StartDate, IsActive, ElectionDate)
 SELECT
     NEWID(),
     bp.ID,
@@ -164,10 +164,10 @@ SELECT
     DATEADD(YEAR, -1, @EndDate),
     1,
     DATEADD(DAY, -10, DATEADD(YEAR, -1, @EndDate))
-FROM [governance].[BoardPosition] bp
+FROM [AssociationDemo].[BoardPosition] bp
 CROSS APPLY (
     SELECT TOP 1 ID
-    FROM [membership].[Member]
+    FROM [AssociationDemo].[Member]
     ORDER BY NEWID()
 ) m;
 

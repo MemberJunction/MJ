@@ -20,8 +20,6 @@ cat >> "$OUTPUT" << 'EOF'
 SET NOCOUNT ON;
 GO
 
-BEGIN TRANSACTION;
-
 PRINT '';
 PRINT '###################################################################';
 PRINT '#                                                                 #';
@@ -30,9 +28,9 @@ PRINT '#                                                                 #';
 PRINT '###################################################################';
 PRINT '';
 PRINT 'This script will create a comprehensive association management';
-PRINT 'database with realistic sample data across 8 business domains.';
+PRINT 'database with realistic sample data in a single AssociationDemo schema.';
 PRINT '';
-PRINT 'Estimated completion time: 2-5 minutes';
+PRINT 'Estimated completion time: 1-2 minutes';
 PRINT '';
 PRINT '-------------------------------------------------------------------';
 PRINT '';
@@ -52,16 +50,9 @@ GO
 
 EOF
 
-# Add schema files
-cat schema/V001__create_schemas.sql >> "$OUTPUT"
-cat schema/V002__membership_tables.sql >> "$OUTPUT"
-cat schema/V003__events_tables.sql >> "$OUTPUT"
-cat schema/V004__learning_tables.sql >> "$OUTPUT"
-cat schema/V005__finance_tables.sql >> "$OUTPUT"
-cat schema/V006__marketing_tables.sql >> "$OUTPUT"
-cat schema/V007__email_tables.sql >> "$OUTPUT"
-cat schema/V008__chapters_tables.sql >> "$OUTPUT"
-cat schema/V009__governance_tables.sql >> "$OUTPUT"
+# Add schema and table files
+cat schema/V001__create_schema.sql >> "$OUTPUT"
+cat schema/V002__create_tables.sql >> "$OUTPUT"
 
 # Add Phase 1A complete message
 cat >> "$OUTPUT" << 'EOF'
@@ -82,24 +73,8 @@ GO
 
 EOF
 
-# Add documentation files
-cat schema/V001__schemas_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V002__membership_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V003__events_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V004__learning_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V005__finance_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V006__marketing_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V007__email_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V008__chapters_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
-cat schema/V009__governance_documentation.sql >> "$OUTPUT"
+# Add documentation file
+cat schema/V003__table_documentation.sql >> "$OUTPUT"
 echo "GO" >> "$OUTPUT"
 
 # Add Phase 1B complete
@@ -139,7 +114,6 @@ cat data/06_chapters_governance_data.sql >> "$OUTPUT"
 
 # Add Phase 2 complete and verification
 cat >> "$OUTPUT" << 'EOF'
-
 GO
 
 PRINT '';
@@ -187,10 +161,10 @@ PRINT '-------------------------------------------------------------------';
 PRINT '';
 PRINT 'For more information, see README.md';
 PRINT '';
+GO
 
-COMMIT TRANSACTION;
 PRINT '';
-PRINT 'Transaction committed successfully!';
+PRINT 'Build completed successfully!';
 GO
 
 SET NOCOUNT OFF;

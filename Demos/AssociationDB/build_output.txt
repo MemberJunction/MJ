@@ -13,7 +13,7 @@ Estimated completion time: 2-5 minutes
 -------------------------------------------------------------------
  
 Target Database: MJ_2_115_0
-Start Time: 2025-11-05 21:38:39
+Start Time: 2025-11-05 22:26:39
  
 ===================================================================
  
@@ -48,15 +48,93 @@ Chapters schema tables created successfully!
 Tables: Chapter, ChapterMembership, ChapterOfficer
 Governance schema tables created successfully!
 Tables: Committee, CommitteeMembership, BoardPosition, BoardMember
-Msg 156, Level 15, State 1, Server f11443085b15, Line 2328
-Incorrect syntax near the keyword 'PRINT'.
-Msg 134, Level 15, State 1, Server f11443085b15, Line 3218
-The variable name '@MemberCount' has already been declared. Variable names must be unique within a query batch or stored procedure.
-Msg 137, Level 15, State 1, Server f11443085b15, Line 3229
-Must declare the scalar variable "@OrgCount".
-Msg 137, Level 15, State 1, Server f11443085b15, Line 3230
-Must declare the scalar variable "@MembershipCount".
-Msg 137, Level 15, State 2, Server f11443085b15, Line 3250
-Must declare the scalar variable "@OrgCount".
-Msg 137, Level 15, State 2, Server f11443085b15, Line 3252
-Must declare the scalar variable "@MembershipCount".
+ 
+-------------------------------------------------------------------
+PHASE 1A: Schema and table creation complete
+-------------------------------------------------------------------
+ 
+ 
+-------------------------------------------------------------------
+PHASE 1B: ADDING DATABASE DOCUMENTATION
+-------------------------------------------------------------------
+ 
+Msg 15135, Level 16, State 15, Server f11443085b15, Procedure sp_addextendedproperty, Line 37
+Object is invalid. Extended properties are not permitted on 'email.EmailTemplate.Catery', or the object does not exist.
+ 
+-------------------------------------------------------------------
+PHASE 1B COMPLETE: Documentation added successfully
+-------------------------------------------------------------------
+ 
+ 
+===================================================================
+PHASE 1 COMPLETE: All schemas and tables created successfully
+===================================================================
+ 
+ 
+===================================================================
+PHASE 2: POPULATING SAMPLE DATA
+===================================================================
+ 
+Msg 547, Level 16, State 0, Server f11443085b15, Line 470
+The INSERT statement conflicted with the CHECK constraint "CK__Membershi__Statu__7B9E76C9". The conflict occurred in database "MJ_2_115_0", table "membership.Membership", column 'Status'.
+The statement has been terminated.
+Msg 9810, Level 16, State 1, Server f11443085b15, Line 813
+The datepart hour is not supported by date function dateadd for data type date.
+The statement has been terminated.
+Msg 515, Level 16, State 2, Server f11443085b15, Line 1066
+Cannot insert the value NULL into column 'CertificateNumber', table 'MJ_2_115_0.learning.Certificate'; column does not allow nulls. INSERT fails.
+The statement has been terminated.
+Msg 9810, Level 16, State 1, Server f11443085b15, Line 1255
+The datepart minute is not supported by date function dateadd for data type date.
+The statement has been terminated.
+Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
+The datepart minute is not supported by date function dateadd for data type date.
+The statement has been terminated.
+Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
+The datepart minute is not supported by date function dateadd for data type date.
+The statement has been terminated.
+Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
+The datepart minute is not supported by date function dateadd for data type date.
+The statement has been terminated.
+Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
+The datepart minute is not supported by date function dateadd for data type date.
+The statement has been terminated.
+Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
+The datepart minute is not supported by date function dateadd for data type date.
+The statement has been terminated.
+ 
+===================================================================
+PHASE 2 COMPLETE: Sample data population finished
+===================================================================
+ 
+ 
+===================================================================
+PHASE 3: VERIFICATION
+===================================================================
+ 
+Record counts:
+  Members: 500
+  Events: 32
+  Courses: 60
+ 
+ 
+===================================================================
+BUILD COMPLETE!
+===================================================================
+ 
+Next steps:
+ 
+1. Run MemberJunction CodeGen to generate entity classes
+ 
+2. Query the sample data to explore member journeys
+ 
+3. See docs/SAMPLE_QUERIES.md for example queries
+ 
+4. See member journey examples in docs/BUSINESS_SCENARIOS.md
+ 
+-------------------------------------------------------------------
+ 
+For more information, see README.md
+ 
+ 
+Build completed successfully!

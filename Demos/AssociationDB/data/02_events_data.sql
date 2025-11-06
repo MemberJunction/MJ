@@ -19,7 +19,7 @@
 
 
 -- Annual Conferences (5 years)
-INSERT INTO [events].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
+INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
     (@Event_AnnualConf2020, '2020 Annual Technology Leadership Summit', 'Conference',
      DATEADD(DAY, -1650, @EndDate), DATEADD(DAY, -1647, @EndDate), 'America/New_York',
@@ -62,7 +62,7 @@ VALUES
      'Completed');
 
 -- Virtual Summits (2)
-INSERT INTO [events].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, VirtualPlatform, MeetingURL, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
+INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, VirtualPlatform, MeetingURL, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
     (@Event_VirtualSummit2024, '2024 Virtual Technology Summit', 'Virtual Summit',
      DATEADD(DAY, -180, @EndDate), DATEADD(DAY, -179, @EndDate), 'America/New_York',
@@ -81,7 +81,7 @@ VALUES
      'Registration Open');
 
 -- Leadership Workshops (5)
-INSERT INTO [events].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
+INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
     (@Event_LeadershipWorkshop, 'Executive Leadership Workshop - Strategic Technology Planning', 'Workshop',
      DATEADD(DAY, -45, @EndDate), DATEADD(DAY, -44, @EndDate), 'America/Chicago',
@@ -124,7 +124,7 @@ VALUES
      'Registration Open');
 
 -- Webinars (15 over past 2 years)
-INSERT INTO [events].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, VirtualPlatform, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
+INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, VirtualPlatform, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
     (NEWID(), 'AI Ethics in Product Development', 'Webinar',
      DATEADD(DAY, -600, @EndDate), DATEADD(DAY, -600, @EndDate), 'America/New_York',
@@ -247,7 +247,7 @@ VALUES
      'Draft');
 
 -- Networking Events (5)
-INSERT INTO [events].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
+INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
     (NEWID(), 'Technology Leaders Networking Reception - NYC', 'Networking',
      DATEADD(DAY, -120, @EndDate), DATEADD(DAY, -120, @EndDate), 'America/New_York',
@@ -296,7 +296,7 @@ VALUES
 
 
 -- 2024 Annual Conference Sessions (30 sessions over 3 days)
-INSERT INTO [events].[EventSession] (ID, EventID, Name, Description, StartTime, EndTime, Room, SpeakerName, SessionType, Capacity, CEUCredits)
+INSERT INTO [AssociationDemo].[EventSession] (ID, EventID, Name, Description, StartTime, EndTime, Room, SpeakerName, SessionType, Capacity, CEUCredits)
 VALUES
     -- Day 1 - Keynotes and Opening
     (NEWID(), @Event_AnnualConf2024, 'Opening Keynote: The Future of AI in Enterprise',
@@ -333,7 +333,7 @@ VALUES
     (NEWID(), @Event_AnnualConf2024, 'Kubernetes in Production: Lessons Learned',
      'Real-world experiences running Kubernetes at scale',
      DATEADD(HOUR, 11, DATEADD(DAY, -89, @EndDate)), DATEADD(HOUR, 12, DATEADD(DAY, -89, @EndDate)),
-     'Room A', 'James Rodriguez, Platform Lead at CloudScale', 'Workshop', 120, 1.0),
+     'Room A', 'James Rodriguez, Platform Lead at CloudScale', 'Workshop', 120, 1.0);
 
     -- Abbreviated - would continue with remaining sessions for Day 2 and Day 3
 
@@ -358,7 +358,7 @@ DECLARE @RegistrationsNeeded INT;
 
 SET @EventCursor = CURSOR FOR
     SELECT ID, Capacity, Status, StartDate
-    FROM [events].[Event]
+    FROM [AssociationDemo].[Event]
     WHERE Status IN ('Completed', 'In Progress')
     ORDER BY StartDate;
 
@@ -371,7 +371,7 @@ BEGIN
     SET @RegistrationsNeeded = CAST(@CurrentEventCapacity * (0.70 + (RAND() * 0.25)) AS INT);
 
     -- Insert registrations for random members
-    INSERT INTO [events].[EventRegistration] (ID, EventID, MemberID, RegistrationDate, RegistrationType, Status, CheckInTime, CEUAwarded)
+    INSERT INTO [AssociationDemo].[EventRegistration] (ID, EventID, MemberID, RegistrationDate, RegistrationType, Status, CheckInTime, CEUAwarded)
     SELECT TOP (@RegistrationsNeeded)
         NEWID(),
         @CurrentEventID,
@@ -388,7 +388,7 @@ BEGIN
             THEN DATEADD(HOUR, 8 + (RAND(CHECKSUM(NEWID())) * 2), @CurrentEventDate)
         END,
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.85 THEN 1 ELSE 0 END
-    FROM [membership].[Member] m
+    FROM [AssociationDemo].[Member] m
     WHERE m.JoinDate < @CurrentEventDate
     ORDER BY NEWID();
 

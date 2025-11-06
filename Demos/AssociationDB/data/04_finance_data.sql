@@ -22,7 +22,7 @@ DECLARE @InvoiceCounter INT = 1;
 DECLARE @TotalInvoices INT = 0;
 
 -- Generate membership dues invoices (one per membership)
-INSERT INTO [finance].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
+INSERT INTO [AssociationDemo].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
 SELECT
     NEWID(),
     'INV-' + FORMAT(YEAR(ms.StartDate), '0000') + '-' + RIGHT('000000' + CAST(ROW_NUMBER() OVER (ORDER BY ms.StartDate) AS VARCHAR), 6),
@@ -46,13 +46,13 @@ SELECT
         WHEN ms.Status = 'Pending' THEN 'Sent'
         ELSE 'Overdue'
     END
-FROM [membership].[Membership] ms
-INNER JOIN [membership].[MembershipType] mt ON ms.MembershipTypeID = mt.ID;
+FROM [AssociationDemo].[Membership] ms
+INNER JOIN [AssociationDemo].[MembershipType] mt ON ms.MembershipTypeID = mt.ID;
 
 SET @TotalInvoices = @@ROWCOUNT;
 
 -- Generate event registration invoices
-INSERT INTO [finance].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
+INSERT INTO [AssociationDemo].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
 SELECT
     NEWID(),
     'INV-' + FORMAT(YEAR(er.RegistrationDate), '0000') + '-' + RIGHT('000000' + CAST(@TotalInvoices + ROW_NUMBER() OVER (ORDER BY er.RegistrationDate) AS VARCHAR), 6),
@@ -65,14 +65,14 @@ SELECT
     CASE WHEN er.Status != 'Cancelled' THEN e.MemberPrice * 1.08 ELSE 0 END,
     CASE WHEN er.Status != 'Cancelled' THEN 0 ELSE e.MemberPrice * 1.08 END,
     CASE WHEN er.Status != 'Cancelled' THEN 'Paid' ELSE 'Cancelled' END
-FROM [events].[EventRegistration] er
-INNER JOIN [events].[Event] e ON er.EventID = e.ID
+FROM [AssociationDemo].[EventRegistration] er
+INNER JOIN [AssociationDemo].[Event] e ON er.EventID = e.ID
 WHERE e.MemberPrice > 0;
 
 SET @TotalInvoices = @TotalInvoices + @@ROWCOUNT;
 
 -- Generate course enrollment invoices
-INSERT INTO [finance].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
+INSERT INTO [AssociationDemo].[Invoice] (ID, InvoiceNumber, MemberID, InvoiceDate, DueDate, SubTotal, Tax, Total, AmountPaid, Balance, Status)
 SELECT
     NEWID(),
     'INV-' + FORMAT(YEAR(en.EnrollmentDate), '0000') + '-' + RIGHT('000000' + CAST(@TotalInvoices + ROW_NUMBER() OVER (ORDER BY en.EnrollmentDate) AS VARCHAR), 6),
@@ -89,8 +89,8 @@ SELECT
         WHEN en.Status = 'Withdrawn' THEN 'Cancelled'
         ELSE 'Sent'
     END
-FROM [learning].[Enrollment] en
-INNER JOIN [learning].[Course] c ON en.CourseID = c.ID;
+FROM [AssociationDemo].[Enrollment] en
+INNER JOIN [AssociationDemo].[Course] c ON en.CourseID = c.ID;
 
 SET @TotalInvoices = @TotalInvoices + @@ROWCOUNT;
 
@@ -102,7 +102,7 @@ SET @TotalInvoices = @TotalInvoices + @@ROWCOUNT;
 DECLARE @TotalLineItems INT = 0;
 
 -- Line items for membership dues
-INSERT INTO [finance].[InvoiceLineItem] (ID, InvoiceID, Description, ItemType, Quantity, UnitPrice, Amount, TaxAmount, RelatedEntityType, RelatedEntityID)
+INSERT INTO [AssociationDemo].[InvoiceLineItem] (ID, InvoiceID, Description, ItemType, Quantity, UnitPrice, Amount, TaxAmount, RelatedEntityType, RelatedEntityID)
 SELECT
     NEWID(),
     i.ID,
@@ -114,15 +114,15 @@ SELECT
     mt.AnnualDues * 0.08,
     'Membership',
     ms.ID
-FROM [finance].[Invoice] i
-INNER JOIN [membership].[Member] m ON i.MemberID = m.ID
-INNER JOIN [membership].[Membership] ms ON m.ID = ms.MemberID AND i.InvoiceDate = ms.StartDate
-INNER JOIN [membership].[MembershipType] mt ON ms.MembershipTypeID = mt.ID;
+FROM [AssociationDemo].[Invoice] i
+INNER JOIN [AssociationDemo].[Member] m ON i.MemberID = m.ID
+INNER JOIN [AssociationDemo].[Membership] ms ON m.ID = ms.MemberID AND i.InvoiceDate = ms.StartDate
+INNER JOIN [AssociationDemo].[MembershipType] mt ON ms.MembershipTypeID = mt.ID;
 
 SET @TotalLineItems = @@ROWCOUNT;
 
 -- Line items for event registrations
-INSERT INTO [finance].[InvoiceLineItem] (ID, InvoiceID, Description, ItemType, Quantity, UnitPrice, Amount, TaxAmount, RelatedEntityType, RelatedEntityID)
+INSERT INTO [AssociationDemo].[InvoiceLineItem] (ID, InvoiceID, Description, ItemType, Quantity, UnitPrice, Amount, TaxAmount, RelatedEntityType, RelatedEntityID)
 SELECT
     NEWID(),
     i.ID,
@@ -134,15 +134,15 @@ SELECT
     e.MemberPrice * 0.08,
     'Event',
     e.ID
-FROM [finance].[Invoice] i
-INNER JOIN [events].[EventRegistration] er ON i.MemberID = er.MemberID AND i.InvoiceDate = er.RegistrationDate
-INNER JOIN [events].[Event] e ON er.EventID = e.ID
+FROM [AssociationDemo].[Invoice] i
+INNER JOIN [AssociationDemo].[EventRegistration] er ON i.MemberID = er.MemberID AND i.InvoiceDate = er.RegistrationDate
+INNER JOIN [AssociationDemo].[Event] e ON er.EventID = e.ID
 WHERE e.MemberPrice > 0;
 
 SET @TotalLineItems = @TotalLineItems + @@ROWCOUNT;
 
 -- Line items for course enrollments
-INSERT INTO [finance].[InvoiceLineItem] (ID, InvoiceID, Description, ItemType, Quantity, UnitPrice, Amount, TaxAmount, RelatedEntityType, RelatedEntityID)
+INSERT INTO [AssociationDemo].[InvoiceLineItem] (ID, InvoiceID, Description, ItemType, Quantity, UnitPrice, Amount, TaxAmount, RelatedEntityType, RelatedEntityID)
 SELECT
     NEWID(),
     i.ID,
@@ -154,9 +154,9 @@ SELECT
     c.MemberPrice * 0.08,
     'Course',
     c.ID
-FROM [finance].[Invoice] i
-INNER JOIN [learning].[Enrollment] en ON i.MemberID = en.MemberID AND i.InvoiceDate = en.EnrollmentDate
-INNER JOIN [learning].[Course] c ON en.CourseID = c.ID;
+FROM [AssociationDemo].[Invoice] i
+INNER JOIN [AssociationDemo].[Enrollment] en ON i.MemberID = en.MemberID AND i.InvoiceDate = en.EnrollmentDate
+INNER JOIN [AssociationDemo].[Course] c ON en.CourseID = c.ID;
 
 SET @TotalLineItems = @TotalLineItems + @@ROWCOUNT;
 
@@ -167,7 +167,7 @@ SET @TotalLineItems = @TotalLineItems + @@ROWCOUNT;
 
 
 -- Generate payments for paid invoices
-INSERT INTO [finance].[Payment] (ID, InvoiceID, PaymentDate, Amount, PaymentMethod, TransactionID, Status, ProcessedDate)
+INSERT INTO [AssociationDemo].[Payment] (ID, InvoiceID, PaymentDate, Amount, PaymentMethod, TransactionID, Status, ProcessedDate)
 SELECT
     NEWID(),
     i.ID,
@@ -186,7 +186,7 @@ SELECT
         ELSE 'Failed'
     END,
     DATEADD(MINUTE, 5, DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), i.InvoiceDate))
-FROM [finance].[Invoice] i
+FROM [AssociationDemo].[Invoice] i
 WHERE i.Status = 'Paid';
 
 DECLARE @TotalPayments INT = @@ROWCOUNT;

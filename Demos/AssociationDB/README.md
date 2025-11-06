@@ -6,10 +6,11 @@ A comprehensive, realistic sample database demonstrating a complete association 
 
 This sample database provides a fully functional, data-rich environment for testing and demonstrating MemberJunction capabilities in an association/membership organization context. It includes:
 
-- **8 Business Domains**: Membership, Events, Learning, Finance, Marketing, Email, Chapters, and Governance
+- **Single Consolidated Schema**: All tables in the AssociationDemo schema with logical domain organization
+- **8 Business Domains**: Membership, Events, Learning, Finance, Marketing, Email, Chapters, and Governance (organized as table prefixes)
 - **Realistic Sample Data**: High-quality, semantically meaningful data generated for testing
 - **Evergreen Dates**: All dates are calculated relative to execution time, keeping data fresh
-- **Complete Relationships**: Full referential integrity across all schemas
+- **Complete Relationships**: Full referential integrity across all tables
 - **Ready for CodeGen**: Designed to work seamlessly with MemberJunction's code generation system
 
 ## 🎯 What's Included
@@ -83,13 +84,13 @@ This sample database provides a fully functional, data-rich environment for test
 3. **Verify the installation**:
    ```sql
    -- Check record counts
-   SELECT 'Members' as Entity, COUNT(*) as Count FROM membership.Member
+   SELECT 'Members' as Entity, COUNT(*) as Count FROM AssociationDemo.Member
    UNION ALL
-   SELECT 'Events', COUNT(*) FROM events.Event
+   SELECT 'Events', COUNT(*) FROM AssociationDemo.Event
    UNION ALL
-   SELECT 'Courses', COUNT(*) FROM learning.Course
+   SELECT 'Courses', COUNT(*) FROM AssociationDemo.Course
    UNION ALL
-   SELECT 'Campaigns', COUNT(*) FROM marketing.Campaign;
+   SELECT 'Campaigns', COUNT(*) FROM AssociationDemo.Campaign;
    ```
 
 4. **Run MemberJunction CodeGen** (if applicable):
@@ -105,25 +106,11 @@ AssociationDB/
 ├── README.md                              # This file
 ├── MASTER_BUILD_AssociationDB.sql         # Master build script (runs everything)
 │
-├── schema/                                # Schema definition files
-│   ├── V001__create_schemas.sql          # Creates 8 schemas
-│   ├── V001__schemas_documentation.sql   # Schema descriptions (optional)
-│   ├── V002__membership_tables.sql       # Membership domain tables
-│   ├── V002__membership_documentation.sql # Membership table docs (optional)
-│   ├── V003__events_tables.sql           # Events domain tables
-│   ├── V003__events_documentation.sql    # Events table docs (optional)
-│   ├── V004__learning_tables.sql         # Learning/LMS domain tables
-│   ├── V004__learning_documentation.sql  # Learning table docs (optional)
-│   ├── V005__finance_tables.sql          # Finance domain tables
-│   ├── V005__finance_documentation.sql   # Finance table docs (optional)
-│   ├── V006__marketing_tables.sql        # Marketing domain tables
-│   ├── V006__marketing_documentation.sql # Marketing table docs (optional)
-│   ├── V007__email_tables.sql            # Email/communications tables
-│   ├── V007__email_documentation.sql     # Email table docs (optional)
-│   ├── V008__chapters_tables.sql         # Chapters domain tables
-│   ├── V008__chapters_documentation.sql  # Chapters table docs (optional)
-│   ├── V009__governance_tables.sql       # Governance domain tables
-│   └── V009__governance_documentation.sql # Governance table docs (optional)
+├── schema/                                # Schema definition files (consolidated in AssociationDemo)
+│   ├── V001__create_schema.sql           # Creates AssociationDemo schema
+│   ├── V001__schema_documentation.sql    # Schema description (optional)
+│   ├── V002__core_tables.sql             # All domain tables (membership, events, learning, finance, etc.)
+│   └── V002__table_documentation.sql     # Table and column descriptions (optional)
 │
 ├── data/                                  # Sample data population files
 │   ├── 00_parameters.sql                 # Date parameters and UUID declarations
@@ -163,23 +150,23 @@ This ensures:
 - Relationships maintain proper temporal ordering
 - Reports and queries return meaningful results regardless of when the script runs
 
-## 🔗 Schema Relationships
+## 🔗 Table Organization
 
-The database implements a multi-schema architecture with clear domain boundaries:
+The database consolidates all tables in a single AssociationDemo schema with logical domain organization through table naming:
 
 ```
-membership.*        ← Core member and organization data (foundation)
+Member/Organization tables (Membership domain - foundation)
      ↑
-     ├→ events.*               (Event registrations reference members)
-     ├→ learning.*             (Course enrollments reference members)
-     ├→ finance.*              (Invoices reference members)
-     ├→ marketing.*            (Campaign members reference members)
-     ├→ email.*                (Email sends reference members)
-     ├→ chapters.*             (Chapter memberships reference members)
-     └→ governance.*           (Committee/board assignments reference members)
+     ├→ Event, EventSession, EventRegistration (Events domain)
+     ├→ Course, Enrollment, Certificate (Learning domain)
+     ├→ Invoice, LineItem, Payment (Finance domain)
+     ├→ Campaign, Segment, CampaignMember (Marketing domain)
+     ├→ EmailTemplate, EmailSend (Email domain)
+     ├→ Chapter, ChapterMembership (Chapters domain)
+     └→ Committee, BoardPosition, Assignment (Governance domain)
 ```
 
-All foreign keys are properly defined with referential integrity constraints.
+All foreign keys are properly defined with referential integrity constraints. Domain organization is logical (via naming and grouping) rather than schema-based.
 
 ## 🎓 Use Cases
 
@@ -241,6 +228,7 @@ FROM sys.schemas s
 LEFT JOIN sys.extended_properties ep
     ON ep.major_id = s.schema_id
     AND ep.class = 3
+WHERE s.name = 'AssociationDemo'
 ORDER BY s.name;
 
 -- View table and column descriptions
@@ -255,7 +243,7 @@ LEFT JOIN sys.extended_properties ep
     ON ep.major_id = c.object_id
     AND ep.minor_id = c.column_id
     AND ep.name = 'MS_Description'
-WHERE SCHEMA_NAME(t.schema_id) IN ('membership', 'events', 'learning', 'finance', 'marketing', 'email', 'chapters', 'governance')
+WHERE SCHEMA_NAME(t.schema_id) = 'AssociationDemo'
 ORDER BY SchemaName, TableName, c.column_id;
 ```
 
@@ -312,12 +300,12 @@ SELECT
     COUNT(DISTINCT er.ID) as EventsAttended,
     COUNT(DISTINCT e.ID) as CoursesCompleted,
     COALESCE(SUM(inv.Total), 0) as TotalSpent
-FROM membership.Member m
-    JOIN membership.Membership ms ON m.ID = ms.MemberID
-    JOIN membership.MembershipType mt ON ms.MembershipTypeID = mt.ID
-    LEFT JOIN events.EventRegistration er ON m.ID = er.MemberID AND er.Status = 'Attended'
-    LEFT JOIN learning.Enrollment e ON m.ID = e.MemberID AND e.Status = 'Completed'
-    LEFT JOIN finance.Invoice inv ON m.ID = inv.MemberID
+FROM AssociationDemo.Member m
+    JOIN AssociationDemo.Membership ms ON m.ID = ms.MemberID
+    JOIN AssociationDemo.MembershipType mt ON ms.MembershipTypeID = mt.ID
+    LEFT JOIN AssociationDemo.EventRegistration er ON m.ID = er.MemberID AND er.Status = 'Attended'
+    LEFT JOIN AssociationDemo.Enrollment e ON m.ID = e.MemberID AND e.Status = 'Completed'
+    LEFT JOIN AssociationDemo.Invoice inv ON m.ID = inv.MemberID
 WHERE ms.Status = 'Active'
 GROUP BY m.FirstName, m.LastName, mt.Name
 ORDER BY TotalSpent DESC;
@@ -331,9 +319,9 @@ SELECT
     COUNT(DISTINCT er.ID) as Registrations,
     SUM(inv.Total) as Revenue,
     AVG(inv.Total) as AvgTicketPrice
-FROM events.Event e
-    JOIN events.EventRegistration er ON e.ID = er.EventID
-    JOIN finance.Invoice inv ON inv.RelatedEntityID = er.ID
+FROM AssociationDemo.Event e
+    JOIN AssociationDemo.EventRegistration er ON e.ID = er.EventID
+    JOIN AssociationDemo.Invoice inv ON inv.RelatedEntityID = er.ID
 WHERE inv.Status IN ('Paid', 'Partial')
 GROUP BY e.Name, e.EventType
 ORDER BY Revenue DESC;

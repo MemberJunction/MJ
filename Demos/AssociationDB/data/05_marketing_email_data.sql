@@ -15,7 +15,7 @@
 -- ============================================================================
 
 
-INSERT INTO [marketing].[Segment] (ID, Name, Description, SegmentType, MemberCount, IsActive)
+INSERT INTO [AssociationDemo].[Segment] (ID, Name, Description, SegmentType, MemberCount, IsActive)
 VALUES
     (@Segment_ActiveMembers, 'Active Members', 'All members with active status', 'Membership Status', 0, 1),
     (@Segment_Students, 'Student Members', 'All student membership holders', 'Membership Type', 0, 1),
@@ -34,7 +34,7 @@ VALUES
 -- ============================================================================
 
 
-INSERT INTO [marketing].[Campaign] (ID, Name, CampaignType, Status, StartDate, EndDate, Budget, Description)
+INSERT INTO [AssociationDemo].[Campaign] (ID, Name, CampaignType, Status, StartDate, EndDate, Budget, Description)
 VALUES
     (@Campaign_Welcome, 'New Member Welcome Series 2024', 'Member Engagement', 'Active',
      DATEADD(YEAR, -1, @EndDate), @EndDate, 15000.00, 'Automated welcome campaign for new members'),
@@ -53,7 +53,7 @@ VALUES
 -- ============================================================================
 
 
-INSERT INTO [email].[EmailTemplate] (ID, Name, Subject, FromName, FromEmail, Category, IsActive, PreviewText)
+INSERT INTO [AssociationDemo].[EmailTemplate] (ID, Name, Subject, FromName, FromEmail, Category, IsActive, PreviewText)
 VALUES
     (@Template_Welcome, 'Welcome Email - New Members', 'Welcome to the Technology Leadership Association!',
      'Technology Leadership Association', 'welcome@association.org', 'Welcome', 1, 'Thank you for joining our community of technology leaders'),
@@ -79,7 +79,7 @@ DECLARE @CurrentTemplateID UNIQUEIDENTIFIER;
 DECLARE @CurrentTemplateName NVARCHAR(255);
 DECLARE @SendsPerTemplate INT;
 
-SET @EmailCursor = CURSOR FOR SELECT ID, Name FROM [email].[EmailTemplate];
+SET @EmailCursor = CURSOR FOR SELECT ID, Name FROM [AssociationDemo].[EmailTemplate];
 OPEN @EmailCursor;
 FETCH NEXT FROM @EmailCursor INTO @CurrentTemplateID, @CurrentTemplateName;
 
@@ -94,7 +94,7 @@ BEGIN
     END;
 
     -- Generate sends
-    INSERT INTO [email].[EmailSend] (ID, TemplateID, MemberID, Subject, SentDate, DeliveredDate, OpenedDate, ClickedDate, Status, OpenCount, ClickCount)
+    INSERT INTO [AssociationDemo].[EmailSend] (ID, TemplateID, MemberID, Subject, SentDate, DeliveredDate, OpenedDate, ClickedDate, Status, OpenCount, ClickCount)
     SELECT TOP (@SendsPerTemplate)
         NEWID(),
         @CurrentTemplateID,
@@ -121,7 +121,7 @@ BEGIN
         END,
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.25 THEN 1 + ABS(CHECKSUM(NEWID()) % 3) ELSE 0 END,
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.05 THEN 1 + ABS(CHECKSUM(NEWID()) % 2) ELSE 0 END
-    FROM [membership].[Member] m
+    FROM [AssociationDemo].[Member] m
     ORDER BY NEWID();
 
     SET @TotalEmailSends = @TotalEmailSends + @@ROWCOUNT;
@@ -133,7 +133,7 @@ DEALLOCATE @EmailCursor;
 
 
 -- Generate email clicks for clicked emails
-INSERT INTO [email].[EmailClick] (ID, EmailSendID, ClickDate, URL, LinkName)
+INSERT INTO [AssociationDemo].[EmailClick] (ID, EmailSendID, ClickDate, URL, LinkName)
 SELECT
     NEWID(),
     es.ID,
@@ -148,7 +148,7 @@ SELECT
         WHEN 1 THEN 'Browse Courses'
         ELSE 'Renew Now'
     END
-FROM [email].[EmailSend] es
+FROM [AssociationDemo].[EmailSend] es
 WHERE es.Status = 'Clicked';
 
 

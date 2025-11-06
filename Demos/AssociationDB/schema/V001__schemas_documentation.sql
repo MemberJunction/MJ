@@ -62,12 +62,12 @@ EXEC sp_addextendedproperty
     @level0name = 'chapters';
 
 
--- Documentation for vernance schema
+-- Documentation for governance schema
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Association vernance structures including committees, task forces, board positions, and volunteer leadership tracking',
+    @value = N'Association governance structures including committees, task forces, board positions, and volunteer leadership tracking',
     @level0type = N'SCHEMA',
-    @level0name = 'vernance';
+    @level0name = 'governance';
 
 
 

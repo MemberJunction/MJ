@@ -16,7 +16,7 @@
 -- ============================================================================
 
 
-INSERT INTO [learning].[Course] (ID, Code, Title, Description, Category, Level, DurationHours, CEUCredits, Price, MemberPrice, IsActive, PublishedDate, InstructorName)
+INSERT INTO [AssociationDemo].[Course] (ID, Code, Title, Description, Category, Level, DurationHours, CEUCredits, Price, MemberPrice, IsActive, PublishedDate, InstructorName)
 VALUES
     -- Cloud Architecture (8 courses)
     (@Course_CloudArchitect, 'CLD-301', 'Advanced Cloud Architecture Certification', 'Comprehensive cloud architecture patterns and best practices', 'Cloud', 'Advanced', 40.0, 12.0, 899.00, 699.00, 1, DATEADD(DAY, -900, @EndDate), 'Dr. Michael Chen'),
@@ -103,7 +103,7 @@ DECLARE @TotalEnrollments INT = 0;
 DECLARE @CompletedEnrollments INT = 0;
 
 -- Insert enrollments for random member/course combinations
-INSERT INTO [learning].[Enrollment] (ID, CourseID, MemberID, EnrollmentDate, StartDate, CompletionDate, Status, ProgressPercentage, FinalScore, Passed, InvoiceID)
+INSERT INTO [AssociationDemo].[Enrollment] (ID, CourseID, MemberID, EnrollmentDate, StartDate, CompletionDate, Status, ProgressPercentage, FinalScore, Passed, InvoiceID)
 SELECT TOP 900
     NEWID(),
     c.ID,
@@ -132,8 +132,8 @@ SELECT TOP 900
         ELSE 0
     END,
     NULL -- Will link to invoices later
-FROM [learning].[Course] c
-CROSS JOIN [membership].[Member] m
+FROM [AssociationDemo].[Course] c
+CROSS JOIN [AssociationDemo].[Member] m
 WHERE m.JoinDate < DATEADD(DAY, -30, @EndDate)
 ORDER BY NEWID();
 
@@ -145,7 +145,7 @@ SET @TotalEnrollments = @@ROWCOUNT;
 -- ============================================================================
 
 
-INSERT INTO [learning].[Certificate] (ID, EnrollmentID, CertificateNumber, IssuedDate, ExpirationDate, CertificatePDFURL, VerificationCode)
+INSERT INTO [AssociationDemo].[Certificate] (ID, EnrollmentID, CertificateNumber, IssuedDate, ExpirationDate, CertificatePDFURL, VerificationCode)
 SELECT
     NEWID(),
     e.ID,
@@ -157,8 +157,8 @@ SELECT
     END,
     'https://certificates.association.org/' + CAST(NEWID() AS VARCHAR(36)) + '.pdf',
     UPPER(SUBSTRING(CAST(NEWID() AS VARCHAR(36)), 1, 12))
-FROM [learning].[Enrollment] e
-INNER JOIN [learning].[Course] c ON e.CourseID = c.ID
+FROM [AssociationDemo].[Enrollment] e
+INNER JOIN [AssociationDemo].[Course] c ON e.CourseID = c.ID
 WHERE e.Status = 'Completed' AND e.Passed = 1;
 
 SET @CompletedEnrollments = @@ROWCOUNT;

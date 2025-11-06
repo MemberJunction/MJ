@@ -19,7 +19,7 @@
 -- ============================================================================
 
 
-INSERT INTO [membership].[MembershipType] (ID, Name, Description, AnnualDues, RenewalPeriodMonths, IsActive, AllowAutoRenew, RequiresApproval, Benefits, DisplayOrder)
+INSERT INTO [AssociationDemo].[MembershipType] (ID, Name, Description, AnnualDues, RenewalPeriodMonths, IsActive, AllowAutoRenew, RequiresApproval, Benefits, DisplayOrder)
 VALUES
     (@MembershipType_Individual, 'Individual Professional', 'Standard individual membership for technology professionals', 295.00, 12, 1, 1, 0, 'Full access to events, courses, and resources. Includes monthly newsletter, member directory access, and discounts on conferences.', 1),
     (@MembershipType_Student, 'Student', 'Discounted membership for full-time students', 95.00, 12, 1, 1, 1, 'Access to educational resources, webinars, and student networking events. Requires verification of student status.', 2),
@@ -36,7 +36,7 @@ VALUES
 -- ============================================================================
 
 
-INSERT INTO [membership].[Organization] (ID, Name, Industry, EmployeeCount, AnnualRevenue, MarketCapitalization, TickerSymbol, Exchange, Website, Description, YearFounded, City, State, Country, Phone)
+INSERT INTO [AssociationDemo].[Organization] (ID, Name, Industry, EmployeeCount, AnnualRevenue, MarketCapitalization, TickerSymbol, Exchange, Website, Description, YearFounded, City, State, Country, Phone)
 VALUES
     -- Real Public Technology Companies (10)
     (@Org_TechVentures, 'Microsoft Corporation', 'Cloud & AI', 238000, 245000000000.00, 3100000000000.00, 'MSFT', 'NASDAQ', 'https://www.microsoft.com', 'Global technology company providing cloud computing, software, and AI services', 1975, 'Redmond', 'WA', 'United States', '425-882-8080'),
@@ -93,7 +93,7 @@ VALUES
 
 
 -- Key Members with Full Details (Mix of real executives from public companies and fictional members)
-INSERT INTO [membership].[Member] (ID, Email, FirstName, LastName, Title, OrganizationID, Industry, JobFunction, YearsInProfession, JoinDate, City, State, Country, Phone, LinkedInURL)
+INSERT INTO [AssociationDemo].[Member] (ID, Email, FirstName, LastName, Title, OrganizationID, Industry, JobFunction, YearsInProfession, JoinDate, City, State, Country, Phone, LinkedInURL)
 VALUES
     -- Real Executives from Public Companies
     (@Member_SarahChen, 'satya.nadella@microsoft.com', 'Satya', 'Nadella', 'Chairman and Chief Executive Officer', @Org_TechVentures, 'Cloud & AI', 'Executive', 33, DATEADD(DAY, -1825, @EndDate), 'Redmond', 'WA', 'United States', '425-882-8080', 'https://linkedin.com/in/satyanadella'),
@@ -196,7 +196,7 @@ INSERT INTO @Cities VALUES
 ('Sydney', 'NSW', 'Australia');
 
 -- Generate 485 additional members
-INSERT INTO [membership].[Member] (ID, Email, FirstName, LastName, Title, OrganizationID, Industry, JobFunction, YearsInProfession, JoinDate, City, State, Country)
+INSERT INTO [AssociationDemo].[Member] (ID, Email, FirstName, LastName, Title, OrganizationID, Industry, JobFunction, YearsInProfession, JoinDate, City, State, Country)
 SELECT TOP 485
     NEWID(),
     LOWER(fn.FirstName + '.' + ln.LastName + CAST(ABS(CHECKSUM(NEWID()) % 1000) AS NVARCHAR(10)) + '@' +
@@ -242,7 +242,7 @@ CROSS JOIN @LastNames ln
 CROSS JOIN @Titles t
 CROSS JOIN @Cities c
 CROSS APPLY (
-    SELECT TOP 1 ID FROM [membership].[Organization] ORDER BY NEWID()
+    SELECT TOP 1 ID FROM [AssociationDemo].[Organization] ORDER BY NEWID()
 ) o
 ORDER BY NEWID();
 
@@ -253,7 +253,7 @@ ORDER BY NEWID();
 
 
 -- Key members with detailed renewal histories (17 records for the 15 key members)
-INSERT INTO [membership].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
+INSERT INTO [AssociationDemo].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
 VALUES
     -- Sarah Chen - Active Individual Member with 4 renewals
     (NEWID(), @Member_SarahChen, @MembershipType_Individual, 'Active', DATEADD(DAY, -1460, @EndDate), DATEADD(DAY, -1095, @EndDate), DATEADD(DAY, -1095, @EndDate), 1),
@@ -296,7 +296,7 @@ INSERT INTO @MembershipTypeDistribution VALUES
     (@MembershipType_International, 2);     -- 2% International
 
 -- First membership for each remaining member (483 members = 483 records)
-INSERT INTO [membership].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
+INSERT INTO [AssociationDemo].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
 SELECT
     NEWID(),
     m.ID,
@@ -319,12 +319,12 @@ SELECT
     END,
     NULL,
     CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 70 THEN 1 ELSE 0 END
-FROM [membership].[Member] m
+FROM [AssociationDemo].[Member] m
 WHERE m.ID NOT IN (@Member_SarahChen, @Member_MichaelJohnson, @Member_EmilyRodriguez, @Member_DavidKim, @Member_AlexTaylor);
 
 
 -- Additional renewal records for 25% of members (125 additional records to get to 625 total)
-INSERT INTO [membership].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
+INSERT INTO [AssociationDemo].[Membership] (ID, MemberID, MembershipTypeID, Status, StartDate, EndDate, RenewalDate, AutoRenew)
 SELECT TOP 125
     NEWID(),
     ms.MemberID,
@@ -334,7 +334,7 @@ SELECT TOP 125
     ms.StartDate,
     ms.StartDate,
     1
-FROM [membership].[Membership] ms
+FROM [AssociationDemo].[Membership] ms
 WHERE ms.MemberID NOT IN (@Member_SarahChen, @Member_MichaelJohnson, @Member_EmilyRodriguez, @Member_DavidKim, @Member_AlexTaylor)
   AND ms.Status = 'Active'
 ORDER BY NEWID();
