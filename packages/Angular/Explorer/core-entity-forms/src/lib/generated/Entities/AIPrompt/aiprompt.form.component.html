@@ -1,0 +1,784 @@
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 13 expanded
+            </span>
+        </div>
+        <div class="form-panels-container">
+<!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description templateid template id categoryid category id typeid type id status __mj_createdat created at __mj_updatedat updated at responseformat response format modelspecificresponseformat model specific response format aimodeltypeid ai model type id minpowerrank min power rank selectionstrategy selection strategy powerpreference power preference parallelizationmode parallelization mode parallelcount parallel count parallelconfigparam parallel config param outputtype output type outputexample output example validationbehavior validation behavior maxretries max retries retrydelayms retry delay ms retrystrategy retry strategy resultselectorpromptid result selector prompt id enablecaching enable caching cachettlseconds cache ttl seconds cachematchtype cache match type cachesimilaritythreshold cache similarity threshold cachemustmatchmodel cache must match model cachemustmatchvendor cache must match vendor cachemustmatchagent cache must match agent cachemustmatchconfig cache must match config promptrole prompt role promptposition prompt position temperature topp top p topk top k minp min p frequencypenalty frequency penalty presencepenalty presence penalty seed stopsequences stop sequences includelogprobs include log probs toplogprobs top log probs failoverstrategy failover strategy failovermaxattempts failover max attempts failoverdelayseconds failover delay seconds failovermodelstrategy failover model strategy failovererrorscope failover error scope effortlevel effort level template category type aimodeltype ai model type resultselectorprompt result selector prompt rootresultselectorpromptid root result selector prompt id">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-align-left"></i>
+                    <h3><span class="section-name">Details</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TemplateID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CategoryID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ResponseFormat"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelSpecificResponseFormat"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModelTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MinPowerRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SelectionStrategy"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PowerPreference"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParallelizationMode"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParallelCount"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParallelConfigParam"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputExample"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ValidationBehavior"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxRetries"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RetryDelayMS"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RetryStrategy"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ResultSelectorPromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EnableCaching"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheTTLSeconds"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMatchType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheSimilarityThreshold"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchModel"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchVendor"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchAgent"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchConfig"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptRole"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptPosition"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Temperature"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TopP"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TopK"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MinP"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FrequencyPenalty"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PresencePenalty"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Seed"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StopSequences"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IncludeLogProbs"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TopLogProbs"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverStrategy"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverMaxAttempts"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverDelaySeconds"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverModelStrategy"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverErrorScope"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EffortLevel"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Template"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModelType"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ResultSelectorPrompt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootResultSelectorPromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+        <div class="related-entity-grid">
+
+        <!-- AI Agent Actions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="ai agent actions" data-field-names="ai agent actions" data-section-key="aIAgentActions">
+            <div class="collapsible-header" (click)="toggleSection('aIAgentActions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">AI Agent Actions</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentActions']">{{sectionRowCounts['aIAgentActions']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIAgentActions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIAgentActions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Actions','CompactPromptID')"
+                        [NewRecordValues]="NewRecordValues('AI Agent Actions')"
+                        [AllowLoad]="IsCurrentSection('aIAgentActions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['aIAgentActions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Result Cache Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="ai result cache" data-field-names="ai result cache" data-section-key="aIResultCache">
+            <div class="collapsible-header" (click)="toggleSection('aIResultCache')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">AI Result Cache</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIResultCache']">{{sectionRowCounts['aIResultCache']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIResultCache ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIResultCache" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIPromptID')"
+                        [NewRecordValues]="NewRecordValues('AI Result Cache')"
+                        [AllowLoad]="IsCurrentSection('aIResultCache')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['aIResultCache'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Agent Types Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent types" data-field-names="mj: ai agent types" data-section-key="mJAIAgentTypes">
+            <div class="collapsible-header" (click)="toggleSection('mJAIAgentTypes')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Agent Types</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentTypes']">{{sectionRowCounts['mJAIAgentTypes']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIAgentTypes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIAgentTypes" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','SystemPromptID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                        [AllowLoad]="IsCurrentSection('mJAIAgentTypes')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIAgentTypes'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Configurations Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai configurations" data-field-names="mj: ai configurations" data-section-key="mJAIConfigurations">
+            <div class="collapsible-header" (click)="toggleSection('mJAIConfigurations')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Configurations</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIConfigurations']">{{sectionRowCounts['mJAIConfigurations']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIConfigurations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIConfigurations" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextCompressionID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
+                        [AllowLoad]="IsCurrentSection('mJAIConfigurations')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIConfigurations'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Prompts Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="ai prompts" data-field-names="ai prompts" data-section-key="aIPrompts">
+            <div class="collapsible-header" (click)="toggleSection('aIPrompts')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">AI Prompts</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIPrompts']">{{sectionRowCounts['aIPrompts']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIPrompts ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIPrompts" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','ResultSelectorPromptID')"
+                        [NewRecordValues]="NewRecordValues('AI Prompts')"
+                        [AllowLoad]="IsCurrentSection('aIPrompts')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['aIPrompts'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Configurations Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai configurations" data-field-names="mj: ai configurations" data-section-key="mJAIConfigurations">
+            <div class="collapsible-header" (click)="toggleSection('mJAIConfigurations')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Configurations</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIConfigurations']">{{sectionRowCounts['mJAIConfigurations']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIConfigurations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIConfigurations" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextSummarizationID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
+                        [AllowLoad]="IsCurrentSection('mJAIConfigurations')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIConfigurations'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Agent Prompts Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent prompts" data-field-names="mj: ai agent prompts" data-section-key="mJAIAgentPrompts">
+            <div class="collapsible-header" (click)="toggleSection('mJAIAgentPrompts')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Agent Prompts</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentPrompts']">{{sectionRowCounts['mJAIAgentPrompts']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIAgentPrompts ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIAgentPrompts" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','PromptID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
+                        [AllowLoad]="IsCurrentSection('mJAIAgentPrompts')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIAgentPrompts'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Agent Steps Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent steps" data-field-names="mj: ai agent steps" data-section-key="mJAIAgentSteps">
+            <div class="collapsible-header" (click)="toggleSection('mJAIAgentSteps')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Agent Steps</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentSteps']">{{sectionRowCounts['mJAIAgentSteps']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIAgentSteps ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIAgentSteps" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Steps','PromptID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
+                        [AllowLoad]="IsCurrentSection('mJAIAgentSteps')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIAgentSteps'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Prompt Models Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt models" data-field-names="mj: ai prompt models" data-section-key="mJAIPromptModels">
+            <div class="collapsible-header" (click)="toggleSection('mJAIPromptModels')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Prompt Models</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptModels']">{{sectionRowCounts['mJAIPromptModels']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIPromptModels ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIPromptModels" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Models','PromptID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Prompt Models')"
+                        [AllowLoad]="IsCurrentSection('mJAIPromptModels')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIPromptModels'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Prompt Runs Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt runs" data-field-names="mj: ai prompt runs" data-section-key="mJAIPromptRuns">
+            <div class="collapsible-header" (click)="toggleSection('mJAIPromptRuns')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Prompt Runs</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptRuns']">{{sectionRowCounts['mJAIPromptRuns']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIPromptRuns ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIPromptRuns" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','PromptID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
+                        [AllowLoad]="IsCurrentSection('mJAIPromptRuns')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIPromptRuns'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Agents Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="ai agents" data-field-names="ai agents" data-section-key="aIAgents">
+            <div class="collapsible-header" (click)="toggleSection('aIAgents')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">AI Agents</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgents']">{{sectionRowCounts['aIAgents']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIAgents ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIAgents" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','ContextCompressionPromptID')"
+                        [NewRecordValues]="NewRecordValues('AI Agents')"
+                        [AllowLoad]="IsCurrentSection('aIAgents')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['aIAgents'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="actions" data-field-names="actions" data-section-key="actions">
+            <div class="collapsible-header" (click)="toggleSection('actions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa-solid fa-bolt"></i>
+                    <h3>
+                        <span class="section-name">Actions</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['actions']">{{sectionRowCounts['actions']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.actions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.actions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Actions','DefaultCompactPromptID')"
+                        [NewRecordValues]="NewRecordValues('Actions')"
+                        [AllowLoad]="IsCurrentSection('actions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['actions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
+    </form>
+</div>
+        

@@ -1,0 +1,563 @@
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
+            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
+                <div #topArea class="record-form-group">
+                    <mj-form-section Entity="Actions" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                </div>
+            </kendo-splitter-pane>
+            <kendo-splitter-pane>
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 13 expanded
+            </span>
+        </div>
+        <div class="form-panels-container">
+<!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="categoryid category id description type usercomments user comments codecomments code comments codeapprovalstatus code approval status codeapprovalcomments code approval comments codeapprovedbyuserid code approved by user id codeapprovedat code approved at codelocked code locked forcecodegeneration force code generation retentionperiod retention period status __mj_createdat __mj _created at __mj_updatedat __mj _updated at driverclass driver class parentid parent id iconclass icon class defaultcompactpromptid default compact prompt id category codeapprovedbyuser code approved by user parent defaultcompactprompt default compact prompt rootparentid root parent id">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-align-left"></i>
+                    <h3><span class="section-name">Details</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CategoryID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UserComments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeComments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeApprovalStatus"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeApprovalComments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeApprovedByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeApprovedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeLocked"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ForceCodeGeneration"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RetentionPeriod"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IconClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultCompactPromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeApprovedByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultCompactPrompt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Section -->
+        <div class="form-card collapsible-card" data-section-name="code" data-field-names="code">
+            <div class="collapsible-header" (click)="toggleSection('code')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-info-circle"></i>
+                    <h3><span class="section-name">Code</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.code ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.code">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="Code"
+            Type="code"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+        <div class="related-entity-grid">
+
+        <!-- Params Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="params" data-field-names="action params" data-section-key="params">
+            <div class="collapsible-header" (click)="toggleSection('params')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Params</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['params']">{{sectionRowCounts['params']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.params ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.params" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Params','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Action Params')"
+                        [AllowLoad]="IsCurrentSection('params')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['params'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Libraries Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="libraries" data-field-names="action libraries" data-section-key="libraries">
+            <div class="collapsible-header" (click)="toggleSection('libraries')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa-solid fa-book"></i>
+                    <h3>
+                        <span class="section-name">Libraries</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['libraries']">{{sectionRowCounts['libraries']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.libraries ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.libraries" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Action Libraries')"
+                        [AllowLoad]="IsCurrentSection('libraries')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['libraries'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Codes Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="result codes" data-field-names="action result codes" data-section-key="resultCodes">
+            <div class="collapsible-header" (click)="toggleSection('resultCodes')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Result Codes</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['resultCodes']">{{sectionRowCounts['resultCodes']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.resultCodes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resultCodes" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Result Codes','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Action Result Codes')"
+                        [AllowLoad]="IsCurrentSection('resultCodes')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['resultCodes'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- AIAgent Actions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="aiagent actions" data-field-names="ai agent actions" data-section-key="aIAgentActions">
+            <div class="collapsible-header" (click)="toggleSection('aIAgentActions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">AIAgent Actions</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentActions']">{{sectionRowCounts['aIAgentActions']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIAgentActions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIAgentActions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Actions','ActionID')"
+                        [NewRecordValues]="NewRecordValues('AI Agent Actions')"
+                        [AllowLoad]="IsCurrentSection('aIAgentActions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['aIAgentActions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduled Actions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="scheduled actions" data-field-names="scheduled actions" data-section-key="scheduledActions">
+            <div class="collapsible-header" (click)="toggleSection('scheduledActions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Scheduled Actions</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['scheduledActions']">{{sectionRowCounts['scheduledActions']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.scheduledActions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.scheduledActions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Actions','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Scheduled Actions')"
+                        [AllowLoad]="IsCurrentSection('scheduledActions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['scheduledActions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Contexts Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="action contexts" data-field-names="action contexts" data-section-key="actionContexts">
+            <div class="collapsible-header" (click)="toggleSection('actionContexts')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Action Contexts</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['actionContexts']">{{sectionRowCounts['actionContexts']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.actionContexts ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.actionContexts" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Contexts','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Action Contexts')"
+                        [AllowLoad]="IsCurrentSection('actionContexts')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['actionContexts'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Entity Actions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="entity actions" data-field-names="entity actions" data-section-key="entityActions">
+            <div class="collapsible-header" (click)="toggleSection('entityActions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Entity Actions</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActions']">{{sectionRowCounts['entityActions']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.entityActions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityActions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Actions','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Entity Actions')"
+                        [AllowLoad]="IsCurrentSection('entityActions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['entityActions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: AI Agent Steps Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent steps" data-field-names="mj: ai agent steps" data-section-key="mJAIAgentSteps">
+            <div class="collapsible-header" (click)="toggleSection('mJAIAgentSteps')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">MJ: AI Agent Steps</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentSteps']">{{sectionRowCounts['mJAIAgentSteps']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJAIAgentSteps ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIAgentSteps" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Steps','ActionID')"
+                        [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
+                        [AllowLoad]="IsCurrentSection('mJAIAgentSteps')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJAIAgentSteps'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution Logs Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="execution logs" data-field-names="action execution logs" data-section-key="executionLogs">
+            <div class="collapsible-header" (click)="toggleSection('executionLogs')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Execution Logs</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['executionLogs']">{{sectionRowCounts['executionLogs']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.executionLogs ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.executionLogs" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Execution Logs','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Action Execution Logs')"
+                        [AllowLoad]="IsCurrentSection('executionLogs')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['executionLogs'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authorizations Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="authorizations" data-field-names="action authorizations" data-section-key="authorizations">
+            <div class="collapsible-header" (click)="toggleSection('authorizations')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Authorizations</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['authorizations']">{{sectionRowCounts['authorizations']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.authorizations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.authorizations" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations','ActionID')"
+                        [NewRecordValues]="NewRecordValues('Action Authorizations')"
+                        [AllowLoad]="IsCurrentSection('authorizations')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['authorizations'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="actions" data-field-names="actions" data-section-key="actions">
+            <div class="collapsible-header" (click)="toggleSection('actions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa-solid fa-bolt"></i>
+                    <h3>
+                        <span class="section-name">Actions</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['actions']">{{sectionRowCounts['actions']}}</span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.actions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.actions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Actions','ParentID')"
+                        [NewRecordValues]="NewRecordValues('Actions')"
+                        [AllowLoad]="IsCurrentSection('actions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['actions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
+            </kendo-splitter-pane>
+        </kendo-splitter>
+    </form>
+</div>
+        
