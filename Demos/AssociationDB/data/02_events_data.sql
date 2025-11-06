@@ -301,38 +301,38 @@ VALUES
     -- Day 1 - Keynotes and Opening
     (NEWID(), @Event_AnnualConf2024, 'Opening Keynote: The Future of AI in Enterprise',
      'Industry thought leader discusses the transformative impact of AI on business',
-     DATEADD(HOUR, 9, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 10, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 9, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 10, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Main Hall', 'Dr. Jennifer Walsh, Chief AI Officer at TechCorp', 'Keynote', 650, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Cloud Architecture Patterns for Scale',
      'Deep dive into patterns for building scalable cloud applications',
-     DATEADD(HOUR, 11, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 12, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 11, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room A', 'Michael Chen, Principal Architect at CloudScale', 'Workshop', 100, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Cybersecurity Threat Landscape 2024',
      'Current threats and defensive strategies for modern organizations',
-     DATEADD(HOUR, 11, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 12, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 11, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room B', 'Sarah Martinez, CISO at SecureNet', 'Panel', 150, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'DevOps Transformation Case Study',
      'How a Fortune 500 company transformed their delivery process',
-     DATEADD(HOUR, 13, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 14, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 13, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 14, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room A', 'David Kim, VP Engineering at Enterprise Co', 'Workshop', 80, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Machine Learning Operations at Scale',
      'MLOps best practices for production ML systems',
-     DATEADD(HOUR, 13, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 14, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 13, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 14, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room B', 'Dr. Lisa Johnson, ML Lead at DataDriven', 'Workshop', 100, 1.0),
 
     -- Day 2 Sessions
     (NEWID(), @Event_AnnualConf2024, 'Day 2 Keynote: Digital Transformation Success Stories',
      'Leading companies share their digital transformation journeys',
-     DATEADD(HOUR, 9, DATEADD(DAY, -89, @EndDate)), DATEADD(HOUR, 10, DATEADD(DAY, -89, @EndDate)),
+     DATEADD(HOUR, 9, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 10, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))),
      'Main Hall', 'Panel of CTOs from Fortune 500 companies', 'Keynote', 650, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Kubernetes in Production: Lessons Learned',
      'Real-world experiences running Kubernetes at scale',
-     DATEADD(HOUR, 11, DATEADD(DAY, -89, @EndDate)), DATEADD(HOUR, 12, DATEADD(DAY, -89, @EndDate)),
+     DATEADD(HOUR, 11, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))),
      'Room A', 'James Rodriguez, Platform Lead at CloudScale', 'Workshop', 120, 1.0);
 
     -- Abbreviated - would continue with remaining sessions for Day 2 and Day 3
