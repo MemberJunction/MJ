@@ -118,20 +118,19 @@ const codegenConfig = {
         enabled: false,
       },
       {
-        name: 'EntityFieldDescriptions',
-        description: 'Use AI to generate descriptions for fields, only used when new fields are detected',
-        enabled: false,
-      },
-      {
-        name: 'FormLayout',
-        description:
-          'Use AI to generate better layouts for forms. This includes using AI to determine the way to layout fields on each entity form. The field will still be laid out in the order they are defined in the entity, but the AI will determine the best way to layout the fields on the form. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
+        name: 'SmartFieldIdentification',
+        description: 'Use AI to identify the best name field and default field to show in views for each entity',
         enabled: true,
       },
       {
-        name: 'FormTabs',
+        name: 'TransitiveJoinIntelligence',
+        description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
+        enabled: true,
+      },
+      {
+        name: 'FormLayoutGeneration',
         description:
-          "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
+          'Use AI to generate semantic field categories for better form organization. This includes using AI to determine the way to layout fields on each entity form by assigning them to domain-specific categories. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
         enabled: true,
       },
       {

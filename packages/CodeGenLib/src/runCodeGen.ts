@@ -140,7 +140,7 @@ export class RunCodeGenBase {
       }
       succeedSpinner(`Loaded ${md.Entities.length} entities from metadata`);
 
-      // Initialize AIEngine for advanced generation features (AI prompts, agents, etc.)
+      // Initialize AIEngine for advanced generation features (needed for prompt metadata access)
       if (configInfo.advancedGeneration?.enableAdvancedGeneration) {
         startSpinner('Initializing AI Engine for advanced generation...');
         await AIEngine.Instance.Config(false, currentUser);

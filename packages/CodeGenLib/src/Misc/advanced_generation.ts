@@ -3,6 +3,7 @@ import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { AIPromptEntityExtended } from "@memberjunction/core-entities";
+import { AIEngine } from "@memberjunction/aiengine";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -44,7 +45,6 @@ export type FormLayoutResult = {
 export class AdvancedGeneration {
     private _metadata: Metadata;
     private _promptRunner: AIPromptRunner;
-    private _promptCache: Map<string, AIPromptEntityExtended> = new Map();
 
     constructor() {
         this._metadata = new Metadata();
@@ -72,21 +72,12 @@ export class AdvancedGeneration {
      * Prompts include their model configuration via the MJ: AI Prompt Models relationship.
      */
     private async getPromptEntity(promptName: string, contextUser: UserInfo): Promise<AIPromptEntityExtended> {
-        if (this._promptCache.has(promptName)) {
-            return this._promptCache.get(promptName)!;
-        }
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === promptName?.trim().toLowerCase());
 
-        const prompt = await this._metadata.GetEntityObject<AIPromptEntityExtended>(
-            'AI Prompts',
-            contextUser
-        );
-
-        const loaded = await prompt.Load(promptName, ['MJ: AI Prompt Models']);
-        if (!loaded) {
+        if (!prompt) {
             throw new Error(`Prompt '${promptName}' not found in database. Ensure the prompt metadata has been synced.`);
         }
 
-        this._promptCache.set(promptName, prompt);
         return prompt;
     }
 
