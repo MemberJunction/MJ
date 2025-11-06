@@ -3,7 +3,6 @@ import { logError, logStatus } from '../Misc/status_logging';
 import fs from 'fs';
 import path from 'path';
 import { mjCoreSchema, outputOptionValue } from '../Config/config';
-import { RegisterClass } from '@memberjunction/global';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
 import { sortBySequenceAndCreatedAt } from '../Misc/util';
 
@@ -702,7 +701,15 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
         const md = new Metadata();
         const tabs: AngularFormSectionInfo[] = [];
-        const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities.filter(re => re.DisplayInForm)); // only show related entities that are marked to display in the form and sort by sequence, then by creation date
+        // Sort related entities by Sequence (user's explicit ordering), then by RelatedEntity name (stable tiebreaker)
+        const sortedRelatedEntities = entity.RelatedEntities
+            .filter(re => re.DisplayInForm)
+            .sort((a, b) => {
+                if (a.Sequence !== b.Sequence) {
+                    return a.Sequence - b.Sequence;
+                }
+                return a.RelatedEntity.localeCompare(b.RelatedEntity);
+            });
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
             const tabName: string = this.generateRelatedEntityTabName(relatedEntity, sortedRelatedEntities)
