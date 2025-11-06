@@ -992,18 +992,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     this.registeredCallbacks.set(taskExecutionMessage.ID, callback);
     this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
 
-    console.log('[DEBUG] 🔍 Registered callback for taskExecutionMessage.ID:', taskExecutionMessage.ID);
-    console.log('[DEBUG] 🔍 All registered callbacks:', Array.from(this.registeredCallbacks.keys()));
-
     try {
       // Get environment ID from user
       const environmentId = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
       // Get session ID for PubSub
       const sessionId = (GraphQLDataProvider.Instance as any).sessionId || '';
-      console.log('[DEBUG] 🔍 Sending ExecuteTaskGraph with sessionId:', sessionId);
-      console.log('[DEBUG] 🔍 Sending ExecuteTaskGraph with conversationDetailId:', taskExecutionMessage.ID);
-
+      
       // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
       const mutation = `
         mutation ExecuteTaskGraph($taskGraphJson: String!, $conversationDetailId: String!, $environmentId: String!, $sessionId: String!, $createNotifications: Boolean) {

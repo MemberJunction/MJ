@@ -228,8 +228,6 @@ export class TaskOrchestrator {
         };
 
         LogStatus(`📡 Publishing task progress: ${taskName} - ${message} (${percentComplete}%) to session ${this.userPayload.sessionId}`);
-        LogStatus(`[DEBUG] 🔍 conversationDetailId in payload: ${this.conversationDetailId || 'UNDEFINED'}`);
-        LogStatus(`[DEBUG] 🔍 Full payload data: ${JSON.stringify({ taskName, conversationDetailId: this.conversationDetailId, session: this.userPayload.sessionId })}`);
         this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
 
         LogStatus(`[Task: ${taskName}] ${message} (${percentComplete}%)`);
@@ -261,7 +259,6 @@ export class TaskOrchestrator {
         };
 
         LogStatus(`📡 Publishing agent progress: ${taskName} → ${agentStep} to session ${this.userPayload.sessionId}`);
-        LogStatus(`[DEBUG] 🔍 conversationDetailId in payload: ${this.conversationDetailId || 'UNDEFINED'}`);
         this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
 
         LogStatus(`[Task: ${taskName}] → ${agentStep}: ${agentMessage}`);

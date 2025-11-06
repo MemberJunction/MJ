@@ -76,7 +76,6 @@ export class ConversationStreamingService implements OnDestroy {
     try {
       const dataProvider = GraphQLDataProvider.Instance;
       const sessionId = (dataProvider as any).sessionId || (dataProvider as any)._sessionId;
-      console.log('[DEBUG] 🔍 GraphQLDataProvider sessionId:', sessionId);
 
       this.pushStatusSubscription = dataProvider.PushStatusUpdates().subscribe({
         next: (status: any) => {
@@ -193,10 +192,9 @@ export class ConversationStreamingService implements OnDestroy {
    * Handle incoming PubSub status updates and route to registered callbacks
    */
   private async handlePushStatusUpdate(status: any): Promise<void> {
-    console.log('[DEBUG] 🔍 Raw PubSub message received:', status);
 
     if (!status) {
-      console.warn('[DEBUG] ⚠️ PubSub status is null or undefined');
+      console.warn('PubSub status is null or undefined');
       return;
     }
 
@@ -204,20 +202,15 @@ export class ConversationStreamingService implements OnDestroy {
       // Parse the status if it's a JSON string, otherwise use as-is
       // GraphQL subscription emits JSON strings that need to be parsed
       const statusObj = typeof status === 'string' ? JSON.parse(status) : status;
-      console.log('[DEBUG] 🔍 Parsed statusObj:', statusObj);
-      console.log('[DEBUG] 🔍 statusObj.resolver:', statusObj.resolver);
 
       // Handle both resolver types for agent progress updates
       if (statusObj.resolver === 'TaskOrchestrator') {
         // Task graph execution (multi-step workflows)
-        console.log('[DEBUG] ✅ TaskOrchestrator message detected, routing...');
         await this.routeTaskProgress(statusObj);
       } else if (statusObj.resolver === 'RunAIAgentResolver') {
         // Direct agent execution (Sage, Research Agent, etc.)
-        console.log('[DEBUG] ✅ RunAIAgentResolver message detected, routing...');
         await this.routeAgentProgress(statusObj);
       } else {
-        console.log('[DEBUG] ⏭️  Skipping message (resolver: ' + statusObj.resolver + ')');
       }
 
     } catch (error) {
