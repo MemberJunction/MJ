@@ -112,10 +112,8 @@ if (this.IsActive === 1) {
 **3. Error Messages**
 - User-friendly, not technical
 - Explain what's wrong and what's expected
-- Escape double quotes: `\"`
 
 **4. Code Formatting**
-- Use template literals (backticks) for multi-line code
 - Single tab indent for each line
 - Include comments for complex logic
 
@@ -126,7 +124,7 @@ Return a JSON object with this exact structure:
 ```json
 {
   "Description": "Plain-language explanation of what the constraint enforces",
-  "Code": "Complete TypeScript method including signature - use \\` for multi-line strings, escape \\" quotes",
+  "Code": "Complete TypeScript method including signature",
   "MethodName": "Validate{Field}{Comparison}"
 }
 ```
@@ -137,8 +135,6 @@ Return a JSON object with this exact structure:
 - No markdown code fences around the JSON
 - The output must be valid, parseable JSON
 - Code property must contain the complete method (signature + body)
-- Use `\\`` (template literals) for the Code property to preserve formatting
-- Escape double quotes in error messages: `\\"`
 - Method name must be valid TypeScript identifier
 - Check nullable fields before applying constraints
 - Never compare boolean fields to 0/1
@@ -159,7 +155,7 @@ ADD CONSTRAINT CHK_Customers_Deactivation CHECK (
 ```json
 {
   "Description": "Active customers cannot have a deactivation date, and inactive customers must have a deactivation date to track when they were deactivated",
-  "Code": "public ValidateDeactivationDateComparedToIsActiveFlag(result: ValidationResult) {\\n\\tif (this.IsActive && this.DeactivationDate !== null) {\\n\\t\\tresult.Errors.push(new ValidationErrorInfo(\\n\\t\\t\\t\\"DeactivationDate\\",\\n\\t\\t\\t\\"An active customer cannot have a deactivation date\\",\\n\\t\\t\\tthis.DeactivationDate,\\n\\t\\t\\tValidationErrorType.Failure\\n\\t\\t));\\n\\t}\\n\\telse if (!this.IsActive && this.DeactivationDate === null) {\\n\\t\\tresult.Errors.push(new ValidationErrorInfo(\\n\\t\\t\\t\\"DeactivationDate\\",\\n\\t\\t\\t\\"An inactive customer must have a deactivation date\\",\\n\\t\\t\\tthis.DeactivationDate,\\n\\t\\t\\tValidationErrorType.Failure\\n\\t\\t));\\n\\t}\\n}",
+  "Code": "This is where you put the actual TypeScript code INCLUDING the method signature. Don't include markdown formatting or anything else, just the code.",
   "MethodName": "ValidateDeactivationDateComparedToIsActiveFlag"
 }
 ```
