@@ -18,7 +18,7 @@ export class ComponentFormComponent extends BaseFormComponent {
         details: true,
         mJComponentDependencies: false,
         mJComponentLibraryLinks: false,
-        mJComponentDependencies: false
+        mJComponentDependencies1: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

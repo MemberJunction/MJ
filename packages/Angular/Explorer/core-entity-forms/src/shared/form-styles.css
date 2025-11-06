@@ -20,7 +20,8 @@ a {
   display: block;
   flex-direction: column;
   background-color: #F5F6FA;
-  padding: 10px;
+  padding: 0;
+  min-height: 100vh;
 }
 
 .record-form-group {
@@ -87,10 +88,30 @@ button {
 
 /* Collapsible Panel Styles */
 .form-panels-container {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 16px;
   padding: 16px;
+  background-color: #F5F6FA;
+  grid-auto-rows: min-content;
+  align-items: start;
+}
+
+/* Responsive multi-column layout for wider screens */
+@media (min-width: 1400px) {
+  .form-panels-container {
+    grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+  }
+
+  /* Force related entities to take full width by default */
+  .form-panels-container .form-card.related-entity {
+    grid-column: 1 / -1;
+  }
+
+  /* Allow related entities to be side-by-side if they have the allow-grid class */
+  .form-panels-container .form-card.related-entity.allow-grid {
+    grid-column: auto;
+  }
 }
 
 .form-card {
@@ -184,12 +205,13 @@ button {
 /* Section Controls */
 .form-section-controls {
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 10px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+  border-bottom: 2px solid #e5e7eb;
   align-items: center;
   flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .form-section-controls .control-group {
@@ -199,33 +221,46 @@ button {
 }
 
 .form-section-controls button {
-  padding: 6px 12px;
+  padding: 8px 14px;
   font-size: 13px;
   border: 1px solid #d1d5db;
   background: white;
   color: #374151;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   margin-right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
 }
 
 .form-section-controls button:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.form-section-controls button:active {
+  transform: translateY(0);
 }
 
 .form-section-controls button i {
-  margin-right: 4px;
+  margin-right: 0;
+  font-size: 14px;
 }
 
 .form-section-controls .section-search {
-  padding: 6px 12px;
+  padding: 8px 14px;
   font-size: 13px;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
-  width: 200px;
+  border-radius: 6px;
+  width: 240px;
   transition: all 0.2s;
+  background: white;
 }
 
 .form-section-controls .section-search:focus {
@@ -234,10 +269,16 @@ button {
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
+.form-section-controls .section-search::placeholder {
+  color: #9ca3af;
+  font-style: italic;
+}
+
 .form-section-controls .section-count {
   font-size: 13px;
   color: #6b7280;
   margin-left: auto;
+  font-weight: 500;
 }
 
 /* Hidden sections for search filter */

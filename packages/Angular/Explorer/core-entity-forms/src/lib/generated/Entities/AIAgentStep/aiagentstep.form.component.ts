@@ -17,7 +17,7 @@ export class AIAgentStepFormComponent extends BaseFormComponent {
     public sectionsExpanded = {
         details: true,
         mJAIAgentStepPaths: false,
-        mJAIAgentStepPaths: false
+        mJAIAgentStepPaths1: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

@@ -17,7 +17,7 @@ export class ListFormComponent extends BaseFormComponent {
     public sectionsExpanded = {
         details: true,
         duplicateRuns: false,
-        details: false
+        details1: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

@@ -16,7 +16,7 @@ export class UserViewRunFormComponent extends BaseFormComponent {
     // Collapsible section state
     public sectionsExpanded = {
         details: true,
-        details: false
+        details1: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

@@ -59,7 +59,7 @@ export class EntityFormComponent extends BaseFormComponent {
         mJRecordLinks: false,
         queryEntities: false,
         generatedCodes: false,
-        mJRecordLinks: false
+        mJRecordLinks1: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

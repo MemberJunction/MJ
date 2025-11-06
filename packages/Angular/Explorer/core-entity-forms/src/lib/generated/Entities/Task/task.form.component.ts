@@ -17,7 +17,7 @@ export class TaskFormComponent extends BaseFormComponent {
     public sectionsExpanded = {
         details: true,
         mJTaskDependencies: false,
-        mJTaskDependencies: false,
+        mJTaskDependencies1: false,
         mJTasks: false
     };
 

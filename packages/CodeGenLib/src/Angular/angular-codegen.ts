@@ -74,6 +74,11 @@ export class AngularFormSectionInfo {
      * The minimum sequence number from fields in this section (used for sorting)
      */
     MinSequence?: number;
+
+    /**
+     * The unique camelCase key used for this section in the sectionsExpanded object
+     */
+    UniqueKey?: string;
 }
 
 /**
@@ -411,14 +416,41 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
                                                         relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput!.CodeOutput!.length > 0)
                                                                                 .map(s => s.GeneratedOutput!.CodeOutput!.split("\n").map(l => `    ${l}`).join("\n")).join('\n') : '';
 
-        // Generate sectionsExpanded state object for collapsible panels (both field sections and related entities)
+        // Generate unique keys for all sections FIRST, then use them everywhere
         const sectionsWithoutTop = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top && s.Name);
         const allSections = [...sectionsWithoutTop, ...relatedEntitySections];
+
+        // Assign unique keys to each section
+        const usedKeys = new Set<string>();
+        allSections.forEach((s) => {
+            let sectionKey = this.camelCase(s.Name);
+            // Ensure unique keys by tracking used keys and adding suffix for duplicates
+            let suffix = 1;
+            while (usedKeys.has(sectionKey)) {
+                sectionKey = this.camelCase(s.Name) + suffix++;
+            }
+            usedKeys.add(sectionKey);
+            s.UniqueKey = sectionKey; // Store the unique key with the section
+        });
+
+        // Now update all TabCode with the correct unique keys
+        allSections.forEach(s => {
+            if (s.TabCode && s.UniqueKey) {
+                // Replace placeholder camelCase keys with actual unique keys in the HTML
+                const placeholderKey = this.camelCase(s.Name);
+                if (placeholderKey !== s.UniqueKey) {
+                    // Only replace if they're different (i.e., there was a duplicate)
+                    const keyRegex = new RegExp(placeholderKey, 'g');
+                    s.TabCode = s.TabCode.replace(keyRegex, s.UniqueKey);
+                }
+            }
+        });
+
+        // Now generate the sectionsExpanded object using the stored unique keys
         const sectionsExpandedEntries = allSections.map((s, index) => {
-            const sectionKey = this.camelCase(s.Name);
             // First 2 sections expanded by default, metadata and related entities collapsed
             const isExpanded = index < 2 && !s.Name.toLowerCase().includes('metadata') && !s.IsRelatedEntity;
-            return `        ${sectionKey}: ${isExpanded}`;
+            return `        ${s.UniqueKey}: ${isExpanded}`;
         });
         const sectionsExpandedObject = sectionsExpandedEntries.length > 0
             ? `\n\n    // Collapsible section state\n    public sectionsExpanded = {\n${sectionsExpandedEntries.join(',\n')}\n    };`
@@ -580,9 +612,9 @@ export function Load${entity.ClassName}FormComponent() {
                   const formHTML = this.generateSectionHTMLForAngular(entity, section);
                   // Use category-specific icon from LLM if available, otherwise fall back to keyword matching
                   const icon = (categoryIcons && categoryIcons[section.Name]) || this.getIconForCategory(section.Name);
+                  // NOTE: We'll set the UniqueKey later in generateSingleEntityTypeScriptForAngular()
+                  // For now, just use a placeholder that will be replaced
                   const sectionKey = this.camelCase(section.Name);
-                  // First 2 sections expanded by default, metadata collapsed
-                  const isExpanded = sectionIndex < 2 && !section.Name.toLowerCase().includes('metadata');
 
                   section.TabCode = `${sectionIndex > 0 ? '\n        ' : ''}<!-- ${section.Name} Section -->
         <div class="form-card collapsible-card" data-section-name="${section.Name.toLowerCase()}">

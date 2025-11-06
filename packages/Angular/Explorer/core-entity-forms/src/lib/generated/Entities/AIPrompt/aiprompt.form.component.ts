@@ -21,7 +21,7 @@ export class AIPromptFormComponent extends BaseFormComponent {
         mJAIAgentTypes: false,
         mJAIConfigurations: false,
         aIPrompts: false,
-        mJAIConfigurations: false,
+        mJAIConfigurations1: false,
         mJAIAgentPrompts: false,
         mJAIAgentSteps: false,
         mJAIPromptModels: false,
