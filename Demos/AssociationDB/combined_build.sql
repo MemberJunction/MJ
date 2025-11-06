@@ -1582,10 +1582,10 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TextBody';
 
 EXEC sp_addextendedproperty
-    @name = N'MS_Description', @value = N'Template catery (Welcome, Renewal, Event, Newsletter, etc.)',
+    @name = N'MS_Description', @value = N'Template category (Welcome, Renewal, Event, Newsletter, etc.)',
     @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
     @level1type = N'TABLE', @level1name = 'EmailTemplate',
-    @level2type = N'COLUMN', @level2name = 'Catery';
+    @level2type = N'COLUMN', @level2name = 'Category';
 
 
 -- ============================================================================
@@ -2485,7 +2485,7 @@ SELECT
     ),
     CASE
         WHEN ABS(CHECKSUM(NEWID()) % 100) < 80 THEN 'Active'
-        WHEN ABS(CHECKSUM(NEWID()) % 100) < 95 THEN 'Expired'
+        WHEN ABS(CHECKSUM(NEWID()) % 100) < 95 THEN 'Lapsed'
         ELSE 'Cancelled'
     END,
     m.JoinDate,
@@ -3072,17 +3072,17 @@ INSERT INTO [AssociationDemo].[Certificate] (ID, EnrollmentID, CertificateNumber
 SELECT
     NEWID(),
     e.ID,
-    'CERT-' + FORMAT(YEAR(e.CompletionDate), '0000') + '-' + RIGHT('000000' + CAST(ROW_NUMBER() OVER (ORDER BY e.CompletionDate) AS VARCHAR), 6),
-    e.CompletionDate,
+    'CERT-' + FORMAT(YEAR(COALESCE(e.CompletionDate, GETDATE())), '0000') + '-' + RIGHT('000000' + CAST(ROW_NUMBER() OVER (ORDER BY COALESCE(e.CompletionDate, GETDATE())) AS VARCHAR), 6),
+    COALESCE(e.CompletionDate, GETDATE()),
     CASE
-        WHEN c.Category IN ('Security', 'Cloud') THEN DATEADD(YEAR, 3, e.CompletionDate)
+        WHEN c.Category IN ('Security', 'Cloud') THEN DATEADD(YEAR, 3, COALESCE(e.CompletionDate, GETDATE()))
         ELSE NULL
     END,
     'https://certificates.association.org/' + CAST(NEWID() AS VARCHAR(36)) + '.pdf',
     UPPER(SUBSTRING(CAST(NEWID() AS VARCHAR(36)), 1, 12))
 FROM [AssociationDemo].[Enrollment] e
 INNER JOIN [AssociationDemo].[Course] c ON e.CourseID = c.ID
-WHERE e.Status = 'Completed' AND e.Passed = 1;
+WHERE e.Status = 'Completed' AND e.Passed = 1 AND e.CompletionDate IS NOT NULL;
 
 SET @CompletedEnrollments = @@ROWCOUNT;
 
@@ -3261,7 +3261,7 @@ INSERT INTO [AssociationDemo].[Payment] (ID, InvoiceID, PaymentDate, Amount, Pay
 SELECT
     NEWID(),
     i.ID,
-    DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), i.InvoiceDate), -- Payment within 20 days
+    DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), CAST(i.InvoiceDate AS DATETIME)), -- Payment within 20 days
     i.Total,
     CASE ABS(CHECKSUM(NEWID()) % 5)
         WHEN 0 THEN 'Credit Card'
@@ -3275,7 +3275,7 @@ SELECT
         WHEN RAND(CHECKSUM(NEWID())) < 0.97 THEN 'Completed'
         ELSE 'Failed'
     END,
-    DATEADD(MINUTE, 5, DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), i.InvoiceDate))
+    DATEADD(MINUTE, 5, DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), CAST(i.InvoiceDate AS DATETIME)))
 FROM [AssociationDemo].[Invoice] i
 WHERE i.Status = 'Paid';
 
@@ -3384,18 +3384,18 @@ BEGIN
         @CurrentTemplateID,
         m.ID,
         'Sample Subject for ' + @CurrentTemplateName,
-        DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate),
+        DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)),
         -- 97% delivery rate
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.97
-            THEN DATEADD(MINUTE, 2, DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(MINUTE, 2, DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         -- 25% open rate of delivered
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.25
-            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 48), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 48), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         -- 5% click rate of delivered
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.05
-            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 72), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 72), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         CASE
             WHEN RAND(CHECKSUM(NEWID())) < 0.05 THEN 'Clicked'
@@ -3629,9 +3629,9 @@ PRINT '';
 GO
 
 DECLARE @MemberCount INT, @EventCount INT, @CourseCount INT;
-SELECT @MemberCount = COUNT(*) FROM membership.Member;
-SELECT @EventCount = COUNT(*) FROM events.Event;
-SELECT @CourseCount = COUNT(*) FROM learning.Course;
+SELECT @MemberCount = COUNT(*) FROM AssociationDemo.Member;
+SELECT @EventCount = COUNT(*) FROM AssociationDemo.Event;
+SELECT @CourseCount = COUNT(*) FROM AssociationDemo.Course;
 
 PRINT 'Record counts:';
 PRINT '  Members: ' + CAST(@MemberCount AS VARCHAR);

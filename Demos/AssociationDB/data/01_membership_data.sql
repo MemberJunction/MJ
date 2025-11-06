@@ -309,7 +309,7 @@ SELECT
     ),
     CASE
         WHEN ABS(CHECKSUM(NEWID()) % 100) < 80 THEN 'Active'
-        WHEN ABS(CHECKSUM(NEWID()) % 100) < 95 THEN 'Expired'
+        WHEN ABS(CHECKSUM(NEWID()) % 100) < 95 THEN 'Lapsed'
         ELSE 'Cancelled'
     END,
     m.JoinDate,

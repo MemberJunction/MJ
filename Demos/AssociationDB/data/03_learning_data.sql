@@ -149,17 +149,17 @@ INSERT INTO [AssociationDemo].[Certificate] (ID, EnrollmentID, CertificateNumber
 SELECT
     NEWID(),
     e.ID,
-    'CERT-' + FORMAT(YEAR(e.CompletionDate), '0000') + '-' + RIGHT('000000' + CAST(ROW_NUMBER() OVER (ORDER BY e.CompletionDate) AS VARCHAR), 6),
-    e.CompletionDate,
+    'CERT-' + FORMAT(YEAR(COALESCE(e.CompletionDate, GETDATE())), '0000') + '-' + RIGHT('000000' + CAST(ROW_NUMBER() OVER (ORDER BY COALESCE(e.CompletionDate, GETDATE())) AS VARCHAR), 6),
+    COALESCE(e.CompletionDate, GETDATE()),
     CASE
-        WHEN c.Category IN ('Security', 'Cloud') THEN DATEADD(YEAR, 3, e.CompletionDate)
+        WHEN c.Category IN ('Security', 'Cloud') THEN DATEADD(YEAR, 3, COALESCE(e.CompletionDate, GETDATE()))
         ELSE NULL
     END,
     'https://certificates.association.org/' + CAST(NEWID() AS VARCHAR(36)) + '.pdf',
     UPPER(SUBSTRING(CAST(NEWID() AS VARCHAR(36)), 1, 12))
 FROM [AssociationDemo].[Enrollment] e
 INNER JOIN [AssociationDemo].[Course] c ON e.CourseID = c.ID
-WHERE e.Status = 'Completed' AND e.Passed = 1;
+WHERE e.Status = 'Completed' AND e.Passed = 1 AND e.CompletionDate IS NOT NULL;
 
 SET @CompletedEnrollments = @@ROWCOUNT;
 

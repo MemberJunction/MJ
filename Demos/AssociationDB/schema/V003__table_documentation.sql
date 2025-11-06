@@ -817,10 +817,10 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TextBody';
 
 EXEC sp_addextendedproperty
-    @name = N'MS_Description', @value = N'Template catery (Welcome, Renewal, Event, Newsletter, etc.)',
+    @name = N'MS_Description', @value = N'Template category (Welcome, Renewal, Event, Newsletter, etc.)',
     @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
     @level1type = N'TABLE', @level1name = 'EmailTemplate',
-    @level2type = N'COLUMN', @level2name = 'Catery';
+    @level2type = N'COLUMN', @level2name = 'Category';
 
 
 -- ============================================================================

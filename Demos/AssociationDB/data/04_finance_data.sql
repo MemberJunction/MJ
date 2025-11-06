@@ -171,7 +171,7 @@ INSERT INTO [AssociationDemo].[Payment] (ID, InvoiceID, PaymentDate, Amount, Pay
 SELECT
     NEWID(),
     i.ID,
-    DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), i.InvoiceDate), -- Payment within 20 days
+    DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), CAST(i.InvoiceDate AS DATETIME)), -- Payment within 20 days
     i.Total,
     CASE ABS(CHECKSUM(NEWID()) % 5)
         WHEN 0 THEN 'Credit Card'
@@ -185,7 +185,7 @@ SELECT
         WHEN RAND(CHECKSUM(NEWID())) < 0.97 THEN 'Completed'
         ELSE 'Failed'
     END,
-    DATEADD(MINUTE, 5, DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), i.InvoiceDate))
+    DATEADD(MINUTE, 5, DATEADD(DAY, ABS(CHECKSUM(NEWID()) % 20), CAST(i.InvoiceDate AS DATETIME)))
 FROM [AssociationDemo].[Invoice] i
 WHERE i.Status = 'Paid';
 

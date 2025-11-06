@@ -100,18 +100,18 @@ BEGIN
         @CurrentTemplateID,
         m.ID,
         'Sample Subject for ' + @CurrentTemplateName,
-        DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate),
+        DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)),
         -- 97% delivery rate
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.97
-            THEN DATEADD(MINUTE, 2, DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(MINUTE, 2, DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         -- 25% open rate of delivered
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.25
-            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 48), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 48), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         -- 5% click rate of delivered
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.05
-            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 72), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 72), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         CASE
             WHEN RAND(CHECKSUM(NEWID())) < 0.05 THEN 'Clicked'
@@ -149,7 +149,7 @@ SELECT
         ELSE 'Renew Now'
     END
 FROM [AssociationDemo].[EmailSend] es
-WHERE es.Status = 'Clicked';
+WHERE es.Status = 'Clicked' AND es.ClickedDate IS NOT NULL;
 
 
 -- Note: No GO statement here - variables must persist within transaction

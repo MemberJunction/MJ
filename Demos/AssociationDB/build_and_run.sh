@@ -131,9 +131,9 @@ PRINT '';
 GO
 
 DECLARE @MemberCount INT, @EventCount INT, @CourseCount INT;
-SELECT @MemberCount = COUNT(*) FROM membership.Member;
-SELECT @EventCount = COUNT(*) FROM events.Event;
-SELECT @CourseCount = COUNT(*) FROM learning.Course;
+SELECT @MemberCount = COUNT(*) FROM AssociationDemo.Member;
+SELECT @EventCount = COUNT(*) FROM AssociationDemo.Event;
+SELECT @CourseCount = COUNT(*) FROM AssociationDemo.Course;
 
 PRINT 'Record counts:';
 PRINT '  Members: ' + CAST(@MemberCount AS VARCHAR);

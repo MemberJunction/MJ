@@ -6,14 +6,14 @@
 ###################################################################
  
 This script will create a comprehensive association management
-database with realistic sample data across 8 business domains.
+database with realistic sample data in a single AssociationDemo schema.
  
-Estimated completion time: 2-5 minutes
+Estimated completion time: 1-2 minutes
  
 -------------------------------------------------------------------
  
 Target Database: MJ_2_115_0
-Start Time: 2025-11-05 22:26:39
+Start Time: 2025-11-06 02:08:15
  
 ===================================================================
  
@@ -22,32 +22,109 @@ Start Time: 2025-11-05 22:26:39
 PHASE 1: CREATING SCHEMAS AND TABLES
 ===================================================================
  
-Created schema: membership
-Created schema: events
-Created schema: learning
-Created schema: finance
-Created schema: marketing
-Created schema: email
-Created schema: chapters
-Created schema: governance
-All schemas created successfully!
-Schemas: membership, events, learning, finance, marketing, email, chapters, governance
-Membership schema tables created successfully!
-Tables: Organization, MembershipType, Member, Membership
-Events schema tables created successfully!
-Tables: Event, EventSession, EventRegistration
-Learning schema tables created successfully!
-Tables: Course, Enrollment, Certificate
-Finance schema tables created successfully!
-Tables: Invoice, InvoiceLineItem, Payment
-Marketing schema tables created successfully!
-Tables: Campaign, Segment, CampaignMember
-Email schema tables created successfully!
-Tables: EmailTemplate, EmailSend, EmailClick
-Chapters schema tables created successfully!
-Tables: Chapter, ChapterMembership, ChapterOfficer
-Governance schema tables created successfully!
-Tables: Committee, CommitteeMembership, BoardPosition, BoardMember
+Schema created successfully!
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 28
+There is already an object named 'Organization' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'MembershipType' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'Member' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Member_Email' already exists on table 'AssociationDemo.Member'.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Member_Organization' already exists on table 'AssociationDemo.Member'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'Membership' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Membership_Member' already exists on table 'AssociationDemo.Membership'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 9
+There is already an object named 'Event' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Event_StartDate' already exists on table 'AssociationDemo.Event'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'EventSession' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_EventSession_Event' already exists on table 'AssociationDemo.EventSession'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'EventRegistration' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_EventReg_Event' already exists on table 'AssociationDemo.EventRegistration'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 9
+There is already an object named 'Course' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Course_Code' already exists on table 'AssociationDemo.Course'.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Course_Category' already exists on table 'AssociationDemo.Course'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'Enrollment' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Enrollment_Course' already exists on table 'AssociationDemo.Enrollment'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'Certificate' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Certificate_Number' already exists on table 'AssociationDemo.Certificate'.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Certificate_Enrollment' already exists on table 'AssociationDemo.Certificate'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 9
+There is already an object named 'Invoice' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Invoice_Number' already exists on table 'AssociationDemo.Invoice'.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Invoice_Member' already exists on table 'AssociationDemo.Invoice'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'InvoiceLineItem' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_LineItem_Invoice' already exists on table 'AssociationDemo.InvoiceLineItem'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'Payment' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Payment_Invoice' already exists on table 'AssociationDemo.Payment'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 9
+There is already an object named 'Campaign' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Campaign_Type' already exists on table 'AssociationDemo.Campaign'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'Segment' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_Segment_Type' already exists on table 'AssociationDemo.Segment'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'CampaignMember' in the database.
+Msg 1913, Level 16, State 1, Server f11443085b15, Line 3
+The operation failed because an index or statistics with name 'IX_CampaignMember_Campaign' already exists on table 'AssociationDemo.CampaignMember'.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 9
+There is already an object named 'EmailTemplate' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'EmailSend' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'EmailClick' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 9
+There is already an object named 'Chapter' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'ChapterMembership' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'ChapterOfficer' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 9
+There is already an object named 'Committee' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'CommitteeMembership' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'BoardPosition' in the database.
+Msg 2714, Level 16, State 6, Server f11443085b15, Line 5
+There is already an object named 'BoardMember' in the database.
+========================================
+AssociationDemo schema tables created successfully!
+Total tables created: 27
+ 
+Table breakdown by domain:
+  Membership: 4 tables (Organization, MembershipType, Member, Membership)
+  Events: 3 tables (Event, EventSession, EventRegistration)
+  Learning: 3 tables (Course, Enrollment, Certificate)
+  Finance: 3 tables (Invoice, InvoiceLineItem, Payment)
+  Marketing: 3 tables (Campaign, Segment, CampaignMember)
+  Email: 3 tables (EmailTemplate, EmailSend, EmailClick)
+  Chapters: 3 tables (Chapter, ChapterMembership, ChapterOfficer)
+  Governance: 4 tables (Committee, CommitteeMembership, BoardPosition, BoardMember)
+========================================
  
 -------------------------------------------------------------------
 PHASE 1A: Schema and table creation complete
@@ -58,8 +135,8 @@ PHASE 1A: Schema and table creation complete
 PHASE 1B: ADDING DATABASE DOCUMENTATION
 -------------------------------------------------------------------
  
-Msg 15135, Level 16, State 15, Server f11443085b15, Procedure sp_addextendedproperty, Line 37
-Object is invalid. Extended properties are not permitted on 'email.EmailTemplate.Catery', or the object does not exist.
+Msg 15233, Level 16, State 1, Server f11443085b15, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'AssociationDemo'.
  
 -------------------------------------------------------------------
 PHASE 1B COMPLETE: Documentation added successfully
@@ -75,32 +152,59 @@ PHASE 1 COMPLETE: All schemas and tables created successfully
 PHASE 2: POPULATING SAMPLE DATA
 ===================================================================
  
-Msg 547, Level 16, State 0, Server f11443085b15, Line 470
-The INSERT statement conflicted with the CHECK constraint "CK__Membershi__Statu__7B9E76C9". The conflict occurred in database "MJ_2_115_0", table "membership.Membership", column 'Status'.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 193
+Violation of PRIMARY KEY constraint 'PK__Membersh__3214EC273D3565F6'. Cannot insert duplicate key in object 'AssociationDemo.MembershipType'. The duplicate key value is (0b76f9ed-a512-49b3-9d46-18771891a895).
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 210
+Violation of PRIMARY KEY constraint 'PK__Organiza__3214EC27B5416C7D'. Cannot insert duplicate key in object 'AssociationDemo.Organization'. The duplicate key value is (830433b7-c43d-4ea8-8eb0-5c4fddf48e33).
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 267
+Violation of PRIMARY KEY constraint 'PK__Member__3214EC27FCD0FFE9'. Cannot insert duplicate key in object 'AssociationDemo.Member'. The duplicate key value is (4c271da3-5d80-4861-bcf2-7da0083ee59d).
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 536
+Violation of PRIMARY KEY constraint 'PK__Event__3214EC27317277F7'. Cannot insert duplicate key in object 'AssociationDemo.Event'. The duplicate key value is (39f84fc0-004c-4eb6-9735-97a0d588d0e4).
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 579
+Violation of PRIMARY KEY constraint 'PK__Event__3214EC27317277F7'. Cannot insert duplicate key in object 'AssociationDemo.Event'. The duplicate key value is (be99ce5c-5f69-49e1-a744-7029e36db151).
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 598
+Violation of PRIMARY KEY constraint 'PK__Event__3214EC27317277F7'. Cannot insert duplicate key in object 'AssociationDemo.Event'. The duplicate key value is (1fc55931-a72e-4ecd-926f-39f6372edac5).
 The statement has been terminated.
 Msg 9810, Level 16, State 1, Server f11443085b15, Line 813
 The datepart hour is not supported by date function dateadd for data type date.
 The statement has been terminated.
-Msg 515, Level 16, State 2, Server f11443085b15, Line 1066
-Cannot insert the value NULL into column 'CertificateNumber', table 'MJ_2_115_0.learning.Certificate'; column does not allow nulls. INSERT fails.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 937
+Violation of PRIMARY KEY constraint 'PK__Course__3214EC279F6A3A77'. Cannot insert duplicate key in object 'AssociationDemo.Course'. The duplicate key value is (075aecb8-0914-4b53-a8f5-3609c8ade64e).
 The statement has been terminated.
-Msg 9810, Level 16, State 1, Server f11443085b15, Line 1255
-The datepart minute is not supported by date function dateadd for data type date.
+Msg 2601, Level 14, State 1, Server f11443085b15, Line 1110
+Cannot insert duplicate key row in object 'AssociationDemo.Invoice' with unique index 'IX_Invoice_Number'. The duplicate key value is (INV-2021-000068).
 The statement has been terminated.
-Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
-The datepart minute is not supported by date function dateadd for data type date.
+Msg 2601, Level 14, State 1, Server f11443085b15, Line 1140
+Cannot insert duplicate key row in object 'AssociationDemo.Invoice' with unique index 'IX_Invoice_Number'. The duplicate key value is (INV-2021-000002).
 The statement has been terminated.
-Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
-The datepart minute is not supported by date function dateadd for data type date.
+Msg 2601, Level 14, State 1, Server f11443085b15, Line 1160
+Cannot insert duplicate key row in object 'AssociationDemo.Invoice' with unique index 'IX_Invoice_Number'. The duplicate key value is (INV-2024-000013).
 The statement has been terminated.
-Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
-The datepart minute is not supported by date function dateadd for data type date.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 1297
+Violation of PRIMARY KEY constraint 'PK__Segment__3214EC27BF211B28'. Cannot insert duplicate key in object 'AssociationDemo.Segment'. The duplicate key value is (854c98a3-49b7-4968-bc82-848a39779aa9).
 The statement has been terminated.
-Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
-The datepart minute is not supported by date function dateadd for data type date.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 1316
+Violation of PRIMARY KEY constraint 'PK__Campaign__3214EC2745C70021'. Cannot insert duplicate key in object 'AssociationDemo.Campaign'. The duplicate key value is (90fc1d81-2447-436b-b29e-cc200f75d74c).
 The statement has been terminated.
-Msg 9810, Level 16, State 1, Server f11443085b15, Line 1376
-The datepart minute is not supported by date function dateadd for data type date.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 1335
+Violation of PRIMARY KEY constraint 'PK__EmailTem__3214EC270AC20635'. Cannot insert duplicate key in object 'AssociationDemo.EmailTemplate'. The duplicate key value is (27ee327a-b797-4442-a4e3-56d5bcca1a99).
+The statement has been terminated.
+Msg 515, Level 16, State 2, Server f11443085b15, Line 1415
+Cannot insert the value NULL into column 'ClickDate', table 'MJ_2_115_0.AssociationDemo.EmailClick'; column does not allow nulls. INSERT fails.
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 1452
+Violation of PRIMARY KEY constraint 'PK__Chapter__3214EC27C92A7DAE'. Cannot insert duplicate key in object 'AssociationDemo.Chapter'. The duplicate key value is (f6b82c02-4178-4663-be22-70550443adfc).
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 1532
+Violation of PRIMARY KEY constraint 'PK__Committe__3214EC27F69E8831'. Cannot insert duplicate key in object 'AssociationDemo.Committee'. The duplicate key value is (a80ef20a-29dc-47d4-beb9-69c8a25f3243).
+The statement has been terminated.
+Msg 2627, Level 14, State 1, Server f11443085b15, Line 1579
+Violation of PRIMARY KEY constraint 'PK__BoardPos__3214EC2784E9F306'. Cannot insert duplicate key in object 'AssociationDemo.BoardPosition'. The duplicate key value is (2468e717-05e6-4b55-8f0d-c3e07aaaef36).
 The statement has been terminated.
  
 ===================================================================
@@ -113,8 +217,8 @@ PHASE 3: VERIFICATION
 ===================================================================
  
 Record counts:
-  Members: 500
-  Events: 32
+  Members: 985
+  Events: 52
   Courses: 60
  
  
