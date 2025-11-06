@@ -4,6 +4,101 @@
 
 DBAutoDoc is an AI-powered SQL Server database documentation generator that analyzes database schema, samples data, and uses LLMs to generate comprehensive descriptions at schema, table, and column levels. The tool works standalone with zero MemberJunction runtime dependencies, making it useful for documenting any SQL Server database.
 
+---
+
+## 📝 Updates from v1 (Key Changes)
+
+### 1. ✅ BaseLLM Integration (Moved to Phase 1, High Priority)
+**What Changed**: Originally, the package used `SimpleAIClient` with direct `fetch()` calls to OpenAI/Anthropic. This has been identified as a **temporary placeholder** that must be replaced early in development.
+
+**Why**:
+- MJ's `BaseLLM` class provides support for 10+ AI providers (not just OpenAI/Anthropic)
+- File-based prompts are easier to maintain than inline strings
+- BaseLLM handles retries, error handling, and rate limiting
+- **Zero database dependency** - BaseLLM can be used standalone without MJ database running
+- Consistent with MJ architecture
+
+**Implementation**:
+- **Phase 1a** (Days 1-2): Replace SimpleAIClient with BaseLLM wrapper (`LLMClient`)
+- Create 6 prompt template files in `src/prompts/`
+- Initialize BaseLLM from environment variables (AI_PROVIDER, AI_MODEL, AI_API_KEY)
+- Support all MJ providers: OpenAI, Anthropic, Groq, Cerebras, Azure, Gemini, Vertex, Bedrock, etc.
+
+**Example**:
+```typescript
+// OLD (SimpleAIClient - fetch-based)
+const client = new SimpleAIClient();
+const result = await client.generateTableDoc(request);
+
+// NEW (LLMClient - BaseLLM-based with file prompts)
+const llmClient = new LLMClient({
+  provider: process.env.AI_PROVIDER || 'openai',
+  model: process.env.AI_MODEL || 'gpt-4',
+  apiKey: process.env.AI_API_KEY!
+});
+const result = await llmClient.generateTableDoc({
+  promptFile: 'table-analysis.txt',
+  variables: { schema, table, columns, ... }
+});
+```
+
+### 2. ✅ User-Configurable Settings (No Hardcoded Values)
+**What Changed**: Configuration values like `maxIterationsPerTable` (20) and `confidenceThreshold` (0.85) are no longer hardcoded.
+
+**Why**:
+- Different databases have different complexity levels
+- Users should control iteration limits and quality thresholds
+- Better UX - users understand what settings control behavior
+- Settings persist in state file for subsequent runs
+
+**Implementation**:
+- **Phase 1b** (Days 2-3): Add interactive prompts at start of `analyze` command
+- Prompt for: `maxIterationsPerTable`, `confidenceThreshold`, `enableBackPropagation`, etc.
+- Store in state file's `analysisConfig` field
+- Provide sensible defaults (20, 0.85, true)
+- Support CLI flags to override: `--max-iterations 30`, `--confidence-threshold 0.90`, etc.
+- Add `--use-defaults` flag to skip prompts entirely
+
+**Example CLI Flow**:
+```bash
+$ db-auto-doc analyze
+
+📊 Analysis Configuration
+? Maximum iterations per table (prevents infinite loops)? (20)
+? Confidence threshold to stop refinement (0.0-1.0)? (0.85)
+? Enable back-propagation (re-analyze earlier levels)? (Yes)
+? Sample data rows per table? (10)
+? Maximum distinct values to extract? (20)
+
+✓ Configuration saved to state file
+
+# On subsequent runs, uses stored config
+$ db-auto-doc analyze
+✓ Using stored configuration (use --reconfigure to change)
+
+# Or override specific settings
+$ db-auto-doc analyze --max-iterations 30 --confidence-threshold 0.90
+```
+
+**State File**:
+```typescript
+{
+  "version": "2.0",
+  "analysisConfig": {  // NEW: User's choices persisted
+    "maxIterationsPerTable": 20,
+    "confidenceThreshold": 0.85,
+    "enableBackPropagation": true,
+    "backPropConfidenceThreshold": 0.70,
+    "sampleDataRows": 10,
+    "maxDistinctValues": 20,
+    "parallelTablesPerLevel": 3
+  },
+  // ... rest of state
+}
+```
+
+---
+
 ## Current Status
 
 ### ✅ Already Implemented (v1.0 Foundation)
@@ -50,14 +145,20 @@ The following components are **already built** and functional:
   - Sample data extraction
 - **Pure SQL Server**: No MJ dependencies
 
-#### 4. AI Integration (Basic)
+#### 4. AI Integration (⚠️ TEMPORARY - To Be Replaced)
 - **Location**: `src/ai/simple-ai-client.ts`
 - **Current Implementation**:
-  - Direct HTTP calls to OpenAI and Anthropic
+  - Direct HTTP calls to OpenAI and Anthropic using fetch()
   - Generates table and column descriptions
   - Returns confidence scores
   - Tracks token usage
-- **Limitation**: Uses fetch() instead of MJ's BaseLLM class
+- **Status**: ⚠️ **TEMPORARY PLACEHOLDER** - Will be replaced with MJ's BaseLLM in Phase 1
+- **Why Replace**:
+  - BaseLLM provides support for 10+ AI providers (OpenAI, Anthropic, Groq, Cerebras, etc.)
+  - BaseLLM handles retries, error handling, and rate limiting
+  - File-based prompts are easier to maintain than inline strings
+  - Consistent with MJ architecture
+  - **Zero database dependency** - BaseLLM can be used standalone without MJ database running
 
 #### 5. Export Generators
 - **Location**: `src/generators/sql-generator.ts`, `src/generators/markdown-generator.ts`
@@ -433,177 +534,254 @@ export class SanityChecker {
 
 ---
 
-### 8. BaseLLM Integration
+### 8. User-Configurable Analysis Settings
 **Status**: ❌ Not Implemented
-**Priority**: **HIGH** - Required for MJ consistency and better prompt management
+**Priority**: **HIGH** - Essential UX improvement
 
 #### Current Limitation:
-Uses `SimpleAIClient` with inline prompts and direct fetch() calls.
+Configuration values like `maxIterations` and `confidenceThreshold` are hardcoded or only available in config files.
 
 #### Requirements:
-- Replace `SimpleAIClient` with MJ's `BaseLLM` class
-- Use file-based prompts stored in `src/prompts/` directory
-- Support all MJ-configured AI providers (OpenAI, Anthropic, Groq, Cerebras, etc.)
-- No hard dependency on MJ database (use `BaseLLM` directly, not `AIPromptRunner`)
+- Prompt user for analysis settings at the start of `analyze` command
+- Store settings in state file for subsequent runs
+- Allow command-line flags to override stored settings
+- Provide sensible defaults for all settings
 
-#### Implementation Plan:
+#### Settings to Configure:
 ```typescript
-// New file: src/ai/llm-client.ts
-import { BaseLLM } from '@memberjunction/ai';
-
-export class LLMClient {
-  private llm: BaseLLM;
-
-  constructor() {
-    // Initialize BaseLLM based on config
-    const provider = process.env.AI_PROVIDER || 'openai';
-    const model = process.env.AI_MODEL || 'gpt-4';
-    this.llm = new BaseLLM(provider, model, process.env.AI_API_KEY);
-  }
-
-  /**
-   * Generate table documentation using file-based prompt
-   */
-  async generateTableDoc(
-    context: TableAnalysisContext
-  ): Promise<AITableDocResponse>
+export interface AnalysisConfig {
+  maxIterationsPerTable: number;        // Default: 20
+  confidenceThreshold: number;          // Default: 0.85
+  enableBackPropagation: boolean;       // Default: true
+  backPropConfidenceThreshold: number;  // Default: 0.70
+  sampleDataRows: number;               // Default: 10
+  maxDistinctValues: number;            // Default: 20
+  parallelTablesPerLevel: number;       // Default: 3
 }
 ```
 
-#### Prompt Files:
-Create prompt templates in `src/prompts/`:
-- `table-analysis.txt` - Analyze a single table
-- `column-analysis.txt` - Analyze table columns
-- `level-review.txt` - Review an entire dependency level
-- `schema-summary.txt` - Generate schema description
-- `sanity-check.txt` - Review for consistency
-- `back-propagation-check.txt` - Determine if re-analysis needed
+#### Implementation Plan:
+```typescript
+// In analyze command, before starting analysis
+async function promptForAnalysisConfig(
+  existingConfig?: AnalysisConfig
+): Promise<AnalysisConfig> {
+  const config = await inquirer.prompt([
+    {
+      type: 'number',
+      name: 'maxIterationsPerTable',
+      message: 'Maximum iterations per table (prevents infinite loops)?',
+      default: existingConfig?.maxIterationsPerTable || 20
+    },
+    {
+      type: 'number',
+      name: 'confidenceThreshold',
+      message: 'Confidence threshold to stop refinement (0.0-1.0)?',
+      default: existingConfig?.confidenceThreshold || 0.85
+    },
+    {
+      type: 'confirm',
+      name: 'enableBackPropagation',
+      message: 'Enable back-propagation (re-analyze earlier levels)?',
+      default: existingConfig?.enableBackPropagation !== false
+    },
+    // ... other settings
+  ]);
 
-#### Prompt Format:
+  return config;
+}
 ```
-You are analyzing a SQL Server database table.
 
-Schema: {{schema}}
-Table: {{table}}
+#### State File Storage:
+```typescript
+export interface StateFile {
+  version: string;
+  database: DatabaseInfo;
+  analysisConfig?: AnalysisConfig;  // NEW: Store user's choices
+  seedContext?: SeedContext;
+  schemas: Record<string, SchemaState>;
+  runHistory: RunHistoryEntry[];
+}
+```
 
-Columns:
-{{#columns}}
-- {{name}} ({{type}}) {{#isPK}}[PK]{{/isPK}} {{#isFK}}[FK]{{/isFK}}
-{{/columns}}
+#### CLI Flag Overrides:
+```bash
+# Use stored config
+db-auto-doc analyze
 
-Foreign Keys:
-{{#foreignKeys}}
-- {{column}} → {{referencedTable}}
-{{/foreignKeys}}
+# Override specific settings
+db-auto-doc analyze \
+  --max-iterations 30 \
+  --confidence-threshold 0.90 \
+  --no-back-propagation
 
-Sample Data:
-{{sampleDataJson}}
-
-Data Profile:
-{{#profiles}}
-- {{columnName}}: {{distinctCount}} distinct values
-  {{#possibleValues}}Values: {{.}}{{/possibleValues}}
-  {{#statistics}}Range: {{min}} to {{max}}, Avg: {{avg}}{{/statistics}}
-{{/profiles}}
-
-Task: Generate a detailed description for this table and its columns.
-Return JSON with this structure: {...}
+# Skip prompts, use all defaults
+db-auto-doc analyze --use-defaults
 ```
 
 ---
 
 ## 🏗️ Implementation Phases
 
-### Phase 1: Core Infrastructure (Week 1)
-**Goal**: Set up foundational systems for new workflow
+### Phase 1: Core Infrastructure & BaseLLM (Week 1)
+**Goal**: Set up foundational systems and replace SimpleAIClient with BaseLLM
 
-1. **Topological Sort**
-   - Implement `TopologicalSorter` class
-   - Add dependency level calculation
-   - Update state file structure with `dependencyLevel` and `dependencies` fields
-   - Add unit tests for various dependency graphs
+#### 1a. BaseLLM Integration (Days 1-2) ⚠️ **HIGH PRIORITY - Do First**
+**Why First**: All subsequent work depends on proper AI integration
 
-2. **Enhanced State File**
-   - Migrate from single `aiGenerated` to `descriptionIterations[]` array
-   - Add `analysisAttempts` and `locked` fields
-   - Add migration utility to upgrade old state files
-   - Update `StateManager` methods to work with iterations
+- **Replace SimpleAIClient** with MJ's `BaseLLM` class
+  - Create `LLMClient` wrapper around `BaseLLM`
+  - Support all MJ providers (OpenAI, Anthropic, Groq, Cerebras, Azure, Gemini, Vertex, Bedrock, etc.)
+  - Initialize BaseLLM from environment variables (AI_PROVIDER, AI_MODEL, AI_API_KEY)
+  - **Zero database dependency** - use BaseLLM directly, NOT AIPromptRunner
+  - Example provider instantiation:
+    ```typescript
+    import { OpenAILLM } from '@memberjunction/ai-openai';
+    import { GroqLLM } from '@memberjunction/ai-groq';
+    // ... other providers
 
-3. **Data Profiler**
-   - Implement `DataProfiler` class
-   - Add cardinality analysis
-   - Add statistical analysis for numeric/date columns
-   - Add pattern detection utilities
+    // Factory pattern based on AI_PROVIDER env var
+    function createLLM(provider: string, apiKey: string): BaseLLM {
+      switch (provider.toLowerCase()) {
+        case 'openai': return new OpenAILLM(apiKey);
+        case 'groq': return new GroqLLM(apiKey);
+        // ... other providers
+        default: throw new Error(`Unsupported provider: ${provider}`);
+      }
+    }
+    ```
+
+- **File-Based Prompts**
+  - Create prompt templates in `src/prompts/` directory
+  - Implement prompt template loader with variable substitution
+  - Create initial prompts:
+    - `table-analysis.txt` - Analyze a single table
+    - `column-analysis.txt` - Analyze table columns (batch)
+    - `level-review.txt` - Review an entire dependency level
+    - `schema-summary.txt` - Generate schema-level description
+    - `sanity-check.txt` - Consistency validation
+    - `back-propagation-check.txt` - Determine if re-analysis needed
+
+- **Integration**
+  - Update `DatabaseAnalyzer` to use `LLMClient` instead of `SimpleAIClient`
+  - Add error handling and retry logic (leveraging BaseLLM capabilities)
+  - Track token usage and costs per provider
+
+**Example Usage**:
+```typescript
+// Initialize from config
+const llmClient = new LLMClient({
+  provider: process.env.AI_PROVIDER || 'openai',
+  model: process.env.AI_MODEL || 'gpt-4',
+  apiKey: process.env.AI_API_KEY!
+});
+
+// Use with file-based prompt
+const result = await llmClient.generateTableDoc({
+  promptFile: 'table-analysis.txt',
+  variables: {
+    schema: 'dbo',
+    table: 'Customer',
+    columns: [...],
+    // ... other context
+  }
+});
+```
+
+#### 1b. User-Configurable Settings (Days 2-3)
+- **Interactive Configuration Prompts**
+  - Add prompts at start of `analyze` command
+  - Settings: maxIterations, confidenceThreshold, enableBackPropagation, etc.
+  - Store in state file's `analysisConfig` field
+  - Use stored config on subsequent runs (with option to reconfigure)
+
+- **CLI Flag Overrides**
+  - Add flags: `--max-iterations`, `--confidence-threshold`, `--no-back-propagation`
+  - Add `--use-defaults` flag to skip prompts
+  - Add `--reconfigure` flag to re-prompt even if config exists
+
+- **State File Updates**
+  - Add `analysisConfig?: AnalysisConfig` field
+  - Validate config values (sensible ranges)
+  - Provide clear defaults
+
+#### 1c. Topological Sort (Days 3-4)
+- Implement `TopologicalSorter` class
+- Add dependency level calculation
+- Update state file structure with `dependencyLevel` and `dependencies` fields
+- Add unit tests for various dependency graphs (cycles, disconnected components, etc.)
+
+#### 1d. Enhanced State File (Days 4-5)
+- Migrate from single `aiGenerated` to `descriptionIterations[]` array
+- Add `analysisAttempts` and `locked` fields
+- Add migration utility to upgrade v1.0 state files to v2.0
+- Update `StateManager` methods to work with iterations
+- Add helper methods for common operations
+
+#### 1e. Data Profiler (Days 5-6)
+- Implement `DataProfiler` class
+- Add cardinality analysis (distinct count, unique/high/medium/low)
+- Add statistical analysis for numeric/date/money columns (MIN/MAX/AVG/STDEV)
+- Add possible values extraction for low-cardinality columns (<= 20 distinct)
+- Add pattern detection utilities (null %, common formats)
+
+#### 1f. Testing (Day 7)
+- Unit tests for BaseLLM integration
+- Unit tests for TopologicalSorter
+- Unit tests for DataProfiler
+- Integration test: full analysis on simple test database
 
 **Deliverables**:
-- `src/analysis/topological-sort.ts`
-- `src/analysis/data-profiler.ts`
-- Updated `src/types/state-file.ts`
+- `src/ai/llm-client.ts` ✨ **NEW**
+- `src/prompts/*.txt` (6 prompt templates) ✨ **NEW**
+- `src/utils/prompt-loader.ts` ✨ **NEW**
+- `src/analysis/topological-sort.ts` ✨ **NEW**
+- `src/analysis/data-profiler.ts` ✨ **NEW**
+- Updated `src/types/state-file.ts` (v2.0 with `analysisConfig` and iterations)
 - Updated `src/state/state-manager.ts`
-- Migration utility for old state files
+- `src/utils/migration.ts` (v1.0 → v2.0 migrator) ✨ **NEW**
+- Updated `src/analyzers/analyzer.ts` (use LLMClient)
+- Updated `src/commands/analyze.ts` (config prompts and flags)
+- Test suite for Phase 1 components
 
 ---
 
-### Phase 2: BaseLLM Integration (Week 1-2)
-**Goal**: Replace simple AI client with MJ's BaseLLM and file-based prompts
-
-1. **LLM Client**
-   - Create `LLMClient` wrapper around `BaseLLM`
-   - Implement prompt template loading
-   - Add template variable substitution
-   - Add retry logic and error handling
-
-2. **Prompt Templates**
-   - Create all prompt files in `src/prompts/`
-   - Test with various table types (lookup, junction, transactional, etc.)
-   - Tune prompts for optimal output quality
-
-3. **Integration**
-   - Replace `SimpleAIClient` usage in `DatabaseAnalyzer`
-   - Update all commands to use new `LLMClient`
-   - Preserve backward compatibility with existing state files
-
-**Deliverables**:
-- `src/ai/llm-client.ts`
-- `src/prompts/*.txt` (6-8 prompt templates)
-- Updated `src/analyzers/analyzer.ts`
-- Configuration examples in README
-
----
-
-### Phase 3: Iterative Analysis Workflow (Week 2-3)
+### Phase 2: Iterative Analysis Workflow (Week 2)
 **Goal**: Implement level-by-level analysis with back-propagation
 
 1. **Level-Based Analyzer**
-   - Rewrite `DatabaseAnalyzer.analyze()` to process by levels
+   - Rewrite `DatabaseAnalyzer.analyze()` to process by levels (not alphabetically)
    - For each level:
-     - Profile all tables
+     - Profile all tables using DataProfiler
      - Generate descriptions with context from previous levels
      - Store iteration with reasoning
+     - Use user-configured `analysisConfig` settings
    - Add progress tracking and logging
 
 2. **Back-Propagation Engine**
    - Implement `BackPropagationEngine`
    - Detect when downstream analysis invalidates upstream assumptions
    - Mark tables for re-analysis
-   - Re-run analysis with additional context
-   - Prevent infinite loops with max attempts
+   - Re-run affected level with additional context
+   - Continue from re-analyzed level downward
+   - Prevent infinite loops with `maxIterationsPerTable` from config
 
 3. **Refinement Loop**
    - Implement `RefinementEngine`
-   - After each level, ask LLM to review
+   - After each level, ask LLM to review using `level-review.txt` prompt
    - Apply suggested refinements
-   - Continue until confidence threshold met or max iterations reached
+   - Continue until `confidenceThreshold` met or max iterations reached
+   - Track refinement history in `descriptionIterations`
 
 **Deliverables**:
-- `src/analysis/back-propagation.ts`
-- `src/analysis/refinement-engine.ts`
+- `src/analysis/back-propagation.ts` ✨ **NEW**
+- `src/analysis/refinement-engine.ts` ✨ **NEW**
 - Updated `src/analyzers/analyzer.ts` with level-based workflow
-- Guardrails and safety limits
+- Guardrails and safety limits (using user config)
 
 ---
 
-### Phase 4: Schema & Sanity Checks (Week 3)
+### Phase 3: Schema & Sanity Checks (Week 3)
 **Goal**: Add final quality assurance steps
 
 1. **Schema Description**
@@ -632,7 +810,7 @@ Return JSON with this structure: {...}
 
 ---
 
-### Phase 5: Testing & Documentation (Week 4)
+### Phase 4: Testing & Documentation (Week 4)
 **Goal**: Comprehensive testing and documentation
 
 1. **Testing**
@@ -1284,6 +1462,32 @@ The DBAutoDoc package will be considered **complete** when:
 
 ---
 
-**Last Updated**: 2024-11-06
-**Status**: Planning Phase
-**Next Steps**: Begin Phase 1 implementation
+**Last Updated**: 2024-11-06 (v2 - Updated with BaseLLM priority and user-configurable settings)
+**Status**: Planning Phase - Ready for Implementation
+**Next Steps**: Begin Phase 1a - BaseLLM Integration (HIGH PRIORITY)
+
+---
+
+## Summary of Changes from v1 Plan
+
+1. **BaseLLM Integration moved from Phase 2 to Phase 1a** (Days 1-2)
+   - Now the FIRST task in implementation
+   - Recognized as critical foundation for all subsequent work
+   - SimpleAIClient clearly marked as temporary placeholder
+
+2. **User-Configurable Settings added to Phase 1b** (Days 2-3)
+   - All analysis parameters are now user-provided (with defaults)
+   - Settings persist in state file
+   - CLI flags allow per-run overrides
+   - No more hardcoded values like maxIterations=20
+
+3. **Timeline compressed to 4 weeks** (from 5)
+   - Week 1: Core Infrastructure + BaseLLM + User Config
+   - Week 2: Iterative Analysis Workflow
+   - Week 3: Schema & Sanity Checks
+   - Week 4: Testing & Documentation
+
+4. **State file v2.0 includes `analysisConfig`**
+   - Stores user's configuration choices
+   - Enables consistent behavior across runs
+   - Supports `--reconfigure` to update settings
