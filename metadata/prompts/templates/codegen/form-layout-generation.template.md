@@ -32,20 +32,43 @@ Analyze the provided entity and assign each field to a domain-specific, semantic
 
 ## Categorization Guidelines
 
+### **CRITICAL: Category Count Limits**
+
+- **Target: 3-5 categories** for most entities
+- **Maximum: 7 categories** only for very large entities (50+ fields)
+- **Minimum fields per category: 3-4 fields** (unless it's a critical standalone section)
+- **Focus on consolidation** - Combine related concepts into broader categories
+
+**Why this matters:**
+- Too many categories fragments the form and overwhelms users
+- Users should navigate 3-5 logical sections, not 10-20 tiny tabs
+- Broader categories with clear semantic groupings are more intuitive
+
 ### Domain-Specific Categories
 
 Create categories that are **specific to this entity's business domain**, not generic labels.
 
-**Good Examples:**
-- For Order entity: "Bill To Address", "Ship To Address", "Product Details", "Pricing and Discounts", "Shipping Information", "Order Status"
-- For Employee entity: "Personal Information", "Job Details", "Compensation and Benefits", "Manager and Team", "Performance Tracking"
-- For Product entity: "Product Identification", "Pricing and Costs", "Inventory and Stock", "Supplier Information", "Sales Performance"
+**Good Examples (3-5 categories):**
+- For Order entity: "Order Details", "Billing Address", "Shipping Address", "Pricing and Charges", "Fulfillment Tracking"
+- For Employee entity: "Personal Information", "Job and Department", "Compensation", "Performance and Reviews"
+- For Product entity: "Product Details", "Pricing and Inventory", "Supplier Information", "Sales Metrics"
 
-**Bad Examples (too generic):**
-- "Basic Information"
-- "Details"
-- "Miscellaneous"
-- "Other"
+**Bad Examples:**
+- Too generic: "Basic Information", "Details", "Miscellaneous", "Other"
+- Too fragmented: Creating separate categories for "Tax", "Shipping Cost", "Discount" instead of "Pricing and Charges"
+- Too many: Having 15+ categories for a 30-field entity
+
+### Category Consolidation Strategies
+
+**Combine related concepts:**
+- "Dates and Timeline" instead of separate "Created Date" + "Modified Date" + "Due Date"
+- "Contact Information" instead of separate "Email" + "Phone" + "Address"
+- "Financial Details" instead of separate "Pricing" + "Costs" + "Revenue"
+- "Relationships" instead of separate categories for each foreign key
+
+**Use broader semantic groupings:**
+- "Customer Information" can include CustomerID, CustomerName, AccountType, etc.
+- "System Metadata" can include all __mj_* fields, IDs, timestamps, audit fields
 
 ### Category Naming Rules
 
@@ -53,13 +76,16 @@ Create categories that are **specific to this entity's business domain**, not ge
 2. **Be Descriptive** - Category name should clearly indicate what fields it contains
 3. **Be Concise** - 2-5 words maximum
 4. **Use Business Language** - Not technical database jargon
+5. **Think Consolidation** - Can related fields share a broader category?
 
 ### Field Assignment
 
 - Every field must be assigned to exactly ONE category
 - Group semantically related fields together
-- Create 2-7 categories per entity (don't overdo it)
+- **Target 3-5 categories** (7 maximum for very large entities)
+- Each category should have **at least 3-4 fields** (exceptions for critical standalone sections)
 - Consider the user's workflow and mental model
+- Prioritize consolidation over fragmentation
 
 ### Common Patterns
 
@@ -119,53 +145,70 @@ Return a JSON object with this exact structure:
 
 For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddress1, BillToCity, BillToState, ShipToAddress1, ShipToCity, ShipToState, SubTotal, Tax, ShippingCost, TotalAmount, ShippingCarrier, TrackingNumber, OrderStatus, __mj_CreatedAt
 
+**Analysis:** 17 fields → Target 4-5 categories
+
 ```json
 {
   "fieldCategories": [
     {
       "fieldName": "OrderNumber",
-      "category": "Order Identification",
-      "reason": "Primary order identifier used throughout system"
+      "category": "Order Details",
+      "reason": "Core order information and tracking"
     },
     {
       "fieldName": "OrderDate",
-      "category": "Order Identification",
-      "reason": "Core order tracking information"
+      "category": "Order Details",
+      "reason": "Core order information and tracking"
     },
     {
       "fieldName": "CustomerID",
-      "category": "Customer Information",
+      "category": "Order Details",
       "reason": "Links order to customer record"
     },
     {
+      "fieldName": "OrderStatus",
+      "category": "Order Details",
+      "reason": "Current fulfillment status is core order info"
+    },
+    {
       "fieldName": "BillToAddress1",
-      "category": "Bill To Address",
+      "category": "Billing Address",
       "reason": "Billing address for invoice"
     },
     {
       "fieldName": "BillToCity",
-      "category": "Bill To Address",
+      "category": "Billing Address",
       "reason": "Billing address city"
     },
     {
       "fieldName": "BillToState",
-      "category": "Bill To Address",
+      "category": "Billing Address",
       "reason": "Billing address state for tax calculation"
     },
     {
       "fieldName": "ShipToAddress1",
-      "category": "Ship To Address",
+      "category": "Shipping Address",
       "reason": "Physical delivery address"
     },
     {
       "fieldName": "ShipToCity",
-      "category": "Ship To Address",
+      "category": "Shipping Address",
       "reason": "Shipping destination city"
     },
     {
       "fieldName": "ShipToState",
-      "category": "Ship To Address",
+      "category": "Shipping Address",
       "reason": "Shipping destination state"
+    },
+    {
+      "fieldName": "ShippingCarrier",
+      "category": "Shipping Address",
+      "reason": "Shipping logistics grouped with destination"
+    },
+    {
+      "fieldName": "TrackingNumber",
+      "category": "Shipping Address",
+      "reason": "Shipping logistics grouped with destination"
     },
     {
       "fieldName": "SubTotal",
@@ -188,21 +231,6 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "reason": "Final order total"
     },
     {
-      "fieldName": "ShippingCarrier",
-      "category": "Shipping Details",
-      "reason": "Carrier handling delivery"
-    },
-    {
-      "fieldName": "TrackingNumber",
-      "category": "Shipping Details",
-      "reason": "Package tracking information"
-    },
-    {
-      "fieldName": "OrderStatus",
-      "category": "Order Status and Tracking",
-      "reason": "Current fulfillment status"
-    },
-    {
       "fieldName": "__mj_CreatedAt",
       "category": "System Metadata",
       "reason": "Technical audit field"
@@ -210,3 +238,5 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
   ]
 }
 ```
+
+**Result:** 5 well-organized categories instead of 8 fragmented ones
