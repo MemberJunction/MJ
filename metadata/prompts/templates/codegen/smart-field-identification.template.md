@@ -5,8 +5,8 @@ You are an expert database analyst specializing in identifying the most appropri
 ## Your Task
 
 Analyze the provided entity structure and determine:
-1. Which field should be the **Name Field** (primary human-readable identifier)
-2. Which field should be **Default in View** (shown in dropdowns/lists)
+1. Which field should be the **Name Field** (primary human-readable identifier) - **EXACTLY ONE FIELD**
+2. Which fields should be **Default in View** (shown in dropdowns/lists) - **ONE OR MORE FIELDS**
 
 ## Entity Information
 
@@ -41,13 +41,14 @@ Analyze the provided entity structure and determine:
 
 ## Analysis Guidelines
 
-### Name Field Selection
+### Name Field Selection (EXACTLY ONE)
 
 The Name Field should be:
 - **User-friendly** - What humans naturally call this record
 - **Readable** - Contains actual names/titles, not codes
 - **Descriptive** - Provides semantic meaning
 - **Unique or near-unique** - Helps distinguish records
+- **ONLY ONE FIELD** - You must select exactly one field as the Name Field
 
 Good candidates:
 - Fields with "name", "title", "label" in the name
@@ -60,18 +61,26 @@ Bad candidates:
 - Technical fields (__mj_*, ID, CreatedAt)
 - Overly long text fields (descriptions, notes)
 
-### Default in View Selection
+### Default in View Selection (ONE OR MORE)
 
-The Default in View field should be:
+The Default in View fields should be:
 - **Recognizable** - What users search for or reference
-- **Unique** - Helps identify the specific record
-- **Concise** - Short enough for dropdown display
+- **Useful** - Helps identify and distinguish records
+- **Concise** - Short enough for grid/list display
 - **Practical** - What users actually use day-to-day
+- **ONE OR MORE FIELDS** - You can and should select multiple fields if they're all useful
 
-This might be:
-- The same as Name Field (common case)
-- A unique code if that's how users reference items (e.g., ProductSKU, OrderNumber)
-- A composite display (but single field only - we'll concatenate elsewhere if needed)
+Common patterns:
+- Include the Name Field (almost always)
+- Include unique codes/identifiers (OrderNumber, SKU, etc.)
+- Include key dates (CreatedDate, DueDate, etc.)
+- Include status fields (Status, State, etc.)
+- Include important foreign key display values
+
+Do NOT include:
+- Technical fields (__mj_*, internal IDs)
+- Very long text fields (descriptions, notes, comments)
+- Binary/complex data types
 
 ## Output Format
 
@@ -81,11 +90,15 @@ Return a JSON object with this exact structure:
 {
   "nameField": "FieldName",
   "nameFieldReason": "Brief explanation of why this field is best for human-readable identification",
-  "defaultInView": "FieldName",
-  "defaultInViewReason": "Brief explanation of why this field should appear in dropdowns",
+  "defaultInView": ["FieldName1", "FieldName2", "FieldName3"],
+  "defaultInViewReason": "Brief explanation of why these fields should appear in grids/lists",
   "confidence": "high|medium|low"
 }
 ```
+
+**IMPORTANT**:
+- `nameField` is a **single string** (exactly one field)
+- `defaultInView` is an **array of strings** (one or more fields)
 
 ### Confidence Levels
 - **high**: Clear, obvious choice (e.g., "CustomerName" in Customers table)
@@ -102,14 +115,14 @@ Return a JSON object with this exact structure:
 
 ## Example
 
-For entity "Products" with fields: ID, ProductSKU, ProductTitle, InternalCode, Price
+For entity "Products" with fields: ID, ProductSKU, ProductTitle, InternalCode, Price, CategoryName, IsActive, CreatedAt
 
 ```json
 {
   "nameField": "ProductTitle",
   "nameFieldReason": "Most user-friendly identifier for display purposes - describes what the product is",
-  "defaultInView": "ProductSKU",
-  "defaultInViewReason": "Unique identifier that users recognize and search for when looking up products",
+  "defaultInView": ["ProductTitle", "ProductSKU", "CategoryName", "IsActive"],
+  "defaultInViewReason": "ProductTitle for recognition, ProductSKU for lookup, CategoryName for context, IsActive for status - all useful in grid views",
   "confidence": "high"
 }
 ```

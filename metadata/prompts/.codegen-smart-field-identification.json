@@ -9,6 +9,8 @@
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
+      "OutputType": "object",
+      "OutputExample": "",
       "ParallelizationMode": "None",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
@@ -30,7 +32,7 @@
             "ID": "CFB45989-B4A2-41AF-800F-3A79778EEDE5"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:35.524Z",
+            "lastModified": "2025-11-06T18:05:20.785Z",
             "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
           }
         },
@@ -45,7 +47,7 @@
             "ID": "721EAA4F-C26E-4096-93F8-2D2F7CF01B3C"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:35.538Z",
+            "lastModified": "2025-11-06T18:05:20.798Z",
             "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
           }
         }
@@ -55,8 +57,8 @@
       "ID": "7FF02D68-02AE-49A1-AA5E-843D52367D57"
     },
     "sync": {
-      "lastModified": "2025-11-06T16:58:35.490Z",
-      "checksum": "8df013388bc141c4e1bda7052850f5e1dbdbd645cce914a2f0d0f7cff4ae557a"
+      "lastModified": "2025-11-06T18:18:23.962Z",
+      "checksum": "adda168a919325105c565d80d8804144df804d8906b59da01525a8b4a0f0bcb0"
     }
   }
 ]

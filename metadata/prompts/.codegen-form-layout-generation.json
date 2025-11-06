@@ -10,6 +10,8 @@
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
@@ -30,7 +32,7 @@
             "ID": "4EAD0807-9E6E-496D-8F9E-F64376C5522A"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:32.456Z",
+            "lastModified": "2025-11-06T18:05:18.232Z",
             "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
           }
         },
@@ -45,7 +47,7 @@
             "ID": "63B92084-D3C0-42FD-B5A1-0C98811D4075"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:32.468Z",
+            "lastModified": "2025-11-06T18:05:18.247Z",
             "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
           }
         }
@@ -55,8 +57,8 @@
       "ID": "910D617C-56CE-4698-A938-E2E982BB91FD"
     },
     "sync": {
-      "lastModified": "2025-11-06T16:58:32.420Z",
-      "checksum": "8c2c012496d57d8214c06dff7aecffd4b5702fdaee2996b0672ce57d37b0aa49"
+      "lastModified": "2025-11-06T18:18:23.879Z",
+      "checksum": "dc0f1c918695fdc3b69634673ae659861a4aa33a49a17756a13da4c9fd96ed53"
     }
   }
 ]
