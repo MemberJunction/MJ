@@ -13,11 +13,19 @@ import { takeUntil } from 'rxjs/operators';
   template: `
     <div class="conversation-list">
       <div class="list-header">
-        <input
-          type="text"
-          class="search-input"
-          placeholder="Search conversations..."
-          [(ngModel)]="conversationState.searchQuery">
+        <div class="header-top">
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search conversations..."
+            [(ngModel)]="conversationState.searchQuery">
+          @if (!isSelectionMode) {
+            <button class="btn-select" (click)="toggleSelectionMode()" title="Select conversations">
+              <i class="fas fa-check-square"></i>
+              <span>Select</span>
+            </button>
+          }
+        </div>
       </div>
       <button class="btn-new-conversation" (click)="createNewConversation()" title="New Conversation">
         <i class="fas fa-plus"></i>
@@ -39,7 +47,14 @@ import { takeUntil } from 'rxjs/operators';
                 <div class="conversation-item"
                      [class.active]="conversation.ID === conversationState.activeConversationId"
                      [class.renamed]="conversation.ID === renamedConversationId"
-                     (click)="selectConversation(conversation)">
+                     (click)="handleConversationClick(conversation)">
+                  @if (isSelectionMode) {
+                    <div class="conversation-checkbox">
+                      <input type="checkbox"
+                             [checked]="selectedConversationIds.has(conversation.ID)"
+                             (click)="$event.stopPropagation(); toggleConversationSelection(conversation.ID)">
+                    </div>
+                  }
                   <div class="conversation-icon-wrapper">
                     @if (hasActiveTasks(conversation.ID)) {
                       <div class="conversation-icon has-tasks">
@@ -54,28 +69,30 @@ import { takeUntil } from 'rxjs/operators';
                     <div class="conversation-name">{{ conversation.Name }}</div>
                     <div class="conversation-preview">{{ conversation.Description }}</div>
                   </div>
-                  <div class="conversation-actions">
-                    <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
-                      <i class="fas fa-ellipsis"></i>
-                    </button>
-                    @if (openMenuConversationId === conversation.ID) {
-                      <div class="context-menu" (click)="$event.stopPropagation()">
-                        <button class="menu-item" (click)="togglePin(conversation, $event)">
-                          <i class="fas fa-thumbtack"></i>
-                          <span>Unpin</span>
-                        </button>
-                        <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
-                          <i class="fas fa-edit"></i>
-                          <span>Rename</span>
-                        </button>
-                        <div class="menu-divider"></div>
-                        <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
-                          <i class="fas fa-trash"></i>
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    }
-                  </div>
+                  @if (!isSelectionMode) {
+                    <div class="conversation-actions">
+                      <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
+                        <i class="fas fa-ellipsis"></i>
+                      </button>
+                      @if (openMenuConversationId === conversation.ID) {
+                        <div class="context-menu" (click)="$event.stopPropagation()">
+                          <button class="menu-item" (click)="togglePin(conversation, $event)">
+                            <i class="fas fa-thumbtack"></i>
+                            <span>Unpin</span>
+                          </button>
+                          <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
+                            <i class="fas fa-edit"></i>
+                            <span>Rename</span>
+                          </button>
+                          <div class="menu-divider"></div>
+                          <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
+                            <i class="fas fa-trash"></i>
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
                 </div>
               }
             </div>
@@ -95,7 +112,14 @@ import { takeUntil } from 'rxjs/operators';
               <div class="conversation-item"
                    [class.active]="conversation.ID === conversationState.activeConversationId"
                    [class.renamed]="conversation.ID === renamedConversationId"
-                   (click)="selectConversation(conversation)">
+                   (click)="handleConversationClick(conversation)">
+                @if (isSelectionMode) {
+                  <div class="conversation-checkbox">
+                    <input type="checkbox"
+                           [checked]="selectedConversationIds.has(conversation.ID)"
+                           (click)="$event.stopPropagation(); toggleConversationSelection(conversation.ID)">
+                  </div>
+                }
                 <div class="conversation-icon-wrapper">
                   @if (hasActiveTasks(conversation.ID)) {
                     <div class="conversation-icon has-tasks">
@@ -110,33 +134,60 @@ import { takeUntil } from 'rxjs/operators';
                   <div class="conversation-name">{{ conversation.Name }}</div>
                   <div class="conversation-preview">{{ conversation.Description }}</div>
                 </div>
-                <div class="conversation-actions">
-                  <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
-                    <i class="fas fa-ellipsis"></i>
-                  </button>
-                  @if (openMenuConversationId === conversation.ID) {
-                    <div class="context-menu" (click)="$event.stopPropagation()">
-                      <button class="menu-item" (click)="togglePin(conversation, $event)">
-                        <i class="fas fa-thumbtack"></i>
-                        <span>Pin</span>
-                      </button>
-                      <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
-                        <i class="fas fa-edit"></i>
-                        <span>Rename</span>
-                      </button>
-                      <div class="menu-divider"></div>
-                      <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
-                        <i class="fas fa-trash"></i>
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  }
-                </div>
+                @if (!isSelectionMode) {
+                  <div class="conversation-actions">
+                    <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
+                      <i class="fas fa-ellipsis"></i>
+                    </button>
+                    @if (openMenuConversationId === conversation.ID) {
+                      <div class="context-menu" (click)="$event.stopPropagation()">
+                        <button class="menu-item" (click)="togglePin(conversation, $event)">
+                          <i class="fas fa-thumbtack"></i>
+                          <span>Pin</span>
+                        </button>
+                        <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
+                          <i class="fas fa-edit"></i>
+                          <span>Rename</span>
+                        </button>
+                        <div class="menu-divider"></div>
+                        <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
+                          <i class="fas fa-trash"></i>
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
               </div>
             }
           </div>
         </div>
       </div>
+
+      <!-- Selection Action Bar -->
+      @if (isSelectionMode) {
+        <div class="selection-action-bar">
+          <div class="selection-info">
+            <span class="selection-count">{{ selectedConversationIds.size }} selected</span>
+            @if (selectedConversationIds.size < conversationState.filteredConversations.length) {
+              <button class="link-btn" (click)="selectAll()">Select All</button>
+            } @else {
+              <button class="link-btn" (click)="deselectAll()">Deselect All</button>
+            }
+          </div>
+          <div class="selection-actions">
+            <button class="btn-cancel" (click)="toggleSelectionMode()">
+              Cancel
+            </button>
+            <button class="btn-delete-bulk"
+                    (click)="bulkDeleteConversations()"
+                    [disabled]="selectedConversationIds.size === 0">
+              <i class="fas fa-trash"></i>
+              Delete ({{ selectedConversationIds.size }})
+            </button>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -426,6 +477,145 @@ import { takeUntil } from 'rxjs/operators';
         box-shadow: none;
       }
     }
+
+    /* Selection Mode Styles */
+    .header-top {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn-select {
+      padding: 8px 12px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.7);
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .btn-select:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    .conversation-checkbox {
+      display: flex;
+      align-items: center;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .conversation-checkbox input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #0076B6;
+    }
+
+    .selection-action-bar {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #0A2742;
+      border-top: 1px solid rgba(255,255,255,0.15);
+      gap: 12px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .selection-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: rgba(255,255,255,0.9);
+      font-size: 14px;
+      font-weight: 500;
+      flex: 1 1 auto;
+      min-width: 150px;
+    }
+
+    .selection-count {
+      color: white;
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      color: #AAE7FD;
+      cursor: pointer;
+      font-size: 13px;
+      text-decoration: underline;
+      padding: 0;
+      transition: color 0.2s;
+    }
+
+    .link-btn:hover {
+      color: white;
+    }
+
+    .selection-actions {
+      display: flex;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .btn-cancel {
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-cancel:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+
+    .btn-delete-bulk {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: #DC2626;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .btn-delete-bulk:hover:not(:disabled) {
+      background: #B91C1C;
+    }
+
+    .btn-delete-bulk:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-delete-bulk i {
+      font-size: 12px;
+    }
   `]
 })
 export class ConversationListComponent implements OnInit, OnDestroy {
@@ -437,6 +627,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public pinnedExpanded: boolean = true;
   public openMenuConversationId: string | null = null;
   public conversationIdsWithTasks = new Set<string>();
+  public isSelectionMode: boolean = false;
+  public selectedConversationIds = new Set<string>();
 
   private destroy$ = new Subject<void>();
 
@@ -577,5 +769,75 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   hasActiveTasks(conversationId: string): boolean {
     return this.conversationIdsWithTasks.has(conversationId);
+  }
+
+  toggleSelectionMode(): void {
+    this.isSelectionMode = !this.isSelectionMode;
+    if (!this.isSelectionMode) {
+      this.selectedConversationIds.clear();
+    }
+  }
+
+  toggleConversationSelection(conversationId: string): void {
+    if (this.selectedConversationIds.has(conversationId)) {
+      this.selectedConversationIds.delete(conversationId);
+    } else {
+      this.selectedConversationIds.add(conversationId);
+    }
+  }
+
+  selectAll(): void {
+    this.conversationState.filteredConversations.forEach(c => {
+      this.selectedConversationIds.add(c.ID);
+    });
+  }
+
+  deselectAll(): void {
+    this.selectedConversationIds.clear();
+  }
+
+  async bulkDeleteConversations(): Promise<void> {
+    const count = this.selectedConversationIds.size;
+
+    if (count === 0) return;
+
+    const confirmed = await this.dialogService.confirm({
+      title: 'Delete Conversations',
+      message: `Are you sure you want to delete ${count} conversation${count > 1 ? 's' : ''}? This action cannot be undone.`,
+      okText: 'Delete',
+      cancelText: 'Cancel'
+    });
+
+    if (confirmed) {
+      try {
+        const result = await this.conversationState.deleteMultipleConversations(
+          Array.from(this.selectedConversationIds),
+          this.currentUser
+        );
+
+        // Show results if there were any failures
+        if (result.failed.length > 0) {
+          await this.dialogService.alert(
+            'Partial Success',
+            `Deleted ${result.successful.length} of ${count} conversations. ${result.failed.length} failed.`
+          );
+        }
+
+        // Exit selection mode
+        this.toggleSelectionMode();
+
+      } catch (error) {
+        console.error('Error deleting conversations:', error);
+        await this.dialogService.alert('Error', 'Failed to delete conversations. Please try again.');
+      }
+    }
+  }
+
+  handleConversationClick(conversation: ConversationEntity): void {
+    if (this.isSelectionMode) {
+      this.toggleConversationSelection(conversation.ID);
+    } else {
+      this.selectConversation(conversation);
+    }
   }
 }
