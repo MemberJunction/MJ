@@ -1,10 +1,37 @@
 #!/bin/bash
 # Prepare Association DB Build - Generates combined SQL file from source files
 # This script only generates the SQL file, it does not execute against the database
+#
+# Usage: ./prepare_build.sh [--skip-docs]
+#   --skip-docs: Skip adding database documentation (extended properties)
 
 cd "$(dirname "$0")"
 
+# Parse command line arguments
+SKIP_DOCS=false
+for arg in "$@"; do
+    case $arg in
+        --skip-docs)
+            SKIP_DOCS=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: ./prepare_build.sh [--skip-docs]"
+            echo "  --skip-docs: Skip adding database documentation (extended properties)"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Usage: ./prepare_build.sh [--skip-docs]"
+            exit 1
+            ;;
+    esac
+done
+
 echo "Generating combined SQL file..."
+if [ "$SKIP_DOCS" = true ]; then
+    echo "  (Skipping documentation)"
+fi
 
 # Output file goes in tmp directory
 OUTPUT="tmp/combined_build.sql"
@@ -63,6 +90,11 @@ PRINT 'PHASE 1A: Schema and table creation complete';
 PRINT '-------------------------------------------------------------------';
 PRINT '';
 GO
+EOF
+
+# Conditionally add documentation based on --skip-docs flag
+if [ "$SKIP_DOCS" = false ]; then
+    cat >> "$OUTPUT" << 'EOF'
 
 PRINT '';
 PRINT '-------------------------------------------------------------------';
@@ -73,12 +105,12 @@ GO
 
 EOF
 
-# Add documentation file
-cat schema/V003__table_documentation.sql >> "$OUTPUT"
-echo "GO" >> "$OUTPUT"
+    # Add documentation file
+    cat schema/V003__table_documentation.sql >> "$OUTPUT"
+    echo "GO" >> "$OUTPUT"
 
-# Add Phase 1B complete
-cat >> "$OUTPUT" << 'EOF'
+    # Add Phase 1B complete
+    cat >> "$OUTPUT" << 'EOF'
 
 PRINT '';
 PRINT '-------------------------------------------------------------------';
@@ -86,6 +118,21 @@ PRINT 'PHASE 1B COMPLETE: Documentation added successfully';
 PRINT '-------------------------------------------------------------------';
 PRINT '';
 GO
+EOF
+else
+    cat >> "$OUTPUT" << 'EOF'
+
+PRINT '';
+PRINT '-------------------------------------------------------------------';
+PRINT 'PHASE 1B: SKIPPING DATABASE DOCUMENTATION';
+PRINT '-------------------------------------------------------------------';
+PRINT '';
+GO
+EOF
+fi
+
+# Add Phase 1 complete and Phase 2 start messages
+cat >> "$OUTPUT" << 'EOF'
 
 PRINT '';
 PRINT '===================================================================';

@@ -45,22 +45,34 @@ This sample database provides a fully functional, data-rich environment for test
 - SQL Server 2016 or later (Express, Standard, or Enterprise)
 - MemberJunction framework installed
 - SQL Server Management Studio (SSMS) or Azure Data Studio
+- `sqlcmd` command-line utility (for automated installation)
 
 ### Installation Steps
 
 **Option 1: Automated Installation (Recommended)**
 
-1. **Copy the installation script template**:
+1. **Create environment file from template**:
    ```bash
-   cp install.sh.template install.sh
+   cp .env.template .env
    ```
 
-2. **Edit install.sh with your database credentials**:
-   - Update server name, database name, username, and password
+2. **Edit .env with your database credentials**:
+   ```bash
+   # Open .env and update with your settings
+   DB_SERVER=localhost
+   DB_NAME=MJ_2_115_0
+   DB_USER=sa
+   DB_PASSWORD=your_password_here
+   ```
 
 3. **Run the installer**:
    ```bash
    ./install.sh
+   ```
+
+   **Optional: Skip documentation** (faster installation):
+   ```bash
+   ./install.sh --skip-docs
    ```
 
    This will:
@@ -106,7 +118,8 @@ npm run codegen
 ```
 AssociationDB/
 ├── README.md                              # This file
-├── install.sh.template                    # Installation script template (copy and configure)
+├── .env.template                          # Database credentials template
+├── install.sh                             # Installation script (requires .env file)
 ├── prepare_build.sh                       # Generates combined SQL file
 ├── MASTER_BUILD_AssociationDB.sql         # Alternative SQLCMD entry point
 │
@@ -258,6 +271,11 @@ ORDER BY SchemaName, TableName, c.column_id;
 
 To test auto-documentation tools, install the database without extended properties:
 
+```bash
+./install.sh --skip-docs
+```
+
+Or via SQLCMD mode in SSMS:
 ```sql
 :setvar INCLUDE_DOCUMENTATION 0
 USE YourMJDatabase;
