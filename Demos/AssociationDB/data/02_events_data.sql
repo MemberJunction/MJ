@@ -2,10 +2,13 @@
  * Association Sample Database - Events Data
  * File: 02_events_data.sql
  *
+ * International Cheese Federation (ICF) Events
  * Generates comprehensive events data including:
- * - 35 Events (conferences, webinars, workshops)
- * - 85 Event Sessions (for multi-day conferences)
- * - 1,400 Event Registrations (generated programmatically)
+ * - 3 ICF Annual Meetings (2024, 2025, 2026) - 3rd Sunday of April
+ * - 6 Cheese Symposiums (Cheddar, Feta, Swiss themed)
+ * - 4 Joint Conferences
+ * - 8 Webinars
+ * - Event Registrations with YoY growth trends
  *
  * All dates are relative to parameters defined in 00_parameters.sql
  ******************************************************************************/
@@ -14,391 +17,416 @@
 -- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
--- EVENTS (35 Events over 5 years)
+-- CALCULATE 3RD SUNDAY OF APRIL FOR ANNUAL MEETINGS
+-- ============================================================================
+
+-- Calculate the 3rd Sunday of April for years 2024, 2025, 2026
+-- 3rd Sunday = First day of April + offset to first Sunday + 14 days (2 more weeks)
+DECLARE @Year2024 INT = YEAR(@EndDate) - 1;  -- Last year
+DECLARE @Year2025 INT = YEAR(@EndDate);      -- Current year
+DECLARE @Year2026 INT = YEAR(@EndDate) + 1;  -- Next year
+
+-- Calculate 3rd Sunday of April for each year
+DECLARE @April2024Start DATE = DATEFROMPARTS(@Year2024, 4, 1);
+DECLARE @DaysToFirstSunday2024 INT = (8 - DATEPART(WEEKDAY, @April2024Start)) % 7;
+DECLARE @ThirdSunday2024 DATE = DATEADD(DAY, @DaysToFirstSunday2024 + 14, @April2024Start);
+
+DECLARE @April2025Start DATE = DATEFROMPARTS(@Year2025, 4, 1);
+DECLARE @DaysToFirstSunday2025 INT = (8 - DATEPART(WEEKDAY, @April2025Start)) % 7;
+DECLARE @ThirdSunday2025 DATE = DATEADD(DAY, @DaysToFirstSunday2025 + 14, @April2025Start);
+
+DECLARE @April2026Start DATE = DATEFROMPARTS(@Year2026, 4, 1);
+DECLARE @DaysToFirstSunday2026 INT = (8 - DATEPART(WEEKDAY, @April2026Start)) % 7;
+DECLARE @ThirdSunday2026 DATE = DATEADD(DAY, @DaysToFirstSunday2026 + 14, @April2026Start);
+
+
+-- ============================================================================
+-- EVENTS (21 Events - ICF Themed)
 -- ============================================================================
 
 
--- Annual Conferences (5 years)
+-- ICF ANNUAL MEETINGS (3 events - showing YoY growth)
 INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
-    (@Event_AnnualConf2020, '2020 Annual Technology Leadership Summit', 'Conference',
-     DATEADD(DAY, -1650, @EndDate), DATEADD(DAY, -1647, @EndDate), 'America/New_York',
-     'Boston Convention Center, Boston, MA', 0, 500,
-     DATEADD(DAY, -1740, @EndDate), DATEADD(DAY, -1655, @EndDate),
-     599.00, 799.00, 12.0,
-     'Our flagship annual conference brings together technology leaders from across industries. Three days of keynotes, workshops, and networking.',
+    -- 2024 Annual Meeting (Completed) - 950 attendees out of 1000 capacity
+    (@Event_AnnualConf2024, 'ICF 2024 Annual Meeting', 'Conference',
+     CAST(@ThirdSunday2024 AS DATETIME), DATEADD(DAY, 3, CAST(@ThirdSunday2024 AS DATETIME)), 'America/Chicago',
+     'Wisconsin Center, Milwaukee, WI', 0, 1000,
+     DATEADD(DAY, -90, @ThirdSunday2024), DATEADD(DAY, -1, @ThirdSunday2024),
+     595.00, 795.00, 16.0,
+     'The premier gathering of cheese professionals from around the world. Four days of education, networking, and celebration of artisan cheese excellence.',
      'Completed'),
 
-    (@Event_AnnualConf2021, '2021 Annual Technology Leadership Summit', 'Conference',
-     DATEADD(DAY, -1285, @EndDate), DATEADD(DAY, -1282, @EndDate), 'America/Chicago',
-     'McCormick Place, Chicago, IL', 0, 500,
-     DATEADD(DAY, -1375, @EndDate), DATEADD(DAY, -1290, @EndDate),
-     599.00, 799.00, 12.0,
-     'Year two of our premier conference focusing on digital transformation and emerging technologies.',
+    -- 2025 Annual Meeting (Completed) - 1050 attendees out of 1100 capacity (10.5% growth)
+    (NEWID(), 'ICF 2025 Annual Meeting', 'Conference',
+     CAST(@ThirdSunday2025 AS DATETIME), DATEADD(DAY, 3, CAST(@ThirdSunday2025 AS DATETIME)), 'America/Los_Angeles',
+     'Moscone Center, San Francisco, CA', 0, 1100,
+     DATEADD(DAY, -90, @ThirdSunday2025), DATEADD(DAY, -1, @ThirdSunday2025),
+     645.00, 845.00, 16.0,
+     'Building on record attendance! Join the global cheese community for innovation, education, and unforgettable cheese experiences.',
      'Completed'),
 
-    (@Event_AnnualConf2022, '2022 Annual Technology Leadership Summit', 'Conference',
-     DATEADD(DAY, -920, @EndDate), DATEADD(DAY, -917, @EndDate), 'America/Los_Angeles',
-     'Los Angeles Convention Center, Los Angeles, CA', 0, 550,
-     DATEADD(DAY, -1010, @EndDate), DATEADD(DAY, -925, @EndDate),
-     649.00, 849.00, 12.0,
-     'Exploring the future of technology with focus on AI, cloud, and cybersecurity.',
-     'Completed'),
-
-    (@Event_AnnualConf2023, '2023 Annual Technology Leadership Summit', 'Conference',
-     DATEADD(DAY, -555, @EndDate), DATEADD(DAY, -552, @EndDate), 'America/Denver',
-     'Colorado Convention Center, Denver, CO', 0, 600,
-     DATEADD(DAY, -645, @EndDate), DATEADD(DAY, -560, @EndDate),
-     699.00, 899.00, 12.0,
-     'Celebrating innovation and leadership in technology. Expanded track on AI and machine learning.',
-     'Completed'),
-
-    (@Event_AnnualConf2024, '2024 Annual Technology Leadership Summit', 'Conference',
-     DATEADD(DAY, -90, @EndDate), DATEADD(DAY, -87, @EndDate), 'America/New_York',
-     'Javits Center, New York, NY', 0, 650,
-     DATEADD(DAY, -180, @EndDate), DATEADD(DAY, -95, @EndDate),
-     749.00, 949.00, 12.0,
-     'Our largest conference yet! Focus on generative AI, cloud architecture, and digital transformation.',
-     'Completed');
-
--- Virtual Summits (2)
-INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, VirtualPlatform, MeetingURL, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
-VALUES
-    (@Event_VirtualSummit2024, '2024 Virtual Technology Summit', 'Virtual Summit',
-     DATEADD(DAY, -180, @EndDate), DATEADD(DAY, -179, @EndDate), 'America/New_York',
-     'Virtual', 1, 'Zoom', 'https://zoom.us/j/virtual-summit-2024', 2000,
-     DATEADD(DAY, -240, @EndDate), DATEADD(DAY, -181, @EndDate),
-     199.00, 299.00, 4.0,
-     'Global virtual summit bringing together leaders worldwide. Keynotes and interactive sessions on emerging tech trends.',
-     'Completed'),
-
-    (NEWID(), '2024 Winter Virtual Summit - AI & Machine Learning', 'Virtual Summit',
-     DATEADD(DAY, 45, @EndDate), DATEADD(DAY, 46, @EndDate), 'America/Los_Angeles',
-     'Virtual', 1, 'Teams', 'https://teams.microsoft.com/winter-summit', 2500,
-     DATEADD(DAY, -15, @EndDate), DATEADD(DAY, 44, @EndDate),
-     199.00, 299.00, 4.0,
-     'Deep dive into AI and ML with hands-on workshops and case studies.',
+    -- 2026 Annual Meeting (Registration Open) - Target 1150 out of 1200 capacity
+    (NEWID(), 'ICF 2026 Annual Meeting', 'Conference',
+     CAST(@ThirdSunday2026 AS DATETIME), DATEADD(DAY, 3, CAST(@ThirdSunday2026 AS DATETIME)), 'America/New_York',
+     'Jacob Javits Center, New York, NY', 0, 1200,
+     DATEADD(DAY, -90, @ThirdSunday2026), DATEADD(DAY, -1, @ThirdSunday2026),
+     695.00, 895.00, 16.0,
+     'Our biggest annual meeting yet! Four days of cheese mastery featuring keynotes from industry legends, hands-on workshops, and the Grand Cheese Awards.',
      'Registration Open');
 
--- Leadership Workshops (5)
+
+-- CHEESE SYMPOSIUMS (6 events - specialty cheese focused)
 INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
-    (@Event_LeadershipWorkshop, 'Executive Leadership Workshop - Strategic Technology Planning', 'Workshop',
-     DATEADD(DAY, -45, @EndDate), DATEADD(DAY, -44, @EndDate), 'America/Chicago',
-     'Hyatt Regency, Chicago, IL', 0, 50,
-     DATEADD(DAY, -90, @EndDate), DATEADD(DAY, -47, @EndDate),
-     399.00, 549.00, 8.0,
-     'Intensive two-day workshop for CTOs and technology executives on strategic planning.',
+    -- Cheddar Symposiums
+    (NEWID(), 'International Cheddar Symposium 2024', 'Workshop',
+     DATEADD(DAY, -245, @EndDate), DATEADD(DAY, -244, @EndDate), 'America/Chicago',
+     'Tillamook Creamery, Tillamook, OR', 0, 150,
+     DATEADD(DAY, -290, @EndDate), DATEADD(DAY, -246, @EndDate),
+     295.00, 425.00, 6.0,
+     'Deep dive into cheddar production, aging techniques, and flavor development. Features tours of award-winning cheddar facilities.',
      'Completed'),
 
-    (NEWID(), 'Technical Leadership Skills Workshop', 'Workshop',
-     DATEADD(DAY, -320, @EndDate), DATEADD(DAY, -319, @EndDate), 'America/New_York',
-     'Microsoft Technology Center, New York, NY', 0, 40,
-     DATEADD(DAY, -380, @EndDate), DATEADD(DAY, -322, @EndDate),
-     299.00, 449.00, 6.0,
-     'Building effective technical leadership skills for engineering managers.',
-     'Completed'),
-
-    (NEWID(), 'Cloud Architecture Intensive Workshop', 'Workshop',
-     DATEADD(DAY, -200, @EndDate), DATEADD(DAY, -198, @EndDate), 'America/Los_Angeles',
-     'AWS Summit Center, San Francisco, CA', 0, 60,
-     DATEADD(DAY, -260, @EndDate), DATEADD(DAY, -202, @EndDate),
-     499.00, 649.00, 12.0,
-     'Three-day intensive workshop on cloud architecture patterns and best practices.',
-     'Completed'),
-
-    (NEWID(), 'Cybersecurity Leadership Workshop', 'Workshop',
-     DATEADD(DAY, 25, @EndDate), DATEADD(DAY, 26, @EndDate), 'America/Denver',
-     'Denver Tech Center, Denver, CO', 0, 45,
-     DATEADD(DAY, -30, @EndDate), DATEADD(DAY, 24, @EndDate),
-     449.00, 599.00, 8.0,
-     'Security leadership and risk management for technology executives.',
-     'Registration Open'),
-
-    (NEWID(), 'Agile Transformation Workshop', 'Workshop',
-     DATEADD(DAY, 60, @EndDate), DATEADD(DAY, 61, @EndDate), 'America/Chicago',
-     'Agile Training Center, Austin, TX', 0, 35,
-     DATEADD(DAY, 10, @EndDate), DATEADD(DAY, 59, @EndDate),
-     349.00, 499.00, 6.0,
-     'Practical workshop on leading agile transformations in technology organizations.',
-     'Registration Open');
-
--- Webinars (15 over past 2 years)
-INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, VirtualPlatform, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
-VALUES
-    (NEWID(), 'AI Ethics in Product Development', 'Webinar',
-     DATEADD(DAY, -600, @EndDate), DATEADD(DAY, -600, @EndDate), 'America/New_York',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, -630, @EndDate), DATEADD(DAY, -601, @EndDate),
-     0.00, 49.00, 1.0,
-     'Exploring ethical considerations when building AI-powered products.',
-     'Completed'),
-
-    (NEWID(), 'Cloud Cost Optimization Strategies', 'Webinar',
-     DATEADD(DAY, -550, @EndDate), DATEADD(DAY, -550, @EndDate), 'America/Los_Angeles',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, -580, @EndDate), DATEADD(DAY, -551, @EndDate),
-     0.00, 49.00, 1.0,
-     'Best practices for managing and optimizing cloud infrastructure costs.',
-     'Completed'),
-
-    (NEWID(), 'Zero Trust Security Architecture', 'Webinar',
-     DATEADD(DAY, -480, @EndDate), DATEADD(DAY, -480, @EndDate), 'America/Chicago',
-     'Virtual', 1, 'Teams', 1000,
-     DATEADD(DAY, -510, @EndDate), DATEADD(DAY, -481, @EndDate),
-     0.00, 49.00, 1.0,
-     'Implementing zero trust security in modern cloud environments.',
-     'Completed'),
-
-    (NEWID(), 'Data Governance and Privacy Compliance', 'Webinar',
-     DATEADD(DAY, -420, @EndDate), DATEADD(DAY, -420, @EndDate), 'America/New_York',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, -450, @EndDate), DATEADD(DAY, -421, @EndDate),
-     0.00, 49.00, 1.0,
-     'Navigating GDPR, CCPA, and other data privacy regulations.',
-     'Completed'),
-
-    (NEWID(), 'Microservices Architecture Patterns', 'Webinar',
-     DATEADD(DAY, -350, @EndDate), DATEADD(DAY, -350, @EndDate), 'America/Los_Angeles',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, -380, @EndDate), DATEADD(DAY, -351, @EndDate),
-     0.00, 49.00, 1.0,
-     'Design patterns and best practices for microservices architecture.',
-     'Completed'),
-
-    (NEWID(), 'DevOps Culture and Transformation', 'Webinar',
-     DATEADD(DAY, -280, @EndDate), DATEADD(DAY, -280, @EndDate), 'America/Chicago',
-     'Virtual', 1, 'Teams', 1000,
-     DATEADD(DAY, -310, @EndDate), DATEADD(DAY, -281, @EndDate),
-     0.00, 49.00, 1.0,
-     'Building a DevOps culture and implementing continuous delivery.',
-     'Completed'),
-
-    (NEWID(), 'Machine Learning in Production', 'Webinar',
-     DATEADD(DAY, -210, @EndDate), DATEADD(DAY, -210, @EndDate), 'America/New_York',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, -240, @EndDate), DATEADD(DAY, -211, @EndDate),
-     0.00, 49.00, 1.0,
-     'Deploying and managing machine learning models in production environments.',
-     'Completed'),
-
-    (NEWID(), 'Kubernetes Best Practices', 'Webinar',
-     DATEADD(DAY, -140, @EndDate), DATEADD(DAY, -140, @EndDate), 'America/Los_Angeles',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, -170, @EndDate), DATEADD(DAY, -141, @EndDate),
-     0.00, 49.00, 1.0,
-     'Production-ready Kubernetes deployments and operations.',
-     'Completed'),
-
-    (NEWID(), 'API Security Fundamentals', 'Webinar',
-     DATEADD(DAY, -70, @EndDate), DATEADD(DAY, -70, @EndDate), 'America/Chicago',
-     'Virtual', 1, 'Teams', 1000,
-     DATEADD(DAY, -100, @EndDate), DATEADD(DAY, -71, @EndDate),
-     0.00, 49.00, 1.5,
-     'Securing APIs and preventing common vulnerabilities.',
-     'Completed'),
-
-    (NEWID(), 'Remote Team Management', 'Webinar',
-     DATEADD(DAY, -20, @EndDate), DATEADD(DAY, -20, @EndDate), 'America/New_York',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, -50, @EndDate), DATEADD(DAY, -21, @EndDate),
-     0.00, 49.00, 1.0,
-     'Best practices for managing distributed technology teams.',
-     'Completed'),
-
-    (NEWID(), 'Generative AI for Developers', 'Webinar',
-     DATEADD(DAY, 15, @EndDate), DATEADD(DAY, 15, @EndDate), 'America/Los_Angeles',
-     'Virtual', 1, 'Zoom', 1500,
-     DATEADD(DAY, -15, @EndDate), DATEADD(DAY, 14, @EndDate),
-     0.00, 49.00, 1.5,
-     'Practical applications of generative AI in software development.',
-     'Registration Open'),
-
-    (NEWID(), 'Cloud Migration Strategies', 'Webinar',
-     DATEADD(DAY, 30, @EndDate), DATEADD(DAY, 30, @EndDate), 'America/Chicago',
-     'Virtual', 1, 'Teams', 1000,
-     DATEADD(DAY, 0, @EndDate), DATEADD(DAY, 29, @EndDate),
-     0.00, 49.00, 1.0,
-     'Step-by-step approach to cloud migration for enterprise applications.',
-     'Registration Open'),
-
-    (NEWID(), 'Modern Data Architecture', 'Webinar',
-     DATEADD(DAY, 50, @EndDate), DATEADD(DAY, 50, @EndDate), 'America/New_York',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, 20, @EndDate), DATEADD(DAY, 49, @EndDate),
-     0.00, 49.00, 1.0,
-     'Building modern data platforms with data lakes and warehouses.',
+    (NEWID(), 'Artisan Cheddar Workshop 2026', 'Workshop',
+     DATEADD(DAY, 95, @EndDate), DATEADD(DAY, 96, @EndDate), 'America/New_York',
+     'Vermont Cheese Council, Burlington, VT', 0, 120,
+     DATEADD(DAY, 45, @EndDate), DATEADD(DAY, 94, @EndDate),
+     325.00, 475.00, 6.0,
+     'Master the art of artisan cheddar making. Hands-on sessions with Vermont''s finest cheddar producers.',
      'Published'),
 
-    (NEWID(), 'Incident Response and Management', 'Webinar',
-     DATEADD(DAY, 75, @EndDate), DATEADD(DAY, 75, @EndDate), 'America/Los_Angeles',
-     'Virtual', 1, 'Zoom', 1000,
-     DATEADD(DAY, 45, @EndDate), DATEADD(DAY, 74, @EndDate),
-     0.00, 49.00, 1.0,
-     'Effective incident response processes and post-mortem analysis.',
+    -- Feta Symposiums
+    (NEWID(), 'Mediterranean Feta Symposium', 'Workshop',
+     DATEADD(DAY, -180, @EndDate), DATEADD(DAY, -179, @EndDate), 'America/Los_Angeles',
+     'Culinary Institute, San Francisco, CA', 0, 100,
+     DATEADD(DAY, -220, @EndDate), DATEADD(DAY, -181, @EndDate),
+     275.00, 395.00, 5.0,
+     'Exploring traditional and modern feta production methods. Greek cheese masters share centuries-old techniques.',
+     'Completed'),
+
+    (NEWID(), 'Feta & Soft Cheese Innovations', 'Workshop',
+     DATEADD(DAY, 125, @EndDate), DATEADD(DAY, 126, @EndDate), 'America/Chicago',
+     'Chicago Culinary Center, Chicago, IL', 0, 110,
+     DATEADD(DAY, 75, @EndDate), DATEADD(DAY, 124, @EndDate),
+     295.00, 425.00, 5.0,
+     'Innovation in soft cheese production. Focus on feta, chevre, and fresh cheese trends.',
      'Published'),
 
-    (NEWID(), 'Platform Engineering Principles', 'Webinar',
-     DATEADD(DAY, 90, @EndDate), DATEADD(DAY, 90, @EndDate), 'America/Chicago',
-     'Virtual', 1, 'Teams', 1000,
-     DATEADD(DAY, 60, @EndDate), DATEADD(DAY, 89, @EndDate),
-     0.00, 49.00, 1.0,
-     'Building internal developer platforms and self-service infrastructure.',
+    -- Swiss Symposiums
+    (NEWID(), 'Alpine Swiss Cheese Symposium 2025', 'Workshop',
+     DATEADD(DAY, -95, @EndDate), DATEADD(DAY, -94, @EndDate), 'America/Denver',
+     'Colorado Convention Center, Denver, CO', 0, 130,
+     DATEADD(DAY, -140, @EndDate), DATEADD(DAY, -96, @EndDate),
+     325.00, 475.00, 6.0,
+     'Traditional Swiss cheese making in the Alps. Eye formation, aging, and flavor development in alpine cheese.',
+     'Completed'),
+
+    (NEWID(), 'Swiss Cheese Production Excellence', 'Workshop',
+     DATEADD(DAY, 155, @EndDate), DATEADD(DAY, 156, @EndDate), 'America/Los_Angeles',
+     'Cheese Heritage Center, Green Bay, WI', 0, 95,
+     DATEADD(DAY, 105, @EndDate), DATEADD(DAY, 154, @EndDate),
+     295.00, 425.00, 5.0,
+     'Perfect your Swiss cheese production. Expert-led sessions on temperature control, bacteria cultures, and quality.',
      'Draft');
 
--- Networking Events (5)
+
+-- JOINT CONFERENCES (4 events - collaborative multi-topic)
 INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
-    (NEWID(), 'Technology Leaders Networking Reception - NYC', 'Networking',
-     DATEADD(DAY, -120, @EndDate), DATEADD(DAY, -120, @EndDate), 'America/New_York',
-     'The Princeton Club, New York, NY', 0, 100,
-     DATEADD(DAY, -150, @EndDate), DATEADD(DAY, -121, @EndDate),
-     0.00, 75.00, 0.0,
-     'Evening networking reception for technology leaders in the NYC area.',
+    -- Past Joint Conferences (showing mixed trends)
+    (NEWID(), 'Joint Conference on Dairy Innovation', 'Conference',
+     DATEADD(DAY, -320, @EndDate), DATEADD(DAY, -318, @EndDate), 'America/Chicago',
+     'McCormick Place, Chicago, IL', 0, 275,
+     DATEADD(DAY, -380, @EndDate), DATEADD(DAY, -321, @EndDate),
+     495.00, 695.00, 10.0,
+     'Collaborative conference bringing together dairy farmers, cheese makers, and distributors. Focus on sustainable dairy practices.',
      'Completed'),
 
-    (NEWID(), 'West Coast Tech Networking Dinner', 'Networking',
-     DATEADD(DAY, -60, @EndDate), DATEADD(DAY, -60, @EndDate), 'America/Los_Angeles',
-     'The Battery, San Francisco, CA', 0, 75,
-     DATEADD(DAY, -90, @EndDate), DATEADD(DAY, -61, @EndDate),
-     0.00, 75.00, 0.0,
-     'Dinner and networking for West Coast technology executives.',
+    (NEWID(), 'Joint Conference on Artisan Cheese Economics', 'Conference',
+     DATEADD(DAY, -155, @EndDate), DATEADD(DAY, -153, @EndDate), 'America/New_York',
+     'New York Hilton Midtown, New York, NY', 0, 225,
+     DATEADD(DAY, -210, @EndDate), DATEADD(DAY, -156, @EndDate),
+     545.00, 745.00, 10.0,
+     'Economics of small-batch cheese production. Business models, pricing strategies, and market trends.',
      'Completed'),
 
-    (NEWID(), 'Midwest Tech Leaders Breakfast', 'Networking',
-     DATEADD(DAY, 10, @EndDate), DATEADD(DAY, 10, @EndDate), 'America/Chicago',
-     'Soho House, Chicago, IL', 0, 60,
-     DATEADD(DAY, -20, @EndDate), DATEADD(DAY, 9, @EndDate),
-     0.00, 50.00, 0.0,
-     'Morning networking breakfast for Midwest technology leaders.',
+    -- Future Joint Conferences
+    (NEWID(), 'Joint Conference on Cheese & Wine Pairing', 'Conference',
+     DATEADD(DAY, 65, @EndDate), DATEADD(DAY, 67, @EndDate), 'America/Los_Angeles',
+     'Napa Valley Conference Center, Napa, CA', 0, 250,
+     DATEADD(DAY, 15, @EndDate), DATEADD(DAY, 64, @EndDate),
+     595.00, 795.00, 10.0,
+     'The intersection of cheese and wine. Master sommeliers and fromagers share pairing secrets and techniques.',
      'Registration Open'),
 
-    (NEWID(), 'Women in Technology Leadership Reception', 'Networking',
-     DATEADD(DAY, 35, @EndDate), DATEADD(DAY, 35, @EndDate), 'America/New_York',
-     'Convene, New York, NY', 0, 80,
-     DATEADD(DAY, 5, @EndDate), DATEADD(DAY, 34, @EndDate),
-     0.00, 0.00, 0.0,
-     'Complimentary reception celebrating women technology leaders.',
-     'Registration Open'),
-
-    (NEWID(), 'Emerging Leaders Happy Hour', 'Networking',
-     DATEADD(DAY, 55, @EndDate), DATEADD(DAY, 55, @EndDate), 'America/Los_Angeles',
-     'WeWork, Palo Alto, CA', 0, 50,
-     DATEADD(DAY, 25, @EndDate), DATEADD(DAY, 54, @EndDate),
-     0.00, 25.00, 0.0,
-     'Networking event for early-career technology professionals.',
+    (NEWID(), 'Joint Conference on Sustainable Cheese Production', 'Conference',
+     DATEADD(DAY, 185, @EndDate), DATEADD(DAY, 187, @EndDate), 'America/Denver',
+     'Colorado Convention Center, Denver, CO', 0, 200,
+     DATEADD(DAY, 135, @EndDate), DATEADD(DAY, 184, @EndDate),
+     545.00, 745.00, 10.0,
+     'Environmental sustainability in cheese production. Carbon footprint reduction, regenerative agriculture, and eco-packaging.',
      'Published');
 
 
--- ============================================================================
--- EVENT SESSIONS (For Major Conferences - 85 sessions)
--- ============================================================================
-
-
--- 2024 Annual Conference Sessions (30 sessions over 3 days)
-INSERT INTO [AssociationDemo].[EventSession] (ID, EventID, Name, Description, StartTime, EndTime, Room, SpeakerName, SessionType, Capacity, CEUCredits)
+-- WEBINARS (8 events - virtual education)
+INSERT INTO [AssociationDemo].[Event] (ID, Name, EventType, StartDate, EndDate, Timezone, Location, IsVirtual, VirtualPlatform, MeetingURL, Capacity, RegistrationOpenDate, RegistrationCloseDate, MemberPrice, NonMemberPrice, CEUCredits, Description, Status)
 VALUES
-    -- Day 1 - Keynotes and Opening
-    (NEWID(), @Event_AnnualConf2024, 'Opening Keynote: The Future of AI in Enterprise',
-     'Industry thought leader discusses the transformative impact of AI on business',
-     DATEADD(HOUR, 9, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 10, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
-     'Main Hall', 'Dr. Jennifer Walsh, Chief AI Officer at TechCorp', 'Keynote', 650, 1.0),
+    -- Completed Webinars
+    (NEWID(), 'Cheese Safety & HACCP Compliance', 'Webinar',
+     DATEADD(DAY, -210, @EndDate), DATEADD(DAY, -210, @EndDate), 'America/New_York',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/cheese-safety', 500,
+     DATEADD(DAY, -240, @EndDate), DATEADD(DAY, -211, @EndDate),
+     0.00, 49.00, 1.5,
+     'Food safety regulations for cheese producers. HACCP plans, testing protocols, and compliance best practices.',
+     'Completed'),
 
-    (NEWID(), @Event_AnnualConf2024, 'Cloud Architecture Patterns for Scale',
-     'Deep dive into patterns for building scalable cloud applications',
-     DATEADD(HOUR, 11, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
-     'Room A', 'Michael Chen, Principal Architect at CloudScale', 'Workshop', 100, 1.0),
+    (NEWID(), 'Aging Cheese: Temperature & Humidity Control', 'Webinar',
+     DATEADD(DAY, -145, @EndDate), DATEADD(DAY, -145, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Teams', 'https://teams.microsoft.com/aging-cheese', 500,
+     DATEADD(DAY, -175, @EndDate), DATEADD(DAY, -146, @EndDate),
+     0.00, 49.00, 1.5,
+     'Perfect aging conditions for different cheese varieties. Cave management and quality control.',
+     'Completed'),
 
-    (NEWID(), @Event_AnnualConf2024, 'Cybersecurity Threat Landscape 2024',
-     'Current threats and defensive strategies for modern organizations',
-     DATEADD(HOUR, 11, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
-     'Room B', 'Sarah Martinez, CISO at SecureNet', 'Panel', 150, 1.0),
+    (NEWID(), 'Marketing Your Artisan Cheese Brand', 'Webinar',
+     DATEADD(DAY, -75, @EndDate), DATEADD(DAY, -75, @EndDate), 'America/Los_Angeles',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/cheese-marketing', 500,
+     DATEADD(DAY, -105, @EndDate), DATEADD(DAY, -76, @EndDate),
+     0.00, 49.00, 1.0,
+     'Build your cheese brand. Social media strategies, storytelling, and direct-to-consumer sales.',
+     'Completed'),
 
-    (NEWID(), @Event_AnnualConf2024, 'DevOps Transformation Case Study',
-     'How a Fortune 500 company transformed their delivery process',
-     DATEADD(HOUR, 13, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 14, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
-     'Room A', 'David Kim, VP Engineering at Enterprise Co', 'Workshop', 80, 1.0),
+    (NEWID(), 'Milk Quality for Cheesemaking', 'Webinar',
+     DATEADD(DAY, -25, @EndDate), DATEADD(DAY, -25, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/milk-quality', 500,
+     DATEADD(DAY, -55, @EndDate), DATEADD(DAY, -26, @EndDate),
+     0.00, 49.00, 1.5,
+     'From farm to vat: ensuring optimal milk quality. Testing, handling, and storage best practices.',
+     'Completed'),
 
-    (NEWID(), @Event_AnnualConf2024, 'Machine Learning Operations at Scale',
-     'MLOps best practices for production ML systems',
-     DATEADD(HOUR, 13, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 14, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
-     'Room B', 'Dr. Lisa Johnson, ML Lead at DataDriven', 'Workshop', 100, 1.0),
+    -- Upcoming Webinars
+    (NEWID(), 'Cheese Export Regulations & Documentation', 'Webinar',
+     DATEADD(DAY, 35, @EndDate), DATEADD(DAY, 35, @EndDate), 'America/New_York',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/export-regs', 750,
+     DATEADD(DAY, 5, @EndDate), DATEADD(DAY, 34, @EndDate),
+     0.00, 49.00, 1.5,
+     'Navigate international cheese exports. Certifications, customs, and compliance for global markets.',
+     'Registration Open'),
 
-    -- Day 2 Sessions
-    (NEWID(), @Event_AnnualConf2024, 'Day 2 Keynote: Digital Transformation Success Stories',
-     'Leading companies share their digital transformation journeys',
-     DATEADD(HOUR, 9, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 10, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))),
-     'Main Hall', 'Panel of CTOs from Fortune 500 companies', 'Keynote', 650, 1.0),
+    (NEWID(), 'Innovative Cheese Packaging Solutions', 'Webinar',
+     DATEADD(DAY, 70, @EndDate), DATEADD(DAY, 70, @EndDate), 'America/Los_Angeles',
+     'Virtual', 1, 'Teams', 'https://teams.microsoft.com/packaging', 500,
+     DATEADD(DAY, 40, @EndDate), DATEADD(DAY, 69, @EndDate),
+     0.00, 49.00, 1.0,
+     'Sustainable packaging innovations. Biodegradable materials, vacuum sealing, and shelf-life extension.',
+     'Published'),
 
-    (NEWID(), @Event_AnnualConf2024, 'Kubernetes in Production: Lessons Learned',
-     'Real-world experiences running Kubernetes at scale',
-     DATEADD(HOUR, 11, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))),
-     'Room A', 'James Rodriguez, Platform Lead at CloudScale', 'Workshop', 120, 1.0);
+    (NEWID(), 'Cheese Cultures & Flavor Development', 'Webinar',
+     DATEADD(DAY, 110, @EndDate), DATEADD(DAY, 110, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/cultures', 500,
+     DATEADD(DAY, 80, @EndDate), DATEADD(DAY, 109, @EndDate),
+     0.00, 49.00, 1.5,
+     'Master cheese cultures. Starter selection, flavor profiles, and troubleshooting fermentation issues.',
+     'Published'),
 
-    -- Abbreviated - would continue with remaining sessions for Day 2 and Day 3
-
--- TODO: Add remaining 78 sessions for 2024 conference and previous conferences
+    (NEWID(), 'Building a Profitable Cheese Business', 'Webinar',
+     DATEADD(DAY, 145, @EndDate), DATEADD(DAY, 145, @EndDate), 'America/New_York',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/cheese-business', 500,
+     DATEADD(DAY, 115, @EndDate), DATEADD(DAY, 144, @EndDate),
+     0.00, 49.00, 1.0,
+     'Financial planning for cheese startups. Pricing, cash flow management, and scaling production.',
+     'Draft');
 
 
 -- ============================================================================
--- EVENT REGISTRATIONS (1,400 registrations - Generated Programmatically)
+-- EVENT REGISTRATIONS (Generated Programmatically with YoY Growth)
 -- ============================================================================
 
 
--- For completed events, generate realistic registrations
--- This uses a cursor to iterate through members and assign to events
+-- Event registrations with SPECIAL HANDLING for Annual Meetings to show YoY growth
+-- and "repeat attender" analysis possibilities
 
-DECLARE @TotalRegistrations INT = 0;
-DECLARE @EventCursor CURSOR;
-DECLARE @CurrentEventID UNIQUEIDENTIFIER;
-DECLARE @CurrentEventCapacity INT;
-DECLARE @CurrentEventStatus NVARCHAR(20);
-DECLARE @CurrentEventDate DATETIME;
-DECLARE @RegistrationsNeeded INT;
+-- For Annual Meetings: Use specific target counts to show YoY growth
+-- 2024: 950 attendees, 2025: 1050 attendees (10.5% growth), 2026: 400 so far (partial)
 
-SET @EventCursor = CURSOR FOR
-    SELECT ID, Capacity, Status, StartDate
-    FROM [AssociationDemo].[Event]
-    WHERE Status IN ('Completed', 'In Progress')
-    ORDER BY StartDate;
+-- 2024 Annual Meeting Registrations (950 attendees)
+INSERT INTO [AssociationDemo].[EventRegistration] (ID, EventID, MemberID, RegistrationDate, RegistrationType, Status, CheckInTime, CEUAwarded)
+SELECT
+    NEWID(),
+    @Event_AnnualConf2024,
+    m.ID,
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 60), CAST(@ThirdSunday2024 AS DATETIME)),
+    CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 35 THEN 'Early Bird' ELSE 'Standard' END,
+    CASE ABS(CHECKSUM(NEWID()) % 100)
+        WHEN 0 THEN 'No Show'
+        WHEN 1 THEN 'No Show'
+        WHEN 2 THEN 'No Show'
+        WHEN 3 THEN 'No Show'
+        WHEN 4 THEN 'Registered'
+        WHEN 5 THEN 'Registered'
+        WHEN 6 THEN 'Registered'
+        ELSE 'Attended'
+    END,
+    CASE
+        WHEN ABS(CHECKSUM(NEWID()) % 100) < 90
+        THEN DATEADD(MINUTE, 480 + ABS(CHECKSUM(NEWID()) % 120), CAST(@ThirdSunday2024 AS DATETIME))
+        ELSE NULL
+    END,
+    CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 90 THEN 1 ELSE 0 END
+FROM (
+    SELECT TOP 950 ID
+    FROM [AssociationDemo].[Member]
+    WHERE JoinDate < CAST(@ThirdSunday2024 AS DATETIME)
+    ORDER BY NEWID()
+) m;
 
-OPEN @EventCursor;
-FETCH NEXT FROM @EventCursor INTO @CurrentEventID, @CurrentEventCapacity, @CurrentEventStatus, @CurrentEventDate;
 
-WHILE @@FETCH_STATUS = 0
-BEGIN
-    -- Calculate registrations for this event (70-95% of capacity for completed events)
-    SET @RegistrationsNeeded = CAST(@CurrentEventCapacity * (0.70 + (RAND() * 0.25)) AS INT);
+-- 2025 Annual Meeting Registrations (1050 attendees - includes repeat attendees from 2024)
+-- 70% are repeat attendees from 2024, 30% are new
+INSERT INTO [AssociationDemo].[EventRegistration] (ID, EventID, MemberID, RegistrationDate, RegistrationType, Status, CheckInTime, CEUAwarded)
+SELECT
+    NEWID(),
+    e.ID,
+    m.ID,
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 60), CAST(@ThirdSunday2025 AS DATETIME)),
+    CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 40 THEN 'Early Bird' ELSE 'Standard' END,
+    CASE ABS(CHECKSUM(NEWID()) % 100)
+        WHEN 0 THEN 'No Show'
+        WHEN 1 THEN 'No Show'
+        WHEN 2 THEN 'No Show'
+        WHEN 3 THEN 'Registered'
+        WHEN 4 THEN 'Registered'
+        WHEN 5 THEN 'Registered'
+        ELSE 'Attended'
+    END,
+    CASE
+        WHEN ABS(CHECKSUM(NEWID()) % 100) < 92
+        THEN DATEADD(MINUTE, 480 + ABS(CHECKSUM(NEWID()) % 120), CAST(@ThirdSunday2025 AS DATETIME))
+        ELSE NULL
+    END,
+    CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 92 THEN 1 ELSE 0 END
+FROM [AssociationDemo].[Event] e
+CROSS APPLY (
+    -- 70% repeat attendees from 2024
+    SELECT TOP 735 er.MemberID AS ID
+    FROM [AssociationDemo].[EventRegistration] er
+    WHERE er.EventID = @Event_AnnualConf2024
+    AND er.Status = 'Attended'
+    ORDER BY NEWID()
 
-    -- Insert registrations for random members
-    INSERT INTO [AssociationDemo].[EventRegistration] (ID, EventID, MemberID, RegistrationDate, RegistrationType, Status, CheckInTime, CEUAwarded)
-    SELECT TOP (@RegistrationsNeeded)
-        NEWID(),
-        @CurrentEventID,
-        m.ID,
-        DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 60), @CurrentEventDate), -- Random date before event
-        CASE WHEN DATEDIFF(DAY, m.JoinDate, @CurrentEventDate) < 30 THEN 'Early Bird' ELSE 'Standard' END,
-        CASE
-            WHEN RAND(CHECKSUM(NEWID())) < 0.85 THEN 'Attended'
-            WHEN RAND(CHECKSUM(NEWID())) < 0.95 THEN 'Registered'
-            ELSE 'No Show'
-        END,
-        CASE
-            WHEN RAND(CHECKSUM(NEWID())) < 0.85
-            THEN DATEADD(HOUR, 8 + (RAND(CHECKSUM(NEWID())) * 2), CAST(@CurrentEventDate AS DATETIME))
-        END,
-        CASE WHEN RAND(CHECKSUM(NEWID())) < 0.85 THEN 1 ELSE 0 END
+    UNION ALL
+
+    -- 30% new attendees
+    SELECT TOP 315 m2.ID
+    FROM [AssociationDemo].[Member] m2
+    WHERE m2.JoinDate < CAST(@ThirdSunday2025 AS DATETIME)
+    AND m2.ID NOT IN (
+        SELECT MemberID
+        FROM [AssociationDemo].[EventRegistration]
+        WHERE EventID = @Event_AnnualConf2024
+    )
+    ORDER BY NEWID()
+) m
+WHERE e.Name = 'ICF 2025 Annual Meeting';
+
+
+-- 2026 Annual Meeting Registrations (400 so far - registration still open)
+-- Mix of repeat and new attendees
+INSERT INTO [AssociationDemo].[EventRegistration] (ID, EventID, MemberID, RegistrationDate, RegistrationType, Status, CheckInTime, CEUAwarded)
+SELECT
+    NEWID(),
+    e.ID,
+    m.ID,
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 30), CAST(GETDATE() AS DATETIME)),  -- Recent registrations
+    CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 60 THEN 'Early Bird' ELSE 'Standard' END,
+    'Registered',  -- All still just registered, event hasn't happened
+    NULL,
+    0
+FROM [AssociationDemo].[Event] e
+CROSS APPLY (
+    SELECT TOP 400 m2.ID
+    FROM [AssociationDemo].[Member] m2
+    WHERE m2.JoinDate < CAST(@ThirdSunday2026 AS DATETIME)
+    ORDER BY NEWID()
+) m
+WHERE e.Name = 'ICF 2026 Annual Meeting';
+
+
+-- All other events: Use standard registration generation
+INSERT INTO [AssociationDemo].[EventRegistration] (ID, EventID, MemberID, RegistrationDate, RegistrationType, Status, CheckInTime, CEUAwarded)
+SELECT
+    NEWID(),
+    e.ID,
+    m.ID,
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 60), e.StartDate),
+    CASE
+        WHEN DATEDIFF(DAY, m.JoinDate, e.StartDate) < 30 THEN 'Early Bird'
+        ELSE 'Standard'
+    END,
+    CASE
+        -- Adjust attendance rates based on event type and trend
+        WHEN e.EventType = 'Conference' THEN
+            CASE ABS(CHECKSUM(NEWID()) % 100)
+                WHEN 0 THEN 'No Show'
+                WHEN 1 THEN 'No Show'
+                WHEN 2 THEN 'No Show'
+                WHEN 3 THEN 'Registered'
+                WHEN 4 THEN 'Registered'
+                ELSE 'Attended'
+            END
+        WHEN e.EventType = 'Workshop' THEN
+            CASE ABS(CHECKSUM(NEWID()) % 100)
+                WHEN 0 THEN 'No Show'
+                WHEN 1 THEN 'No Show'
+                WHEN 2 THEN 'Registered'
+                WHEN 3 THEN 'Registered'
+                ELSE 'Attended'
+            END
+        ELSE  -- Webinars have higher no-show rates
+            CASE ABS(CHECKSUM(NEWID()) % 100)
+                WHEN 0 THEN 'No Show' WHEN 1 THEN 'No Show' WHEN 2 THEN 'No Show'
+                WHEN 3 THEN 'No Show' WHEN 4 THEN 'No Show' WHEN 5 THEN 'No Show'
+                WHEN 6 THEN 'No Show' WHEN 7 THEN 'No Show' WHEN 8 THEN 'No Show'
+                WHEN 9 THEN 'No Show'
+                WHEN 10 THEN 'Registered' WHEN 11 THEN 'Registered' WHEN 12 THEN 'Registered'
+                WHEN 13 THEN 'Registered' WHEN 14 THEN 'Registered'
+                ELSE 'Attended'
+            END
+    END,
+    CASE
+        WHEN e.Status = 'Completed' AND ABS(CHECKSUM(NEWID()) % 100) < 85
+        THEN DATEADD(MINUTE, 480 + ABS(CHECKSUM(NEWID()) % 120), CAST(e.StartDate AS DATETIME))
+        ELSE NULL
+    END,
+    CASE
+        WHEN e.Status = 'Completed' AND ABS(CHECKSUM(NEWID()) % 100) < 85 THEN 1
+        ELSE 0
+    END
+FROM [AssociationDemo].[Event] e
+CROSS APPLY (
+    -- Calculate target registrations based on event type and status
+    SELECT CASE
+        WHEN e.Status = 'Completed' THEN
+            -- Completed events: 75-90% capacity (trending)
+            CAST(e.Capacity * (0.75 + (CAST(ABS(CHECKSUM(e.ID)) % 16 AS DECIMAL) / 100)) AS INT)
+        WHEN e.Status = 'Registration Open' THEN
+            -- Open registration: 35-50% capacity so far
+            CAST(e.Capacity * (0.35 + (CAST(ABS(CHECKSUM(e.ID)) % 16 AS DECIMAL) / 100)) AS INT)
+        WHEN e.Status = 'Published' THEN
+            -- Published but not open: 20-35% early registrants
+            CAST(e.Capacity * (0.20 + (CAST(ABS(CHECKSUM(e.ID)) % 16 AS DECIMAL) / 100)) AS INT)
+        ELSE 0
+    END AS TargetCount
+) target
+CROSS APPLY (
+    SELECT TOP (target.TargetCount) ID, JoinDate
     FROM [AssociationDemo].[Member] m
-    WHERE m.JoinDate < @CurrentEventDate
-    ORDER BY NEWID();
-
-    SET @TotalRegistrations = @TotalRegistrations + @@ROWCOUNT;
-
-    FETCH NEXT FROM @EventCursor INTO @CurrentEventID, @CurrentEventCapacity, @CurrentEventStatus, @CurrentEventDate;
-END;
-
-CLOSE @EventCursor;
-DEALLOCATE @EventCursor;
+    WHERE m.JoinDate < e.StartDate
+    ORDER BY NEWID()
+) m
+WHERE e.Name NOT LIKE 'ICF%Annual Meeting%'  -- Exclude Annual Meetings (already handled above)
+AND target.TargetCount > 0;
 
 
 -- Note: No GO statement here - variables must persist within transaction
