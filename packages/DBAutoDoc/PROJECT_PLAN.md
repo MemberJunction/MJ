@@ -34,9 +34,9 @@ const result = await client.generateTableDoc(request);
 import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 
-// Map model API name (from .env) to DriverClass
-const modelAPIName = process.env.AI_MODEL || 'gpt-4'; // User provides in init
-const driverClass = getDriverClassForModel(modelAPIName); // e.g., 'gpt-4' → 'OpenAILLM'
+// Read from environment (user provides both in init)
+const modelAPIName = process.env.AI_MODEL || 'gpt-4';
+const driverClass = process.env.AI_DRIVER_CLASS || 'OpenAILLM';
 const apiKey = GetAIAPIKey(driverClass); // Gets OPENAI_API_KEY from env
 
 // Use MJ ClassFactory to instantiate (NOT new OpenAILLM())
@@ -47,7 +47,7 @@ const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
 );
 
 // Use with file-based prompts
-const llmClient = new LLMClient(modelAPIName);
+const llmClient = new LLMClient(); // Reads from env
 const result = await llmClient.generateTableDoc({
   promptFile: 'table-analysis.txt',
   variables: { schema, table, columns, ... }
@@ -643,8 +643,8 @@ db-auto-doc analyze --use-defaults
 
 - **Replace SimpleAIClient** with MJ's `BaseLLM` class using MJGlobal ClassFactory
   - Use `MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>` pattern (NOT direct instantiation)
-  - Map model API names (like "gpt-4", "claude-3-5-sonnet") to DriverClass (like "OpenAILLM", "AnthropicLLM")
-  - Prompt for model API name in `init` command and store in .env as `AI_MODEL`
+  - Prompt for both model API name AND driver class in `init` command
+  - Store in .env as `AI_MODEL` and `AI_DRIVER_CLASS`
   - **Zero database dependency** - use BaseLLM directly, NOT AIPromptRunner or AIEngine
 
   **Correct MJ Pattern**:
@@ -652,58 +652,25 @@ db-auto-doc analyze --use-defaults
   import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai';
   import { MJGlobal } from '@memberjunction/global';
 
-  // Map model API name to DriverClass (without requiring database)
-  function getDriverClassForModel(modelAPIName: string): string {
-    const modelMap: Record<string, string> = {
-      // OpenAI models
-      'gpt-4': 'OpenAILLM',
-      'gpt-4-turbo': 'OpenAILLM',
-      'gpt-4o': 'OpenAILLM',
-      'gpt-3.5-turbo': 'OpenAILLM',
-
-      // Anthropic models
-      'claude-3-5-sonnet': 'AnthropicLLM',
-      'claude-3-opus': 'AnthropicLLM',
-      'claude-3-sonnet': 'AnthropicLLM',
-
-      // Groq models
-      'llama-3.1-70b': 'GroqLLM',
-      'llama-3.1-8b': 'GroqLLM',
-      'mixtral-8x7b': 'GroqLLM',
-
-      // Cerebras models
-      'llama3.1-8b': 'CerebrasLLM',
-      'llama3.1-70b': 'CerebrasLLM',
-
-      // Azure OpenAI
-      'azure-gpt-4': 'AzureLLM',
-
-      // Gemini
-      'gemini-pro': 'GeminiLLM',
-
-      // More models as needed...
-    };
-
-    const normalized = modelAPIName.toLowerCase();
-    const driverClass = modelMap[normalized];
-
-    if (!driverClass) {
-      throw new Error(`Unknown model: ${modelAPIName}. Supported models: ${Object.keys(modelMap).join(', ')}`);
-    }
-
-    return driverClass;
-  }
-
-  // Initialize LLM using MJ ClassFactory (correct pattern)
+  // Read from environment variables (user provides both)
   const modelAPIName = process.env.AI_MODEL || 'gpt-4';
-  const driverClass = getDriverClassForModel(modelAPIName);
-  const apiKey = GetAIAPIKey(driverClass); // Gets from env (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
+  const driverClass = process.env.AI_DRIVER_CLASS || 'OpenAILLM';
+  const apiKey = GetAIAPIKey(driverClass); // Gets OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
 
+  // Use MJ ClassFactory to instantiate (correct pattern)
   const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
     BaseLLM,
     driverClass,
     apiKey
   );
+  ```
+
+  **Environment Variables**:
+  ```bash
+  # User provides all three:
+  AI_MODEL=gpt-4              # Model API name to use in ChatCompletion calls
+  AI_DRIVER_CLASS=OpenAILLM   # MJ driver class for instantiation
+  OPENAI_API_KEY=sk-...       # Provider-specific API key
   ```
 
 - **File-Based Prompts**
@@ -729,15 +696,15 @@ export class LLMClient {
   private llm: BaseLLM;
   private modelAPIName: string;
 
-  constructor(modelAPIName?: string) {
+  constructor(modelAPIName?: string, driverClass?: string) {
     this.modelAPIName = modelAPIName || process.env.AI_MODEL || 'gpt-4';
-    const driverClass = getDriverClassForModel(this.modelAPIName);
-    const apiKey = GetAIAPIKey(driverClass);
+    const driver = driverClass || process.env.AI_DRIVER_CLASS || 'OpenAILLM';
+    const apiKey = GetAIAPIKey(driver);
 
-    // Use MJ ClassFactory pattern
+    // Use MJ ClassFactory pattern (NOT direct instantiation)
     this.llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
       BaseLLM,
-      driverClass,
+      driver,
       apiKey
     );
   }
@@ -766,13 +733,13 @@ export class LLMClient {
 }
 ```
 
-#### 1b. Update Init Command for Model API Name (Days 2)
+#### 1b. Update Init Command for Model and Driver Class (Days 2)
 - **Update `init` Command**
-  - Prompt for AI Model API name (not provider + model separately)
-  - Examples shown: "gpt-4", "claude-3-5-sonnet", "llama-3.1-70b", "mixtral-8x7b"
-  - Detect provider from model name and prompt for correct API key
-  - Store as `AI_MODEL` in .env
-  - Store provider-specific API key (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
+  - Prompt for AI Model API name (e.g., "gpt-4", "claude-3-5-sonnet")
+  - Prompt for Driver Class (e.g., "OpenAILLM", "AnthropicLLM", "GroqLLM")
+  - Prompt for provider-specific API key
+  - Store as `AI_MODEL`, `AI_DRIVER_CLASS`, and `<PROVIDER>_API_KEY` in .env
+  - Provide examples/help text showing common driver classes
 
   **Example Init Flow**:
   ```bash
@@ -783,13 +750,23 @@ export class LLMClient {
   ? Database name? AdventureWorks
 
   AI Configuration:
-  ? AI Model (gpt-4, claude-3-5-sonnet, llama-3.1-70b, etc.)? gpt-4
-  ℹ Detected provider: OpenAI
+  ? AI Model API Name (e.g., gpt-4, claude-3-5-sonnet)? gpt-4
+  ? AI Driver Class (OpenAILLM, AnthropicLLM, GroqLLM, etc.)? OpenAILLM
+  ℹ Provider: OpenAI (will use OPENAI_API_KEY from environment)
   ? OpenAI API Key? sk-...
 
   ✓ Created .env file
   ✓ Created db-doc-state.json
   ```
+
+  **Common Driver Classes**:
+  - OpenAI models → `OpenAILLM`
+  - Anthropic models → `AnthropicLLM`
+  - Groq models → `GroqLLM`
+  - Cerebras models → `CerebrasLLM`
+  - Azure OpenAI → `AzureLLM`
+  - Gemini → `GeminiLLM`
+  - See MJ docs for full list
 
 #### 1c. User-Configurable Settings (Days 2-3)
 - **Interactive Configuration Prompts**
@@ -836,10 +813,9 @@ export class LLMClient {
 
 **Deliverables**:
 - `src/ai/llm-client.ts` ✨ **NEW** (uses MJGlobal.Instance.ClassFactory)
-- `src/ai/model-map.ts` ✨ **NEW** (maps API names to DriverClass)
 - `src/prompts/*.txt` (6 prompt templates) ✨ **NEW**
 - `src/utils/prompt-loader.ts` ✨ **NEW**
-- Updated `src/commands/init.ts` (prompt for model API name)
+- Updated `src/commands/init.ts` (prompt for model API name AND driver class)
 - `src/analysis/topological-sort.ts` ✨ **NEW**
 - `src/analysis/data-profiler.ts` ✨ **NEW**
 - Updated `src/types/state-file.ts` (v2.0 with `analysisConfig` and iterations)
@@ -1406,8 +1382,9 @@ db-auto-doc init
 # Prompts:
 # - Database server? localhost
 # - Database name? AdventureWorks
-# - AI Model (e.g., gpt-4, claude-3-5-sonnet, llama-3.1-70b)? gpt-4
-# - API Key for OpenAI? sk-...
+# - AI Model API Name (e.g., gpt-4, claude-3-5-sonnet)? gpt-4
+# - AI Driver Class (OpenAILLM, AnthropicLLM, etc.)? OpenAILLM
+# - OpenAI API Key? sk-...
 # - Enable back-propagation? Yes
 # - Max iterations per table? 20
 # - Confidence threshold? 0.85
@@ -1416,6 +1393,7 @@ db-auto-doc init
 # DB_SERVER=localhost
 # DB_DATABASE=AdventureWorks
 # AI_MODEL=gpt-4
+# AI_DRIVER_CLASS=OpenAILLM
 # OPENAI_API_KEY=sk-...
 #
 # Seed questions:
@@ -1588,12 +1566,13 @@ The DBAutoDoc package will be considered **complete** when:
    - **Uses MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM> pattern**
    - **NOT** direct instantiation (no `new OpenAILLM()`)
 
-2. **Model API Name Approach** - **NEW PATTERN**
-   - Init command prompts for model API name (e.g., "gpt-4", "claude-3-5-sonnet")
-   - Maps API name to DriverClass (e.g., "gpt-4" → "OpenAILLM")
-   - Uses `GetAIAPIKey(driverClass)` to get provider-specific API key from env
-   - Stores as `AI_MODEL` in .env (not separate provider + model)
-   - Example: User enters "llama-3.1-70b" → maps to "GroqLLM" → gets GROQ_API_KEY
+2. **User Provides Both Model and Driver Class** - **SIMPLIFIED APPROACH**
+   - Init command prompts for BOTH model API name AND driver class
+   - No mapping needed - user tells us which driver to use
+   - Stores as `AI_MODEL` and `AI_DRIVER_CLASS` in .env
+   - Uses `GetAIAPIKey(driverClass)` to get provider-specific API key
+   - Example: User enters "gpt-4" + "OpenAILLM" → gets OPENAI_API_KEY
+   - More flexible - supports any model/driver combination without hardcoded maps
 
 3. **User-Configurable Settings added to Phase 1c** (Days 2-3)
    - All analysis parameters are now user-provided (with defaults)
