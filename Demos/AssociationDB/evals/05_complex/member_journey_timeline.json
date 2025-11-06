@@ -1,0 +1,60 @@
+{
+  "eval_id": "member-journey-timeline",
+  "category": "complex",
+  "difficulty": "very_hard",
+  "tags": ["membership", "journey", "timeline", "multi-domain", "advanced"],
+
+  "business_context": "Member success teams need to understand the complete member journey across all touchpoints (membership, events, courses, emails, chapters, committees) to identify engagement patterns, intervention opportunities, and success factors.",
+
+  "prompt": "Show complete member journey across all activities",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "activity_types_included",
+        "expected_range": [6, 8],
+        "description": "Should include memberships, events, courses, emails, chapters, committees, and possibly more"
+      },
+      {
+        "metric": "timeline_format",
+        "expected_value": true,
+        "description": "Should present activities in chronological timeline format"
+      }
+    ],
+    "visualization": {
+      "type": "timeline",
+      "alternatives": ["journey_map", "activity_stream", "gantt_chart"],
+      "should_not_be": ["bar_chart", "pie_chart", "simple_table"],
+      "reasoning": "Member journey requires visual timeline showing chronological activities across multiple domains"
+    },
+    "required_features": ["chronological_order", "activity_type_indicator", "date_stamps", "activity_details"],
+    "optional_features": ["filter_by_activity_type", "member_selector", "engagement_score_overlay", "milestone_markers"],
+    "interactivity": [
+      {
+        "action": "Select a member",
+        "expected_result": "Load and display complete timeline for that member"
+      },
+      {
+        "action": "Click on timeline activity",
+        "expected_result": "Show detailed information about that specific activity"
+      },
+      {
+        "action": "Filter by activity type",
+        "expected_result": "Show only selected activity types on timeline"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Complete member journey timeline\n-- Combines all activities across all domains\nDECLARE @MemberID UNIQUEIDENTIFIER = @SelectedMemberID;\n\nWITH AllActivities AS (\n  -- Memberships\n  SELECT \n    'Membership' as ActivityType,\n    'Joined as ' + mt.Name as ActivityDescription,\n    ms.StartDate as ActivityDate,\n    NULL as RelatedEntity\n  FROM membership.Membership ms\n  JOIN membership.MembershipType mt ON ms.MembershipTypeID = mt.ID\n  WHERE ms.MemberID = @MemberID\n  \n  UNION ALL\n  \n  -- Event Registrations\n  SELECT \n    'Event' as ActivityType,\n    'Attended: ' + e.Name as ActivityDescription,\n    er.RegistrationDate as ActivityDate,\n    e.ID as RelatedEntity\n  FROM events.EventRegistration er\n  JOIN events.Event e ON er.EventID = e.ID\n  WHERE er.MemberID = @MemberID AND er.Status = 'Attended'\n  \n  UNION ALL\n  \n  -- Course Enrollments\n  SELECT \n    'Course' as ActivityType,\n    CASE \n      WHEN enr.Status = 'Completed' THEN 'Completed: ' + c.Title\n      ELSE 'Enrolled: ' + c.Title\n    END as ActivityDescription,\n    enr.EnrollmentDate as ActivityDate,\n    c.ID as RelatedEntity\n  FROM learning.Enrollment enr\n  JOIN learning.Course c ON enr.CourseID = c.ID\n  WHERE enr.MemberID = @MemberID\n  \n  UNION ALL\n  \n  -- Certificates\n  SELECT \n    'Certificate' as ActivityType,\n    'Earned: ' + c.Title as ActivityDescription,\n    cert.IssuedDate as ActivityDate,\n    cert.ID as RelatedEntity\n  FROM learning.Certificate cert\n  JOIN learning.Enrollment enr ON cert.EnrollmentID = enr.ID\n  JOIN learning.Course c ON enr.CourseID = c.ID\n  WHERE enr.MemberID = @MemberID\n  \n  UNION ALL\n  \n  -- Chapter Memberships\n  SELECT \n    'Chapter' as ActivityType,\n    'Joined Chapter: ' + ch.Name as ActivityDescription,\n    cm.JoinDate as ActivityDate,\n    ch.ID as RelatedEntity\n  FROM chapters.ChapterMembership cm\n  JOIN chapters.Chapter ch ON cm.ChapterID = ch.ID\n  WHERE cm.MemberID = @MemberID\n  \n  UNION ALL\n  \n  -- Committee Assignments\n  SELECT \n    'Committee' as ActivityType,\n    'Joined Committee: ' + com.Name as ActivityDescription,\n    comm.StartDate as ActivityDate,\n    com.ID as RelatedEntity\n  FROM governance.CommitteeMember comm\n  JOIN governance.Committee com ON comm.CommitteeID = com.ID\n  WHERE comm.MemberID = @MemberID\n  \n  UNION ALL\n  \n  -- Email Opens\n  SELECT \n    'Email' as ActivityType,\n    'Opened: ' + et.Subject as ActivityDescription,\n    eo.OpenedAt as ActivityDate,\n    et.ID as RelatedEntity\n  FROM email.EmailOpen eo\n  JOIN email.EmailSend es ON eo.EmailSendID = es.ID\n  JOIN email.EmailTemplate et ON es.EmailTemplateID = et.ID\n  WHERE es.MemberID = @MemberID\n)\nSELECT \n  ActivityType,\n  ActivityDescription,\n  ActivityDate,\n  DATEDIFF(DAY, LAG(ActivityDate) OVER (ORDER BY ActivityDate), ActivityDate) as DaysSinceLastActivity\nFROM AllActivities\nORDER BY ActivityDate DESC;",
+
+  "human_eval_guidance": "Test with multiple members to verify journey completeness. Check that all activity types are included and properly categorized. Verify chronological ordering is correct. Look for visual clarity in how different activity types are differentiated.",
+
+  "common_pitfalls": "Missing activity types from some domains; incorrect date handling; slow performance when loading all activities; timeline visualization too cluttered; not differentiating activity types visually; missing key details for each activity."
+}

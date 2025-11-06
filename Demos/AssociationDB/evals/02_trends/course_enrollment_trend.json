@@ -1,0 +1,57 @@
+{
+  "eval_id": "course-enrollment-monthly",
+  "category": "trend",
+  "difficulty": "medium",
+  "tags": ["learning", "enrollment", "trend", "monthly"],
+
+  "business_context": "The learning department tracks enrollment trends to understand demand patterns, plan course offerings, and allocate instructor resources effectively.",
+
+  "prompt": "Show course enrollment trends month-over-month",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "months_shown",
+        "expected_range": [12, 36],
+        "description": "Should show 1-3 years of monthly enrollment data"
+      },
+      {
+        "metric": "total_enrollments",
+        "expected_value": 900,
+        "sql_validation": "SELECT COUNT(*) FROM learning.Enrollment",
+        "description": "Total enrollment count should match database"
+      }
+    ],
+    "visualization": {
+      "type": "line_chart",
+      "alternatives": ["area_chart", "column_chart"],
+      "should_not_be": ["pie_chart", "scatter_plot", "single_metric"],
+      "reasoning": "Monthly trend is best shown with line chart for smooth progression"
+    },
+    "required_features": ["month_labels", "enrollment_count", "smooth_line"],
+    "optional_features": ["trend_line", "growth_rate", "moving_average", "comparison_to_prior_year"],
+    "interactivity": [
+      {
+        "action": "Hover over data point",
+        "expected_result": "Show exact enrollment count and month"
+      },
+      {
+        "action": "Click on data point",
+        "expected_result": "Show courses and members enrolled in that month"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Course enrollments by month\nSELECT \n  YEAR(e.EnrollmentDate) as Year,\n  MONTH(e.EnrollmentDate) as Month,\n  DATEFROMPARTS(YEAR(e.EnrollmentDate), MONTH(e.EnrollmentDate), 1) as MonthStart,\n  COUNT(*) as Enrollments\nFROM learning.Enrollment e\nGROUP BY YEAR(e.EnrollmentDate), MONTH(e.EnrollmentDate)\nORDER BY YEAR(e.EnrollmentDate), MONTH(e.EnrollmentDate);",
+
+  "human_eval_guidance": "Verify all months are represented (no gaps). Check that month labels are clear (Jan 2024, Feb 2024, etc.). Confirm trend shows realistic enrollment patterns.",
+
+  "common_pitfalls": "Missing months with zero enrollments; incorrect date grouping; showing only completed enrollments instead of all; not handling month boundaries correctly."
+}

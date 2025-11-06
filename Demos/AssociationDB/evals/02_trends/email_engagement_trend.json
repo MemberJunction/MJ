@@ -1,0 +1,57 @@
+{
+  "eval_id": "email-engagement-trend",
+  "category": "trend",
+  "difficulty": "medium",
+  "tags": ["email", "engagement", "trend", "marketing"],
+
+  "business_context": "Marketing team needs to track email engagement rates over time to measure campaign effectiveness and optimize send strategies.",
+
+  "prompt": "Show email open rates over time",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "time_periods_shown",
+        "expected_range": [12, 24],
+        "description": "Should show email engagement across multiple months"
+      },
+      {
+        "metric": "open_rate_range",
+        "expected_range": [0.15, 0.35],
+        "sql_validation": "SELECT CAST(COUNT(DISTINCT eo.EmailSendID) AS FLOAT) / NULLIF(COUNT(DISTINCT es.ID), 0) FROM email.EmailSend es LEFT JOIN email.EmailOpen eo ON es.ID = eo.EmailSendID",
+        "description": "Overall open rate should be between 15% and 35%"
+      }
+    ],
+    "visualization": {
+      "type": "line_chart",
+      "alternatives": ["area_chart", "combination_chart"],
+      "should_not_be": ["pie_chart", "table", "bar_chart"],
+      "reasoning": "Engagement rate over time is best shown with line chart"
+    },
+    "required_features": ["time_axis", "open_rate_percentage", "trend_line"],
+    "optional_features": ["click_rate", "comparison_line", "industry_benchmark", "annotations"],
+    "interactivity": [
+      {
+        "action": "Hover over data point",
+        "expected_result": "Show open rate, click rate, and send volume for that period"
+      },
+      {
+        "action": "Click on data point",
+        "expected_result": "Show individual email campaigns from that period"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Email engagement by month\nSELECT \n  YEAR(es.SentAt) as Year,\n  MONTH(es.SentAt) as Month,\n  DATEFROMPARTS(YEAR(es.SentAt), MONTH(es.SentAt), 1) as MonthStart,\n  COUNT(DISTINCT es.ID) as EmailsSent,\n  COUNT(DISTINCT eo.EmailSendID) as Opened,\n  CAST(COUNT(DISTINCT eo.EmailSendID) AS FLOAT) / NULLIF(COUNT(DISTINCT es.ID), 0) as OpenRate\nFROM email.EmailSend es\nLEFT JOIN email.EmailOpen eo ON es.ID = eo.EmailSendID\nGROUP BY YEAR(es.SentAt), MONTH(es.SentAt)\nORDER BY YEAR(es.SentAt), MONTH(es.SentAt);",
+
+  "human_eval_guidance": "Verify open rate is displayed as percentage (15%-35% range). Check that trend line shows clear patterns. Confirm calculation is correct (opens / sends).",
+
+  "common_pitfalls": "Confusing unique opens with total opens; not handling emails that weren't opened; incorrect percentage calculation; missing time periods with no sends."
+}
