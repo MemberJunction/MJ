@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { WorkflowEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadWorkflowDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Workflows') // Tell MemberJunction about this class
@@ -13,8 +12,19 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class WorkflowFormComponent extends BaseFormComponent {
     public record!: WorkflowEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        reports: false,
+        workflowRuns: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadWorkflowFormComponent() {
-    LoadWorkflowDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

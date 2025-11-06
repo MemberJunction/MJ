@@ -122,9 +122,41 @@ Return a JSON object with this exact structure:
       "category": "Ship To Address",
       "reason": "Physical shipping destination for order fulfillment"
     }
-  ]
+  ],
+  "categoryIcons": {
+    "Bill To Address": "fa fa-file-invoice",
+    "Ship To Address": "fa fa-shipping-fast"
+  }
 }
 ```
+
+### Icon Selection Guidelines
+
+For each **unique category**, select an appropriate Font Awesome icon class (version 5.x solid icons preferred).
+
+**Icon Selection Rules:**
+- Use semantic, recognizable icons that clearly represent the category's purpose
+- Prefer solid icons (`fa fa-icon-name`) over regular/light variants
+- Choose icons that work well at small sizes (20px)
+- Avoid overly complex or detailed icons
+
+**Common Category → Icon Mappings:**
+- **Address/Location**: `fa fa-map-marker-alt`, `fa fa-location-arrow`
+- **Contact Information**: `fa fa-address-card`, `fa fa-envelope`
+- **Financial/Pricing**: `fa fa-dollar-sign`, `fa fa-money-bill`, `fa fa-credit-card`
+- **Dates/Timeline**: `fa fa-calendar`, `fa fa-clock`
+- **Status/State**: `fa fa-flag`, `fa fa-check-circle`
+- **System/Technical**: `fa fa-cog`, `fa fa-database`
+- **Description/Notes**: `fa fa-align-left`, `fa fa-file-alt`
+- **Settings**: `fa fa-sliders-h`, `fa fa-wrench`
+- **Shipping/Delivery**: `fa fa-truck`, `fa fa-shipping-fast`
+- **User/Person**: `fa fa-user`, `fa fa-users`, `fa fa-id-card`
+- **Company/Organization**: `fa fa-building`, `fa fa-briefcase`
+- **Product/Items**: `fa fa-box`, `fa fa-shopping-cart`
+- **Documents**: `fa fa-file`, `fa fa-file-invoice`
+- **Communication**: `fa fa-comment`, `fa fa-phone`
+- **Security**: `fa fa-lock`, `fa fa-shield-alt`
+- **Performance**: `fa fa-chart-line`, `fa fa-tachometer-alt`
 
 ### Constraints
 
@@ -235,8 +267,15 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "System Metadata",
       "reason": "Technical audit field"
     }
-  ]
+  ],
+  "categoryIcons": {
+    "Order Details": "fa fa-shopping-cart",
+    "Billing Address": "fa fa-file-invoice",
+    "Shipping Address": "fa fa-truck",
+    "Pricing and Charges": "fa fa-dollar-sign",
+    "System Metadata": "fa fa-cog"
+  }
 }
 ```
 
-**Result:** 5 well-organized categories instead of 8 fragmented ones
+**Result:** 5 well-organized categories instead of 8 fragmented ones, each with a semantic icon

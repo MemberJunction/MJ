@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { DuplicateRunDetailMatchEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadDuplicateRunDetailMatchDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Duplicate Run Detail Matches') // Tell MemberJunction about this class
 @Component({
@@ -12,8 +11,17 @@ import { LoadDuplicateRunDetailMatchDetailsComponent } from "./sections/details.
 })
 export class DuplicateRunDetailMatchFormComponent extends BaseFormComponent {
     public record!: DuplicateRunDetailMatchEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadDuplicateRunDetailMatchFormComponent() {
-    LoadDuplicateRunDetailMatchDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

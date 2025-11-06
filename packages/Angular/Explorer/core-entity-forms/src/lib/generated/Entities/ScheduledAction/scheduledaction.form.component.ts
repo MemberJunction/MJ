@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { ScheduledActionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadScheduledActionDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Scheduled Actions') // Tell MemberJunction about this class
@@ -13,8 +12,18 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class ScheduledActionFormComponent extends BaseFormComponent {
     public record!: ScheduledActionEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        scheduledActionParams: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadScheduledActionFormComponent() {
-    LoadScheduledActionDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

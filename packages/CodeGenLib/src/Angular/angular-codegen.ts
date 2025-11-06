@@ -14,14 +14,14 @@ export class AngularFormSectionInfo {
      * The type of form section (e.g., Top, Category, Details)
      */
     Type!: GeneratedFormSectionType;
-    
+
     /**
      * The display name of the section
      */
     Name!: string;
-    
+
     /**
-     * The generated HTML code for the tab
+     * The generated HTML code for the section (panel or tab)
      */
     TabCode!: string;
     
@@ -69,6 +69,11 @@ export class AngularFormSectionInfo {
      * The generation result for related entity components
      */
     GeneratedOutput?: GenerationResult;
+
+    /**
+     * The minimum sequence number from fields in this section (used for sorting)
+     */
+    MinSequence?: number;
 }
 
 /**
@@ -267,7 +272,7 @@ export function Load${modulePrefix}GeneratedForms() {
           
           // iterate through the componentNames first, then after we've exhausted those, then iterate through the sections
           const simpleComponentNames = componentNames.map(c => c.componentName);
-          const combinedArray: string[] = simpleComponentNames.concat(sections.map(s => s.ClassName!));
+          const combinedArray: string[] = simpleComponentNames.concat(sections.filter(s => s.ClassName).map(s => s.ClassName!));
           const subModules: string[] = [];
           let currentComponentCount: number = 0;
           const subModuleStarter: string =   `
@@ -373,13 +378,12 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
        */
       protected generateSingleEntityTypeScriptForAngular(entity: EntityInfo, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
         const entityObjectClass: string = entity.ClassName
-        const sectionImports: string = additionalSections.length > 0 ? additionalSections.map(s => `import { Load${s.ClassName} } from "./sections/${s.FileNameWithoutExtension}"`).join('\n') : '';
 
         // next, build a list of distinct imports at the library level and for components within the library
         const libs: {lib: string, items: string[]}[] = relatedEntitySections.length > 0 ? relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput.Component && s.GeneratedOutput.Component.ImportPath)
                                                                                                                   .map(s => {
                                                                                                                                 return {
-                                                                                                                                    lib: s.GeneratedOutput!.Component!.ImportPath, 
+                                                                                                                                    lib: s.GeneratedOutput!.Component!.ImportPath,
                                                                                                                                     items: []
                                                                                                                                 }
                                                                                                                             }
@@ -401,18 +405,67 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
                                 }
                             });
 
-        // nowe our libs array is good to go, we can generate the import statements for the libraries and the items within the libraries
+        // now our libs array is good to go, we can generate the import statements for the libraries and the items within the libraries
         const generationImports: string = distinctLibs.map(l => `import { ${l.items.join(", ")} } from "${l.lib}"`).join('\n');
-        const generationInjectedCode: string = relatedEntitySections.length > 0 ? 
+        const generationInjectedCode: string = relatedEntitySections.length > 0 ?
                                                         relatedEntitySections.filter(s => s.GeneratedOutput && s.GeneratedOutput!.CodeOutput!.length > 0)
                                                                                 .map(s => s.GeneratedOutput!.CodeOutput!.split("\n").map(l => `    ${l}`).join("\n")).join('\n') : '';
+
+        // Generate sectionsExpanded state object for collapsible panels (both field sections and related entities)
+        const sectionsWithoutTop = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top && s.Name);
+        const allSections = [...sectionsWithoutTop, ...relatedEntitySections];
+        const sectionsExpandedEntries = allSections.map((s, index) => {
+            const sectionKey = this.camelCase(s.Name);
+            // First 2 sections expanded by default, metadata and related entities collapsed
+            const isExpanded = index < 2 && !s.Name.toLowerCase().includes('metadata') && !s.IsRelatedEntity;
+            return `        ${sectionKey}: ${isExpanded}`;
+        });
+        const sectionsExpandedObject = sectionsExpandedEntries.length > 0
+            ? `\n\n    // Collapsible section state\n    public sectionsExpanded = {\n${sectionsExpandedEntries.join(',\n')}\n    };`
+            : '';
+
+        const toggleSectionMethod = sectionsExpandedEntries.length > 0
+            ? `\n\n    public toggleSection(section: keyof typeof this.sectionsExpanded): void {\n        this.sectionsExpanded[section] = !this.sectionsExpanded[section];\n    }`
+            : '';
+
+        // Add expand all/collapse all/filter methods if there are 4+ sections
+        const totalSections = allSections.length;
+        const sectionUtilityMethods = totalSections >= 4 ? `\n
+    public expandAllSections(): void {
+        Object.keys(this.sectionsExpanded).forEach(key => {
+            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = true;
+        });
+    }
+
+    public collapseAllSections(): void {
+        Object.keys(this.sectionsExpanded).forEach(key => {
+            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = false;
+        });
+    }
+
+    public getExpandedCount(): number {
+        return Object.values(this.sectionsExpanded).filter(v => v === true).length;
+    }
+
+    public filterSections(event: Event): void {
+        const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
+        const panels = document.querySelectorAll('.form-card.collapsible-card');
+
+        panels.forEach((panel: Element) => {
+            const sectionName = panel.getAttribute('data-section-name') || '';
+            if (sectionName.includes(searchTerm)) {
+                panel.classList.remove('search-hidden');
+            } else {
+                panel.classList.add('search-hidden');
+            }
+        });
+    }` : '';
 
         return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-${sectionImports}${generationImports.length > 0 ? '\n' + generationImports : ''}
-
+${generationImports.length > 0 ? generationImports + '\n' : ''}
 @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-${entity.ClassName.toLowerCase()}-form',
@@ -420,11 +473,11 @@ ${sectionImports}${generationImports.length > 0 ? '\n' + generationImports : ''}
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ${entity.ClassName}FormComponent extends BaseFormComponent {
-    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}
-} 
+    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}${sectionsExpandedObject}${toggleSectionMethod}${sectionUtilityMethods}
+}
 
 export function Load${entity.ClassName}FormComponent() {
-    ${additionalSections.map(s => `Load${s.ClassName}();`).join('\n    ')}
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }
 `
       }
@@ -455,11 +508,12 @@ export function Load${entity.ClassName}FormComponent() {
        * @param sections Array of existing sections
        * @param type The type of section to add
        * @param name The name of the section
+       * @param fieldSequence Optional sequence number of the field (used to track minimum sequence for sorting)
        */
-      protected AddSectionIfNeeded(entity: EntityInfo, sections: AngularFormSectionInfo[], type: GeneratedFormSectionType, name: string) {
+      protected AddSectionIfNeeded(entity: EntityInfo, sections: AngularFormSectionInfo[], type: GeneratedFormSectionType, name: string, fieldSequence?: number) {
           const section = sections.find(s => s.Name === name && s.Type === type);
           const fName = `${this.stripWhiteSpace(name.toLowerCase())}.component`
-          if (!section) 
+          if (!section) {
               sections.push({
                   Type: type,
                   Name: name,
@@ -469,31 +523,46 @@ export function Load${entity.ClassName}FormComponent() {
                   TabCode: '',
                   Fields: [],
                   EntityClassName: entity.ClassName,
-                  FileNameWithoutExtension: fName
+                  FileNameWithoutExtension: fName,
+                  MinSequence: fieldSequence
               });
+          } else if (fieldSequence != null && (section.MinSequence == null || fieldSequence < section.MinSequence)) {
+              // Update the minimum sequence if this field has a lower sequence
+              section.MinSequence = fieldSequence;
+          }
       }
       /**
        * Generates additional form sections based on entity field metadata
        * @param entity The entity to generate sections for
        * @param startIndex Starting index for tab ordering
+       * @param categoryIcons Optional map of category names to Font Awesome icon classes
        * @returns Array of generated form sections
        */
-      protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
+      protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, categoryIcons?: Record<string, string>): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
           const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
-                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm) 
-                      this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Category, field.Category);
-                  else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Details) 
-                      this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Details, "Details");
+                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm)
+                      this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Category, field.Category, field.Sequence);
+                  else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Details)
+                      this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Details, "Details", field.Sequence);
                   else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top)
-                      this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Top, "Top");
+                      this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Top, "Top", field.Sequence);
               }
           }
-      
-          // now we have a distinct list of section names set, generate HTML for each section 
+
+          // Sort sections by minimum sequence (Top sections first, then by MinSequence)
+          sections.sort((a, b) => {
+              if (a.Type === GeneratedFormSectionType.Top) return -1;
+              if (b.Type === GeneratedFormSectionType.Top) return 1;
+              const aSeq = a.MinSequence ?? Number.MAX_SAFE_INTEGER;
+              const bSeq = b.MinSequence ?? Number.MAX_SAFE_INTEGER;
+              return aSeq - bSeq;
+          });
+
+          // now we have a distinct list of section names set, generate HTML for each section
           let sectionIndex = 0;
           for (const section of sections) {
               let sectionName: string = ''
@@ -506,52 +575,46 @@ export function Load${entity.ClassName}FormComponent() {
                       sectionName = this.stripWhiteSpace(section.Name.toLowerCase());
                   else if (section.Type === GeneratedFormSectionType.Details)
                       sectionName = 'details';
-      
-                  section.TabCode = `${sectionIndex++ > 0 ? '\n                    ' : ''}<mj-tab Name="${section.Name}">
-                        ${section.Name}
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="${entity.Name}" 
-                            Section="${this.stripWhiteSpace(section.Name.toLowerCase())}" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>`
-              }
-      
-              const formHTML = this.generateSectionHTMLForAngular(entity, section);
-      
-              section.ComponentCode = `import { Component, Input } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ${entity.ClassName}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
 
-@RegisterClass(BaseFormSectionComponent, '${entity.Name}.${sectionName}') // Tell MemberJunction about this class 
-@Component({
-    selector: 'gen-${entity.ClassName.toLowerCase()}-form-${sectionName}',
-    styleUrls: ['../../../../../shared/form-styles.css'],
-    template: \`<div *ngIf="this.record">
-    <div class="record-form">
+                  // Generate collapsible panel HTML inline instead of using separate components
+                  const formHTML = this.generateSectionHTMLForAngular(entity, section);
+                  // Use category-specific icon from LLM if available, otherwise fall back to keyword matching
+                  const icon = (categoryIcons && categoryIcons[section.Name]) || this.getIconForCategory(section.Name);
+                  const sectionKey = this.camelCase(section.Name);
+                  // First 2 sections expanded by default, metadata collapsed
+                  const isExpanded = sectionIndex < 2 && !section.Name.toLowerCase().includes('metadata');
+
+                  section.TabCode = `${sectionIndex > 0 ? '\n        ' : ''}<!-- ${section.Name} Section -->
+        <div class="form-card collapsible-card" data-section-name="${section.Name.toLowerCase()}">
+            <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="${icon}"></i>
+                    <h3>${section.Name}</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.${sectionKey} ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.${sectionKey}">
+                <div class="form-body">
 ${formHTML}
-    </div>
-</div>
-    \`
-})
-export class ${entity.ClassName}${this.stripWhiteSpace(section.Name)}Component extends BaseFormSectionComponent {
-    @Input() override record!: ${entity.ClassName}Entity;
-    @Input() override EditMode: boolean = false;
-}
+                </div>
+            </div>
+        </div>`
 
-export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Component() {
-    // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
-}
-      `
-      
+                  sectionIndex++;
+              }
+
+              // We no longer need separate component files for sections - everything is inline
+              section.ComponentCode = undefined;
+              section.FileName = undefined;
+              section.ClassName = undefined;
+              section.FileNameWithoutExtension = undefined;
+
               if (section.Type !== GeneratedFormSectionType.Top)
                   index++; // don't increment the tab index for TOP AREA, becuse it won't be rendered as a tab
           }
-      
+
           return sections;
       }
       
@@ -736,15 +799,30 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                 RelationshipInfo: relatedEntity,
                 TabName: tabName
             });
-            // now for each newline add a series of tabs to map to the indentation we need for pretty formatting
-            const componentCodeWithTabs = generateResults.TemplateOutput.split('\n').map(l => `                        ${l}`).join('\n')
+            // Add proper indentation for collapsible panel body
+            const componentCodeWithIndent = generateResults.TemplateOutput.split('\n').map(l => `                    ${l}`).join('\n')
 
-            const tabCode = `${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" [Visible]="record.IsSaved"> 
-                        ${icon}${tabName}
-                    </mj-tab>
-                    <mj-tab-body>
-${componentCodeWithTabs}                    
-                    </mj-tab-body>`
+            // Generate collapsible panel HTML for related entity
+            const sectionKey = this.camelCase(tabName);
+            const iconClass = icon ? icon.match(/class="([^"]+)"/)?.[1] || 'fa fa-table' : 'fa fa-table';
+
+            const tabCode = `${index > 0 ? '\n        ' : ''}<!-- ${tabName} Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="${tabName.toLowerCase()}">
+            <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="${iconClass}"></i>
+                    <h3>${tabName}</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.${sectionKey} ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.${sectionKey}" *ngIf="record.IsSaved">
+                <div class="form-body">
+${componentCodeWithIndent}
+                </div>
+            </div>
+        </div>`
 
             tabs.push({
                 Type: GeneratedFormSectionType.Category,
@@ -769,22 +847,122 @@ ${componentCodeWithTabs}
       protected stripWhiteSpace(s: string): string {
           return s.replace(/\s/g, '');
       }
-      
+
+      /**
+       * Converts a string to camelCase and sanitizes it for use as a JavaScript identifier
+       * @param str The string to convert
+       * @returns String in camelCase format, safe for use as object key or variable name
+       */
+      protected camelCase(str: string): string {
+          // First, replace non-alphanumeric characters (except spaces) with spaces
+          let sanitized = str.replace(/[^a-zA-Z0-9\s]/g, ' ');
+
+          // Convert to camelCase
+          let result = sanitized
+              .replace(/\s(.)/g, (match, char) => char.toUpperCase())
+              .replace(/\s/g, '')
+              .replace(/^(.)/, (match, char) => char.toLowerCase());
+
+          // If starts with a digit, prefix with underscore
+          if (/^\d/.test(result)) {
+              result = '_' + result;
+          }
+
+          // If result is empty (all special chars), use a default
+          if (result.length === 0) {
+              result = 'section';
+          }
+
+          return result;
+      }
+
+      /**
+       * Maps category names to appropriate Font Awesome icon classes
+       * @param category The category name to map
+       * @returns Font Awesome icon class string
+       */
+      protected getIconForCategory(category: string): string {
+          const lowerCategory = category.toLowerCase();
+
+          // Address/Location categories
+          if (lowerCategory.includes('address') || lowerCategory.includes('location')) {
+              return 'fa fa-map-marker-alt';
+          }
+          // Contact Information
+          if (lowerCategory.includes('contact')) {
+              return 'fa fa-address-card';
+          }
+          // Financial/Pricing categories
+          if (lowerCategory.includes('pric') || lowerCategory.includes('cost') ||
+              lowerCategory.includes('payment') || lowerCategory.includes('financial') ||
+              lowerCategory.includes('billing')) {
+              return 'fa fa-dollar-sign';
+          }
+          // Date/Time categories
+          if (lowerCategory.includes('date') || lowerCategory.includes('time') ||
+              lowerCategory.includes('schedule')) {
+              return 'fa fa-calendar';
+          }
+          // Status/State categories
+          if (lowerCategory.includes('status') || lowerCategory.includes('state')) {
+              return 'fa fa-flag';
+          }
+          // Metadata/Technical categories
+          if (lowerCategory.includes('metadata') || lowerCategory.includes('technical') ||
+              lowerCategory.includes('system')) {
+              return 'fa fa-cog';
+          }
+          // Description/Details categories
+          if (lowerCategory.includes('description') || lowerCategory.includes('detail')) {
+              return 'fa fa-align-left';
+          }
+          // Settings/Configuration categories
+          if (lowerCategory.includes('setting') || lowerCategory.includes('config') ||
+              lowerCategory.includes('preference')) {
+              return 'fa fa-sliders-h';
+          }
+          // Shipping/Delivery categories
+          if (lowerCategory.includes('ship') || lowerCategory.includes('delivery')) {
+              return 'fa fa-truck';
+          }
+          // User/Person categories
+          if (lowerCategory.includes('user') || lowerCategory.includes('person') ||
+              lowerCategory.includes('customer') || lowerCategory.includes('employee')) {
+              return 'fa fa-user';
+          }
+          // Default icon for uncategorized sections
+          return 'fa fa-info-circle';
+      }
+
       /**
        * Generates the complete HTML template for a single entity form
        * @param entity The entity to generate HTML for
        * @param contextUser User context for permission checking
        * @returns Promise resolving to an object containing the HTML code and section information
        */
-      protected async generateSingleEntityHTMLForAngular(entity: EntityInfo, contextUser: UserInfo): Promise<{htmlCode: string, 
-                                                                                                              additionalSections: AngularFormSectionInfo[], 
+      protected async generateSingleEntityHTMLForAngular(entity: EntityInfo, contextUser: UserInfo): Promise<{htmlCode: string,
+                                                                                                              additionalSections: AngularFormSectionInfo[],
                                                                                                               relatedEntitySections: AngularFormSectionInfo[]}> {
+          // Load category icons from EntitySetting if available
+          let categoryIcons: Record<string, string> | undefined;
+          const entitySettings = entity.Settings;
+          if (entitySettings) {
+              const iconSetting = entitySettings.find((s: any) => s.Name === 'FieldCategoryIcons');
+              if (iconSetting && iconSetting.Value) {
+                  try {
+                      categoryIcons = JSON.parse(iconSetting.Value);
+                  } catch (e) {
+                      // Invalid JSON, ignore and fall back to keyword matching
+                  }
+              }
+          }
+
           const topArea = this.generateTopAreaHTMLForAngular(entity);
-          const additionalSections = this.generateAngularAdditionalSections(entity, 0);
+          const additionalSections = this.generateAngularAdditionalSections(entity, 0, categoryIcons);
           // calc ending index for additional sections so we can pass taht into the related entity tabs because they need to start incrementally up from there...
           const endingIndex = additionalSections && additionalSections.length ? (topArea && topArea.length > 0 ? additionalSections.length - 1 : additionalSections.length) : 0;
           const relatedEntitySections = await this.generateRelatedEntityTabs(entity, endingIndex, contextUser);
-          const htmlCode = topArea.length > 0 ? this.generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections) : 
+          const htmlCode = topArea.length > 0 ? this.generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections) :
                                                 this.generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections);
           return {htmlCode, additionalSections, relatedEntitySections};
       }
@@ -798,15 +976,15 @@ ${componentCodeWithTabs}
        * @returns Generated HTML with splitter layout
        */
       protected generateSingleEntityHTMLWithSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const htmlCode: string =  `<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+          const htmlCode: string =  `<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
             <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
 ${this.innerTopAreaHTML(topArea)}
             </kendo-splitter-pane>
             <kendo-splitter-pane>
-${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
+${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
             </kendo-splitter-pane>
         </kendo-splitter>
     </form>
@@ -829,6 +1007,60 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
                 </div>`
       }
       /**
+       * Generates the HTML for collapsible panels containing all form sections
+       * @param additionalSections Array of field-based form sections
+       * @param relatedEntitySections Array of related entity sections
+       * @returns HTML string for all collapsible panels
+       */
+      protected innerCollapsiblePanelsHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+        // Filter out Top sections as they're handled separately
+        const sectionsToRender = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top);
+        const totalSections = sectionsToRender.length + relatedEntitySections.length;
+
+        // Only show section controls if there are 4+ sections
+        const showControls = totalSections >= 4;
+        const controlsHTML = showControls ? `        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of ${totalSections} expanded
+            </span>
+        </div>
+` : '';
+
+        // Combine field sections and related entity sections into panels, respecting DisplayLocation
+        if (relatedEntitySections.length > 0) {
+            const relatedEntityBeforePanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
+            const relatedEntityAfterPanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
+
+            const beforePanelsHTML = relatedEntityBeforePanels.length > 0 ? relatedEntityBeforePanels.map(s => s.TabCode).join('\n') : '';
+            const afterPanelsHTML = relatedEntityAfterPanels.length > 0 ? relatedEntityAfterPanels.map(s => s.TabCode).join('\n') : '';
+            const fieldPanelsHTML = sectionsToRender.map(s => s.TabCode).join('\n');
+
+            return `${controlsHTML}        <div class="form-panels-container">
+${beforePanelsHTML}${beforePanelsHTML && fieldPanelsHTML ? '\n' : ''}${fieldPanelsHTML}${fieldPanelsHTML && afterPanelsHTML ? '\n' : ''}${afterPanelsHTML}
+        </div>`
+        } else {
+            // No related entities, just show field panels
+            return `${controlsHTML}        <div class="form-panels-container">
+${sectionsToRender.map(s => s.TabCode).join('\n')}
+        </div>`
+        }
+      }
+
+      /**
+       * @deprecated Use innerCollapsiblePanelsHTML instead
        * Generates the HTML for the tab strip containing all form sections
        * @param additionalSections Array of field-based form sections
        * @param relatedEntitySections Array of related entity sections
@@ -855,11 +1087,11 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
        * @returns Generated HTML without splitter layout
        */
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const htmlCode: string =  `<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+          const htmlCode: string =  `<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 ${this.innerTopAreaHTML(topArea)}
-${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
+${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
     </form>
 </div>
         `

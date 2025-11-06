@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { DashboardEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadDashboardDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Dashboards') // Tell MemberJunction about this class
@@ -13,8 +12,19 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class DashboardFormComponent extends BaseFormComponent {
     public record!: DashboardEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        mJDashboardUserStates: false,
+        mJDashboardUserPreferences: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadDashboardFormComponent() {
-    LoadDashboardDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

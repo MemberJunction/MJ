@@ -36,6 +36,7 @@ export type FormLayoutResult = {
         category: string;
         reason: string;
     }>;
+    categoryIcons?: Record<string, string>;
 }
 
 /**

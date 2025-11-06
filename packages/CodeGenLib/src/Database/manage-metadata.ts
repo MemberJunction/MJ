@@ -2184,13 +2184,44 @@ NumberedRows AS (
          if (field && field.AutoUpdateCategory && field.ID) {
             const updateSQL = `
                UPDATE [${mj_core_schema()}].EntityField
-               SET Category = '${fieldCategory.category.replace(/'/g, "''")}'
+               SET Category = '${fieldCategory.category.replace(/'/g, "''")}',
+                   GeneratedFormSection = 'Category'
                WHERE ID = '${field.ID}'
                AND AutoUpdateCategory = 1
             `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Set Category '${fieldCategory.category}' for ${fieldCategory.fieldName}`, false);
+            await this.LogSQLAndExecute(pool, updateSQL, `Set Category '${fieldCategory.category}' and GeneratedFormSection to 'Category' for ${fieldCategory.fieldName}`, false);
          } else if (!field) {
             logError(`Form layout generation returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
+         }
+      }
+
+      // Store category icons in EntitySetting if provided
+      if (result.categoryIcons && Object.keys(result.categoryIcons).length > 0) {
+         const iconsJSON = JSON.stringify(result.categoryIcons).replace(/'/g, "''");
+
+         // First check if setting already exists
+         const checkSQL = `
+            SELECT ID FROM [${mj_core_schema()}].EntitySetting
+            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+         `;
+         const existing = await pool.request().query(checkSQL);
+
+         if (existing.recordset.length > 0) {
+            // Update existing setting
+            const updateSQL = `
+               UPDATE [${mj_core_schema()}].EntitySetting
+               SET Value = '${iconsJSON}',
+                   __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+            `;
+            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity`, false);
+         } else {
+            // Insert new setting
+            const insertSQL = `
+               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES (NEWID(), '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
+            `;
+            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity`, false);
          }
       }
    }

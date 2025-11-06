@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { AIModelTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIModelTypeDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'AI Model Types') // Tell MemberJunction about this class
@@ -13,8 +12,19 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class AIModelTypeFormComponent extends BaseFormComponent {
     public record!: AIModelTypeEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        aIModels: false,
+        aIPrompts: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadAIModelTypeFormComponent() {
-    LoadAIModelTypeDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

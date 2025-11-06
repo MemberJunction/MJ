@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIAgentRunStepDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Run Steps') // Tell MemberJunction about this class
@@ -13,8 +12,18 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class AIAgentRunStepFormComponent extends BaseFormComponent {
     public record!: AIAgentRunStepEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        mJAIAgentRunSteps: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadAIAgentRunStepFormComponent() {
-    LoadAIAgentRunStepDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

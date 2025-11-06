@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { ListEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadListDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Lists') // Tell MemberJunction about this class
@@ -13,8 +12,19 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class ListFormComponent extends BaseFormComponent {
     public record!: ListEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        duplicateRuns: false,
+        details: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadListFormComponent() {
-    LoadListDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

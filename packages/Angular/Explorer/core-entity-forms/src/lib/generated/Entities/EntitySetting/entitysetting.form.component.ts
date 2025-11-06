@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { EntitySettingEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadEntitySettingDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Entity Settings') // Tell MemberJunction about this class
 @Component({
@@ -12,8 +11,17 @@ import { LoadEntitySettingDetailsComponent } from "./sections/details.component"
 })
 export class EntitySettingFormComponent extends BaseFormComponent {
     public record!: EntitySettingEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadEntitySettingFormComponent() {
-    LoadEntitySettingDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

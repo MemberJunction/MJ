@@ -1,59 +1,163 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Communication Providers" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Communication Logs" [Visible]="record.IsSaved"> 
-                        Communication Logs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderID')"  
-                            [NewRecordValues]="NewRecordValues('Communication Logs')"
-                            [AllowLoad]="IsCurrentTab('Communication Logs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <div class="form-panels-container">
+<!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-align-left"></i>
+                    <h3>Details</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsSending"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsReceiving"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsScheduledSending"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsForwarding"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsReplying"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsDrafts"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
-                    <mj-tab Name="Message Types" [Visible]="record.IsSaved"> 
-                        Message Types
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-join-grid
-                            [ShowSaveButton]="false"
-                            [ShowCancelButton]="false"
-                            [EditMode]="GridEditMode()"
-                            RowsEntityName="Communication Base Message Types"
-                            RowsEntityDisplayField="Type"
-                            RowsExtraFilter=""
-                            RowsEntityDataSource="FullEntity"
-                            RowsOrderBy="Type"
-                            RowsEntityDisplayName="Base Type"
-                            ColumnsMode="Fields"
-                            JoinEntityName="Communication Provider Message Types"
-                            JoinEntityRowForeignKey="CommunicationBaseMessageTypeID"
-                            [JoinEntityExtraFilter]="'CommunicationProviderID=' + record.ID"
-                            [JoinEntityDisplayColumns]="['Name','Status','AdditionalAttributes']"
-                            [NewRecordDefaultValues]="{CommunicationProviderID: record.ID}"
+                </div>
+            </div>
+        </div>
+
+        <!-- Communication Logs Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="communication logs">
+            <div class="collapsible-header" (click)="toggleSection('communicationLogs')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>Communication Logs</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.communicationLogs ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.communicationLogs" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderID')"  
+                        [NewRecordValues]="NewRecordValues('Communication Logs')"
+                        [AllowLoad]="IsCurrentTab('Communication Logs')"  
+                        [EditMode]="GridEditMode()"  
                         >
-                        </mj-join-grid>
-                                            
-                    </mj-tab-body>
-                </mj-tabstrip>
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message Types Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="message types">
+            <div class="collapsible-header" (click)="toggleSection('messageTypes')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>Message Types</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.messageTypes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.messageTypes" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-join-grid
+                        [ShowSaveButton]="false"
+                        [ShowCancelButton]="false"
+                        [EditMode]="GridEditMode()"
+                        RowsEntityName="Communication Base Message Types"
+                        RowsEntityDisplayField="Type"
+                        RowsExtraFilter=""
+                        RowsEntityDataSource="FullEntity"
+                        RowsOrderBy="Type"
+                        RowsEntityDisplayName="Base Type"
+                        ColumnsMode="Fields"
+                        JoinEntityName="Communication Provider Message Types"
+                        JoinEntityRowForeignKey="CommunicationBaseMessageTypeID"
+                        [JoinEntityExtraFilter]="'CommunicationProviderID=' + record.ID"
+                        [JoinEntityDisplayColumns]="['Name','Status','AdditionalAttributes']"
+                        [NewRecordDefaultValues]="{CommunicationProviderID: record.ID}"
+                    >
+                    </mj-join-grid>
+                    
+                </div>
+            </div>
+        </div>
+        </div>
     </form>
 </div>
         

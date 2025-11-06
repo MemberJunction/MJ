@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { CommunicationProviderMessageTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadCommunicationProviderMessageTypeDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Communication Provider Message Types') // Tell MemberJunction about this class
@@ -13,8 +12,18 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class CommunicationProviderMessageTypeFormComponent extends BaseFormComponent {
     public record!: CommunicationProviderMessageTypeEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        communicationLogs: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadCommunicationProviderMessageTypeFormComponent() {
-    LoadCommunicationProviderMessageTypeDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

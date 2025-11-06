@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { UserRecordLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadUserRecordLogDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'User Record Logs') // Tell MemberJunction about this class
 @Component({
@@ -12,8 +11,17 @@ import { LoadUserRecordLogDetailsComponent } from "./sections/details.component"
 })
 export class UserRecordLogFormComponent extends BaseFormComponent {
     public record!: UserRecordLogEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadUserRecordLogFormComponent() {
-    LoadUserRecordLogDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

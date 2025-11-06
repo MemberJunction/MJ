@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { AIModelPriceUnitTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIModelPriceUnitTypeDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Price Unit Types') // Tell MemberJunction about this class
@@ -13,8 +12,18 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class AIModelPriceUnitTypeFormComponent extends BaseFormComponent {
     public record!: AIModelPriceUnitTypeEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true,
+        mJAIModelCosts: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadAIModelPriceUnitTypeFormComponent() {
-    LoadAIModelPriceUnitTypeDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

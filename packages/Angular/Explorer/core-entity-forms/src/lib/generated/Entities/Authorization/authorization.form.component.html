@@ -1,86 +1,229 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Authorizations" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Action Authorizations" [Visible]="record.IsSaved"> 
-                        Action Authorizations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations','AuthorizationID')"  
-                            [NewRecordValues]="NewRecordValues('Action Authorizations')"
-                            [AllowLoad]="IsCurrentTab('Action Authorizations')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
+            </span>
+        </div>
+        <div class="form-panels-container">
+<!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-align-left"></i>
+                    <h3>Details</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UseAuditLog"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
-                    <mj-tab Name="Audit Log Types" [Visible]="record.IsSaved"> 
-                        Audit Log Types
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types','AuthorizationName')"  
-                            [NewRecordValues]="NewRecordValues('Audit Log Types')"
-                            [AllowLoad]="IsCurrentTab('Audit Log Types')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+                </div>
+            </div>
+        </div>
 
-                    <mj-tab Name="Audit Logs" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-fingerprint tab-header-icon"></span>Audit Logs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs','AuthorizationName')"  
-                            [NewRecordValues]="NewRecordValues('Audit Logs')"
-                            [AllowLoad]="IsCurrentTab('Audit Logs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <!-- Action Authorizations Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="action authorizations">
+            <div class="collapsible-header" (click)="toggleSection('actionAuthorizations')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>Action Authorizations</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.actionAuthorizations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.actionAuthorizations" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations','AuthorizationID')"  
+                        [NewRecordValues]="NewRecordValues('Action Authorizations')"
+                        [AllowLoad]="IsCurrentTab('Action Authorizations')"  
+                        [EditMode]="GridEditMode()"  
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
 
-                    <mj-tab Name="Authorization Roles" [Visible]="record.IsSaved"> 
-                        Authorization Roles
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','AuthorizationID')"  
-                            [NewRecordValues]="NewRecordValues('Authorization Roles')"
-                            [AllowLoad]="IsCurrentTab('Authorization Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <!-- Audit Log Types Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="audit log types">
+            <div class="collapsible-header" (click)="toggleSection('auditLogTypes')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>Audit Log Types</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.auditLogTypes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.auditLogTypes" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types','AuthorizationName')"  
+                        [NewRecordValues]="NewRecordValues('Audit Log Types')"
+                        [AllowLoad]="IsCurrentTab('Audit Log Types')"  
+                        [EditMode]="GridEditMode()"  
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
 
-                    <mj-tab Name="Authorizations" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-shield-halved tab-header-icon"></span>Authorizations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorizations','ParentID')"  
-                            [NewRecordValues]="NewRecordValues('Authorizations')"
-                            [AllowLoad]="IsCurrentTab('Authorizations')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
+        <!-- Audit Logs Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="audit logs">
+            <div class="collapsible-header" (click)="toggleSection('auditLogs')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa-solid fa-fingerprint tab-header-icon"></i>
+                    <h3>Audit Logs</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.auditLogs ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.auditLogs" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs','AuthorizationName')"  
+                        [NewRecordValues]="NewRecordValues('Audit Logs')"
+                        [AllowLoad]="IsCurrentTab('Audit Logs')"  
+                        [EditMode]="GridEditMode()"  
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authorization Roles Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="authorization roles">
+            <div class="collapsible-header" (click)="toggleSection('authorizationRoles')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>Authorization Roles</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.authorizationRoles ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.authorizationRoles" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','AuthorizationID')"  
+                        [NewRecordValues]="NewRecordValues('Authorization Roles')"
+                        [AllowLoad]="IsCurrentTab('Authorization Roles')"  
+                        [EditMode]="GridEditMode()"  
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authorizations Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="authorizations">
+            <div class="collapsible-header" (click)="toggleSection('authorizations')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa-solid fa-shield-halved tab-header-icon"></i>
+                    <h3>Authorizations</h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.authorizations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.authorizations" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid 
+                        [Params]="BuildRelationshipViewParamsByEntityName('Authorizations','ParentID')"  
+                        [NewRecordValues]="NewRecordValues('Authorizations')"
+                        [AllowLoad]="IsCurrentTab('Authorizations')"  
+                        [EditMode]="GridEditMode()"  
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+        </div>
     </form>
 </div>
         

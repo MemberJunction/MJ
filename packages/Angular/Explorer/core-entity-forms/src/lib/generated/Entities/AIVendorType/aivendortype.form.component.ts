@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { AIVendorTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIVendorTypeDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Vendor Types') // Tell MemberJunction about this class
 @Component({
@@ -12,8 +11,17 @@ import { LoadAIVendorTypeDetailsComponent } from "./sections/details.component"
 })
 export class AIVendorTypeFormComponent extends BaseFormComponent {
     public record!: AIVendorTypeEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        details: true
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadAIVendorTypeFormComponent() {
-    LoadAIVendorTypeDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }
