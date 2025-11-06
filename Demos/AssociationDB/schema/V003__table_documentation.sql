@@ -272,6 +272,66 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE', @level1name = 'Event',
     @level2type = N'COLUMN', @level2name = 'Status';
 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Event timezone (e.g., America/New_York, America/Chicago)',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'Timezone';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Physical location or address of event',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'Location';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'URL for virtual event meeting',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'MeetingURL';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Associated chapter for chapter-specific events',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'ChapterID';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Date when event registration opens',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'RegistrationOpenDate';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Date when event registration closes',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'RegistrationCloseDate';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Base registration fee (deprecated - use MemberPrice/NonMemberPrice instead)',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'RegistrationFee';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Registration price for association members. Invoices are automatically generated for event registrations using this price for members.',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'MemberPrice';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Registration price for non-members (higher than MemberPrice to incentivize membership)',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'NonMemberPrice';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description', @value = N'Event description and details',
+    @level0type = N'SCHEMA', @level0name = 'AssociationDemo',
+    @level1type = N'TABLE', @level1name = 'Event',
+    @level2type = N'COLUMN', @level2name = 'Description';
+
 
 -- ============================================================================
 -- Extended properties for EventSession

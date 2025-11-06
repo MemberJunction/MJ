@@ -54,18 +54,26 @@ VALUES
 -- ============================================================================
 
 
--- Random chapter memberships
+-- Chapter memberships - 30-50 members per chapter (randomized distribution)
 INSERT INTO [AssociationDemo].[ChapterMembership] (ID, ChapterID, MemberID, JoinDate, Status, Role)
-SELECT TOP 275
+SELECT
     NEWID(),
     c.ID,
     m.ID,
-    DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 1000), @EndDate),
-    'Active',
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 1825), @EndDate),  -- Joined within last 5 years
+    CASE ABS(CHECKSUM(NEWID()) % 100)
+        WHEN 0 THEN 'Inactive'
+        WHEN 1 THEN 'Inactive'
+        WHEN 2 THEN 'Inactive'
+        ELSE 'Active'
+    END,
     'Member'
 FROM [AssociationDemo].[Chapter] c
-CROSS JOIN [AssociationDemo].[Member] m
-ORDER BY NEWID();
+CROSS APPLY (
+    SELECT TOP (30 + ABS(CHECKSUM(c.ID) % 21)) ID  -- 30-50 members per chapter
+    FROM [AssociationDemo].[Member]
+    ORDER BY NEWID()
+) m;
 
 
 -- Chapter officers (3 per chapter = 45 total)
@@ -155,19 +163,39 @@ VALUES
     (@BoardPos_Director5, 'Director at Large #5', 9, 3, 0, 1);
 
 
--- Current board members
-INSERT INTO [AssociationDemo].[BoardMember] (ID, BoardPositionID, MemberID, StartDate, IsActive, ElectionDate)
+-- Board members with historical terms (3 terms per position = 27 total board members)
+-- Current term (active), plus 2 previous terms (inactive)
+INSERT INTO [AssociationDemo].[BoardMember] (ID, BoardPositionID, MemberID, StartDate, EndDate, IsActive, ElectionDate)
 SELECT
     NEWID(),
     bp.ID,
     m.ID,
-    DATEADD(YEAR, -1, @EndDate),
-    1,
-    DATEADD(DAY, -10, DATEADD(YEAR, -1, @EndDate))
+    CASE terms.TermNumber
+        WHEN 1 THEN DATEADD(YEAR, -1 * (bp.TermLengthYears * 2), @EndDate)  -- Oldest term
+        WHEN 2 THEN DATEADD(YEAR, -1 * bp.TermLengthYears, @EndDate)        -- Middle term
+        ELSE DATEADD(YEAR, -1, @EndDate)                                     -- Current term
+    END,
+    CASE terms.TermNumber
+        WHEN 1 THEN DATEADD(YEAR, -1 * bp.TermLengthYears, @EndDate)        -- Oldest term ended
+        WHEN 2 THEN DATEADD(YEAR, -1, @EndDate)                             -- Middle term ended
+        ELSE NULL                                                             -- Current term ongoing
+    END,
+    CASE terms.TermNumber WHEN 3 THEN 1 ELSE 0 END,  -- Only current term is active
+    CASE terms.TermNumber
+        WHEN 1 THEN DATEADD(DAY, -10, DATEADD(YEAR, -1 * (bp.TermLengthYears * 2), @EndDate))
+        WHEN 2 THEN DATEADD(DAY, -10, DATEADD(YEAR, -1 * bp.TermLengthYears, @EndDate))
+        ELSE DATEADD(DAY, -10, DATEADD(YEAR, -1, @EndDate))
+    END
 FROM [AssociationDemo].[BoardPosition] bp
+CROSS JOIN (VALUES (1), (2), (3)) AS terms(TermNumber)
 CROSS APPLY (
     SELECT TOP 1 ID
     FROM [AssociationDemo].[Member]
+    WHERE NOT EXISTS (  -- Don't reuse same member for multiple terms of same position
+        SELECT 1
+        FROM [AssociationDemo].[BoardMember] bm
+        WHERE bm.BoardPositionID = bp.ID
+    )
     ORDER BY NEWID()
 ) m;
 
