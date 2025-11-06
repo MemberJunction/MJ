@@ -460,6 +460,13 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
 
         // Add expand all/collapse all/filter methods if there are 4+ sections
         const totalSections = allSections.length;
+
+        // Add sectionRowCounts property for related entities
+        const hasRelatedEntities = relatedEntitySections.length > 0;
+        const sectionRowCountsProperty = hasRelatedEntities
+            ? `\n\n    // Row counts for related entity sections (populated after grids load)\n    public sectionRowCounts: { [key: string]: number } = {};`
+            : '';
+
         const sectionUtilityMethods = totalSections >= 4 ? `\n
     public expandAllSections(): void {
         Object.keys(this.sectionsExpanded).forEach(key => {
@@ -486,12 +493,34 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             const fieldNames = panel.getAttribute('data-field-names') || '';
 
             // Show section if search term matches section name OR any field name
-            if (sectionName.includes(searchTerm) || fieldNames.includes(searchTerm)) {
+            const matches = sectionName.includes(searchTerm) || fieldNames.includes(searchTerm);
+
+            if (matches) {
                 panel.classList.remove('search-hidden');
+
+                // Add highlighting to matched text in section name
+                if (searchTerm && sectionName.includes(searchTerm)) {
+                    const h3 = panel.querySelector('.collapsible-title h3 .section-name');
+                    if (h3) {
+                        const originalText = h3.textContent || '';
+                        const regex = new RegExp(\`(\${searchTerm})\`, 'gi');
+                        h3.innerHTML = originalText.replace(regex, '<span class="search-highlight">$1</span>');
+                    }
+                }
             } else {
                 panel.classList.add('search-hidden');
             }
         });
+
+        // Clear highlighting when search is empty
+        if (!searchTerm) {
+            panels.forEach((panel: Element) => {
+                const h3 = panel.querySelector('.collapsible-title h3 .section-name');
+                if (h3) {
+                    h3.innerHTML = h3.textContent || '';
+                }
+            });
+        }
     }` : '';
 
         return `import { Component } from '@angular/core';
@@ -506,7 +535,7 @@ ${generationImports.length > 0 ? generationImports + '\n' : ''}
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ${entity.ClassName}FormComponent extends BaseFormComponent {
-    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}${sectionsExpandedObject}${toggleSectionMethod}${sectionUtilityMethods}
+    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}${sectionsExpandedObject}${sectionRowCountsProperty}${toggleSectionMethod}${sectionUtilityMethods}
 }
 
 export function Load${entity.ClassName}FormComponent() {
@@ -631,7 +660,7 @@ export function Load${entity.ClassName}FormComponent() {
             <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="${icon}"></i>
-                    <h3>${section.Name}</h3>
+                    <h3><span class="section-name">${section.Name}</span></h3>
                 </div>
                 <div class="collapse-icon">
                     <i [class]="sectionsExpanded.${sectionKey} ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
@@ -814,19 +843,24 @@ ${formHTML}
             const tabName: string = this.generateRelatedEntityTabName(relatedEntity, sortedRelatedEntities)
             
             let icon: string = '';
-            switch (relatedEntity.DisplayIconType) {
-                case 'Custom':
-                    if (relatedEntity.DisplayIcon && relatedEntity.DisplayIcon.length > 0)
-                        icon = `<span class="${relatedEntity.DisplayIcon} tab-header-icon"></span>`;
-                    break;
-                case 'Related Entity Icon':
-                    const re: EntityInfo | undefined = md.Entities.find(e => e.ID === relatedEntity.RelatedEntityID)
-                    if (re && re.Icon && re.Icon.length > 0)
-                        icon = `<span class="${re.Icon} tab-header-icon"></span>`;
-                    break;
-                default:
-                    // none
-                    break;
+            let iconClass: string = '';
+
+            // First, check for custom icon
+            if (relatedEntity.DisplayIconType === 'Custom' && relatedEntity.DisplayIcon && relatedEntity.DisplayIcon.length > 0) {
+                icon = `<span class="${relatedEntity.DisplayIcon} tab-header-icon"></span>`;
+                iconClass = relatedEntity.DisplayIcon;
+            }
+            // If no custom icon, try to use the related entity's icon
+            else {
+                const re: EntityInfo | undefined = md.Entities.find(e => e.ID === relatedEntity.RelatedEntityID)
+                if (re && re.Icon && re.Icon.length > 0) {
+                    icon = `<span class="${re.Icon} tab-header-icon"></span>`;
+                    iconClass = re.Icon;
+                }
+                else {
+                    // Fall back to default table icon
+                    iconClass = 'fa fa-table';
+                }
             }
 
             // Calculate section key before generation (may be replaced later if duplicate)
@@ -842,18 +876,18 @@ ${formHTML}
             // Add proper indentation for collapsible panel body
             const componentCodeWithIndent = generateResults.TemplateOutput.split('\n').map(l => `                    ${l}`).join('\n')
 
-            // Generate collapsible panel HTML for related entity
-            const iconClass = icon ? icon.match(/class="([^"]+)"/)?.[1] || 'fa fa-table' : 'fa fa-table';
-
             // For related entities, use the related entity name as searchable term
             const relatedEntitySearchTerms = relatedEntity.RelatedEntity.toLowerCase();
 
             const tabCode = `${index > 0 ? '\n        ' : ''}<!-- ${tabName} Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="${tabName.toLowerCase()}" data-field-names="${relatedEntitySearchTerms}">
+        <div class="form-card collapsible-card related-entity" data-section-name="${tabName.toLowerCase()}" data-field-names="${relatedEntitySearchTerms}" data-section-key="${sectionKey}">
             <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="${iconClass}"></i>
-                    <h3>${tabName}</h3>
+                    <h3>
+                        <span class="section-name">${tabName}</span>
+                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['${sectionKey}']">{{sectionRowCounts['${sectionKey}']}}</span>
+                    </h3>
                 </div>
                 <div class="collapse-icon">
                     <i [class]="sectionsExpanded.${sectionKey} ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
@@ -1139,8 +1173,13 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
             const relatedEntityBeforePanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
             const relatedEntityAfterPanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
 
-            const beforePanelsHTML = relatedEntityBeforePanels.length > 0 ? relatedEntityBeforePanels.map(s => s.TabCode).join('\n') : '';
-            const afterPanelsHTML = relatedEntityAfterPanels.length > 0 ? relatedEntityAfterPanels.map(s => s.TabCode).join('\n') : '';
+            // Wrap related entity sections in grid container
+            const beforePanelsHTML = relatedEntityBeforePanels.length > 0
+                ? `        <div class="related-entity-grid">\n${relatedEntityBeforePanels.map(s => s.TabCode).join('\n')}\n        </div>`
+                : '';
+            const afterPanelsHTML = relatedEntityAfterPanels.length > 0
+                ? `        <div class="related-entity-grid">\n${relatedEntityAfterPanels.map(s => s.TabCode).join('\n')}\n        </div>`
+                : '';
             const fieldPanelsHTML = sectionsToRender.map(s => s.TabCode).join('\n');
 
             return `${controlsHTML}        <div class="form-panels-container">

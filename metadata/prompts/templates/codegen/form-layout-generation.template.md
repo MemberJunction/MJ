@@ -111,6 +111,7 @@ Return a JSON object with this exact structure:
 
 ```json
 {
+  "entityIcon": "fa fa-shopping-cart",
   "fieldCategories": [
     {
       "fieldName": "BillToAddress1",
@@ -132,6 +133,10 @@ Return a JSON object with this exact structure:
 
 ### Icon Selection Guidelines
 
+**Entity Icon:**
+Select ONE icon that best represents the entire entity's business purpose and domain. This icon will be used throughout the application to represent this entity type.
+
+**Category Icons:**
 For each **unique category**, select an appropriate Font Awesome icon class (version 5.x solid icons preferred).
 
 **Icon Selection Rules:**
@@ -181,6 +186,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
 
 ```json
 {
+  "entityIcon": "fa fa-shopping-cart",
   "fieldCategories": [
     {
       "fieldName": "OrderNumber",

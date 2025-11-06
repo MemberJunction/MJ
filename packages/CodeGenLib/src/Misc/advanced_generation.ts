@@ -31,6 +31,7 @@ export type TransitiveJoinResult = {
 }
 
 export type FormLayoutResult = {
+    entityIcon?: string;
     fieldCategories: Array<{
         fieldName: string;
         category: string;

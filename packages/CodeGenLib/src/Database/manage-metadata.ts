@@ -2195,6 +2195,32 @@ NumberedRows AS (
          }
       }
 
+      // Store entity icon if provided and entity doesn't already have one
+      if (result.entityIcon && result.entityIcon.trim().length > 0) {
+         // Check if entity already has an icon
+         const checkEntitySQL = `
+            SELECT Icon FROM [${mj_core_schema()}].Entity
+            WHERE ID = '${entityId}'
+         `;
+         const entityCheck = await pool.request().query(checkEntitySQL);
+
+         if (entityCheck.recordset.length > 0) {
+            const currentIcon = entityCheck.recordset[0].Icon;
+            // Only update if entity doesn't have an icon set
+            if (!currentIcon || currentIcon.trim().length === 0) {
+               const escapedIcon = result.entityIcon.replace(/'/g, "''");
+               const updateEntitySQL = `
+                  UPDATE [${mj_core_schema()}].Entity
+                  SET Icon = '${escapedIcon}',
+                      __mj_UpdatedAt = GETUTCDATE()
+                  WHERE ID = '${entityId}'
+               `;
+               await this.LogSQLAndExecute(pool, updateEntitySQL, `Set entity icon to ${result.entityIcon}`, false);
+               logStatus(`  ✓ Set entity icon: ${result.entityIcon}`);
+            }
+         }
+      }
+
       // Store category icons in EntitySetting if provided
       if (result.categoryIcons && Object.keys(result.categoryIcons).length > 0) {
          const iconsJSON = JSON.stringify(result.categoryIcons).replace(/'/g, "''");

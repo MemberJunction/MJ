@@ -50,11 +50,16 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
             ? `IsCurrentSection('${input.SectionKey.trim()}')`
             : `IsCurrentTab('${input.TabName.trim()}')`;
 
+        // Add dataLoaded event binding to capture row count
+        const dataLoadedEvent = input.SectionKey && input.SectionKey.length > 0
+            ? `(dataLoaded)="sectionRowCounts['${input.SectionKey.trim()}'] = $event.totalRowCount"`
+            : '';
+
         const template = `<mj-user-view-grid
     [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"
     [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"
     [AllowLoad]="${allowLoadCheck}"
-    [EditMode]="GridEditMode()"
+    [EditMode]="GridEditMode()"${dataLoadedEvent ? `\n    ${dataLoadedEvent}` : ''}
     >
 </mj-user-view-grid>`
         return {
