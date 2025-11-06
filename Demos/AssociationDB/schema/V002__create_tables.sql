@@ -95,14 +95,6 @@ CREATE TABLE [AssociationDemo].[Member] (
 );
 GO
 
--- Create index on email for lookups
-CREATE UNIQUE INDEX IX_Member_Email ON [AssociationDemo].[Member]([Email]);
-GO
-
--- Create index on organization for reporting
-CREATE INDEX IX_Member_Organization ON [AssociationDemo].[Member]([OrganizationID]);
-GO
-
 -- ============================================================================
 -- Membership Table
 -- ============================================================================
@@ -122,13 +114,6 @@ CREATE TABLE [AssociationDemo].[Membership] (
     CONSTRAINT FK_Membership_Type FOREIGN KEY ([MembershipTypeID])
         REFERENCES [AssociationDemo].[MembershipType]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Membership_Member ON [AssociationDemo].[Membership]([MemberID]);
-CREATE INDEX IX_Membership_Type ON [AssociationDemo].[Membership]([MembershipTypeID]);
-CREATE INDEX IX_Membership_Status ON [AssociationDemo].[Membership]([Status]);
-CREATE INDEX IX_Membership_Dates ON [AssociationDemo].[Membership]([StartDate], [EndDate]);
 GO
 
 -- ============================================================================
@@ -162,12 +147,6 @@ CREATE TABLE [AssociationDemo].[Event] (
 );
 GO
 
--- Create indexes for common queries
-CREATE INDEX IX_Event_StartDate ON [AssociationDemo].[Event]([StartDate]);
-CREATE INDEX IX_Event_Type ON [AssociationDemo].[Event]([EventType]);
-CREATE INDEX IX_Event_Status ON [AssociationDemo].[Event]([Status]);
-GO
-
 -- ============================================================================
 -- EventSession Table
 -- ============================================================================
@@ -186,10 +165,6 @@ CREATE TABLE [AssociationDemo].[EventSession] (
     CONSTRAINT FK_EventSession_Event FOREIGN KEY ([EventID])
         REFERENCES [AssociationDemo].[Event]([ID])
 );
-GO
-
--- Create index for event lookups
-CREATE INDEX IX_EventSession_Event ON [AssociationDemo].[EventSession]([EventID]);
 GO
 
 -- ============================================================================
@@ -213,12 +188,6 @@ CREATE TABLE [AssociationDemo].[EventRegistration] (
     CONSTRAINT FK_EventReg_Member FOREIGN KEY ([MemberID])
         REFERENCES [AssociationDemo].[Member]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_EventReg_Event ON [AssociationDemo].[EventRegistration]([EventID]);
-CREATE INDEX IX_EventReg_Member ON [AssociationDemo].[EventRegistration]([MemberID]);
-CREATE INDEX IX_EventReg_Status ON [AssociationDemo].[EventRegistration]([Status]);
 GO
 
 -- ============================================================================
@@ -250,15 +219,6 @@ CREATE TABLE [AssociationDemo].[Course] (
 );
 GO
 
--- Create unique index on course code
-CREATE UNIQUE INDEX IX_Course_Code ON [AssociationDemo].[Course]([Code]);
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Course_Category ON [AssociationDemo].[Course]([Category]);
-CREATE INDEX IX_Course_Level ON [AssociationDemo].[Course]([Level]);
-GO
-
 -- ============================================================================
 -- Enrollment Table
 -- ============================================================================
@@ -285,12 +245,6 @@ CREATE TABLE [AssociationDemo].[Enrollment] (
 );
 GO
 
--- Create indexes for common queries
-CREATE INDEX IX_Enrollment_Course ON [AssociationDemo].[Enrollment]([CourseID]);
-CREATE INDEX IX_Enrollment_Member ON [AssociationDemo].[Enrollment]([MemberID]);
-CREATE INDEX IX_Enrollment_Status ON [AssociationDemo].[Enrollment]([Status]);
-GO
-
 -- ============================================================================
 -- Certificate Table
 -- ============================================================================
@@ -305,15 +259,6 @@ CREATE TABLE [AssociationDemo].[Certificate] (
     CONSTRAINT FK_Certificate_Enrollment FOREIGN KEY ([EnrollmentID])
         REFERENCES [AssociationDemo].[Enrollment]([ID])
 );
-GO
-
--- Create unique indexes
-CREATE UNIQUE INDEX IX_Certificate_Number ON [AssociationDemo].[Certificate]([CertificateNumber]);
-CREATE UNIQUE INDEX IX_Certificate_VerificationCode ON [AssociationDemo].[Certificate]([VerificationCode]);
-GO
-
--- Create index for enrollment lookups
-CREATE INDEX IX_Certificate_Enrollment ON [AssociationDemo].[Certificate]([EnrollmentID]);
 GO
 
 -- ============================================================================
@@ -343,16 +288,6 @@ CREATE TABLE [AssociationDemo].[Invoice] (
 );
 GO
 
--- Create unique index on invoice number
-CREATE UNIQUE INDEX IX_Invoice_Number ON [AssociationDemo].[Invoice]([InvoiceNumber]);
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Invoice_Member ON [AssociationDemo].[Invoice]([MemberID]);
-CREATE INDEX IX_Invoice_Status ON [AssociationDemo].[Invoice]([Status]);
-CREATE INDEX IX_Invoice_Dates ON [AssociationDemo].[Invoice]([InvoiceDate], [DueDate]);
-GO
-
 -- ============================================================================
 -- InvoiceLineItem Table
 -- ============================================================================
@@ -372,10 +307,6 @@ CREATE TABLE [AssociationDemo].[InvoiceLineItem] (
 );
 GO
 
--- Create index for invoice lookups
-CREATE INDEX IX_LineItem_Invoice ON [AssociationDemo].[InvoiceLineItem]([InvoiceID]);
-GO
-
 -- ============================================================================
 -- Payment Table
 -- ============================================================================
@@ -393,12 +324,6 @@ CREATE TABLE [AssociationDemo].[Payment] (
     CONSTRAINT FK_Payment_Invoice FOREIGN KEY ([InvoiceID])
         REFERENCES [AssociationDemo].[Invoice]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Payment_Invoice ON [AssociationDemo].[Payment]([InvoiceID]);
-CREATE INDEX IX_Payment_Status ON [AssociationDemo].[Payment]([Status]);
-CREATE INDEX IX_Payment_Date ON [AssociationDemo].[Payment]([PaymentDate]);
 GO
 
 -- ============================================================================
@@ -423,12 +348,6 @@ CREATE TABLE [AssociationDemo].[Campaign] (
 );
 GO
 
--- Create indexes for common queries
-CREATE INDEX IX_Campaign_Type ON [AssociationDemo].[Campaign]([CampaignType]);
-CREATE INDEX IX_Campaign_Status ON [AssociationDemo].[Campaign]([Status]);
-CREATE INDEX IX_Campaign_Dates ON [AssociationDemo].[Campaign]([StartDate], [EndDate]);
-GO
-
 -- ============================================================================
 -- Segment Table
 -- ============================================================================
@@ -442,11 +361,6 @@ CREATE TABLE [AssociationDemo].[Segment] (
     [LastCalculatedDate] DATETIME,
     [IsActive] BIT NOT NULL DEFAULT 1
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Segment_Type ON [AssociationDemo].[Segment]([SegmentType]);
-CREATE INDEX IX_Segment_Active ON [AssociationDemo].[Segment]([IsActive]);
 GO
 
 -- ============================================================================
@@ -468,13 +382,6 @@ CREATE TABLE [AssociationDemo].[CampaignMember] (
     CONSTRAINT FK_CampaignMember_Segment FOREIGN KEY ([SegmentID])
         REFERENCES [AssociationDemo].[Segment]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_CampaignMember_Campaign ON [AssociationDemo].[CampaignMember]([CampaignID]);
-CREATE INDEX IX_CampaignMember_Member ON [AssociationDemo].[CampaignMember]([MemberID]);
-CREATE INDEX IX_CampaignMember_Segment ON [AssociationDemo].[CampaignMember]([SegmentID]);
-CREATE INDEX IX_CampaignMember_Status ON [AssociationDemo].[CampaignMember]([Status]);
 GO
 
 -- ============================================================================

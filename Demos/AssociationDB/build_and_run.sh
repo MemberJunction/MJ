@@ -18,6 +18,11 @@ cat >> "$OUTPUT" << 'EOF'
 -- Auto-generated from multiple files
 
 SET NOCOUNT ON;
+SET XACT_ABORT ON;  -- Abort transaction on any error
+GO
+
+-- Begin transaction - will rollback on any error
+BEGIN TRANSACTION;
 GO
 
 PRINT '';
@@ -99,7 +104,6 @@ PRINT '===================================================================';
 PRINT 'PHASE 2: POPULATING SAMPLE DATA';
 PRINT '===================================================================';
 PRINT '';
-GO
 
 EOF
 
@@ -165,6 +169,12 @@ GO
 
 PRINT '';
 PRINT 'Build completed successfully!';
+GO
+
+-- Commit the transaction
+COMMIT TRANSACTION;
+PRINT '';
+PRINT 'Transaction committed successfully!';
 GO
 
 SET NOCOUNT OFF;

@@ -13,7 +13,7 @@ Estimated completion time: 1-2 minutes
 -------------------------------------------------------------------
  
 Target Database: MJ_2_115_0
-Start Time: 2025-11-06 02:14:24
+Start Time: 2025-11-06 02:26:04
  
 ===================================================================
  
@@ -63,9 +63,6 @@ PHASE 1 COMPLETE: All schemas and tables created successfully
 PHASE 2: POPULATING SAMPLE DATA
 ===================================================================
  
-Msg 9810, Level 16, State 1, Server f11443085b15, Line 813
-The datepart hour is not supported by date function dateadd for data type date.
-The statement has been terminated.
  
 ===================================================================
 PHASE 2 COMPLETE: Sample data population finished
@@ -102,3 +99,5 @@ For more information, see README.md
  
  
 Build completed successfully!
+ 
+Transaction committed successfully!

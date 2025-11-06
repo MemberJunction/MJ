@@ -2,6 +2,11 @@
 -- Auto-generated from multiple files
 
 SET NOCOUNT ON;
+SET XACT_ABORT ON;  -- Abort transaction on any error
+GO
+
+-- Begin transaction - will rollback on any error
+BEGIN TRANSACTION;
 GO
 
 PRINT '';
@@ -147,14 +152,6 @@ CREATE TABLE [AssociationDemo].[Member] (
 );
 GO
 
--- Create index on email for lookups
-CREATE UNIQUE INDEX IX_Member_Email ON [AssociationDemo].[Member]([Email]);
-GO
-
--- Create index on organization for reporting
-CREATE INDEX IX_Member_Organization ON [AssociationDemo].[Member]([OrganizationID]);
-GO
-
 -- ============================================================================
 -- Membership Table
 -- ============================================================================
@@ -174,13 +171,6 @@ CREATE TABLE [AssociationDemo].[Membership] (
     CONSTRAINT FK_Membership_Type FOREIGN KEY ([MembershipTypeID])
         REFERENCES [AssociationDemo].[MembershipType]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Membership_Member ON [AssociationDemo].[Membership]([MemberID]);
-CREATE INDEX IX_Membership_Type ON [AssociationDemo].[Membership]([MembershipTypeID]);
-CREATE INDEX IX_Membership_Status ON [AssociationDemo].[Membership]([Status]);
-CREATE INDEX IX_Membership_Dates ON [AssociationDemo].[Membership]([StartDate], [EndDate]);
 GO
 
 -- ============================================================================
@@ -214,12 +204,6 @@ CREATE TABLE [AssociationDemo].[Event] (
 );
 GO
 
--- Create indexes for common queries
-CREATE INDEX IX_Event_StartDate ON [AssociationDemo].[Event]([StartDate]);
-CREATE INDEX IX_Event_Type ON [AssociationDemo].[Event]([EventType]);
-CREATE INDEX IX_Event_Status ON [AssociationDemo].[Event]([Status]);
-GO
-
 -- ============================================================================
 -- EventSession Table
 -- ============================================================================
@@ -238,10 +222,6 @@ CREATE TABLE [AssociationDemo].[EventSession] (
     CONSTRAINT FK_EventSession_Event FOREIGN KEY ([EventID])
         REFERENCES [AssociationDemo].[Event]([ID])
 );
-GO
-
--- Create index for event lookups
-CREATE INDEX IX_EventSession_Event ON [AssociationDemo].[EventSession]([EventID]);
 GO
 
 -- ============================================================================
@@ -265,12 +245,6 @@ CREATE TABLE [AssociationDemo].[EventRegistration] (
     CONSTRAINT FK_EventReg_Member FOREIGN KEY ([MemberID])
         REFERENCES [AssociationDemo].[Member]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_EventReg_Event ON [AssociationDemo].[EventRegistration]([EventID]);
-CREATE INDEX IX_EventReg_Member ON [AssociationDemo].[EventRegistration]([MemberID]);
-CREATE INDEX IX_EventReg_Status ON [AssociationDemo].[EventRegistration]([Status]);
 GO
 
 -- ============================================================================
@@ -302,15 +276,6 @@ CREATE TABLE [AssociationDemo].[Course] (
 );
 GO
 
--- Create unique index on course code
-CREATE UNIQUE INDEX IX_Course_Code ON [AssociationDemo].[Course]([Code]);
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Course_Category ON [AssociationDemo].[Course]([Category]);
-CREATE INDEX IX_Course_Level ON [AssociationDemo].[Course]([Level]);
-GO
-
 -- ============================================================================
 -- Enrollment Table
 -- ============================================================================
@@ -337,12 +302,6 @@ CREATE TABLE [AssociationDemo].[Enrollment] (
 );
 GO
 
--- Create indexes for common queries
-CREATE INDEX IX_Enrollment_Course ON [AssociationDemo].[Enrollment]([CourseID]);
-CREATE INDEX IX_Enrollment_Member ON [AssociationDemo].[Enrollment]([MemberID]);
-CREATE INDEX IX_Enrollment_Status ON [AssociationDemo].[Enrollment]([Status]);
-GO
-
 -- ============================================================================
 -- Certificate Table
 -- ============================================================================
@@ -357,15 +316,6 @@ CREATE TABLE [AssociationDemo].[Certificate] (
     CONSTRAINT FK_Certificate_Enrollment FOREIGN KEY ([EnrollmentID])
         REFERENCES [AssociationDemo].[Enrollment]([ID])
 );
-GO
-
--- Create unique indexes
-CREATE UNIQUE INDEX IX_Certificate_Number ON [AssociationDemo].[Certificate]([CertificateNumber]);
-CREATE UNIQUE INDEX IX_Certificate_VerificationCode ON [AssociationDemo].[Certificate]([VerificationCode]);
-GO
-
--- Create index for enrollment lookups
-CREATE INDEX IX_Certificate_Enrollment ON [AssociationDemo].[Certificate]([EnrollmentID]);
 GO
 
 -- ============================================================================
@@ -395,16 +345,6 @@ CREATE TABLE [AssociationDemo].[Invoice] (
 );
 GO
 
--- Create unique index on invoice number
-CREATE UNIQUE INDEX IX_Invoice_Number ON [AssociationDemo].[Invoice]([InvoiceNumber]);
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Invoice_Member ON [AssociationDemo].[Invoice]([MemberID]);
-CREATE INDEX IX_Invoice_Status ON [AssociationDemo].[Invoice]([Status]);
-CREATE INDEX IX_Invoice_Dates ON [AssociationDemo].[Invoice]([InvoiceDate], [DueDate]);
-GO
-
 -- ============================================================================
 -- InvoiceLineItem Table
 -- ============================================================================
@@ -424,10 +364,6 @@ CREATE TABLE [AssociationDemo].[InvoiceLineItem] (
 );
 GO
 
--- Create index for invoice lookups
-CREATE INDEX IX_LineItem_Invoice ON [AssociationDemo].[InvoiceLineItem]([InvoiceID]);
-GO
-
 -- ============================================================================
 -- Payment Table
 -- ============================================================================
@@ -445,12 +381,6 @@ CREATE TABLE [AssociationDemo].[Payment] (
     CONSTRAINT FK_Payment_Invoice FOREIGN KEY ([InvoiceID])
         REFERENCES [AssociationDemo].[Invoice]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Payment_Invoice ON [AssociationDemo].[Payment]([InvoiceID]);
-CREATE INDEX IX_Payment_Status ON [AssociationDemo].[Payment]([Status]);
-CREATE INDEX IX_Payment_Date ON [AssociationDemo].[Payment]([PaymentDate]);
 GO
 
 -- ============================================================================
@@ -475,12 +405,6 @@ CREATE TABLE [AssociationDemo].[Campaign] (
 );
 GO
 
--- Create indexes for common queries
-CREATE INDEX IX_Campaign_Type ON [AssociationDemo].[Campaign]([CampaignType]);
-CREATE INDEX IX_Campaign_Status ON [AssociationDemo].[Campaign]([Status]);
-CREATE INDEX IX_Campaign_Dates ON [AssociationDemo].[Campaign]([StartDate], [EndDate]);
-GO
-
 -- ============================================================================
 -- Segment Table
 -- ============================================================================
@@ -494,11 +418,6 @@ CREATE TABLE [AssociationDemo].[Segment] (
     [LastCalculatedDate] DATETIME,
     [IsActive] BIT NOT NULL DEFAULT 1
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_Segment_Type ON [AssociationDemo].[Segment]([SegmentType]);
-CREATE INDEX IX_Segment_Active ON [AssociationDemo].[Segment]([IsActive]);
 GO
 
 -- ============================================================================
@@ -520,13 +439,6 @@ CREATE TABLE [AssociationDemo].[CampaignMember] (
     CONSTRAINT FK_CampaignMember_Segment FOREIGN KEY ([SegmentID])
         REFERENCES [AssociationDemo].[Segment]([ID])
 );
-GO
-
--- Create indexes for common queries
-CREATE INDEX IX_CampaignMember_Campaign ON [AssociationDemo].[CampaignMember]([CampaignID]);
-CREATE INDEX IX_CampaignMember_Member ON [AssociationDemo].[CampaignMember]([MemberID]);
-CREATE INDEX IX_CampaignMember_Segment ON [AssociationDemo].[CampaignMember]([SegmentID]);
-CREATE INDEX IX_CampaignMember_Status ON [AssociationDemo].[CampaignMember]([Status]);
 GO
 
 -- ============================================================================
@@ -2002,7 +1914,6 @@ PRINT '===================================================================';
 PRINT 'PHASE 2: POPULATING SAMPLE DATA';
 PRINT '===================================================================';
 PRINT '';
-GO
 
 /******************************************************************************
  * Association Sample Database - Parameters and UUID Declarations
@@ -2820,38 +2731,38 @@ VALUES
     -- Day 1 - Keynotes and Opening
     (NEWID(), @Event_AnnualConf2024, 'Opening Keynote: The Future of AI in Enterprise',
      'Industry thought leader discusses the transformative impact of AI on business',
-     DATEADD(HOUR, 9, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 10, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 9, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 10, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Main Hall', 'Dr. Jennifer Walsh, Chief AI Officer at TechCorp', 'Keynote', 650, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Cloud Architecture Patterns for Scale',
      'Deep dive into patterns for building scalable cloud applications',
-     DATEADD(HOUR, 11, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 12, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 11, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room A', 'Michael Chen, Principal Architect at CloudScale', 'Workshop', 100, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Cybersecurity Threat Landscape 2024',
      'Current threats and defensive strategies for modern organizations',
-     DATEADD(HOUR, 11, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 12, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 11, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room B', 'Sarah Martinez, CISO at SecureNet', 'Panel', 150, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'DevOps Transformation Case Study',
      'How a Fortune 500 company transformed their delivery process',
-     DATEADD(HOUR, 13, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 14, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 13, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 14, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room A', 'David Kim, VP Engineering at Enterprise Co', 'Workshop', 80, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Machine Learning Operations at Scale',
      'MLOps best practices for production ML systems',
-     DATEADD(HOUR, 13, DATEADD(DAY, -90, @EndDate)), DATEADD(HOUR, 14, DATEADD(DAY, -90, @EndDate)),
+     DATEADD(HOUR, 13, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 14, DATEADD(DAY, -90, CAST(@EndDate AS DATETIME))),
      'Room B', 'Dr. Lisa Johnson, ML Lead at DataDriven', 'Workshop', 100, 1.0),
 
     -- Day 2 Sessions
     (NEWID(), @Event_AnnualConf2024, 'Day 2 Keynote: Digital Transformation Success Stories',
      'Leading companies share their digital transformation journeys',
-     DATEADD(HOUR, 9, DATEADD(DAY, -89, @EndDate)), DATEADD(HOUR, 10, DATEADD(DAY, -89, @EndDate)),
+     DATEADD(HOUR, 9, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 10, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))),
      'Main Hall', 'Panel of CTOs from Fortune 500 companies', 'Keynote', 650, 1.0),
 
     (NEWID(), @Event_AnnualConf2024, 'Kubernetes in Production: Lessons Learned',
      'Real-world experiences running Kubernetes at scale',
-     DATEADD(HOUR, 11, DATEADD(DAY, -89, @EndDate)), DATEADD(HOUR, 12, DATEADD(DAY, -89, @EndDate)),
+     DATEADD(HOUR, 11, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))), DATEADD(HOUR, 12, DATEADD(DAY, -89, CAST(@EndDate AS DATETIME))),
      'Room A', 'James Rodriguez, Platform Lead at CloudScale', 'Workshop', 120, 1.0);
 
     -- Abbreviated - would continue with remaining sessions for Day 2 and Day 3
@@ -3663,6 +3574,12 @@ GO
 
 PRINT '';
 PRINT 'Build completed successfully!';
+GO
+
+-- Commit the transaction
+COMMIT TRANSACTION;
+PRINT '';
+PRINT 'Transaction committed successfully!';
 GO
 
 SET NOCOUNT OFF;
