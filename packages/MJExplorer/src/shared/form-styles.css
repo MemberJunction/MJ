@@ -80,30 +80,24 @@ button {
 
 /* Collapsible Panel Styles */
 .form-panels-container {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   padding: 16px;
   background-color: #F5F6FA;
-  grid-auto-rows: min-content;
-  align-items: start;
 }
 
-/* Responsive multi-column layout for wider screens */
-@media (min-width: 1400px) {
-  .form-panels-container {
-    grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
-  }
+/* All sections take full width */
+.form-panels-container > .form-card,
+.form-panels-container .related-entity-grid {
+  width: 100%;
+}
 
-  /* Force related entities to take full width by default */
-  .form-panels-container .form-card.related-entity {
-    grid-column: 1 / -1;
-  }
-
-  /* Allow related entities to be side-by-side if they have the allow-grid class */
-  .form-panels-container .form-card.related-entity.allow-grid {
-    grid-column: auto;
-  }
+/* Related entity grid container - all items full width */
+.form-panels-container .related-entity-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .form-card {
@@ -286,4 +280,24 @@ button {
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* Row count badge for related entity sections */
+.collapsible-title .row-count-badge {
+  background: #10b981;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+/* Search highlighting */
+.collapsible-title h3 .search-highlight {
+  background-color: #fef08a;
+  color: #854d0e;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 700;
 }
