@@ -1,5 +1,5 @@
-# Build output file - generated during testing
-build_output.txt
+# Generated files directory
+tmp/
 
-# Build script with credentials
-run_build.sh
+# Installation script with credentials (user copies from template)
+install.sh

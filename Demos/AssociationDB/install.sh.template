@@ -1,0 +1,22 @@
+#!/bin/bash
+# Install Association Sample Database
+# Main entry point - generates SQL and executes against database
+
+cd "$(dirname "$0")"
+
+# Create tmp directory if it doesn't exist
+mkdir -p tmp
+
+# Step 1: Generate the combined SQL file
+echo "Step 1: Generating combined SQL file..."
+./prepare_build.sh
+
+# Step 2: Execute against database
+echo ""
+echo "Step 2: Installing to database..."
+sqlcmd -S localhost -d MJ_2_115_0 -U sa -P 'YOUR_PASSWORD_HERE' \
+  -i tmp/combined_build.sql -o tmp/build_output.txt
+
+echo ""
+echo "Installation complete!"
+echo "Check tmp/build_output.txt for results."

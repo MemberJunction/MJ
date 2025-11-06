@@ -1,13 +1,13 @@
 #!/bin/bash
-# Build and run the Association DB - combines all SQL files then executes
-# User must add credentials: -U <username> -P <password>
+# Prepare Association DB Build - Generates combined SQL file from source files
+# This script only generates the SQL file, it does not execute against the database
 
 cd "$(dirname "$0")"
 
-echo "Building combined SQL file..."
+echo "Generating combined SQL file..."
 
-# Output file
-OUTPUT="combined_build.sql"
+# Output file goes in tmp directory
+OUTPUT="tmp/combined_build.sql"
 
 # Start fresh
 > "$OUTPUT"
@@ -181,10 +181,6 @@ SET NOCOUNT OFF;
 GO
 EOF
 
-echo "Combined SQL file created: $OUTPUT"
+echo "Combined SQL file generated: $OUTPUT"
 echo ""
-echo "To execute, run:"
-echo "  sqlcmd -S <server> -d <database> -U <username> -P <password> -i $OUTPUT -o build_output.txt"
-echo ""
-echo "Example:"
-echo "  sqlcmd -S localhost -d MJ_2_115_0 -U sa -P 'yourpassword' -i $OUTPUT -o build_output.txt"
+echo "To execute against database, run: ./install.sh"

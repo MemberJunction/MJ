@@ -48,69 +48,72 @@ This sample database provides a fully functional, data-rich environment for test
 
 ### Installation Steps
 
-1. **Ensure clean database**:
-   ```sql
-   -- Create new database or use existing MemberJunction database
-   -- The schema files use conditional creation (IF NOT EXISTS)
+**Option 1: Automated Installation (Recommended)**
+
+1. **Copy the installation script template**:
+   ```bash
+   cp install.sh.template install.sh
    ```
 
-2. **Run the master build script**:
+2. **Edit install.sh with your database credentials**:
+   - Update server name, database name, username, and password
 
-   **Option A: With Documentation (Default)**
+3. **Run the installer**:
+   ```bash
+   ./install.sh
+   ```
+
+   This will:
+   - Generate the combined SQL file (in `tmp/combined_build.sql`)
+   - Execute it against your database
+   - Save output to `tmp/build_output.txt`
+
+**Option 2: Manual Installation via SQLCMD Mode**
+
+If you prefer to run via SSMS or want more control:
+
+1. **From SSMS (enable SQLCMD Mode: Query → SQLCMD Mode)**:
    ```sql
-   -- From SSMS (enable SQLCMD Mode: Query → SQLCMD Mode)
    USE YourMJDatabase;
    GO
    :r MASTER_BUILD_AssociationDB.sql
+   ```
 
-   -- From sqlcmd
+2. **From command line**:
+   ```bash
    sqlcmd -S localhost -d YourMJDatabase -i MASTER_BUILD_AssociationDB.sql
    ```
 
-   **Option B: Without Documentation**
+**Verify Installation**:
+```sql
+-- Check record counts
+SELECT 'Members' as Entity, COUNT(*) as Count FROM AssociationDemo.Member
+UNION ALL
+SELECT 'Events', COUNT(*) FROM AssociationDemo.Event
+UNION ALL
+SELECT 'Courses', COUNT(*) FROM AssociationDemo.Course
+UNION ALL
+SELECT 'Campaigns', COUNT(*) FROM AssociationDemo.Campaign;
+```
 
-   Useful for testing auto-documentation tools:
-   ```sql
-   -- From SSMS (enable SQLCMD Mode: Query → SQLCMD Mode)
-   :setvar INCLUDE_DOCUMENTATION 0
-   USE YourMJDatabase;
-   GO
-   :r MASTER_BUILD_AssociationDB.sql
-
-   -- From sqlcmd
-   sqlcmd -S localhost -d YourMJDatabase -v INCLUDE_DOCUMENTATION=0 -i MASTER_BUILD_AssociationDB.sql
-   ```
-
-3. **Verify the installation**:
-   ```sql
-   -- Check record counts
-   SELECT 'Members' as Entity, COUNT(*) as Count FROM AssociationDemo.Member
-   UNION ALL
-   SELECT 'Events', COUNT(*) FROM AssociationDemo.Event
-   UNION ALL
-   SELECT 'Courses', COUNT(*) FROM AssociationDemo.Course
-   UNION ALL
-   SELECT 'Campaigns', COUNT(*) FROM AssociationDemo.Campaign;
-   ```
-
-4. **Run MemberJunction CodeGen** (if applicable):
-   ```bash
-   # Generate entity classes and database objects
-   npm run codegen
-   ```
+**Run CodeGen** (if using MemberJunction framework):
+```bash
+npm run codegen
+```
 
 ## 📁 Project Structure
 
 ```
 AssociationDB/
 ├── README.md                              # This file
-├── MASTER_BUILD_AssociationDB.sql         # Master build script (runs everything)
+├── install.sh.template                    # Installation script template (copy and configure)
+├── prepare_build.sh                       # Generates combined SQL file
+├── MASTER_BUILD_AssociationDB.sql         # Alternative SQLCMD entry point
 │
 ├── schema/                                # Schema definition files (consolidated in AssociationDemo)
 │   ├── V001__create_schema.sql           # Creates AssociationDemo schema
-│   ├── V001__schema_documentation.sql    # Schema description (optional)
-│   ├── V002__core_tables.sql             # All domain tables (membership, events, learning, finance, etc.)
-│   └── V002__table_documentation.sql     # Table and column descriptions (optional)
+│   ├── V002__create_tables.sql           # All 27 tables consolidated
+│   └── V003__table_documentation.sql     # Extended properties for documentation
 │
 ├── data/                                  # Sample data population files
 │   ├── 00_parameters.sql                 # Date parameters and UUID declarations
@@ -120,6 +123,10 @@ AssociationDB/
 │   ├── 04_finance_data.sql               # Invoices, payments for all transactions
 │   ├── 05_marketing_email_data.sql       # Campaigns, segments, email sends
 │   └── 06_chapters_governance_data.sql   # Chapters, committees, board data
+│
+├── tmp/                                   # Generated files (gitignored)
+│   ├── combined_build.sql                # Generated during installation
+│   └── build_output.txt                  # Execution output
 │
 └── docs/                                  # Documentation
     ├── SCHEMA_OVERVIEW.md                # Detailed schema documentation
