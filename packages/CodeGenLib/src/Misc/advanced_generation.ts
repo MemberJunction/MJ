@@ -12,7 +12,7 @@ export type CheckConstraintParserResult = { Description: string, Code: string, M
 export type SmartFieldIdentificationResult = {
     nameField: string;
     nameFieldReason: string;
-    defaultInView: string;
+    defaultInView: string[];
     defaultInViewReason: string;
     confidence: 'high' | 'medium' | 'low';
 }
@@ -134,7 +134,6 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<SmartFieldIdentificationResult>(params);
 
             if (result.success && result.result) {
-                LogStatus(`Smart field identification for ${entity.Name}: ${result.result.nameField} (confidence: ${result.result.confidence})`);
                 return result.result;
             } else {
                 LogError('AdvancedGeneration', `Smart field identification failed: ${result.errorMessage}`);
@@ -231,7 +230,6 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<FormLayoutResult>(params);
 
             if (result.success && result.result) {
-                LogStatus(`Form layout generated for ${entity.Name}: ${result.result.fieldCategories.length} field categories`);
                 return result.result;
             } else {
                 LogError('AdvancedGeneration', `Form layout generation failed: ${result.errorMessage}`);

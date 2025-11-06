@@ -1941,13 +1941,25 @@ NumberedRows AS (
       try {
          const ag = new AdvancedGeneration();
          if (!ag.enabled) {
-            logStatus('      Advanced Generation is disabled, skipping...');
             return true;
          }
 
-         logStatus('      Advanced Generation enabled, processing entities...');
+         // Get list of entities to process (only new or modified)
+         // Deduplicate in case an entity appears in both lists
+         const entitiesToProcess = [
+            ...new Set([
+               ...ManageMetadataBase.newEntityList,
+               ...ManageMetadataBase.modifiedEntityList
+            ])
+         ];
 
-         // Get all non-virtual entities that are not in excluded schemas
+         if (entitiesToProcess.length === 0) {
+            return true;
+         }
+
+         logStatus(`      Advanced Generation enabled, processing ${entitiesToProcess.length} entities...`);
+
+         // Get entity details for entities that need processing
          const entitiesSQL = `
             SELECT
                e.ID,
@@ -1959,6 +1971,7 @@ NumberedRows AS (
                [${mj_core_schema()}].vwEntities e
             WHERE
                e.VirtualEntity = 0
+               AND e.Name IN (${entitiesToProcess.map(name => `'${name}'`).join(',')})
                AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
             ORDER BY
                e.Name
@@ -1967,77 +1980,136 @@ NumberedRows AS (
          const entitiesResult = await pool.request().query(entitiesSQL);
          const entities = entitiesResult.recordset;
 
-         let processedCount = 0;
-         let errorCount = 0;
-
-         for (const entity of entities) {
-            try {
-               // Get entity fields for analysis
-               const fieldsSQL = `
-                  SELECT
-                     ef.ID,
-                     ef.Name,
-                     ef.Type,
-                     ef.AllowsNull,
-                     ef.IsPrimaryKey,
-                     ef.IsUnique,
-                     ef.Description,
-                     ef.AutoUpdateIsNameField,
-                     ef.AutoUpdateDefaultInView,
-                     ef.AutoUpdateCategory
-                  FROM
-                     [${mj_core_schema()}].vwEntityFields ef
-                  WHERE
-                     ef.EntityID = '${entity.ID}'
-                  ORDER BY
-                     ef.Sequence
-               `;
-
-               const fieldsResult = await pool.request().query(fieldsSQL);
-               const fields = fieldsResult.recordset;
-
-               // Smart Field Identification
-               // Only run if at least one field allows auto-update
-               if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView)) {
-                  const fieldAnalysis = await ag.identifyFields({
-                     Name: entity.Name,
-                     Description: entity.Description,
-                     Fields: fields
-                  }, currentUser);
-
-                  if (fieldAnalysis) {
-                     await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
-                     logStatus(`         Applied smart field identification for ${entity.Name}`);
-                  }
-               }
-
-               // Form Layout Generation
-               // Only run if at least one field allows auto-update
-               if (fields.some((f: any) => f.AutoUpdateCategory)) {
-                  const layoutAnalysis = await ag.generateFormLayout({
-                     Name: entity.Name,
-                     Description: entity.Description,
-                     Fields: fields
-                  }, currentUser);
-
-                  if (layoutAnalysis) {
-                     await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis);
-                     logStatus(`         Applied form layout for ${entity.Name}`);
-                  }
-               }
-
-               processedCount++;
-            } catch (error) {
-               logError(`         Error processing entity ${entity.Name}: ${error}`);
-               errorCount++;
-            }
+         if (entities.length === 0) {
+            return true;
          }
 
-         logStatus(`      Advanced Generation complete: ${processedCount} entities processed, ${errorCount} errors`);
-         return errorCount === 0;
+         // Get ALL fields for ALL entities in a single query
+         const entityIds = entities.map((e: any) => `'${e.ID}'`).join(',');
+         const fieldsSQL = `
+            SELECT
+               ef.EntityID,
+               ef.ID,
+               ef.Name,
+               ef.Type,
+               ef.AllowsNull,
+               ef.IsPrimaryKey,
+               ef.IsUnique,
+               ef.Description,
+               ef.AutoUpdateIsNameField,
+               ef.AutoUpdateDefaultInView,
+               ef.AutoUpdateCategory
+            FROM
+               [${mj_core_schema()}].vwEntityFields ef
+            WHERE
+               ef.EntityID IN (${entityIds})
+            ORDER BY
+               ef.EntityID,
+               ef.Sequence
+         `;
+
+         const fieldsResult = await pool.request().query(fieldsSQL);
+         const allFields = fieldsResult.recordset;
+
+         // Process entities in batches with parallelization
+         return await this.processEntitiesBatched(pool, entities, allFields, ag, currentUser);
       } catch (error) {
          logError(`Advanced Generation failed: ${error}`);
          return false;
+      }
+   }
+
+   /**
+    * Process entities in batches with parallel execution
+    * @param pool Database connection pool
+    * @param entities Entities to process
+    * @param allFields All fields for all entities (will be filtered per entity)
+    * @param ag AdvancedGeneration instance
+    * @param currentUser User context
+    * @param batchSize Number of entities to process in parallel (default 5)
+    */
+   protected async processEntitiesBatched(
+      pool: sql.ConnectionPool,
+      entities: any[],
+      allFields: any[],
+      ag: AdvancedGeneration,
+      currentUser: UserInfo,
+      batchSize: number = 5
+   ): Promise<boolean> {
+      let processedCount = 0;
+      let errorCount = 0;
+
+      // Process in batches
+      for (let i = 0; i < entities.length; i += batchSize) {
+         const batch = entities.slice(i, i + batchSize);
+
+         // Process batch in parallel
+         const batchResults = await Promise.allSettled(
+            batch.map(entity => this.processEntityAdvancedGeneration(pool, entity, allFields, ag, currentUser))
+         );
+
+         // Tally results
+         for (const result of batchResults) {
+            if (result.status === 'fulfilled') {
+               processedCount++;
+            } else {
+               errorCount++;
+               logError(`         Error processing entity: ${result.reason}`);
+            }
+         }
+
+         logStatus(`      Progress: ${processedCount}/${entities.length} entities processed`);
+      }
+
+      logStatus(`      Advanced Generation complete: ${processedCount} entities processed, ${errorCount} errors`);
+      return errorCount === 0;
+   }
+
+   /**
+    * Process advanced generation for a single entity
+    * @param pool Database connection pool
+    * @param entity Entity to process
+    * @param allFields All fields for all entities (will be filtered for this entity)
+    * @param ag AdvancedGeneration instance
+    * @param currentUser User context
+    */
+   protected async processEntityAdvancedGeneration(
+      pool: sql.ConnectionPool,
+      entity: any,
+      allFields: any[],
+      ag: AdvancedGeneration,
+      currentUser: UserInfo
+   ): Promise<void> {
+      // Filter fields for this entity (client-side filtering)
+      const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
+
+      // Smart Field Identification
+      // Only run if at least one field allows auto-update
+      if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView)) {
+         const fieldAnalysis = await ag.identifyFields({
+            Name: entity.Name,
+            Description: entity.Description,
+            Fields: fields
+         }, currentUser);
+
+         if (fieldAnalysis) {
+            await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+         }
+      }
+
+      // Form Layout Generation
+      // Only run if at least one field allows auto-update
+      if (fields.some((f: any) => f.AutoUpdateCategory)) {
+         const layoutAnalysis = await ag.generateFormLayout({
+            Name: entity.Name,
+            Description: entity.Description,
+            Fields: fields
+         }, currentUser);
+
+         if (layoutAnalysis) {
+            await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis);
+            logStatus(`         Applied form layout for ${entity.Name}`);
+         }
       }
    }
 
@@ -2050,28 +2122,39 @@ NumberedRows AS (
       fields: any[],
       result: SmartFieldIdentificationResult
    ): Promise<void> {
-      // Find the fields for the identified results
+      const sqlStatements: string[] = [];
+
+      // Find the name field (exactly one)
       const nameField = fields.find(f => f.Name === result.nameField);
-      const defaultInViewField = fields.find(f => f.Name === result.defaultInView);
 
       if (nameField && nameField.AutoUpdateIsNameField) {
-         const updateSQL = `
+         sqlStatements.push(`
             UPDATE [${mj_core_schema()}].EntityField
             SET IsNameField = 1
             WHERE ID = '${nameField.ID}'
             AND AutoUpdateIsNameField = 1
-         `;
-         await this.LogSQLAndExecute(pool, updateSQL, `Set IsNameField for ${result.nameField}`, false);
+         `);
       }
 
-      if (defaultInViewField && defaultInViewField.AutoUpdateDefaultInView) {
-         const updateSQL = `
+      // Find all default in view fields (one or more)
+      const defaultInViewFields = fields.filter(f =>
+         result.defaultInView.includes(f.Name) && f.AutoUpdateDefaultInView
+      );
+
+      // Build update statements for all default in view fields
+      for (const field of defaultInViewFields) {
+         sqlStatements.push(`
             UPDATE [${mj_core_schema()}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '${defaultInViewField.ID}'
+            WHERE ID = '${field.ID}'
             AND AutoUpdateDefaultInView = 1
-         `;
-         await this.LogSQLAndExecute(pool, updateSQL, `Set DefaultInView for ${result.defaultInView}`, false);
+         `);
+      }
+
+      // Execute all updates in one batch
+      if (sqlStatements.length > 0) {
+         const combinedSQL = sqlStatements.join('\n');
+         await this.LogSQLAndExecute(pool, combinedSQL, `Set field properties for entity`, false);
       }
    }
 
