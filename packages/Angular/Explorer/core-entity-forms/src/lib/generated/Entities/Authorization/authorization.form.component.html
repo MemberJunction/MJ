@@ -16,27 +16,14 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Authorization Roles" [Visible]="record.IsSaved"> 
-                        Authorization Roles
+                    <mj-tab Name="Action Authorizations" [Visible]="record.IsSaved"> 
+                        Action Authorizations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','AuthorizationID')"  
-                            [NewRecordValues]="NewRecordValues('Authorization Roles')"
-                            [AllowLoad]="IsCurrentTab('Authorization Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Authorizations" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-shield-halved tab-header-icon"></span>Authorizations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorizations','ParentID')"  
-                            [NewRecordValues]="NewRecordValues('Authorizations')"
-                            [AllowLoad]="IsCurrentTab('Authorizations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations','AuthorizationID')"  
+                            [NewRecordValues]="NewRecordValues('Action Authorizations')"
+                            [AllowLoad]="IsCurrentTab('Action Authorizations')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -68,14 +55,27 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Action Authorizations" [Visible]="record.IsSaved"> 
-                        Action Authorizations
+                    <mj-tab Name="Authorization Roles" [Visible]="record.IsSaved"> 
+                        Authorization Roles
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations','AuthorizationID')"  
-                            [NewRecordValues]="NewRecordValues('Action Authorizations')"
-                            [AllowLoad]="IsCurrentTab('Action Authorizations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','AuthorizationID')"  
+                            [NewRecordValues]="NewRecordValues('Authorization Roles')"
+                            [AllowLoad]="IsCurrentTab('Authorization Roles')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Authorizations" [Visible]="record.IsSaved"> 
+                        <span class="fa-solid fa-shield-halved tab-header-icon"></span>Authorizations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Authorizations','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Authorizations')"
+                            [AllowLoad]="IsCurrentTab('Authorizations')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

@@ -16,6 +16,19 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="Authorization Roles" [Visible]="record.IsSaved"> 
+                        Authorization Roles
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','RoleName')"  
+                            [NewRecordValues]="NewRecordValues('Authorization Roles')"
+                            [AllowLoad]="IsCurrentTab('Authorization Roles')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Employee Roles" [Visible]="record.IsSaved"> 
                         Employee Roles
                     </mj-tab>
@@ -42,32 +55,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="User Roles" [Visible]="record.IsSaved"> 
-                        User Roles
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('User Roles','RoleName')"  
-                            [NewRecordValues]="NewRecordValues('User Roles')"
-                            [AllowLoad]="IsCurrentTab('User Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Authorization Roles" [Visible]="record.IsSaved"> 
-                        Authorization Roles
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','RoleName')"  
-                            [NewRecordValues]="NewRecordValues('Authorization Roles')"
-                            [AllowLoad]="IsCurrentTab('Authorization Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Query Permissions" [Visible]="record.IsSaved"> 
                         Query Permissions
                     </mj-tab>
@@ -76,6 +63,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','RoleName')"  
                             [NewRecordValues]="NewRecordValues('Query Permissions')"
                             [AllowLoad]="IsCurrentTab('Query Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="User Roles" [Visible]="record.IsSaved"> 
+                        User Roles
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('User Roles','RoleName')"  
+                            [NewRecordValues]="NewRecordValues('User Roles')"
+                            [AllowLoad]="IsCurrentTab('User Roles')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

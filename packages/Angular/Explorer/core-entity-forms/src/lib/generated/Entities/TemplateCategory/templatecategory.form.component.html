@@ -16,19 +16,6 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Templates" [Visible]="record.IsSaved"> 
-                        <span class="fa-regular fa-rectangle-list tab-header-icon"></span>Templates
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Templates','CategoryID')"  
-                            [NewRecordValues]="NewRecordValues('Templates')"
-                            [AllowLoad]="IsCurrentTab('Templates')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Template Categories" [Visible]="record.IsSaved"> 
                         Template Categories
                     </mj-tab>
@@ -37,6 +24,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Template Categories','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Template Categories')"
                             [AllowLoad]="IsCurrentTab('Template Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Templates" [Visible]="record.IsSaved"> 
+                        <span class="fa-regular fa-rectangle-list tab-header-icon"></span>Templates
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Templates','CategoryID')"  
+                            [NewRecordValues]="NewRecordValues('Templates')"
+                            [AllowLoad]="IsCurrentTab('Templates')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

@@ -16,6 +16,19 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="Content Items" [Visible]="record.IsSaved"> 
+                        Content Items
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Items','ContentSourceID')"  
+                            [NewRecordValues]="NewRecordValues('Content Items')"
+                            [AllowLoad]="IsCurrentTab('Content Items')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Content Process Runs" [Visible]="record.IsSaved"> 
                         Content Process Runs
                     </mj-tab>
@@ -37,19 +50,6 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Content Source Params','ContentSourceID')"  
                             [NewRecordValues]="NewRecordValues('Content Source Params')"
                             [AllowLoad]="IsCurrentTab('Content Source Params')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Content Items" [Visible]="record.IsSaved"> 
-                        Content Items
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Content Items','ContentSourceID')"  
-                            [NewRecordValues]="NewRecordValues('Content Items')"
-                            [AllowLoad]="IsCurrentTab('Content Items')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

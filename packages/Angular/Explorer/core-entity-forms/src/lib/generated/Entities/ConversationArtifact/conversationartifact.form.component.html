@@ -16,19 +16,6 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="MJ: Conversation Artifact Versions" [Visible]="record.IsSaved"> 
-                        MJ: Conversation Artifact Versions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Versions','ConversationArtifactID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions')"
-                            [AllowLoad]="IsCurrentTab('MJ: Conversation Artifact Versions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: Conversation Artifact Permissions" [Visible]="record.IsSaved"> 
                         MJ: Conversation Artifact Permissions
                     </mj-tab>
@@ -37,6 +24,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Permissions','ConversationArtifactID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Permissions')"
                             [AllowLoad]="IsCurrentTab('MJ: Conversation Artifact Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Conversation Artifact Versions" [Visible]="record.IsSaved"> 
+                        MJ: Conversation Artifact Versions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Versions','ConversationArtifactID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions')"
+                            [AllowLoad]="IsCurrentTab('MJ: Conversation Artifact Versions')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

@@ -16,14 +16,14 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="MJ: Projects" [Visible]="record.IsSaved"> 
-                        MJ: Projects
+                    <mj-tab Name="MJ: Artifacts" [Visible]="record.IsSaved"> 
+                        MJ: Artifacts
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Projects')"
-                            [AllowLoad]="IsCurrentTab('MJ: Projects')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','EnvironmentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
+                            [AllowLoad]="IsCurrentTab('MJ: Artifacts')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -42,27 +42,14 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Artifacts" [Visible]="record.IsSaved"> 
-                        MJ: Artifacts
+                    <mj-tab Name="MJ: Projects" [Visible]="record.IsSaved"> 
+                        MJ: Projects
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
-                            [AllowLoad]="IsCurrentTab('MJ: Artifacts')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
-                        MJ: Tasks
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Tasks')"
-                            [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','EnvironmentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Projects')"
+                            [AllowLoad]="IsCurrentTab('MJ: Projects')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -76,6 +63,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','EnvironmentID')"  
                             [NewRecordValues]="NewRecordValues('Dashboards')"
                             [AllowLoad]="IsCurrentTab('Dashboards')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
+                        MJ: Tasks
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','EnvironmentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                            [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

@@ -16,27 +16,14 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Lists" [Visible]="record.IsSaved"> 
-                        Lists
+                    <mj-tab Name="Company Integration Record Maps" [Visible]="record.IsSaved"> 
+                        Company Integration Record Maps
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Lists','CompanyIntegrationID')"  
-                            [NewRecordValues]="NewRecordValues('Lists')"
-                            [AllowLoad]="IsCurrentTab('Lists')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Employee Company Integrations" [Visible]="record.IsSaved"> 
-                        Employee Company Integrations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations','CompanyIntegrationID')"  
-                            [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
-                            [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Record Maps','CompanyIntegrationID')"  
+                            [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
+                            [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -55,14 +42,27 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Company Integration Record Maps" [Visible]="record.IsSaved"> 
-                        Company Integration Record Maps
+                    <mj-tab Name="Employee Company Integrations" [Visible]="record.IsSaved"> 
+                        Employee Company Integrations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Record Maps','CompanyIntegrationID')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Record Maps')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations','CompanyIntegrationID')"  
+                            [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
+                            [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Lists" [Visible]="record.IsSaved"> 
+                        Lists
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Lists','CompanyIntegrationID')"  
+                            [NewRecordValues]="NewRecordValues('Lists')"
+                            [AllowLoad]="IsCurrentTab('Lists')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

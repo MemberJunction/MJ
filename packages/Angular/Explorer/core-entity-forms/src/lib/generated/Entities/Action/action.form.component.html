@@ -73,19 +73,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Scheduled Actions" [Visible]="record.IsSaved"> 
-                        Scheduled Actions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Actions','ActionID')"  
-                            [NewRecordValues]="NewRecordValues('Scheduled Actions')"
-                            [AllowLoad]="IsCurrentTab('Scheduled Actions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="AIAgent Actions" [Visible]="record.IsSaved"> 
                         AIAgent Actions
                     </mj-tab>
@@ -94,6 +81,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Actions','ActionID')"  
                             [NewRecordValues]="NewRecordValues('AI Agent Actions')"
                             [AllowLoad]="IsCurrentTab('AIAgent Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Scheduled Actions" [Visible]="record.IsSaved"> 
+                        Scheduled Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Actions','ActionID')"  
+                            [NewRecordValues]="NewRecordValues('Scheduled Actions')"
+                            [AllowLoad]="IsCurrentTab('Scheduled Actions')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
