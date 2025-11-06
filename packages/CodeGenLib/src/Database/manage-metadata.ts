@@ -76,7 +76,7 @@ export class ManageMetadataBase {
       let bSuccess = true;
       let start = new Date();
       logStatus('   Creating new entities...');
-      if (! await this.createNewEntities(pool)) {
+      if (! await this.createNewEntities(pool, currentUser)) {
          logError('   Error creating new entities');
          bSuccess = false;
       }
@@ -128,7 +128,7 @@ export class ManageMetadataBase {
       logStatus(`    > Managed entity relationships in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
 
       if (ManageMetadataBase.newEntityList.length > 0) {
-         await this.generateNewEntityDescriptions(pool, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
+         await this.generateNewEntityDescriptions(pool, md, currentUser); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
 
       const veResult = await this.manageVirtualEntities(pool)
@@ -790,58 +790,33 @@ export class ManageMetadataBase {
     * to be invoked, the EntityDescriptions feature must be enabled in the Advanced Generation configuration.
     * @param pool
     * @param md
+    * @param currentUser
     */
-   protected async generateNewEntityDescriptions(pool: sql.ConnectionPool, md: Metadata) {
+   protected async generateNewEntityDescriptions(pool: sql.ConnectionPool, md: Metadata, currentUser: UserInfo) {
       // for the list of new entities, go through and attempt to generate new entity descriptions
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityDescriptions')) {
          // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
-         const llm = ag.LLM;
-         const prompt = ag.getPrompt('EntityDescriptions');
-         const systemPrompt = prompt.systemPrompt;
-         const userMessage = prompt.userMessage + '\n\n';
-         // now loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
             const dataResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
-      const data = dataResult.recordset;
+            const data = dataResult.recordset;
             const fieldsResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID='${data[0].ID}'`);
-      const fields = fieldsResult.recordset;
-            const entityUserMessage = userMessage + `Entity Name: ${e},
-                                                     Base Table: ${data[0].BaseTable},
-                                                     Schema: ${data[0].SchemaName}.
-                                                     Fields:
-                                                     ${fields.map((f: { Name: any; Type: any; }) => `   ${f.Name}: ${f.Type}`).join('\n')}`;
-            const result = await llm.ChatCompletion({
-               model: ag.AIModel,
-               messages: [
-                  {
-                     role: 'system',
-                     content: systemPrompt
-                  },
-                  {
-                     role: 'user',
-                     content: entityUserMessage
-                  }
-               ]
-            })
-            if (result?.success) {
-               const resultText = result?.data.choices[0].message.content;
-               try {
-                  const structuredResult: EntityDescriptionResult = JSON.parse(resultText);
-                  if (structuredResult?.entityDescription && structuredResult.entityDescription.length > 0) {
-                     const sSQL = `UPDATE [${mj_core_schema()}].Entity SET Description = '${structuredResult.entityDescription}' WHERE Name = '${e}'`;
-                     await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
-                  }
-                  else {
-                     console.warn('   >>> Advanced Generation Error: LLM returned a blank entity description, skipping entity description for entity ' + e);
-                  }
-               }
-               catch (e) {
-                  console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e + '. Result from LLM: ' + resultText, e);
-               }
+            const fields = fieldsResult.recordset;
+
+            // Use new API to generate entity description
+            const result = await ag.generateEntityDescription(
+               e,
+               data[0].BaseTable,
+               fields.map((f: any) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
+               currentUser
+            );
+
+            if (result?.entityDescription && result.entityDescription.length > 0) {
+               const sSQL = `UPDATE [${mj_core_schema()}].Entity SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
+               await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
-               console.warn('   >>> Advanced Generation Error: LLM call failed, skipping entity description for entity ' + e);
+               console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e);
             }
          }
       }
@@ -1431,69 +1406,28 @@ NumberedRows AS (
 
       try {
          if (generateNewCode && configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
-            // feature is enabled, so let's call the LLM to generate a function for us
+            // feature is enabled, so let's call the AI to generate a function for us
             const ag = new AdvancedGeneration();
-            const llm = ag.LLM;
-            if (!llm) {
-               // we weren't able to get an LLM instance, so log an error and return
-               logError('   >>> Error generating validator function from check constraint. Unable to get an LLM instance.');
-               return returnResult;
-            }
-            await AIEngine.Instance.Config(false, currentUser); // make sure metadata loaded
-            const model = AIEngine.Instance.Models.find(m => {
-                const modelMatch = m.APINameOrName.trim().toLowerCase() === ag.AIModel.trim().toLowerCase();
-                if (!modelMatch) return false;
-
-                // Check if model has a vendor matching the specified vendor
-                const hasVendor = AIEngine.Instance.ModelVendors.some(mv =>
-                    mv.ModelID === m.ID &&
-                    mv.Vendor.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase() &&
-                    mv.Status === 'Active'
-                );
-                return hasVendor;
-            });
-            if (!model)
-               throw new Error(`   >>> Error generating validator function from check constraint. Unable to find AI Model with name ${ag.AIModel} and vendor ${ag.AIVendor}.`);
-
-            const prompt = ag.getPrompt('CheckConstraintParser');
             const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}${item.AllowsNull ? ' (nullable)' : ' (not null)'}`).join('\n');
-            const existingMethodNameBlock = generatedValidationFunctionName ? `Existing Method Name: ${generatedValidationFunctionName}\n Please reuse this SAME method name for the new generation` : '';
-            const markedUpSysPrompt = ag.fillTemplate(prompt.systemPrompt, {
-               ENTITY_FIELD_LIST: entityFieldListInfo,
-               EXISTING_METHOD_NAME: existingMethodNameBlock
-            }); // prompt.systemPrompt.replace(/{{ENTITY_FIELD_LIST}}/g, entityFieldListInfo);
-            const result = await llm.ChatCompletion({
-               messages: [
-                  {
-                     role: 'system',
-                     content: markedUpSysPrompt
-                  },
-                  {
-                     role: 'user',
-                     content: `${constraintDefinition}`
-                  }
-               ],
-               model: ag.AIModel,
-               responseFormat: 'JSON'
-            });
-            if (result && result.success) {
-               const jsonResult = result.data.choices[0].message.content;
-               const structuredResult = <any>SafeJSONParse(jsonResult);
-               if (structuredResult?.Description && structuredResult?.Code && structuredResult?.MethodName) {
-                  returnResult.functionText = structuredResult.Code;
-                  returnResult.functionName = structuredResult.MethodName;
-                  returnResult.functionDescription = structuredResult.Description;
-                  returnResult.aiModelID = model.ID;
 
-                  returnResult.wasGenerated = true; // we just generated this code
-                  returnResult.success = true;
-               }
-               else {
-                  logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM returned invalid result.`);
-               }
+            // Use new API to parse check constraint
+            const result = await ag.parseCheckConstraint(
+               constraintDefinition,
+               entityFieldListInfo,
+               generatedValidationFunctionName,
+               currentUser
+            );
+
+            if (result?.Description && result?.Code && result?.MethodName) {
+               returnResult.functionText = result.Code;
+               returnResult.functionName = result.MethodName;
+               returnResult.functionDescription = result.Description;
+               // Note: aiModelID will need to be retrieved from the prompt run if needed
+               returnResult.wasGenerated = true; // we just generated this code
+               returnResult.success = true;
             }
             else {
-               logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM call failed.`);
+               logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM returned invalid result.`);
             }
          }
       }
@@ -1653,7 +1587,7 @@ NumberedRows AS (
       return sWhere;
    }
 
-   protected async createNewEntities(pool: sql.ConnectionPool): Promise<boolean> {
+   protected async createNewEntities(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
       try   {
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwSQLTablesAndEntities WHERE EntityID IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
          const newEntitiesResult = await pool.request().query(sSQL);
@@ -1667,7 +1601,7 @@ NumberedRows AS (
                // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
                   // process each of the new entities
-                  await this.createNewEntity(pool, newEntities[i], md);
+                  await this.createNewEntity(pool, newEntities[i], md, currentUser);
                }
                await transaction.commit();
             } catch (e) {
@@ -1713,10 +1647,10 @@ NumberedRows AS (
       }
    }
 
-   protected async createNewEntityName(newEntity: any): Promise<string> {
+   protected async createNewEntityName(newEntity: any, currentUser: UserInfo): Promise<string> {
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityNames')) {
-         return this.newEntityNameWithAdvancedGeneration(ag, newEntity);
+         return this.newEntityNameWithAdvancedGeneration(ag, newEntity, currentUser);
       }
       else {
          return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
@@ -1746,44 +1680,13 @@ NumberedRows AS (
       return null; // nothing to do here, the DisplayName can be null as it will just end up being the entity name
    }
 
-   protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any): Promise<string> {
-      // get the LLM for this entity
-      const chat = ag.LLM;
-      const prompt = ag.getPrompt('EntityNames')
-      const systemPrompt = ag.fillTemplate(prompt.systemPrompt, newEntity);
-      const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
-      const result = await chat.ChatCompletion({
-         model: ag.AIModel,
-         messages: [
-            {
-               role: 'system',
-               content: systemPrompt
-            },
-            {
-               role: 'user',
-               content: userMessage
-            }
-         ]
-      })
-      if (result?.success) {
-         const resultText = result?.data.choices[0].message.content;
-         try {
-            const structuredResult: EntityNameResult = JSON.parse(resultText);
-            if (structuredResult?.entityName) {
-               return this.markupEntityName(newEntity.SchemaName, structuredResult.entityName);
-            }
-            else {
-               console.warn('   >>> Advanced Generation Error: LLM returned a blank entity name, falling back to simple generated entity name');
-               return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
-            }
-         }
-         catch (e) {
-            console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name. Result from LLM: ' + resultText, e);
-            return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
-         }
+   protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any, currentUser: UserInfo): Promise<string> {
+      const result = await ag.generateEntityName(newEntity.TableName, currentUser);
+      if (result?.entityName) {
+         return this.markupEntityName(newEntity.SchemaName, result.entityName);
       }
       else {
-         console.warn('   >>> Advanced Generation Error: LLM call failed, falling back to simple generated entity name.');
+         console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name');
          return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
    }
@@ -1827,12 +1730,12 @@ NumberedRows AS (
       return uuidv4();
    }
 
-   protected async createNewEntity(pool: sql.ConnectionPool, newEntity: any, md: Metadata) {
+   protected async createNewEntity(pool: sql.ConnectionPool, newEntity: any, md: Metadata, currentUser: UserInfo) {
       try {
          const {shouldCreate, validationMessage} = await this.shouldCreateNewEntity(pool, newEntity);
          if (shouldCreate) {
             // process a single new entity
-            let newEntityName: string = await this.createNewEntityName(newEntity);
+            let newEntityName: string = await this.createNewEntityName(newEntity, currentUser);
             const newEntityDisplayName = this.createNewEntityDisplayName(newEntity, newEntityName);
 
             let suffix = '';

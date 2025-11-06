@@ -1,14 +1,14 @@
 [
   {
     "fields": {
-      "Name": "CodeGen: Transitive Join Intelligence",
-      "Description": "Analyzes entity relationships to determine which additional fields should be included in transitive joins through junction tables",
+      "Name": "CodeGen: Entity Description Generation",
+      "Description": "Generates brief, user-friendly descriptions for entities based on table name and field list",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/codegen/transitive-join-intelligence.template.md",
+      "TemplateText": "@file:templates/codegen/entity-descriptions.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
-      "PowerPreference": "Balanced",
+      "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "MaxRetries": 2,
       "RetryDelayMS": 1000,
@@ -27,10 +27,10 @@
             "Priority": 1
           },
           "primaryKey": {
-            "ID": "02AA6B64-E5D8-495A-A78D-720D0D854F30"
+            "ID": "510D6A7A-FBBB-4B55-8DA8-A0028FCB37CC"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:38.091Z",
+            "lastModified": "2025-11-06T16:58:26.353Z",
             "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
           }
         },
@@ -42,21 +42,21 @@
             "Priority": 2
           },
           "primaryKey": {
-            "ID": "F56A58CC-7B7F-4678-8C68-9DC88B77AB26"
+            "ID": "43F593A5-DE74-4B41-8A11-6E4B6718C230"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:38.104Z",
+            "lastModified": "2025-11-06T16:58:26.366Z",
             "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "20B32494-268F-4673-BDE1-CDB64CF90B21"
+      "ID": "D33B976C-C409-4AF8-97BA-9CB44CAAC9F6"
     },
     "sync": {
-      "lastModified": "2025-11-06T16:58:38.051Z",
-      "checksum": "303b4747722b8e3b925ec4c6eb58bfb6c3aa8d9f6247bf7f31e6bc009181c988"
+      "lastModified": "2025-11-06T16:58:26.323Z",
+      "checksum": "e8fde78a87a870b226a0105b44f76efe69d0bd0d821f9e5c60c3525c75d1f142"
     }
   }
 ]

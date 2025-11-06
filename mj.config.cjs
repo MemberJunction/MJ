@@ -98,8 +98,8 @@ const codegenConfig = {
   },
   advancedGeneration: {
     enableAdvancedGeneration: true,
-    AIVendor: 'openai',
-    AIModel: 'gpt-4.1', // throw a powerful model at this - want best code generation possible!
+    // NOTE: Model configuration is now per-prompt in the AI Prompts table via the MJ: AI Prompt Models relationship.
+    // This allows different models for different prompts and automatic failover between vendors.
     features: [
       {
         name: 'EntityNames',
@@ -110,7 +110,7 @@ const codegenConfig = {
         name: 'DefaultInViewFields',
         description:
           'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
-        enabled: false,
+        enabled: true,
       },
       {
         name: 'EntityDescriptions',
@@ -126,13 +126,13 @@ const codegenConfig = {
         name: 'FormLayout',
         description:
           'Use AI to generate better layouts for forms. This includes using AI to determine the way to layout fields on each entity form. The field will still be laid out in the order they are defined in the entity, but the AI will determine the best way to layout the fields on the form. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
-        enabled: false,
+        enabled: true,
       },
       {
         name: 'FormTabs',
         description:
           "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
-        enabled: false,
+        enabled: true,
       },
       {
         name: 'ParseCheckConstraints',

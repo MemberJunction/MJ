@@ -1,17 +1,17 @@
 [
   {
     "fields": {
-      "Name": "CodeGen: Transitive Join Intelligence",
-      "Description": "Analyzes entity relationships to determine which additional fields should be included in transitive joins through junction tables",
+      "Name": "CodeGen: Check Constraint Parser",
+      "Description": "Parses SQL CHECK constraints and generates TypeScript validation methods with business-friendly descriptions",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/codegen/transitive-join-intelligence.template.md",
+      "TemplateText": "@file:templates/codegen/check-constraint-parser.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "ParallelizationMode": "None",
-      "MaxRetries": 2,
-      "RetryDelayMS": 1000,
+      "MaxRetries": 3,
+      "RetryDelayMS": 1500,
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
@@ -27,10 +27,10 @@
             "Priority": 1
           },
           "primaryKey": {
-            "ID": "02AA6B64-E5D8-495A-A78D-720D0D854F30"
+            "ID": "FBA6EAF8-3481-4052-A0AF-D59880C4BAFF"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:38.091Z",
+            "lastModified": "2025-11-06T16:58:22.882Z",
             "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
           }
         },
@@ -42,21 +42,21 @@
             "Priority": 2
           },
           "primaryKey": {
-            "ID": "F56A58CC-7B7F-4678-8C68-9DC88B77AB26"
+            "ID": "8FC26972-A24A-4363-A510-A32C121D3226"
           },
           "sync": {
-            "lastModified": "2025-11-06T16:58:38.104Z",
+            "lastModified": "2025-11-06T16:58:22.894Z",
             "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "20B32494-268F-4673-BDE1-CDB64CF90B21"
+      "ID": "8B635038-60E9-4591-8B2C-7F33338D58DC"
     },
     "sync": {
-      "lastModified": "2025-11-06T16:58:38.051Z",
-      "checksum": "303b4747722b8e3b925ec4c6eb58bfb6c3aa8d9f6247bf7f31e6bc009181c988"
+      "lastModified": "2025-11-06T16:58:22.838Z",
+      "checksum": "2d32bd9a7c16a4b920e67c0e45c51333ad39ca4212eaeafab1e9b5933f3b834c"
     }
   }
 ]
