@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description workflowengineid workflow engine id externalsystemrecordid external system record autorunenabled auto run enabled autorunintervalunits auto run interval units autoruninterval auto run interval subclassname subclass name __mj_createdat created at __mj_updatedat updated at autorunintervalminutes auto run interval minutes">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -101,7 +101,7 @@
         </div>
 
         <!-- Reports Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="reports">
+        <div class="form-card collapsible-card related-entity" data-section-name="reports" data-field-names="reports">
             <div class="collapsible-header" (click)="toggleSection('reports')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-solid fa-chart-line tab-header-icon"></i>
@@ -113,11 +113,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.reports" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Reports','OutputWorkflowID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Reports','OutputWorkflowID')"
                         [NewRecordValues]="NewRecordValues('Reports')"
-                        [AllowLoad]="IsCurrentTab('Reports')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('reports')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -125,7 +125,7 @@
         </div>
 
         <!-- Workflow Runs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="workflow runs">
+        <div class="form-card collapsible-card related-entity" data-section-name="workflow runs" data-field-names="workflow runs">
             <div class="collapsible-header" (click)="toggleSection('workflowRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -137,11 +137,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.workflowRuns" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Workflow Runs','WorkflowName')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Workflow Runs','WorkflowName')"
                         [NewRecordValues]="NewRecordValues('Workflow Runs')"
-                        [AllowLoad]="IsCurrentTab('Workflow Runs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('workflowRuns')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

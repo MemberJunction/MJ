@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="actionid action id name defaultvalue default value type valuetype value type isarray is array description isrequired is required __mj_createdat created at __mj_updatedat updated at action">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -101,7 +101,7 @@
         </div>
 
         <!-- Entity Action Params Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity action params">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity action params" data-field-names="entity action params">
             <div class="collapsible-header" (click)="toggleSection('entityActionParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -113,11 +113,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityActionParams" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params','ActionParamID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params','ActionParamID')"
                         [NewRecordValues]="NewRecordValues('Entity Action Params')"
-                        [AllowLoad]="IsCurrentTab('Entity Action Params')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityActionParams')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -125,7 +125,7 @@
         </div>
 
         <!-- Scheduled Action Params Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="scheduled action params">
+        <div class="form-card collapsible-card related-entity" data-section-name="scheduled action params" data-field-names="scheduled action params">
             <div class="collapsible-header" (click)="toggleSection('scheduledActionParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -137,11 +137,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.scheduledActionParams" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ActionParamID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ActionParamID')"
                         [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
-                        [AllowLoad]="IsCurrentTab('Scheduled Action Params')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('scheduledActionParams')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

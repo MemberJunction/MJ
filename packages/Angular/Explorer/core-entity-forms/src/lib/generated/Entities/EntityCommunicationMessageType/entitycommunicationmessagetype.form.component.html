@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="entityid entity id basemessagetypeid base message type id isactive is active __mj_createdat __mj _created at __mj_updatedat __mj _updated at entity basemessagetype base message type">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -75,7 +75,7 @@
         </div>
 
         <!-- Entity Communication Fields Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity communication fields">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity communication fields" data-field-names="entity communication fields">
             <div class="collapsible-header" (click)="toggleSection('entityCommunicationFields')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -87,11 +87,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityCommunicationFields" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Fields','EntityCommunicationMessageTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Fields','EntityCommunicationMessageTypeID')"
                         [NewRecordValues]="NewRecordValues('Entity Communication Fields')"
-                        [AllowLoad]="IsCurrentTab('Entity Communication Fields')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityCommunicationFields')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

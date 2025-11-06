@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name parentid parent id description userid user id __mj_createdat __mj _created at __mj_updatedat __mj _updated at defaultcacheenabled default cache enabled defaultcachettlminutes default cache ttl minutes defaultcachemaxsize default cache max size cacheinheritanceenabled cache inheritance enabled parent user rootparentid root parent id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -117,7 +117,7 @@
         </div>
 
         <!-- Queries Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="queries">
+        <div class="form-card collapsible-card related-entity" data-section-name="queries" data-field-names="queries">
             <div class="collapsible-header" (click)="toggleSection('queries')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-solid fa-clipboard-question tab-header-icon"></i>
@@ -129,11 +129,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queries" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Queries','CategoryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Queries','CategoryID')"
                         [NewRecordValues]="NewRecordValues('Queries')"
-                        [AllowLoad]="IsCurrentTab('Queries')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('queries')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -141,7 +141,7 @@
         </div>
 
         <!-- Query Categories Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="query categories">
+        <div class="form-card collapsible-card related-entity" data-section-name="query categories" data-field-names="query categories">
             <div class="collapsible-header" (click)="toggleSection('queryCategories')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -153,11 +153,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryCategories" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Query Categories','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Categories','ParentID')"
                         [NewRecordValues]="NewRecordValues('Query Categories')"
-                        [AllowLoad]="IsCurrentTab('Query Categories')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('queryCategories')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

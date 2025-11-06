@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description createdbyuserid created by user id actionid action id type cronexpression cron expression timezone status intervaldays interval days dayofweek day of week dayofmonth day of month month customcronexpression custom cron expression __mj_createdat created at __mj_updatedat updated at createdbyuser created by user action">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -145,7 +145,7 @@
         </div>
 
         <!-- Scheduled Action Params Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="scheduled action params">
+        <div class="form-card collapsible-card related-entity" data-section-name="scheduled action params" data-field-names="scheduled action params">
             <div class="collapsible-header" (click)="toggleSection('scheduledActionParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -157,11 +157,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.scheduledActionParams" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ScheduledActionID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ScheduledActionID')"
                         [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
-                        [AllowLoad]="IsCurrentTab('Scheduled Action Params')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('scheduledActionParams')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

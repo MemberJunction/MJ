@@ -104,12 +104,20 @@ export class GenerationInput {
     TabName: string;
 
     /**
+     * The unique camelCase key for the section in collapsible section-based forms.
+     * Used for deferred loading using the IsCurrentSection() method from BaseFormComponent.
+     * Allows components to optimize rendering by only loading data when the section is expanded.
+     */
+    SectionKey: string;
+
+    /**
      * Constructs a new GenerationInput with null/empty default values
      */
     public constructor() {
         this.Entity = null;
         this.RelationshipInfo = null;
         this.TabName = "";
+        this.SectionKey = "";
     }
 }
 

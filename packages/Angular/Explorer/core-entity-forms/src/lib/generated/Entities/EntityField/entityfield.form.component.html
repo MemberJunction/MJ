@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Core Identification Section -->
-        <div class="form-card collapsible-card" data-section-name="core identification">
+        <div class="form-card collapsible-card" data-section-name="core identification" data-field-names="entityid entity id name isvirtual is virtual isnamefield is name field fieldcodename field code name entity schemaname schema name basetable base table baseview base view entitycodename entity code name entityclassname entity class name">
             <div class="collapsible-header" (click)="toggleSection('coreIdentification')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-info-circle"></i>
@@ -119,7 +119,7 @@
         </div>
 
         <!-- User Interface Layout Section -->
-        <div class="form-card collapsible-card" data-section-name="user interface layout">
+        <div class="form-card collapsible-card" data-section-name="user interface layout" data-field-names="sequence displayname display name description autoupdatedescription auto update description category defaultinview default in view viewcelltemplate view cell template defaultcolumnwidth default column width includeingeneratedform include in generated form generatedformsection generated form section scopedefault scope default valuestopackwithschema values to pack with schema autoupdateisnamefield auto update is name field autoupdatedefaultinview auto update default in view autoupdatecategory auto update category">
             <div class="collapsible-header" (click)="toggleSection('userInterfaceLayout')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-user"></i>
@@ -242,7 +242,7 @@
         </div>
 
         <!-- Data Definition & Validation Section -->
-        <div class="form-card collapsible-card" data-section-name="data definition & validation">
+        <div class="form-card collapsible-card" data-section-name="data definition & validation" data-field-names="isprimarykey is primary key isunique is unique type length precision scale allowsnull allows null defaultvalue default value autoincrement auto increment valuelisttype value list type extendedtype extended type codetype code type allowupdateapi allow update api allowupdateinview allow update in view includeinusersearchapi include in user search api fulltextsearchenabled full text search enabled usersearchparamformatapi user search param format api">
             <div class="collapsible-header" (click)="toggleSection('dataDefinitionValidation')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-info-circle"></i>
@@ -379,7 +379,7 @@
         </div>
 
         <!-- Relationships & Linking Section -->
-        <div class="form-card collapsible-card" data-section-name="relationships & linking">
+        <div class="form-card collapsible-card" data-section-name="relationships & linking" data-field-names="relatedentityid relatedentity id relatedentityfieldname related entity field name includerelatedentitynamefieldinbaseview include related entity name field in base view relatedentitynamefieldmap related entity name field map relatedentitydisplaytype related entity display type entityidfieldname entity idfield name autoupdaterelatedentityinfo auto update related entity info relatedentity related entity relatedentityschemaname related entity schema name relatedentitybasetable related entity base table relatedentitybaseview related entity base view relatedentitycodename related entity code name relatedentityclassname related entity class name">
             <div class="collapsible-header" (click)="toggleSection('relationshipsLinking')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-truck"></i>
@@ -490,7 +490,7 @@
         </div>
 
         <!-- System Audit & Lifecycle Section -->
-        <div class="form-card collapsible-card" data-section-name="system audit & lifecycle">
+        <div class="form-card collapsible-card" data-section-name="system audit & lifecycle" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at status">
             <div class="collapsible-header" (click)="toggleSection('systemAuditLifecycle')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-cog"></i>
@@ -529,7 +529,7 @@
         </div>
 
         <!-- Entity Field Values Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity field values">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity field values" data-field-names="entity field values">
             <div class="collapsible-header" (click)="toggleSection('entityFieldValues')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -541,11 +541,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityFieldValues" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Field Values','EntityFieldID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Field Values','EntityFieldID')"
                         [NewRecordValues]="NewRecordValues('Entity Field Values')"
-                        [AllowLoad]="IsCurrentTab('Entity Field Values')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityFieldValues')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

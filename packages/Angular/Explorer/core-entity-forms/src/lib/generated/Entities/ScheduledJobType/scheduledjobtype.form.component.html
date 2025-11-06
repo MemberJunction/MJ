@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description driverclass driver class domainrunentity domain run entity domainrunentityfkey domain run entity f key notificationsavailable notifications available __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -78,7 +78,7 @@
         </div>
 
         <!-- MJ: Scheduled Jobs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: scheduled jobs">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: scheduled jobs" data-field-names="mj: scheduled jobs">
             <div class="collapsible-header" (click)="toggleSection('mJScheduledJobs')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -90,11 +90,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJScheduledJobs" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','JobTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','JobTypeID')"
                         [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
-                        [AllowLoad]="IsCurrentTab('MJ: Scheduled Jobs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJScheduledJobs')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

@@ -49,7 +49,10 @@ export class CompanyFormComponent extends BaseFormComponent {
 
         panels.forEach((panel: Element) => {
             const sectionName = panel.getAttribute('data-section-name') || '';
-            if (sectionName.includes(searchTerm)) {
+            const fieldNames = panel.getAttribute('data-field-names') || '';
+
+            // Show section if search term matches section name OR any field name
+            if (sectionName.includes(searchTerm) || fieldNames.includes(searchTerm)) {
                 panel.classList.remove('search-hidden');
             } else {
                 panel.classList.add('search-hidden');

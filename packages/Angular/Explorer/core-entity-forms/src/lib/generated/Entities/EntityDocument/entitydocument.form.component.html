@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name typeid type id entityid entity id vectordatabaseid vector database id status templateid template id aimodelid aimodel id potentialmatchthreshold potential match threshold absolutematchthreshold absolute match threshold __mj_createdat __mj _created at __mj_updatedat __mj _updated at type entity vectordatabase vector database template aimodel">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -162,7 +162,7 @@
         </div>
 
         <!-- Entity Document Runs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity document runs">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity document runs" data-field-names="entity document runs">
             <div class="collapsible-header" (click)="toggleSection('entityDocumentRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -174,11 +174,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityDocumentRuns" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Document Runs','EntityDocumentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Document Runs','EntityDocumentID')"
                         [NewRecordValues]="NewRecordValues('Entity Document Runs')"
-                        [AllowLoad]="IsCurrentTab('Entity Document Runs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityDocumentRuns')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -186,7 +186,7 @@
         </div>
 
         <!-- Entity Document Settings Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity document settings">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity document settings" data-field-names="entity document settings">
             <div class="collapsible-header" (click)="toggleSection('entityDocumentSettings')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -198,11 +198,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityDocumentSettings" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Document Settings','EntityDocumentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Document Settings','EntityDocumentID')"
                         [NewRecordValues]="NewRecordValues('Entity Document Settings')"
-                        [AllowLoad]="IsCurrentTab('Entity Document Settings')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityDocumentSettings')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -210,7 +210,7 @@
         </div>
 
         <!-- Entity Record Documents Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity record documents">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity record documents" data-field-names="entity record documents">
             <div class="collapsible-header" (click)="toggleSection('entityRecordDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -222,11 +222,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityRecordDocuments" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Record Documents','EntityDocumentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Record Documents','EntityDocumentID')"
                         [NewRecordValues]="NewRecordValues('Entity Record Documents')"
-                        [AllowLoad]="IsCurrentTab('Entity Record Documents')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityRecordDocuments')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

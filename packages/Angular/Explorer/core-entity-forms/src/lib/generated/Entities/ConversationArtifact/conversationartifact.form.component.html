@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description conversationid conversation id artifacttypeid artifact type id sharingscope sharing scope comments __mj_createdat created at __mj_updatedat updated at conversation artifacttype artifact type">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -114,7 +114,7 @@
         </div>
 
         <!-- MJ: Conversation Artifact Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifact permissions">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifact permissions" data-field-names="mj: conversation artifact permissions">
             <div class="collapsible-header" (click)="toggleSection('mJConversationArtifactPermissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -126,11 +126,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJConversationArtifactPermissions" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Permissions','ConversationArtifactID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Permissions','ConversationArtifactID')"
                         [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Permissions')"
-                        [AllowLoad]="IsCurrentTab('MJ: Conversation Artifact Permissions')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJConversationArtifactPermissions')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -138,7 +138,7 @@
         </div>
 
         <!-- MJ: Conversation Artifact Versions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifact versions">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifact versions" data-field-names="mj: conversation artifact versions">
             <div class="collapsible-header" (click)="toggleSection('mJConversationArtifactVersions')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -150,11 +150,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJConversationArtifactVersions" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Versions','ConversationArtifactID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Versions','ConversationArtifactID')"
                         [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions')"
-                        [AllowLoad]="IsCurrentTab('MJ: Conversation Artifact Versions')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJConversationArtifactVersions')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -162,7 +162,7 @@
         </div>
 
         <!-- Conversation Details Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="conversation details">
+        <div class="form-card collapsible-card related-entity" data-section-name="conversation details" data-field-names="conversation details">
             <div class="collapsible-header" (click)="toggleSection('conversationDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -174,11 +174,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.conversationDetails" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ArtifactID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ArtifactID')"
                         [NewRecordValues]="NewRecordValues('Conversation Details')"
-                        [AllowLoad]="IsCurrentTab('Conversation Details')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('conversationDetails')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description categoryid category id userid user id sharingscope sharing scope conversationid conversation id conversationdetailid conversation detail id datacontextid data context id configuration outputtriggertypeid output trigger type id outputformattypeid output format type id outputdeliverytypeid output delivery type id outputfrequency output frequency outputtargetemail output target email outputworkflowid output workflow id __mj_createdat created at __mj_updatedat updated at thumbnail environmentid environment id category user conversation datacontext data context outputtriggertype output trigger type outputformattype output format type outputdeliverytype output delivery type outputworkflow output workflow environment">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -256,7 +256,7 @@
         </div>
 
         <!-- Report Snapshots Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="report snapshots">
+        <div class="form-card collapsible-card related-entity" data-section-name="report snapshots" data-field-names="report snapshots">
             <div class="collapsible-header" (click)="toggleSection('reportSnapshots')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -268,11 +268,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.reportSnapshots" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Report Snapshots','ReportID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Report Snapshots','ReportID')"
                         [NewRecordValues]="NewRecordValues('Report Snapshots')"
-                        [AllowLoad]="IsCurrentTab('Report Snapshots')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('reportSnapshots')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -280,7 +280,7 @@
         </div>
 
         <!-- MJ: Report Versions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: report versions">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: report versions" data-field-names="mj: report versions">
             <div class="collapsible-header" (click)="toggleSection('mJReportVersions')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -292,11 +292,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJReportVersions" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report Versions','ReportID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report Versions','ReportID')"
                         [NewRecordValues]="NewRecordValues('MJ: Report Versions')"
-                        [AllowLoad]="IsCurrentTab('MJ: Report Versions')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJReportVersions')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -304,7 +304,7 @@
         </div>
 
         <!-- MJ: Report User States Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: report user states">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: report user states" data-field-names="mj: report user states">
             <div class="collapsible-header" (click)="toggleSection('mJReportUserStates')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -316,11 +316,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJReportUserStates" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report User States','ReportID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report User States','ReportID')"
                         [NewRecordValues]="NewRecordValues('MJ: Report User States')"
-                        [AllowLoad]="IsCurrentTab('MJ: Report User States')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJReportUserStates')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

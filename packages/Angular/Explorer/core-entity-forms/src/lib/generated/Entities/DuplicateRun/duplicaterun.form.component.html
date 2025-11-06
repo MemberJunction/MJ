@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="entityid entity id startedbyuserid started by user id sourcelistid source list id startedat started at endedat ended at approvalstatus approval status approvalcomments approval comments approvedbyuserid approved by user id processingstatus processing status processingerrormessage processing error message __mj_createdat created at __mj_updatedat updated at entity startedbyuser started by user sourcelist source list approvedbyuser approved by user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -142,7 +142,7 @@
         </div>
 
         <!-- Duplicate Run Details Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="duplicate run details">
+        <div class="form-card collapsible-card related-entity" data-section-name="duplicate run details" data-field-names="duplicate run details">
             <div class="collapsible-header" (click)="toggleSection('duplicateRunDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -154,11 +154,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.duplicateRunDetails" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Details','DuplicateRunID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Details','DuplicateRunID')"
                         [NewRecordValues]="NewRecordValues('Duplicate Run Details')"
-                        [AllowLoad]="IsCurrentTab('Duplicate Run Details')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('duplicateRunDetails')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

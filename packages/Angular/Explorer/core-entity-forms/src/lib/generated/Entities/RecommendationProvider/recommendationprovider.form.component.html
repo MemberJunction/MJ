@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -50,7 +50,7 @@
         </div>
 
         <!-- Recommendation Runs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="recommendation runs">
+        <div class="form-card collapsible-card related-entity" data-section-name="recommendation runs" data-field-names="recommendation runs">
             <div class="collapsible-header" (click)="toggleSection('recommendationRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -62,11 +62,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recommendationRuns" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Runs','RecommendationProviderID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Runs','RecommendationProviderID')"
                         [NewRecordValues]="NewRecordValues('Recommendation Runs')"
-                        [AllowLoad]="IsCurrentTab('Recommendation Runs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('recommendationRuns')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

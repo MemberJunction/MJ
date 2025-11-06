@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name parentid parent id description __mj_createdat created at __mj_updatedat updated at parent rootparentid root parent id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -73,7 +73,7 @@
         </div>
 
         <!-- AI Prompts Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai prompts">
+        <div class="form-card collapsible-card related-entity" data-section-name="ai prompts" data-field-names="ai prompts">
             <div class="collapsible-header" (click)="toggleSection('aIPrompts')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -85,11 +85,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIPrompts" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','CategoryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','CategoryID')"
                         [NewRecordValues]="NewRecordValues('AI Prompts')"
-                        [AllowLoad]="IsCurrentTab('AI Prompts')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('aIPrompts')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -97,7 +97,7 @@
         </div>
 
         <!-- AI Prompt Categories Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai prompt categories">
+        <div class="form-card collapsible-card related-entity" data-section-name="ai prompt categories" data-field-names="ai prompt categories">
             <div class="collapsible-header" (click)="toggleSection('aIPromptCategories')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -109,11 +109,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIPromptCategories" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompt Categories','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompt Categories','ParentID')"
                         [NewRecordValues]="NewRecordValues('AI Prompt Categories')"
-                        [AllowLoad]="IsCurrentTab('AI Prompt Categories')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('aIPromptCategories')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

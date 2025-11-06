@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description defaulturl default url classkey class key __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -64,7 +64,7 @@
         </div>
 
         <!-- Entity Documents Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity documents">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity documents" data-field-names="entity documents">
             <div class="collapsible-header" (click)="toggleSection('entityDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -76,11 +76,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityDocuments" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','ID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','ID')"
                         [NewRecordValues]="NewRecordValues('Entity Documents')"
-                        [AllowLoad]="IsCurrentTab('Entity Documents')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityDocuments')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -88,7 +88,7 @@
         </div>
 
         <!-- Vector Indexes Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="vector indexes">
+        <div class="form-card collapsible-card related-entity" data-section-name="vector indexes" data-field-names="vector indexes">
             <div class="collapsible-header" (click)="toggleSection('vectorIndexes')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -100,11 +100,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.vectorIndexes" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes','VectorDatabaseID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes','VectorDatabaseID')"
                         [NewRecordValues]="NewRecordValues('Vector Indexes')"
-                        [AllowLoad]="IsCurrentTab('Vector Indexes')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('vectorIndexes')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

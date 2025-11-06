@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description userid user id lastrefreshedat last refreshed at __mj_createdat created at __mj_updatedat updated at user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -91,7 +91,7 @@
         </div>
 
         <!-- Data Context Items Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="data context items">
+        <div class="form-card collapsible-card related-entity" data-section-name="data context items" data-field-names="data context items">
             <div class="collapsible-header" (click)="toggleSection('dataContextItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -103,11 +103,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.dataContextItems" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','DataContextID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','DataContextID')"
                         [NewRecordValues]="NewRecordValues('Data Context Items')"
-                        [AllowLoad]="IsCurrentTab('Data Context Items')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('dataContextItems')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -115,7 +115,7 @@
         </div>
 
         <!-- Reports Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="reports">
+        <div class="form-card collapsible-card related-entity" data-section-name="reports" data-field-names="reports">
             <div class="collapsible-header" (click)="toggleSection('reports')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-solid fa-chart-line tab-header-icon"></i>
@@ -127,11 +127,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.reports" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Reports','DataContextID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Reports','DataContextID')"
                         [NewRecordValues]="NewRecordValues('Reports')"
-                        [AllowLoad]="IsCurrentTab('Reports')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('reports')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -139,7 +139,7 @@
         </div>
 
         <!-- Conversations Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="conversations">
+        <div class="form-card collapsible-card related-entity" data-section-name="conversations" data-field-names="conversations">
             <div class="collapsible-header" (click)="toggleSection('conversations')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-regular fa-comments tab-header-icon"></i>
@@ -151,11 +151,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.conversations" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Conversations','DataContextID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Conversations','DataContextID')"
                         [NewRecordValues]="NewRecordValues('Conversations')"
-                        [AllowLoad]="IsCurrentTab('Conversations')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('conversations')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

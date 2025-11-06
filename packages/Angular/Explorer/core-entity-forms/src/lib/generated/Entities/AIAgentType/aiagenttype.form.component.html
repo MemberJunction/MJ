@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description systempromptid system prompt id isactive is active __mj_createdat created at __mj_updatedat updated at agentpromptplaceholder agent prompt placeholder driverclass driver class uiformsectionkey ui form section key uiformkey ui form key uiformsectionexpandedbydefault ui form section expanded by default systemprompt system prompt">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -108,7 +108,7 @@
         </div>
 
         <!-- AI Agents Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai agents">
+        <div class="form-card collapsible-card related-entity" data-section-name="ai agents" data-field-names="ai agents">
             <div class="collapsible-header" (click)="toggleSection('aIAgents')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -120,11 +120,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIAgents" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','TypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','TypeID')"
                         [NewRecordValues]="NewRecordValues('AI Agents')"
-                        [AllowLoad]="IsCurrentTab('AI Agents')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('aIAgents')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

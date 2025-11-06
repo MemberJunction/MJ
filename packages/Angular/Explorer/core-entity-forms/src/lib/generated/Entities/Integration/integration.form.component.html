@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description navigationbaseurl navigation base url classname class name importpath import path batchmaxrequestcount batch max request count batchrequestwaittime batch request wait time __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -104,7 +104,7 @@
         </div>
 
         <!-- Company Integrations Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="company integrations">
+        <div class="form-card collapsible-card related-entity" data-section-name="company integrations" data-field-names="company integrations">
             <div class="collapsible-header" (click)="toggleSection('companyIntegrations')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -116,11 +116,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.companyIntegrations" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integrations','IntegrationName')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integrations','IntegrationName')"
                         [NewRecordValues]="NewRecordValues('Company Integrations')"
-                        [AllowLoad]="IsCurrentTab('Company Integrations')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('companyIntegrations')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -128,7 +128,7 @@
         </div>
 
         <!-- URL Formats Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="url formats">
+        <div class="form-card collapsible-card related-entity" data-section-name="url formats" data-field-names="integration url formats">
             <div class="collapsible-header" (click)="toggleSection('uRLFormats')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -140,11 +140,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.uRLFormats" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Integration URL Formats','IntegrationID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Integration URL Formats','IntegrationID')"
                         [NewRecordValues]="NewRecordValues('Integration URL Formats')"
-                        [AllowLoad]="IsCurrentTab('URL Formats')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('uRLFormats')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -152,7 +152,7 @@
         </div>
 
         <!-- Record Changes Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="record changes">
+        <div class="form-card collapsible-card related-entity" data-section-name="record changes" data-field-names="record changes">
             <div class="collapsible-header" (click)="toggleSection('recordChanges')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -164,11 +164,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recordChanges" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Record Changes','IntegrationID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Record Changes','IntegrationID')"
                         [NewRecordValues]="NewRecordValues('Record Changes')"
-                        [AllowLoad]="IsCurrentTab('Record Changes')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('recordChanges')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

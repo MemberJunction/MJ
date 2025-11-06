@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description categoryid category id userprompt user prompt userid user id activeat active at disabledat disabled at isactive is active __mj_createdat created at __mj_updatedat updated at category user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -128,7 +128,7 @@
         </div>
 
         <!-- Template Contents Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="template contents">
+        <div class="form-card collapsible-card related-entity" data-section-name="template contents" data-field-names="template contents">
             <div class="collapsible-header" (click)="toggleSection('templateContents')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -140,11 +140,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.templateContents" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Template Contents','TemplateID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Template Contents','TemplateID')"
                         [NewRecordValues]="NewRecordValues('Template Contents')"
-                        [AllowLoad]="IsCurrentTab('Template Contents')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('templateContents')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -152,7 +152,7 @@
         </div>
 
         <!-- Template Params Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="template params">
+        <div class="form-card collapsible-card related-entity" data-section-name="template params" data-field-names="template params">
             <div class="collapsible-header" (click)="toggleSection('templateParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -164,11 +164,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.templateParams" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Template Params','TemplateID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Template Params','TemplateID')"
                         [NewRecordValues]="NewRecordValues('Template Params')"
-                        [AllowLoad]="IsCurrentTab('Template Params')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('templateParams')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -176,7 +176,7 @@
         </div>
 
         <!-- AI Prompts Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai prompts">
+        <div class="form-card collapsible-card related-entity" data-section-name="ai prompts" data-field-names="ai prompts">
             <div class="collapsible-header" (click)="toggleSection('aIPrompts')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -188,11 +188,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIPrompts" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TemplateID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TemplateID')"
                         [NewRecordValues]="NewRecordValues('AI Prompts')"
-                        [AllowLoad]="IsCurrentTab('AI Prompts')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('aIPrompts')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -200,7 +200,7 @@
         </div>
 
         <!-- Entity Documents Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity documents">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity documents" data-field-names="entity documents">
             <div class="collapsible-header" (click)="toggleSection('entityDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -212,11 +212,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityDocuments" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','TemplateID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','TemplateID')"
                         [NewRecordValues]="NewRecordValues('Entity Documents')"
-                        [AllowLoad]="IsCurrentTab('Entity Documents')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityDocuments')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

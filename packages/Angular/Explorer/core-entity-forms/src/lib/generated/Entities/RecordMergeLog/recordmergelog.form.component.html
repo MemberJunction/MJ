@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="entityid entity id survivingrecordid surviving record id initiatedbyuserid initiated by user id approvalstatus approval status approvedbyuserid approved by user id processingstatus processing status processingstartedat processing started at processingendedat processing ended at processinglog processing log comments __mj_createdat created at __mj_updatedat updated at entity initiatedbyuser initiated by user approvedbyuser approved by user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -133,7 +133,7 @@
         </div>
 
         <!-- Duplicate Run Detail Matches Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="duplicate run detail matches">
+        <div class="form-card collapsible-card related-entity" data-section-name="duplicate run detail matches" data-field-names="duplicate run detail matches">
             <div class="collapsible-header" (click)="toggleSection('duplicateRunDetailMatches')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -145,11 +145,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.duplicateRunDetailMatches" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','RecordMergeLogID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','RecordMergeLogID')"
                         [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
-                        [AllowLoad]="IsCurrentTab('Duplicate Run Detail Matches')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('duplicateRunDetailMatches')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -157,7 +157,7 @@
         </div>
 
         <!-- Record Merge Deletion Logs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="record merge deletion logs">
+        <div class="form-card collapsible-card related-entity" data-section-name="record merge deletion logs" data-field-names="record merge deletion logs">
             <div class="collapsible-header" (click)="toggleSection('recordMergeDeletionLogs')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -169,11 +169,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recordMergeDeletionLogs" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs','RecordMergeLogID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs','RecordMergeLogID')"
                         [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
-                        [AllowLoad]="IsCurrentTab('Record Merge Deletion Logs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('recordMergeDeletionLogs')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="conversationartifactid conversation artifact id version configuration content comments __mj_createdat created at __mj_updatedat updated at conversationartifact conversation artifact">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -80,7 +80,7 @@
         </div>
 
         <!-- Conversation Details Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="conversation details">
+        <div class="form-card collapsible-card related-entity" data-section-name="conversation details" data-field-names="conversation details">
             <div class="collapsible-header" (click)="toggleSection('conversationDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -92,11 +92,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.conversationDetails" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ArtifactVersionID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ArtifactVersionID')"
                         [NewRecordValues]="NewRecordValues('Conversation Details')"
-                        [AllowLoad]="IsCurrentTab('Conversation Details')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('conversationDetails')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

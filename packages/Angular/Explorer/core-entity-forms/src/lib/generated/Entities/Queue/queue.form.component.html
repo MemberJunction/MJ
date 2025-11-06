@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description queuetypeid queue type id isactive is active processpid process pid processplatform process platform processversion process version processcwd process cwd processipaddress process ipaddress processmacaddress process mac address processosname process osname processosversion process osversion processhostname process host name processuserid process user id processusername process user name lastheartbeat last heartbeat __mj_createdat created at __mj_updatedat updated at queuetype queue type">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -157,7 +157,7 @@
         </div>
 
         <!-- Queue Tasks Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="queue tasks">
+        <div class="form-card collapsible-card related-entity" data-section-name="queue tasks" data-field-names="queue tasks">
             <div class="collapsible-header" (click)="toggleSection('queueTasks')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -169,11 +169,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queueTasks" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Queue Tasks','QueueID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Queue Tasks','QueueID')"
                         [NewRecordValues]="NewRecordValues('Queue Tasks')"
-                        [AllowLoad]="IsCurrentTab('Queue Tasks')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('queueTasks')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

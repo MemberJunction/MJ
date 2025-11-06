@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="communicationproviderid communication provider id communicationbasemessagetypeid communication base message type id name status additionalattributes additional attributes __mj_createdat created at __mj_updatedat updated at communicationprovider communication provider communicationbasemessagetype communication base message type">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -89,7 +89,7 @@
         </div>
 
         <!-- Communication Logs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="communication logs">
+        <div class="form-card collapsible-card related-entity" data-section-name="communication logs" data-field-names="communication logs">
             <div class="collapsible-header" (click)="toggleSection('communicationLogs')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -101,11 +101,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.communicationLogs" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderMessageTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderMessageTypeID')"
                         [NewRecordValues]="NewRecordValues('Communication Logs')"
-                        [AllowLoad]="IsCurrentTab('Communication Logs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('communicationLogs')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

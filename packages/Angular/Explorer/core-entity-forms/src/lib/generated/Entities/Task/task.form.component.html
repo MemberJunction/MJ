@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="parentid parent id name description typeid type id environmentid environment id projectid project id conversationdetailid conversation detail id userid user id agentid agent id status percentcomplete percent complete dueat due at startedat started at completedat completed at __mj_createdat created at __mj_updatedat updated at parent type environment project user agent rootparentid root parent id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -215,7 +215,7 @@
         </div>
 
         <!-- MJ: Task Dependencies Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: task dependencies">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: task dependencies" data-field-names="mj: task dependencies">
             <div class="collapsible-header" (click)="toggleSection('mJTaskDependencies')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -227,11 +227,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJTaskDependencies" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','DependsOnTaskID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','DependsOnTaskID')"
                         [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
-                        [AllowLoad]="IsCurrentTab('MJ: Task Dependencies')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJTaskDependencies')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -239,7 +239,7 @@
         </div>
 
         <!-- MJ: Task Dependencies Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: task dependencies">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: task dependencies" data-field-names="mj: task dependencies">
             <div class="collapsible-header" (click)="toggleSection('mJTaskDependencies')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -251,11 +251,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJTaskDependencies" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','TaskID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','TaskID')"
                         [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
-                        [AllowLoad]="IsCurrentTab('MJ: Task Dependencies')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJTaskDependencies')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -263,7 +263,7 @@
         </div>
 
         <!-- MJ: Tasks Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: tasks">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: tasks" data-field-names="mj: tasks">
             <div class="collapsible-header" (click)="toggleSection('mJTasks')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -275,11 +275,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJTasks" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','ParentID')"
                         [NewRecordValues]="NewRecordValues('MJ: Tasks')"
-                        [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJTasks')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

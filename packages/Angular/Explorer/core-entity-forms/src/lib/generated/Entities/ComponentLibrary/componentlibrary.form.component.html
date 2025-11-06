@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name displayname display name version globalvariable global variable category cdnurl cdn url cdncssurl cdn css url description __mj_createdat created at __mj_updatedat updated at status lintrules lint rules dependencies usagetype usage type">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -120,7 +120,7 @@
         </div>
 
         <!-- MJ: Component Library Links Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: component library links">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: component library links" data-field-names="mj: component library links">
             <div class="collapsible-header" (click)="toggleSection('mJComponentLibraryLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -132,11 +132,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJComponentLibraryLinks" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','LibraryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','LibraryID')"
                         [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
-                        [AllowLoad]="IsCurrentTab('MJ: Component Library Links')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJComponentLibraryLinks')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

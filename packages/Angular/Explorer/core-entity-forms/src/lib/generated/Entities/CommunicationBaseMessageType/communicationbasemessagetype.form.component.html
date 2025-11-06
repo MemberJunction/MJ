@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="type supportsattachments supports attachments supportssubjectline supports subject line supportshtml supports html maxbytes max bytes __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -71,7 +71,7 @@
         </div>
 
         <!-- Communication Provider Message Types Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="communication provider message types">
+        <div class="form-card collapsible-card related-entity" data-section-name="communication provider message types" data-field-names="communication provider message types">
             <div class="collapsible-header" (click)="toggleSection('communicationProviderMessageTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -83,11 +83,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.communicationProviderMessageTypes" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types','CommunicationBaseMessageTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types','CommunicationBaseMessageTypeID')"
                         [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
-                        [AllowLoad]="IsCurrentTab('Communication Provider Message Types')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('communicationProviderMessageTypes')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -95,7 +95,7 @@
         </div>
 
         <!-- Entity Communication Message Types Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity communication message types">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity communication message types" data-field-names="entity communication message types">
             <div class="collapsible-header" (click)="toggleSection('entityCommunicationMessageTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -107,11 +107,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityCommunicationMessageTypes" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types','BaseMessageTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types','BaseMessageTypeID')"
                         [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
-                        [AllowLoad]="IsCurrentTab('Entity Communication Message Types')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityCommunicationMessageTypes')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

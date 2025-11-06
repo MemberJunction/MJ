@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description entityid entity id userid user id categoryid category id externalsystemrecordid external system record id companyintegrationid company integration id __mj_createdat created at __mj_updatedat updated at entity user category companyintegration company integration">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -121,7 +121,7 @@
         </div>
 
         <!-- Duplicate Runs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="duplicate runs">
+        <div class="form-card collapsible-card related-entity" data-section-name="duplicate runs" data-field-names="duplicate runs">
             <div class="collapsible-header" (click)="toggleSection('duplicateRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -133,11 +133,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.duplicateRuns" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Runs','SourceListID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Runs','SourceListID')"
                         [NewRecordValues]="NewRecordValues('Duplicate Runs')"
-                        [AllowLoad]="IsCurrentTab('Duplicate Runs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('duplicateRuns')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -145,7 +145,7 @@
         </div>
 
         <!-- Details Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="details">
+        <div class="form-card collapsible-card related-entity" data-section-name="details" data-field-names="list details">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -157,11 +157,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('List Details','ListID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('List Details','ListID')"
                         [NewRecordValues]="NewRecordValues('List Details')"
-                        [AllowLoad]="IsCurrentTab('Details')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('details')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -50,7 +50,7 @@
         </div>
 
         <!-- MJ: Tasks Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: tasks">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: tasks" data-field-names="mj: tasks">
             <div class="collapsible-header" (click)="toggleSection('mJTasks')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -62,11 +62,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJTasks" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','TypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','TypeID')"
                         [NewRecordValues]="NewRecordValues('MJ: Tasks')"
-                        [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJTasks')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

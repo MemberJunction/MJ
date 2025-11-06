@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="promptid prompt id modelid model id vendorid vendor id agentid agent id configurationid configuration id runat run at completedat completed at executiontimems execution time ms messages result tokensused tokens used tokensprompt tokens prompt tokenscompletion tokens completion totalcost total cost success errormessage error message __mj_createdat created at __mj_updatedat updated at parentid parent id runtype run type executionorder execution order agentrunid agent run id cost costcurrency cost currency tokensusedrollup tokens used rollup tokenspromptrollup tokens prompt rollup tokenscompletionrollup tokens completion rollup temperature topp top p topk top k minp min p frequencypenalty frequency penalty presencepenalty presence penalty seed stopsequences stop sequences responseformat response format logprobs log probs toplogprobs top log probs descendantcost descendant cost validationattemptcount validation attempt count successfulvalidationcount successful validation count finalvalidationpassed final validation passed validationbehavior validation behavior retrystrategy retry strategy maxretriesconfigured max retries configured finalvalidationerror final validation error validationerrorcount validation error count commonvalidationerror common validation error firstattemptat first attempt at lastattemptat last attempt at totalretrydurationms total retry duration ms validationattempts validation attempts validationsummary validation summary failoverattempts failover attempts failovererrors failover errors failoverdurations failover durations originalmodelid original model id originalrequeststarttime original request start time totalfailoverduration total failover duration rerunfrompromptrunid rerun from prompt run id modelselection model selection status cancelled cancellationreason cancellation reason modelpowerrank model power rank selectionstrategy selection strategy cachehit cache hit cachekey cache key judgeid judge id judgescore judge score wasselectedresult was selected result streamingenabled streaming enabled firsttokentime first token time errordetails error details childpromptid child prompt id queuetime queue time prompttime prompt time completiontime completion time modelspecificresponsedetails model specific response details effortlevel effort level runname run name comments prompt model vendor agent configuration originalmodel original model judge childprompt child prompt rootparentid root parent id rootrerunfrompromptrunid root rerun from prompt run id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -688,7 +688,7 @@
         </div>
 
         <!-- MJ: AI Prompt Runs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt runs">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt runs" data-field-names="mj: ai prompt runs">
             <div class="collapsible-header" (click)="toggleSection('mJAIPromptRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -700,11 +700,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIPromptRuns" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ParentID')"
                         [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
-                        [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJAIPromptRuns')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -712,7 +712,7 @@
         </div>
 
         <!-- AI Result Cache Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai result cache">
+        <div class="form-card collapsible-card related-entity" data-section-name="ai result cache" data-field-names="ai result cache">
             <div class="collapsible-header" (click)="toggleSection('aIResultCache')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -724,11 +724,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIResultCache" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','PromptRunID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','PromptRunID')"
                         [NewRecordValues]="NewRecordValues('AI Result Cache')"
-                        [AllowLoad]="IsCurrentTab('AI Result Cache')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('aIResultCache')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

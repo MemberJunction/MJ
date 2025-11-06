@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description vectordatabaseid vector database id embeddingmodelid embedding model id __mj_createdat created at __mj_updatedat updated at vectordatabase vector database embeddingmodel embedding model">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -82,7 +82,7 @@
         </div>
 
         <!-- Entity Record Documents Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity record documents">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity record documents" data-field-names="entity record documents">
             <div class="collapsible-header" (click)="toggleSection('entityRecordDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -94,11 +94,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityRecordDocuments" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Record Documents','VectorIndexID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Record Documents','VectorIndexID')"
                         [NewRecordValues]="NewRecordValues('Entity Record Documents')"
-                        [AllowLoad]="IsCurrentTab('Entity Record Documents')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityRecordDocuments')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

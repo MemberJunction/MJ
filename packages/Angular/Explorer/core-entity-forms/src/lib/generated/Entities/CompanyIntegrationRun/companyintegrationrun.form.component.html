@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="companyintegrationid companyintegration id runbyuserid runbyuser id startedat started at endedat ended at totalrecords total records comments __mj_createdat created at __mj_updatedat updated at status errorlog error log configdata config data integration company runbyuser run by user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -142,7 +142,7 @@
         </div>
 
         <!-- Company Integration Run API Logs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="company integration run api logs">
+        <div class="form-card collapsible-card related-entity" data-section-name="company integration run api logs" data-field-names="company integration run api logs">
             <div class="collapsible-header" (click)="toggleSection('companyIntegrationRunAPILogs')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -154,11 +154,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.companyIntegrationRunAPILogs" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs','CompanyIntegrationRunID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs','CompanyIntegrationRunID')"
                         [NewRecordValues]="NewRecordValues('Company Integration Run API Logs')"
-                        [AllowLoad]="IsCurrentTab('Company Integration Run API Logs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('companyIntegrationRunAPILogs')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -166,7 +166,7 @@
         </div>
 
         <!-- Company Integration Run Details Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="company integration run details">
+        <div class="form-card collapsible-card related-entity" data-section-name="company integration run details" data-field-names="company integration run details">
             <div class="collapsible-header" (click)="toggleSection('companyIntegrationRunDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -178,11 +178,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.companyIntegrationRunDetails" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run Details','CompanyIntegrationRunID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run Details','CompanyIntegrationRunID')"
                         [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
-                        [AllowLoad]="IsCurrentTab('Company Integration Run Details')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('companyIntegrationRunDetails')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -190,7 +190,7 @@
         </div>
 
         <!-- Error Logs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="error logs">
+        <div class="form-card collapsible-card related-entity" data-section-name="error logs" data-field-names="error logs">
             <div class="collapsible-header" (click)="toggleSection('errorLogs')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -202,11 +202,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.errorLogs" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Error Logs','CompanyIntegrationRunID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Error Logs','CompanyIntegrationRunID')"
                         [NewRecordValues]="NewRecordValues('Error Logs')"
-                        [AllowLoad]="IsCurrentTab('Error Logs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('errorLogs')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

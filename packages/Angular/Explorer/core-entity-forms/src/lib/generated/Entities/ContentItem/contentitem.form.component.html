@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="contentsourceid content source id name description contenttypeid content type id contentsourcetypeid content source type id contentfiletypeid content file type id checksum url text __mj_createdat created at __mj_updatedat updated at contentsource content source contenttype content type contentsourcetype content source type contentfiletype content file type">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -135,7 +135,7 @@
         </div>
 
         <!-- Content Item Attributes Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="content item attributes">
+        <div class="form-card collapsible-card related-entity" data-section-name="content item attributes" data-field-names="content item attributes">
             <div class="collapsible-header" (click)="toggleSection('contentItemAttributes')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -147,11 +147,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentItemAttributes" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Content Item Attributes','ContentItemID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Content Item Attributes','ContentItemID')"
                         [NewRecordValues]="NewRecordValues('Content Item Attributes')"
-                        [AllowLoad]="IsCurrentTab('Content Item Attributes')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('contentItemAttributes')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -159,7 +159,7 @@
         </div>
 
         <!-- Content Item Tags Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="content item tags">
+        <div class="form-card collapsible-card related-entity" data-section-name="content item tags" data-field-names="content item tags">
             <div class="collapsible-header" (click)="toggleSection('contentItemTags')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -171,11 +171,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentItemTags" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Content Item Tags','ItemID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Content Item Tags','ItemID')"
                         [NewRecordValues]="NewRecordValues('Content Item Tags')"
-                        [AllowLoad]="IsCurrentTab('Content Item Tags')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('contentItemTags')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

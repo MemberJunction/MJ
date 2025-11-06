@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name displayname display name description icon entityid entity id __mj_createdat __mj _created at __mj_updatedat __mj _updated at categoryentityid category entity id entity categoryentity category entity">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -114,7 +114,7 @@
         </div>
 
         <!-- Workspace Items Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="workspace items">
+        <div class="form-card collapsible-card related-entity" data-section-name="workspace items" data-field-names="workspace items">
             <div class="collapsible-header" (click)="toggleSection('workspaceItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -126,11 +126,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.workspaceItems" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"
                         [NewRecordValues]="NewRecordValues('Workspace Items')"
-                        [AllowLoad]="IsCurrentTab('Workspace Items')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('workspaceItems')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -138,7 +138,7 @@
         </div>
 
         <!-- User Notifications Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="user notifications">
+        <div class="form-card collapsible-card related-entity" data-section-name="user notifications" data-field-names="user notifications">
             <div class="collapsible-header" (click)="toggleSection('userNotifications')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -150,11 +150,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.userNotifications" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"
                         [NewRecordValues]="NewRecordValues('User Notifications')"
-                        [AllowLoad]="IsCurrentTab('User Notifications')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('userNotifications')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -162,7 +162,7 @@
         </div>
 
         <!-- Resource Links Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="resource links">
+        <div class="form-card collapsible-card related-entity" data-section-name="resource links" data-field-names="resource links">
             <div class="collapsible-header" (click)="toggleSection('resourceLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -174,11 +174,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resourceLinks" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"
                         [NewRecordValues]="NewRecordValues('Resource Links')"
-                        [AllowLoad]="IsCurrentTab('Resource Links')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('resourceLinks')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -186,7 +186,7 @@
         </div>
 
         <!-- Resource Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="resource permissions">
+        <div class="form-card collapsible-card related-entity" data-section-name="resource permissions" data-field-names="resource permissions">
             <div class="collapsible-header" (click)="toggleSection('resourcePermissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -198,11 +198,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resourcePermissions" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"
                         [NewRecordValues]="NewRecordValues('Resource Permissions')"
-                        [AllowLoad]="IsCurrentTab('Resource Permissions')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('resourcePermissions')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

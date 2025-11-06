@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name parentid parent id description __mj_createdat created at __mj_updatedat updated at parent rootparentid root parent id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -73,7 +73,7 @@
         </div>
 
         <!-- File Categories Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="file categories">
+        <div class="form-card collapsible-card related-entity" data-section-name="file categories" data-field-names="file categories">
             <div class="collapsible-header" (click)="toggleSection('fileCategories')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -85,11 +85,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.fileCategories" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('File Categories','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('File Categories','ParentID')"
                         [NewRecordValues]="NewRecordValues('File Categories')"
-                        [AllowLoad]="IsCurrentTab('File Categories')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('fileCategories')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -97,7 +97,7 @@
         </div>
 
         <!-- Files Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="files">
+        <div class="form-card collapsible-card related-entity" data-section-name="files" data-field-names="files">
             <div class="collapsible-header" (click)="toggleSection('files')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -109,11 +109,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.files" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Files','CategoryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Files','CategoryID')"
                         [NewRecordValues]="NewRecordValues('Files')"
-                        [AllowLoad]="IsCurrentTab('Files')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('files')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

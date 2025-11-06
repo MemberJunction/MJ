@@ -45,11 +45,16 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
      * @returns Promise resolving to the generation result with the Angular grid template
      */
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
-        const template = `<mj-user-view-grid 
-    [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"  
+        // Use IsCurrentSection for new collapsible section-based forms, IsCurrentTab for legacy tab-based forms
+        const allowLoadCheck = input.SectionKey && input.SectionKey.length > 0
+            ? `IsCurrentSection('${input.SectionKey.trim()}')`
+            : `IsCurrentTab('${input.TabName.trim()}')`;
+
+        const template = `<mj-user-view-grid
+    [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"
     [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"
-    [AllowLoad]="IsCurrentTab('${input.TabName.trim()}')"  
-    [EditMode]="GridEditMode()"  
+    [AllowLoad]="${allowLoadCheck}"
+    [EditMode]="GridEditMode()"
     >
 </mj-user-view-grid>`
         return {

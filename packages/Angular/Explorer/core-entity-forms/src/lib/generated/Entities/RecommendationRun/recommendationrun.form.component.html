@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="recommendationproviderid recommendation provider id startdate start date enddate end date status description runbyuserid run by user id __mj_createdat created at __mj_updatedat updated at recommendationprovider recommendation provider runbyuser run by user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -96,7 +96,7 @@
         </div>
 
         <!-- Recommendations Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="recommendations">
+        <div class="form-card collapsible-card related-entity" data-section-name="recommendations" data-field-names="recommendations">
             <div class="collapsible-header" (click)="toggleSection('recommendations')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-solid fa-circle-nodes tab-header-icon"></i>
@@ -108,11 +108,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recommendations" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Recommendations','RecommendationRunID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Recommendations','RecommendationRunID')"
                         [NewRecordValues]="NewRecordValues('Recommendations')"
-                        [AllowLoad]="IsCurrentTab('Recommendations')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('recommendations')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

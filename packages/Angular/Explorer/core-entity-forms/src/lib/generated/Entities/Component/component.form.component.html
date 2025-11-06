@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="namespace name version versionsequence version sequence title description type status developername developer name developeremail developer email developerorganization developer organization sourceregistryid source registry id replicatedat replicated at lastsyncedat last synced at __mj_createdat created at __mj_updatedat updated at specification functionalrequirements functional requirements technicaldesign technical design functionalrequirementsvector functional requirements vector technicaldesignvector technical design vector hascustomprops has custom props hascustomevents has custom events requiresdata requires data dependencycount dependency count technicaldesignvectorembeddingmodelid technical design vector embedding model id functionalrequirementsvectorembeddingmodelid functional requirements vector embedding model id hasrequiredcustomprops has required custom props sourceregistry source registry">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -245,7 +245,7 @@
         </div>
 
         <!-- MJ: Component Dependencies Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: component dependencies">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: component dependencies" data-field-names="mj: component dependencies">
             <div class="collapsible-header" (click)="toggleSection('mJComponentDependencies')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -257,11 +257,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJComponentDependencies" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','DependencyComponentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','DependencyComponentID')"
                         [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
-                        [AllowLoad]="IsCurrentTab('MJ: Component Dependencies')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJComponentDependencies')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -269,7 +269,7 @@
         </div>
 
         <!-- MJ: Component Library Links Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: component library links">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: component library links" data-field-names="mj: component library links">
             <div class="collapsible-header" (click)="toggleSection('mJComponentLibraryLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -281,11 +281,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJComponentLibraryLinks" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','ComponentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','ComponentID')"
                         [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
-                        [AllowLoad]="IsCurrentTab('MJ: Component Library Links')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJComponentLibraryLinks')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -293,7 +293,7 @@
         </div>
 
         <!-- MJ: Component Dependencies Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: component dependencies">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: component dependencies" data-field-names="mj: component dependencies">
             <div class="collapsible-header" (click)="toggleSection('mJComponentDependencies')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -305,11 +305,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJComponentDependencies" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','ComponentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','ComponentID')"
                         [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
-                        [AllowLoad]="IsCurrentTab('MJ: Component Dependencies')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJComponentDependencies')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="bcmid firstname first name lastname last name companyid company id supervisorid supervisor id title email phone active __mj_createdat __mj _created at __mj_updatedat __mj _updated at firstlast first last supervisor supervisorfirstname supervisor first name supervisorlastname supervisor last name supervisoremail supervisor email">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -157,7 +157,7 @@
         </div>
 
         <!-- Employee Company Integrations Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="employee company integrations">
+        <div class="form-card collapsible-card related-entity" data-section-name="employee company integrations" data-field-names="employee company integrations">
             <div class="collapsible-header" (click)="toggleSection('employeeCompanyIntegrations')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -169,11 +169,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.employeeCompanyIntegrations" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations','EmployeeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Company Integrations','EmployeeID')"
                         [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
-                        [AllowLoad]="IsCurrentTab('Employee Company Integrations')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('employeeCompanyIntegrations')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -181,7 +181,7 @@
         </div>
 
         <!-- Employee Roles Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="employee roles">
+        <div class="form-card collapsible-card related-entity" data-section-name="employee roles" data-field-names="employee roles">
             <div class="collapsible-header" (click)="toggleSection('employeeRoles')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -193,11 +193,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.employeeRoles" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','EmployeeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','EmployeeID')"
                         [NewRecordValues]="NewRecordValues('Employee Roles')"
-                        [AllowLoad]="IsCurrentTab('Employee Roles')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('employeeRoles')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -205,7 +205,7 @@
         </div>
 
         <!-- Employee Skills Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="employee skills">
+        <div class="form-card collapsible-card related-entity" data-section-name="employee skills" data-field-names="employee skills">
             <div class="collapsible-header" (click)="toggleSection('employeeSkills')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -217,11 +217,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.employeeSkills" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills','EmployeeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills','EmployeeID')"
                         [NewRecordValues]="NewRecordValues('Employee Skills')"
-                        [AllowLoad]="IsCurrentTab('Employee Skills')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('employeeSkills')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -229,7 +229,7 @@
         </div>
 
         <!-- Direct Reports Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="direct reports">
+        <div class="form-card collapsible-card related-entity" data-section-name="direct reports" data-field-names="employees">
             <div class="collapsible-header" (click)="toggleSection('directReports')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-solid fa-users tab-header-icon"></i>
@@ -241,11 +241,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.directReports" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Employees','SupervisorID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Employees','SupervisorID')"
                         [NewRecordValues]="NewRecordValues('Employees')"
-                        [AllowLoad]="IsCurrentTab('Direct Reports')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('directReports')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -253,7 +253,7 @@
         </div>
 
         <!-- Users Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="users">
+        <div class="form-card collapsible-card related-entity" data-section-name="users" data-field-names="users">
             <div class="collapsible-header" (click)="toggleSection('users')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-solid fa-user tab-header-icon"></i>
@@ -265,11 +265,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.users" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Users','EmployeeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Users','EmployeeID')"
                         [NewRecordValues]="NewRecordValues('Users')"
-                        [AllowLoad]="IsCurrentTab('Users')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('users')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

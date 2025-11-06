@@ -240,7 +240,6 @@ import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 ${componentImports.join('\n')}
-${sections.filter(s => !s.IsRelatedEntity && s.ClassName && s.EntityClassName && s.FileNameWithoutExtension).map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
 ${
     relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-user-view-grid' )
                                  .map(remi => `import { ${remi.modules.map(m => m).join(', ')} } from "${remi.library}"`)
@@ -250,12 +249,11 @@ ${moduleCode}
     
 export function Load${modulePrefix}GeneratedForms() {
     // This function doesn't do much, but it calls each generated form's loader function
-    // which in turn calls the sections for that generated form. Ultimately, those bits of 
+    // which in turn calls the sections for that generated form. Ultimately, those bits of
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
     ${componentNames.map(c => `Load${c.componentName}();`).join('\n    ')}
-    ${sections.filter(s => !s.IsRelatedEntity && s.ClassName).map(s => `Load${s.ClassName}();`).join('\n    ')}
 }
     `
       }
@@ -268,16 +266,16 @@ export function Load${modulePrefix}GeneratedForms() {
        * @param modulePrefix Prefix for module naming
        * @returns Generated TypeScript code for all sub-modules and the master module
        */
-      protected generateAngularModuleCode(componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[], 
-                                          sections: AngularFormSectionInfo[], 
-                                          maxComponentsPerModule: number, 
+      protected generateAngularModuleCode(componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[],
+                                          sections: AngularFormSectionInfo[],
+                                          maxComponentsPerModule: number,
                                           modulePrefix: string): string {
-          // this function breaks up the componentNames and sections up, we only want to have a max of maxComponentsPerModule components per module (of components and/or sections, doesn't matter)
-          // so, we break up the list of components into sub-modules, and then generate the code for each sub-module
-          
-          // iterate through the componentNames first, then after we've exhausted those, then iterate through the sections
+          // this function breaks up the componentNames into sub-modules, we only want to have a max of maxComponentsPerModule components per module
+          // Note: sections are now inline in the HTML templates, so we don't include them in the module declarations
+
+          // Just use the component names - sections are inline HTML now, not separate components
           const simpleComponentNames = componentNames.map(c => c.componentName);
-          const combinedArray: string[] = simpleComponentNames.concat(sections.filter(s => s.ClassName).map(s => s.ClassName!));
+          const combinedArray: string[] = simpleComponentNames;
           const subModules: string[] = [];
           let currentComponentCount: number = 0;
           const subModuleStarter: string =   `
@@ -485,7 +483,10 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
 
         panels.forEach((panel: Element) => {
             const sectionName = panel.getAttribute('data-section-name') || '';
-            if (sectionName.includes(searchTerm)) {
+            const fieldNames = panel.getAttribute('data-field-names') || '';
+
+            // Show section if search term matches section name OR any field name
+            if (sectionName.includes(searchTerm) || fieldNames.includes(searchTerm)) {
                 panel.classList.remove('search-hidden');
             } else {
                 panel.classList.add('search-hidden');
@@ -544,14 +545,14 @@ export function Load${entity.ClassName}FormComponent() {
        */
       protected AddSectionIfNeeded(entity: EntityInfo, sections: AngularFormSectionInfo[], type: GeneratedFormSectionType, name: string, fieldSequence?: number) {
           const section = sections.find(s => s.Name === name && s.Type === type);
-          const fName = `${this.stripWhiteSpace(name.toLowerCase())}.component`
+          const fName = `${this.sanitizeFilename(name)}.component`
           if (!section) {
               sections.push({
                   Type: type,
                   Name: name,
                   FileName: `${fName}.ts`,
                   ComponentCode: '',
-                  ClassName: `${entity.ClassName}${this.stripWhiteSpace(name)}Component`,
+                  ClassName: `${entity.ClassName}${this.pascalCase(name)}Component`,
                   TabCode: '',
                   Fields: [],
                   EntityClassName: entity.ClassName,
@@ -616,8 +617,17 @@ export function Load${entity.ClassName}FormComponent() {
                   // For now, just use a placeholder that will be replaced
                   const sectionKey = this.camelCase(section.Name);
 
+                  // Build field names string for search functionality (includes both CodeName and DisplayName)
+                  const fieldSearchTerms = section.Fields ? section.Fields.map(f => {
+                      const terms = [f.CodeName.toLowerCase()];
+                      if (f.DisplayName && f.DisplayName.toLowerCase() !== f.CodeName.toLowerCase()) {
+                          terms.push(f.DisplayName.toLowerCase());
+                      }
+                      return terms.join(' ');
+                  }).join(' ') : '';
+
                   section.TabCode = `${sectionIndex > 0 ? '\n        ' : ''}<!-- ${section.Name} Section -->
-        <div class="form-card collapsible-card" data-section-name="${section.Name.toLowerCase()}">
+        <div class="form-card collapsible-card" data-section-name="${section.Name.toLowerCase()}" data-field-names="${fieldSearchTerms}">
             <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="${icon}"></i>
@@ -636,12 +646,6 @@ ${formHTML}
 
                   sectionIndex++;
               }
-
-              // We no longer need separate component files for sections - everything is inline
-              section.ComponentCode = undefined;
-              section.FileName = undefined;
-              section.ClassName = undefined;
-              section.FileNameWithoutExtension = undefined;
 
               if (section.Type !== GeneratedFormSectionType.Top)
                   index++; // don't increment the tab index for TOP AREA, becuse it won't be rendered as a tab
@@ -825,21 +829,27 @@ ${formHTML}
                     break;
             }
 
+            // Calculate section key before generation (may be replaced later if duplicate)
+            const sectionKey = this.camelCase(tabName);
+
             const component = await RelatedEntityDisplayComponentGeneratorBase.GetComponent(relatedEntity, contextUser);
             const generateResults = await component.Generate({
                 Entity: entity,
                 RelationshipInfo: relatedEntity,
-                TabName: tabName
+                TabName: tabName,
+                SectionKey: sectionKey  // Pass section key for IsCurrentSection() calls
             });
             // Add proper indentation for collapsible panel body
             const componentCodeWithIndent = generateResults.TemplateOutput.split('\n').map(l => `                    ${l}`).join('\n')
 
             // Generate collapsible panel HTML for related entity
-            const sectionKey = this.camelCase(tabName);
             const iconClass = icon ? icon.match(/class="([^"]+)"/)?.[1] || 'fa fa-table' : 'fa fa-table';
 
+            // For related entities, use the related entity name as searchable term
+            const relatedEntitySearchTerms = relatedEntity.RelatedEntity.toLowerCase();
+
             const tabCode = `${index > 0 ? '\n        ' : ''}<!-- ${tabName} Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="${tabName.toLowerCase()}">
+        <div class="form-card collapsible-card related-entity" data-section-name="${tabName.toLowerCase()}" data-field-names="${relatedEntitySearchTerms}">
             <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="${iconClass}"></i>
@@ -899,6 +909,59 @@ ${componentCodeWithIndent}
           if (/^\d/.test(result)) {
               result = '_' + result;
           }
+
+          // If result is empty (all special chars), use a default
+          if (result.length === 0) {
+              result = 'section';
+          }
+
+          return result;
+      }
+
+      /**
+       * Converts a string to PascalCase and sanitizes it for use as a class name
+       * @param str The string to convert
+       * @returns String in PascalCase format, safe for use as a class name
+       */
+      protected pascalCase(str: string): string {
+          // First, replace non-alphanumeric characters (except spaces) with spaces
+          let sanitized = str.replace(/[^a-zA-Z0-9\s]/g, ' ');
+
+          // Convert to PascalCase (capitalize first letter of each word)
+          let result = sanitized
+              .replace(/\s(.)/g, (match, char) => char.toUpperCase())
+              .replace(/\s/g, '')
+              .replace(/^(.)/, (match, char) => char.toUpperCase());
+
+          // If starts with a digit, prefix with underscore
+          if (/^\d/.test(result)) {
+              result = '_' + result;
+          }
+
+          // If result is empty (all special chars), use a default
+          if (result.length === 0) {
+              result = 'Section';
+          }
+
+          return result;
+      }
+
+      /**
+       * Sanitizes a string to create a valid filename in lowercase format.
+       * Removes all non-alphanumeric characters (except spaces) and converts to lowercase.
+       * Used for creating component filenames that are safe across all file systems.
+       *
+       * Example: "Timeline & Budget" → "timelinebudget"
+       *
+       * @param str The string to sanitize
+       * @returns A sanitized lowercase filename string
+       */
+      protected sanitizeFilename(str: string): string {
+          // Remove all non-alphanumeric characters (except spaces)
+          let sanitized = str.replace(/[^a-zA-Z0-9\s]/g, '');
+
+          // Convert to lowercase and remove all spaces
+          let result = sanitized.toLowerCase().replace(/\s/g, '');
 
           // If result is empty (all special chars), use a default
           if (result.length === 0) {

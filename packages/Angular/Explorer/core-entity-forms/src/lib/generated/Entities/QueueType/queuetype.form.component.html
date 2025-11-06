@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description driverclass driver class driverimportpath driver import path isactive is active __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -71,7 +71,7 @@
         </div>
 
         <!-- Queues Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="queues">
+        <div class="form-card collapsible-card related-entity" data-section-name="queues" data-field-names="queues">
             <div class="collapsible-header" (click)="toggleSection('queues')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-solid fa-folder-tree tab-header-icon"></i>
@@ -83,11 +83,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queues" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Queues','QueueTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Queues','QueueTypeID')"
                         [NewRecordValues]="NewRecordValues('Queues')"
-                        [AllowLoad]="IsCurrentTab('Queues')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('queues')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

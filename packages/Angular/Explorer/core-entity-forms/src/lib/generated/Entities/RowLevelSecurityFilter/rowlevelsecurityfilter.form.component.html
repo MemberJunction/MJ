@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description filtertext filter text __mj_createdat __mj _created at __mj_updatedat __mj _updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -57,7 +57,7 @@
         </div>
 
         <!-- Entity Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity permissions">
+        <div class="form-card collapsible-card related-entity" data-section-name="entity permissions" data-field-names="entity permissions">
             <div class="collapsible-header" (click)="toggleSection('entityPermissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -69,11 +69,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityPermissions" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','ReadRLSFilterID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','ReadRLSFilterID')"
                         [NewRecordValues]="NewRecordValues('Entity Permissions')"
-                        [AllowLoad]="IsCurrentTab('Entity Permissions')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('entityPermissions')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

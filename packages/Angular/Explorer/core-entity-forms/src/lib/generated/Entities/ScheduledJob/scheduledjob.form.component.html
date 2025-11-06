@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="jobtypeid job type id name description cronexpression cron expression timezone startat start at endat end at status configuration owneruserid owner user id lastrunat last run at nextrunat next run at runcount run count successcount success count failurecount failure count notifyonsuccess notify on success notifyonfailure notify on failure notifyuserid notify user id notifyviaemail notify via email notifyviainapp notify via in app locktoken lock token lockedat locked at lockedbyinstance locked by instance expectedcompletionat expected completion at concurrencymode concurrency mode __mj_createdat created at __mj_updatedat updated at jobtype job type owneruser owner user notifyuser notify user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -238,7 +238,7 @@
         </div>
 
         <!-- MJ: Scheduled Job Runs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: scheduled job runs">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: scheduled job runs" data-field-names="mj: scheduled job runs">
             <div class="collapsible-header" (click)="toggleSection('mJScheduledJobRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -250,11 +250,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJScheduledJobRuns" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Job Runs','ScheduledJobID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Job Runs','ScheduledJobID')"
                         [NewRecordValues]="NewRecordValues('MJ: Scheduled Job Runs')"
-                        [AllowLoad]="IsCurrentTab('MJ: Scheduled Job Runs')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJScheduledJobRuns')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

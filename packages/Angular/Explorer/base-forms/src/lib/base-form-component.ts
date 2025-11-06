@@ -239,8 +239,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
    /**
    * Returns true if the tabName specified is the currently displayed tab, otherwise returns false
-   * @param tabName 
-   * @returns 
+   * @param tabName
+   * @returns
    */
   public IsCurrentTab(tabName: string): boolean {
     if (this.tabComponent) {
@@ -250,6 +250,22 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       }
     }
     // if we get here we are not in a state where we can determine the current tab, so return false
+    return false;
+  }
+
+  /**
+   * Returns true if the sectionName specified is currently expanded, otherwise returns false.
+   * This is used with the new collapsible section-based forms (vs the older tab-based forms).
+   * @param sectionName - The section key (camelCase) to check
+   * @returns boolean indicating if section is expanded
+   */
+  public IsCurrentSection(sectionName: string): boolean {
+    // Check if the component has sectionsExpanded property (new collapsible panel forms)
+    const sectionsExpanded = (this as any).sectionsExpanded;
+    if (sectionsExpanded && typeof sectionsExpanded === 'object') {
+      return sectionsExpanded[sectionName] === true;
+    }
+    // If no sectionsExpanded, return false (not a section-based form)
     return false;
   }
 

@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="agentrunid agent run id stepnumber step number steptype step type stepname step name targetid target id status startedat started at completedat completed at success errormessage error message inputdata input data outputdata output data __mj_createdat created at __mj_updatedat updated at targetlogid target log id payloadatstart payload at start payloadatend payload at end finalpayloadvalidationresult final payload validation result finalpayloadvalidationmessages final payload validation messages parentid parent id comments rootparentid root parent id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -180,7 +180,7 @@
         </div>
 
         <!-- MJ: AI Agent Run Steps Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent run steps">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent run steps" data-field-names="mj: ai agent run steps">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentRunSteps')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -192,11 +192,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIAgentRunSteps" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Steps','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Steps','ParentID')"
                         [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Steps')"
-                        [AllowLoad]="IsCurrentTab('MJ: AI Agent Run Steps')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJAIAgentRunSteps')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

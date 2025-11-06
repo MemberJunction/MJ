@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description contenttype content type isenabled is enabled __mj_createdat created at __mj_updatedat updated at parentid parent id extractrules extract rules driverclass driver class parent rootparentid root parent id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -119,7 +119,7 @@
         </div>
 
         <!-- MJ: AI Agent Artifact Types Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent artifact types">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent artifact types" data-field-names="mj: ai agent artifact types">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentArtifactTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -131,11 +131,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIAgentArtifactTypes" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"
                         [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
-                        [AllowLoad]="IsCurrentTab('MJ: AI Agent Artifact Types')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJAIAgentArtifactTypes')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -143,7 +143,7 @@
         </div>
 
         <!-- MJ: Conversation Artifacts Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifacts">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifacts" data-field-names="mj: conversation artifacts">
             <div class="collapsible-header" (click)="toggleSection('mJConversationArtifacts')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -155,11 +155,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJConversationArtifacts" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ArtifactTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ArtifactTypeID')"
                         [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
-                        [AllowLoad]="IsCurrentTab('MJ: Conversation Artifacts')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJConversationArtifacts')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -167,7 +167,7 @@
         </div>
 
         <!-- MJ: Artifact Types Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: artifact types">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: artifact types" data-field-names="mj: artifact types">
             <div class="collapsible-header" (click)="toggleSection('mJArtifactTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -179,11 +179,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJArtifactTypes" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"
                         [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
-                        [AllowLoad]="IsCurrentTab('MJ: Artifact Types')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJArtifactTypes')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -191,7 +191,7 @@
         </div>
 
         <!-- MJ: Artifacts Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: artifacts">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: artifacts" data-field-names="mj: artifacts">
             <div class="collapsible-header" (click)="toggleSection('mJArtifacts')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -203,11 +203,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJArtifacts" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','TypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','TypeID')"
                         [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
-                        [AllowLoad]="IsCurrentTab('MJ: Artifacts')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJArtifacts')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -215,7 +215,7 @@
         </div>
 
         <!-- AI Agents Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai agents">
+        <div class="form-card collapsible-card related-entity" data-section-name="ai agents" data-field-names="ai agents">
             <div class="collapsible-header" (click)="toggleSection('aIAgents')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -227,11 +227,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIAgents" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','DefaultArtifactTypeID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','DefaultArtifactTypeID')"
                         [NewRecordValues]="NewRecordValues('AI Agents')"
-                        [AllowLoad]="IsCurrentTab('AI Agents')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('aIAgents')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

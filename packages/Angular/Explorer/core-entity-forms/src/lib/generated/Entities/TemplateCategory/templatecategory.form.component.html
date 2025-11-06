@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description parentid parent id userid user id __mj_createdat created at __mj_updatedat updated at parent user rootparentid root parent id">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -89,7 +89,7 @@
         </div>
 
         <!-- Template Categories Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="template categories">
+        <div class="form-card collapsible-card related-entity" data-section-name="template categories" data-field-names="template categories">
             <div class="collapsible-header" (click)="toggleSection('templateCategories')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -101,11 +101,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.templateCategories" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Template Categories','ParentID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Template Categories','ParentID')"
                         [NewRecordValues]="NewRecordValues('Template Categories')"
-                        [AllowLoad]="IsCurrentTab('Template Categories')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('templateCategories')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -113,7 +113,7 @@
         </div>
 
         <!-- Templates Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="templates">
+        <div class="form-card collapsible-card related-entity" data-section-name="templates" data-field-names="templates">
             <div class="collapsible-header" (click)="toggleSection('templates')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa-regular fa-rectangle-list tab-header-icon"></i>
@@ -125,11 +125,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.templates" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Templates','CategoryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Templates','CategoryID')"
                         [NewRecordValues]="NewRecordValues('Templates')"
-                        [AllowLoad]="IsCurrentTab('Templates')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('templates')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

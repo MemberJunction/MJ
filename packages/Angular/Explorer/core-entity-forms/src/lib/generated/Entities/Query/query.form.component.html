@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name categoryid category id userquestion user question description sql technicaldescription technical description originalsql original sql feedback status qualityrank quality rank executioncostrank execution cost rank __mj_createdat __mj _created at __mj_updatedat __mj _updated at usestemplate uses template auditqueryruns audit query runs cacheenabled cache enabled cachettlminutes cache ttl minutes cachemaxsize cache max size embeddingvector embedding vector embeddingmodelid embedding model id category embeddingmodel embedding model">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -198,7 +198,7 @@
         </div>
 
         <!-- Data Context Items Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="data context items">
+        <div class="form-card collapsible-card related-entity" data-section-name="data context items" data-field-names="data context items">
             <div class="collapsible-header" (click)="toggleSection('dataContextItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -210,11 +210,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.dataContextItems" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','QueryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','QueryID')"
                         [NewRecordValues]="NewRecordValues('Data Context Items')"
-                        [AllowLoad]="IsCurrentTab('Data Context Items')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('dataContextItems')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -222,7 +222,7 @@
         </div>
 
         <!-- Query Fields Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="query fields">
+        <div class="form-card collapsible-card related-entity" data-section-name="query fields" data-field-names="query fields">
             <div class="collapsible-header" (click)="toggleSection('queryFields')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -234,11 +234,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryFields" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Query Fields','QueryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Fields','QueryID')"
                         [NewRecordValues]="NewRecordValues('Query Fields')"
-                        [AllowLoad]="IsCurrentTab('Query Fields')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('queryFields')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -246,7 +246,7 @@
         </div>
 
         <!-- Query Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="query permissions">
+        <div class="form-card collapsible-card related-entity" data-section-name="query permissions" data-field-names="query permissions">
             <div class="collapsible-header" (click)="toggleSection('queryPermissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -258,11 +258,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryPermissions" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"
                         [NewRecordValues]="NewRecordValues('Query Permissions')"
-                        [AllowLoad]="IsCurrentTab('Query Permissions')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('queryPermissions')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -270,7 +270,7 @@
         </div>
 
         <!-- MJ: Query Parameters Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: query parameters">
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: query parameters" data-field-names="mj: query parameters">
             <div class="collapsible-header" (click)="toggleSection('mJQueryParameters')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -282,11 +282,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJQueryParameters" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Parameters','QueryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Parameters','QueryID')"
                         [NewRecordValues]="NewRecordValues('MJ: Query Parameters')"
-                        [AllowLoad]="IsCurrentTab('MJ: Query Parameters')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('mJQueryParameters')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
@@ -294,7 +294,7 @@
         </div>
 
         <!-- Query Entities Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="query entities">
+        <div class="form-card collapsible-card related-entity" data-section-name="query entities" data-field-names="query entities">
             <div class="collapsible-header" (click)="toggleSection('queryEntities')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -306,11 +306,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryEntities" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Query Entities','QueryID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Entities','QueryID')"
                         [NewRecordValues]="NewRecordValues('Query Entities')"
-                        [AllowLoad]="IsCurrentTab('Query Entities')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('queryEntities')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>

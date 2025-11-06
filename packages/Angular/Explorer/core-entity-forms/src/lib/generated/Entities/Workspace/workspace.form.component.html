@@ -4,7 +4,7 @@
 
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description userid user id __mj_createdat created at __mj_updatedat updated at user">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -66,7 +66,7 @@
         </div>
 
         <!-- Workspace Items Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="workspace items">
+        <div class="form-card collapsible-card related-entity" data-section-name="workspace items" data-field-names="workspace items">
             <div class="collapsible-header" (click)="toggleSection('workspaceItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-table"></i>
@@ -78,11 +78,11 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.workspaceItems" *ngIf="record.IsSaved">
                 <div class="form-body">
-                    <mj-user-view-grid 
-                        [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','WorkSpaceID')"  
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','WorkSpaceID')"
                         [NewRecordValues]="NewRecordValues('Workspace Items')"
-                        [AllowLoad]="IsCurrentTab('Workspace Items')"  
-                        [EditMode]="GridEditMode()"  
+                        [AllowLoad]="IsCurrentSection('workspaceItems')"
+                        [EditMode]="GridEditMode()"
                         >
                     </mj-user-view-grid>
                 </div>
