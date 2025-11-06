@@ -1,0 +1,5 @@
+# Generated files directory
+tmp/
+
+# Installation script with credentials (user copies from template)
+install.sh

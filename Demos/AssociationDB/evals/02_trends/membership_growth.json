@@ -1,0 +1,57 @@
+{
+  "eval_id": "membership-growth-5year",
+  "category": "trend",
+  "difficulty": "medium",
+  "tags": ["membership", "growth", "trend", "time-series"],
+
+  "business_context": "Board and executive leadership need to understand membership growth patterns over time to assess organizational health, marketing effectiveness, and strategic planning.",
+
+  "prompt": "Show membership growth over the past 5 years",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "data_points",
+        "expected_range": [5, 60],
+        "description": "Should have data points for the past 5 years (yearly, quarterly, or monthly)"
+      },
+      {
+        "metric": "total_current_members",
+        "expected_range": [480, 520],
+        "sql_validation": "SELECT COUNT(*) FROM membership.Member",
+        "description": "Current total should match actual member count"
+      }
+    ],
+    "visualization": {
+      "type": "line_chart",
+      "alternatives": ["area_chart", "column_chart"],
+      "should_not_be": ["pie_chart", "table", "single_metric"],
+      "reasoning": "Trend over time is best visualized with line or area chart showing progression"
+    },
+    "required_features": ["time_axis", "member_count_axis", "trend_line"],
+    "optional_features": ["growth_rate", "year_over_year_comparison", "projection", "annotations"],
+    "interactivity": [
+      {
+        "action": "Hover over data point",
+        "expected_result": "Show exact member count and date"
+      },
+      {
+        "action": "Click on data point",
+        "expected_result": "Show members who joined in that time period"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Membership growth by year\nSELECT \n  YEAR(m.JoinDate) as Year,\n  COUNT(*) as NewMembers,\n  SUM(COUNT(*)) OVER (ORDER BY YEAR(m.JoinDate)) as CumulativeMembers\nFROM membership.Member m\nWHERE m.JoinDate >= DATEADD(YEAR, -5, GETDATE())\nGROUP BY YEAR(m.JoinDate)\nORDER BY YEAR(m.JoinDate);",
+
+  "human_eval_guidance": "Verify the chart shows a clear upward trend. Check that time periods are evenly spaced and labeled. Confirm the final data point matches current member count.",
+
+  "common_pitfalls": "Showing only new members per period instead of cumulative growth; using inappropriate chart type (pie/bar); not handling date ranges correctly; missing data for recent time periods."
+}

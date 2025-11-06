@@ -1,0 +1,103 @@
+ 
+###################################################################
+#                                                                 #
+#     MemberJunction - Association Sample Database Builder       #
+#                                                                 #
+###################################################################
+ 
+This script will create a comprehensive association management
+database with realistic sample data in a single AssociationDemo schema.
+ 
+Estimated completion time: 1-2 minutes
+ 
+-------------------------------------------------------------------
+ 
+Target Database: MJ_2_115_0
+Start Time: 2025-11-06 02:26:04
+ 
+===================================================================
+ 
+ 
+===================================================================
+PHASE 1: CREATING SCHEMAS AND TABLES
+===================================================================
+ 
+Created schema: AssociationDemo
+Schema created successfully!
+========================================
+AssociationDemo schema tables created successfully!
+Total tables created: 27
+ 
+Table breakdown by domain:
+  Membership: 4 tables (Organization, MembershipType, Member, Membership)
+  Events: 3 tables (Event, EventSession, EventRegistration)
+  Learning: 3 tables (Course, Enrollment, Certificate)
+  Finance: 3 tables (Invoice, InvoiceLineItem, Payment)
+  Marketing: 3 tables (Campaign, Segment, CampaignMember)
+  Email: 3 tables (EmailTemplate, EmailSend, EmailClick)
+  Chapters: 3 tables (Chapter, ChapterMembership, ChapterOfficer)
+  Governance: 4 tables (Committee, CommitteeMembership, BoardPosition, BoardMember)
+========================================
+ 
+-------------------------------------------------------------------
+PHASE 1A: Schema and table creation complete
+-------------------------------------------------------------------
+ 
+ 
+-------------------------------------------------------------------
+PHASE 1B: ADDING DATABASE DOCUMENTATION
+-------------------------------------------------------------------
+ 
+ 
+-------------------------------------------------------------------
+PHASE 1B COMPLETE: Documentation added successfully
+-------------------------------------------------------------------
+ 
+ 
+===================================================================
+PHASE 1 COMPLETE: All schemas and tables created successfully
+===================================================================
+ 
+ 
+===================================================================
+PHASE 2: POPULATING SAMPLE DATA
+===================================================================
+ 
+ 
+===================================================================
+PHASE 2 COMPLETE: Sample data population finished
+===================================================================
+ 
+ 
+===================================================================
+PHASE 3: VERIFICATION
+===================================================================
+ 
+Record counts:
+  Members: 500
+  Events: 32
+  Courses: 60
+ 
+ 
+===================================================================
+BUILD COMPLETE!
+===================================================================
+ 
+Next steps:
+ 
+1. Run MemberJunction CodeGen to generate entity classes
+ 
+2. Query the sample data to explore member journeys
+ 
+3. See docs/SAMPLE_QUERIES.md for example queries
+ 
+4. See member journey examples in docs/BUSINESS_SCENARIOS.md
+ 
+-------------------------------------------------------------------
+ 
+For more information, see README.md
+ 
+ 
+Build completed successfully!
+ 
+Transaction committed successfully!

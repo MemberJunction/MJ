@@ -1,0 +1,57 @@
+{
+  "eval_id": "revenue-source-breakdown",
+  "category": "cross_domain",
+  "difficulty": "medium",
+  "tags": ["finance", "revenue", "breakdown", "sources"],
+
+  "business_context": "Finance team needs to understand revenue composition to track business model health, identify growth opportunities, and plan resource allocation across different programs.",
+
+  "prompt": "Show revenue breakdown by source",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "revenue_sources",
+        "expected_range": [3, 4],
+        "description": "Should show memberships, events, courses, and possibly other revenue streams"
+      },
+      {
+        "metric": "total_revenue_sum",
+        "expected_range": [1500000, 3000000],
+        "sql_validation": "SELECT SUM(Total) FROM finance.Invoice WHERE Status IN ('Paid', 'Partial')",
+        "description": "Sum of all revenue sources should match total paid invoices"
+      }
+    ],
+    "visualization": {
+      "type": "pie_chart",
+      "alternatives": ["donut_chart", "bar_chart", "treemap"],
+      "should_not_be": ["line_chart", "scatter_plot", "table"],
+      "reasoning": "Composition breakdown is well-suited to pie/donut chart showing proportions"
+    },
+    "required_features": ["source_name", "revenue_amount", "percentage"],
+    "optional_features": ["comparison_to_prior_period", "trend_indicator", "count_of_transactions"],
+    "interactivity": [
+      {
+        "action": "Click on a revenue source",
+        "expected_result": "Show detailed transactions for that revenue source"
+      },
+      {
+        "action": "Hover over segment",
+        "expected_result": "Show exact dollar amount and percentage"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Revenue by source\nSELECT \n  inv.InvoiceType as RevenueSource,\n  COUNT(*) as TransactionCount,\n  SUM(inv.Total) as TotalRevenue,\n  CAST(SUM(inv.Total) AS FLOAT) / (SELECT SUM(Total) FROM finance.Invoice WHERE Status IN ('Paid', 'Partial')) as Percentage\nFROM finance.Invoice inv\nWHERE inv.Status IN ('Paid', 'Partial')\nGROUP BY inv.InvoiceType\nORDER BY TotalRevenue DESC;",
+
+  "human_eval_guidance": "Verify all revenue sources are shown (memberships, events, courses). Check percentages add up to 100%. Confirm amounts are formatted as currency.",
+
+  "common_pitfalls": "Including unpaid invoices; missing revenue categories; percentages not adding to 100%; not categorizing invoices by source correctly."
+}
