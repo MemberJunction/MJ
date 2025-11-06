@@ -7,6 +7,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
+import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, BaseAgentSuggestedResponse } from '@memberjunction/ai-core-plus';
@@ -38,7 +39,22 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
-  @Input() inProgressMessageIds?: string[]; // Message IDs that are in-progress and need streaming reconnection
+
+  // Message IDs that are in-progress and need streaming reconnection
+  // Using getter/setter to react immediately when value changes (avoids timing issues with ngOnChanges)
+  private _inProgressMessageIds?: string[];
+  @Input()
+  set inProgressMessageIds(value: string[] | undefined) {
+    this._inProgressMessageIds = value;
+    // React immediately when input changes (after component initialized)
+    // This ensures callbacks are registered without relying on ngOnChanges timing
+    if (this.streamingService && value && value.length > 0) {
+      this.reconnectInProgressMessages();
+    }
+  }
+  get inProgressMessageIds(): string[] | undefined {
+    return this._inProgressMessageIds;
+  }
 
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
@@ -58,12 +74,10 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
   public converationManagerAgent: AIAgentEntityExtended | null = null;
 
-  // PubSub subscription for task progress updates
-  private pushStatusSubscription?: Subscription;
-  // Track active task execution message IDs for real-time updates
-  private activeTaskExecutionMessageIds = new Set<string>();
   // Track completion timestamps to prevent race conditions with late progress updates
   private completionTimestamps = new Map<string, number>();
+  // Track registered streaming callbacks for cleanup
+  private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
 
   constructor(
     private dialogService: DialogService,
@@ -72,6 +86,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private conversationState: ConversationStateService,
     private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
+    private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService
   ) {}
@@ -82,10 +97,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     // Initialize mention autocomplete (needed for parsing mentions in messages)
     await this.mentionAutocomplete.initialize(this.currentUser);
 
-    // Subscribe to PubSub for task progress updates
-    this.subscribeToPushStatus();
-
-    // Reconnect to any in-progress messages for streaming updates
+    // Reconnect to any in-progress messages for streaming updates (via global streaming service)
     this.reconnectInProgressMessages();
   }
 
@@ -95,10 +107,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       this.focusInput();
     }
 
-    // When in-progress message IDs change (switching conversations), reconnect
-    if (changes['inProgressMessageIds']) {
-      this.reconnectInProgressMessages();
-    }
+    // Note: inProgressMessageIds now handled by setter, not ngOnChanges
   }
 
   ngAfterViewInit() {
@@ -115,10 +124,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   ngOnDestroy() {
-    // Clean up PubSub subscription
-    if (this.pushStatusSubscription) {
-      this.pushStatusSubscription.unsubscribe();
-    }
+    // Unregister all streaming callbacks
+    this.unregisterAllCallbacks();
   }
 
   /**
@@ -134,118 +141,114 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
-   * Reconnect to in-progress messages for streaming updates
+   * Reconnect to in-progress messages for streaming updates via global streaming service.
    * This is called when:
    * 1. Component initializes (ngOnInit)
    * 2. Conversation changes (ngOnChanges)
    * 3. User returns to a conversation with in-progress messages
+   * 4. Parent component explicitly triggers reconnection
    */
-  private reconnectInProgressMessages(): void {
+  public reconnectInProgressMessages(): void {
     if (!this.inProgressMessageIds || this.inProgressMessageIds.length === 0) {
       return;
     }
 
     console.log(`🔌 Reconnecting to ${this.inProgressMessageIds.length} in-progress messages for streaming updates`);
 
-    // Register all in-progress message IDs to receive PubSub updates
+    // Unregister any previously registered callbacks for this component
+    this.unregisterAllCallbacks();
+
+    // Register new callbacks for each in-progress message
     for (const messageId of this.inProgressMessageIds) {
-      this.activeTaskExecutionMessageIds.add(messageId);
+      // Create callback bound to this message ID
+      const callback = this.createMessageProgressCallback(messageId);
+
+      // Store reference for cleanup
+      this.registeredCallbacks.set(messageId, callback);
+
+      // Register with streaming service
+      this.streamingService.registerMessageCallback(messageId, callback);
     }
 
-    console.log(`✅ Registered ${this.activeTaskExecutionMessageIds.size} messages for streaming updates`);
+    console.log(`✅ Registered ${this.registeredCallbacks.size} message callbacks with streaming service`);
   }
 
   /**
-   * Subscribe to PubSub for real-time task orchestration progress updates
+   * Create a progress callback for a specific message ID.
+   * This callback will be invoked by the streaming service when progress updates arrive.
    */
-  private subscribeToPushStatus() {
-    const dataProvider = GraphQLDataProvider.Instance;
-    this.pushStatusSubscription = dataProvider.PushStatusUpdates().subscribe((status: any) => {
-      if (!status || !status.message) return;
-
-      try {
-        const statusObj = JSON.parse(status.message);
-
-        // Filter for TaskOrchestrator messages
-        if (statusObj.resolver === 'TaskOrchestrator') {
-          this.handleTaskProgress(statusObj);
-        }
-      } catch (error) {
-        console.error('Error parsing push status update:', error);
-      }
-    });
-  }
-
-  /**
-   * Handle task progress updates from PubSub
-   */
-  private async handleTaskProgress(statusObj: any) {
-    if (statusObj.type === 'TaskProgress') {
-      // High-level task progress
-      const { taskName, message, percentComplete } = statusObj.data;
-      console.log(`[Task Progress] ${taskName}: ${message} (${percentComplete}%)`);
-
-      // Update any active task execution messages
-      await this.updateTaskExecutionMessages(taskName, message, percentComplete);
-    } else if (statusObj.type === 'AgentProgress') {
-      // Detailed agent progress (shown as smaller sub-text)
-      const { taskName, agentStep, agentMessage } = statusObj.data;
-      console.log(`[Agent Progress] ${taskName} → ${agentStep}: ${agentMessage}`);
-
-      // Update with agent details
-      await this.updateTaskExecutionMessages(taskName, `${agentStep}: ${agentMessage}`, undefined, true);
-    }
-  }
-
-  /**
-   * Update task execution messages in real-time based on progress updates
-   */
-  private async updateTaskExecutionMessages(
-    taskName: string,
-    progressMessage: string,
-    percentComplete?: number,
-    isAgentDetail: boolean = false
-  ) {
-    // Update all active task execution messages using the cache
-    for (const messageId of this.activeTaskExecutionMessageIds) {
+  private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
+    return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
         const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+
         if (!message) {
-          console.warn(`Task execution message ${messageId} not found in cache`);
-          continue;
+          console.warn(`[StreamingCallback] Message ${messageId} not found in cache`);
+          return;
         }
 
-        // Skip if already complete
+        // Skip if already complete or errored
         if (message.Status === 'Complete' || message.Status === 'Error') {
-          continue;
+          console.log(`[StreamingCallback] Message ${messageId} is ${message.Status}, ignoring progress update`);
+          return;
         }
 
-        // Build progress message
-        let updatedMessage = message.Message || '';
+        // Check if message was marked as completed (prevents race condition)
+        const completionTime = this.completionTimestamps.get(messageId);
+        if (completionTime) {
+          console.log(`[StreamingCallback] Message ${messageId} marked complete at ${new Date(completionTime).toISOString()}, ignoring late progress update`);
+          return;
+        }
 
-        if (isAgentDetail) {
-          // Agent details shown as sub-text
-          updatedMessage = `⏳ **${taskName}**\n\n_${progressMessage}_`;
-        } else if (percentComplete != null) {
+        // Build formatted progress message
+        const taskName = progress.taskName || 'Task';
+        const progressMessage = progress.message;
+        const percentComplete = progress.percentComplete;
+
+        let updatedMessage: string;
+        if (percentComplete != null) {
           updatedMessage = `⏳ **${taskName}** (${percentComplete}%)\n\n${progressMessage}`;
         } else {
           updatedMessage = `⏳ **${taskName}**\n\n${progressMessage}`;
         }
 
         message.Message = updatedMessage;
+
         // Use safe save to prevent race conditions with completion
-        const saved = await this.safeSaveConversationDetail(message, `TaskProgress:${taskName}`);
+        const saved = await this.safeSaveConversationDetail(message, `StreamingProgress:${taskName}`);
+
         if (saved) {
+          // CRITICAL: Emit update to trigger UI refresh
           this.messageSent.emit(message);
 
-          // Also update the ActiveTasksService to keep the tasks dropdown in sync
+          // CRITICAL: Update ActiveTasksService to keep the tasks dropdown in sync
           this.activeTasks.updateStatusByConversationDetailId(message.ID, progressMessage);
+
+          console.log(`[StreamingCallback] Updated message ${messageId}: ${taskName}`);
         }
       } catch (error) {
-        console.error('Error updating task execution message:', error);
+        console.error(`[StreamingCallback] Error updating message ${messageId}:`, error);
       }
+    };
+  }
+
+  /**
+   * Unregister all callbacks registered by this component.
+   * Called during cleanup and when switching conversations.
+   */
+  private unregisterAllCallbacks(): void {
+    if (this.registeredCallbacks.size === 0) {
+      return;
     }
+
+    console.log(`🧹 Unregistering ${this.registeredCallbacks.size} message callbacks`);
+
+    for (const [messageId, callback] of this.registeredCallbacks) {
+      this.streamingService.unregisterMessageCallback(messageId, callback);
+    }
+
+    this.registeredCallbacks.clear();
   }
 
   get canSend(): boolean {
@@ -984,8 +987,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     await taskExecutionMessage.Save();
     this.messageSent.emit(taskExecutionMessage);
 
-    // Register for real-time updates via PubSub
-    this.activeTaskExecutionMessageIds.add(taskExecutionMessage.ID);
+    // Register for streaming updates via global streaming service
+    const callback = this.createMessageProgressCallback(taskExecutionMessage.ID);
+    this.registeredCallbacks.set(taskExecutionMessage.ID, callback);
+    this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
+
+    console.log('[DEBUG] 🔍 Registered callback for taskExecutionMessage.ID:', taskExecutionMessage.ID);
+    console.log('[DEBUG] 🔍 All registered callbacks:', Array.from(this.registeredCallbacks.keys()));
 
     try {
       // Get environment ID from user
@@ -993,6 +1001,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       // Get session ID for PubSub
       const sessionId = (GraphQLDataProvider.Instance as any).sessionId || '';
+      console.log('[DEBUG] 🔍 Sending ExecuteTaskGraph with sessionId:', sessionId);
+      console.log('[DEBUG] 🔍 Sending ExecuteTaskGraph with conversationDetailId:', taskExecutionMessage.ID);
 
       // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
       const mutation = `
@@ -1056,8 +1066,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         name: ''
       });
 
-      // Unregister from real-time updates (task complete)
-      this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
+      // Unregister streaming callback (task complete)
+      const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
+      if (callback) {
+        this.streamingService.unregisterMessageCallback(taskExecutionMessage.ID, callback);
+        this.registeredCallbacks.delete(taskExecutionMessage.ID);
+      }
 
       // Mark agent response message as complete (removes task from active tasks)
       await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete');
@@ -1079,8 +1093,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         name: ''
       });
 
-      // Unregister from real-time updates (task failed)
-      this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
+      // Unregister streaming callback (task failed)
+      const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
+      if (callback) {
+        this.streamingService.unregisterMessageCallback(taskExecutionMessage.ID, callback);
+        this.registeredCallbacks.delete(taskExecutionMessage.ID);
+      }
 
       // Mark agent response message as complete (removes task from active tasks)
       conversationManagerMessage.Error = String(error);
@@ -2003,6 +2021,14 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   private markMessageComplete(conversationDetail: ConversationDetailEntity): void {
     const now = Date.now();
     this.completionTimestamps.set(conversationDetail.ID, now);
+
+    // Unregister streaming callback for this message (no more updates needed)
+    const callback = this.registeredCallbacks.get(conversationDetail.ID);
+    if (callback) {
+      this.streamingService.unregisterMessageCallback(conversationDetail.ID, callback);
+      this.registeredCallbacks.delete(conversationDetail.ID);
+      console.log(`[MarkComplete] Unregistered streaming callback for completed message ${conversationDetail.ID}`);
+    }
 
     // Remove task from active tasks if it exists
     const task = this.activeTasks.getByConversationDetailId(conversationDetail.ID);

@@ -346,12 +346,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.messages = messages;
 
     // Detect in-progress messages for streaming reconnection
-    this.inProgressMessageIds = messages
+    // IMPORTANT: Always create NEW array reference to trigger Input setter in message-input component
+    this.inProgressMessageIds = [...messages
       .filter(m => m.Status === 'In-Progress')
-      .map(m => m.ID);
+      .map(m => m.ID)];
 
     if (this.inProgressMessageIds.length > 0) {
       LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
+      // Note: Reconnection now happens automatically via Input setter in message-input component
     }
 
     this.scrollToBottom = true;

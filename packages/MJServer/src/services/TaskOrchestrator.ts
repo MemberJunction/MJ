@@ -51,7 +51,8 @@ export class TaskOrchestrator {
         private pubSub?: PubSubEngine,
         private sessionId?: string,
         private userPayload?: UserPayload,
-        private createNotifications: boolean = false
+        private createNotifications: boolean = false,
+        private conversationDetailId?: string
     ) {}
 
     /**
@@ -219,13 +220,16 @@ export class TaskOrchestrator {
                     taskName,
                     message,
                     percentComplete,
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    conversationDetailId: this.conversationDetailId
                 }
             }),
             sessionId: this.userPayload.sessionId
         };
 
         LogStatus(`📡 Publishing task progress: ${taskName} - ${message} (${percentComplete}%) to session ${this.userPayload.sessionId}`);
+        LogStatus(`[DEBUG] 🔍 conversationDetailId in payload: ${this.conversationDetailId || 'UNDEFINED'}`);
+        LogStatus(`[DEBUG] 🔍 Full payload data: ${JSON.stringify({ taskName, conversationDetailId: this.conversationDetailId, session: this.userPayload.sessionId })}`);
         this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
 
         LogStatus(`[Task: ${taskName}] ${message} (${percentComplete}%)`);
@@ -249,13 +253,15 @@ export class TaskOrchestrator {
                     taskName,
                     agentStep,
                     agentMessage,
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    conversationDetailId: this.conversationDetailId
                 }
             }),
             sessionId: this.userPayload.sessionId
         };
 
         LogStatus(`📡 Publishing agent progress: ${taskName} → ${agentStep} to session ${this.userPayload.sessionId}`);
+        LogStatus(`[DEBUG] 🔍 conversationDetailId in payload: ${this.conversationDetailId || 'UNDEFINED'}`);
         this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
 
         LogStatus(`[Task: ${taskName}] → ${agentStep}: ${agentMessage}`);
