@@ -409,7 +409,7 @@ NOTE: PLEASE PLEASE PLEASE REMEMBER that for BIT types in SQL Server, they are b
             );
 
             if (result.success && result.result) {
-                LogStatus(`Form layout generated for ${entity.Name}: ${result.result.categories.length} categories`);
+                LogStatus(`Form layout generated for ${entity.Name}: ${result.result.fieldCategories.length} field categories`);
                 return result.result;
             } else {
                 LogError('AdvancedGeneration', `Form layout generation failed: ${result.errorMessage}`);
