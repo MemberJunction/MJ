@@ -26,16 +26,28 @@ DBAutoDoc is an AI-powered SQL Server database documentation generator that anal
 
 **Example**:
 ```typescript
-// OLD (SimpleAIClient - fetch-based)
+// OLD (SimpleAIClient - direct fetch() calls)
 const client = new SimpleAIClient();
 const result = await client.generateTableDoc(request);
 
-// NEW (LLMClient - BaseLLM-based with file prompts)
-const llmClient = new LLMClient({
-  provider: process.env.AI_PROVIDER || 'openai',
-  model: process.env.AI_MODEL || 'gpt-4',
-  apiKey: process.env.AI_API_KEY!
-});
+// NEW (LLMClient - uses MJ ClassFactory pattern)
+import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai';
+import { MJGlobal } from '@memberjunction/global';
+
+// Map model API name (from .env) to DriverClass
+const modelAPIName = process.env.AI_MODEL || 'gpt-4'; // User provides in init
+const driverClass = getDriverClassForModel(modelAPIName); // e.g., 'gpt-4' → 'OpenAILLM'
+const apiKey = GetAIAPIKey(driverClass); // Gets OPENAI_API_KEY from env
+
+// Use MJ ClassFactory to instantiate (NOT new OpenAILLM())
+const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+  BaseLLM,
+  driverClass,
+  apiKey
+);
+
+// Use with file-based prompts
+const llmClient = new LLMClient(modelAPIName);
 const result = await llmClient.generateTableDoc({
   promptFile: 'table-analysis.txt',
   variables: { schema, table, columns, ... }
@@ -629,27 +641,70 @@ db-auto-doc analyze --use-defaults
 #### 1a. BaseLLM Integration (Days 1-2) ⚠️ **HIGH PRIORITY - Do First**
 **Why First**: All subsequent work depends on proper AI integration
 
-- **Replace SimpleAIClient** with MJ's `BaseLLM` class
-  - Create `LLMClient` wrapper around `BaseLLM`
-  - Support all MJ providers (OpenAI, Anthropic, Groq, Cerebras, Azure, Gemini, Vertex, Bedrock, etc.)
-  - Initialize BaseLLM from environment variables (AI_PROVIDER, AI_MODEL, AI_API_KEY)
-  - **Zero database dependency** - use BaseLLM directly, NOT AIPromptRunner
-  - Example provider instantiation:
-    ```typescript
-    import { OpenAILLM } from '@memberjunction/ai-openai';
-    import { GroqLLM } from '@memberjunction/ai-groq';
-    // ... other providers
+- **Replace SimpleAIClient** with MJ's `BaseLLM` class using MJGlobal ClassFactory
+  - Use `MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>` pattern (NOT direct instantiation)
+  - Map model API names (like "gpt-4", "claude-3-5-sonnet") to DriverClass (like "OpenAILLM", "AnthropicLLM")
+  - Prompt for model API name in `init` command and store in .env as `AI_MODEL`
+  - **Zero database dependency** - use BaseLLM directly, NOT AIPromptRunner or AIEngine
 
-    // Factory pattern based on AI_PROVIDER env var
-    function createLLM(provider: string, apiKey: string): BaseLLM {
-      switch (provider.toLowerCase()) {
-        case 'openai': return new OpenAILLM(apiKey);
-        case 'groq': return new GroqLLM(apiKey);
-        // ... other providers
-        default: throw new Error(`Unsupported provider: ${provider}`);
-      }
+  **Correct MJ Pattern**:
+  ```typescript
+  import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai';
+  import { MJGlobal } from '@memberjunction/global';
+
+  // Map model API name to DriverClass (without requiring database)
+  function getDriverClassForModel(modelAPIName: string): string {
+    const modelMap: Record<string, string> = {
+      // OpenAI models
+      'gpt-4': 'OpenAILLM',
+      'gpt-4-turbo': 'OpenAILLM',
+      'gpt-4o': 'OpenAILLM',
+      'gpt-3.5-turbo': 'OpenAILLM',
+
+      // Anthropic models
+      'claude-3-5-sonnet': 'AnthropicLLM',
+      'claude-3-opus': 'AnthropicLLM',
+      'claude-3-sonnet': 'AnthropicLLM',
+
+      // Groq models
+      'llama-3.1-70b': 'GroqLLM',
+      'llama-3.1-8b': 'GroqLLM',
+      'mixtral-8x7b': 'GroqLLM',
+
+      // Cerebras models
+      'llama3.1-8b': 'CerebrasLLM',
+      'llama3.1-70b': 'CerebrasLLM',
+
+      // Azure OpenAI
+      'azure-gpt-4': 'AzureLLM',
+
+      // Gemini
+      'gemini-pro': 'GeminiLLM',
+
+      // More models as needed...
+    };
+
+    const normalized = modelAPIName.toLowerCase();
+    const driverClass = modelMap[normalized];
+
+    if (!driverClass) {
+      throw new Error(`Unknown model: ${modelAPIName}. Supported models: ${Object.keys(modelMap).join(', ')}`);
     }
-    ```
+
+    return driverClass;
+  }
+
+  // Initialize LLM using MJ ClassFactory (correct pattern)
+  const modelAPIName = process.env.AI_MODEL || 'gpt-4';
+  const driverClass = getDriverClassForModel(modelAPIName);
+  const apiKey = GetAIAPIKey(driverClass); // Gets from env (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
+
+  const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+    BaseLLM,
+    driverClass,
+    apiKey
+  );
+  ```
 
 - **File-Based Prompts**
   - Create prompt templates in `src/prompts/` directory
@@ -667,28 +722,76 @@ db-auto-doc analyze --use-defaults
   - Add error handling and retry logic (leveraging BaseLLM capabilities)
   - Track token usage and costs per provider
 
-**Example Usage**:
+**LLMClient Wrapper Usage**:
 ```typescript
-// Initialize from config
-const llmClient = new LLMClient({
-  provider: process.env.AI_PROVIDER || 'openai',
-  model: process.env.AI_MODEL || 'gpt-4',
-  apiKey: process.env.AI_API_KEY!
-});
+// LLMClient wraps the ClassFactory instantiation
+export class LLMClient {
+  private llm: BaseLLM;
+  private modelAPIName: string;
 
-// Use with file-based prompt
-const result = await llmClient.generateTableDoc({
-  promptFile: 'table-analysis.txt',
-  variables: {
-    schema: 'dbo',
-    table: 'Customer',
-    columns: [...],
-    // ... other context
+  constructor(modelAPIName?: string) {
+    this.modelAPIName = modelAPIName || process.env.AI_MODEL || 'gpt-4';
+    const driverClass = getDriverClassForModel(this.modelAPIName);
+    const apiKey = GetAIAPIKey(driverClass);
+
+    // Use MJ ClassFactory pattern
+    this.llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+      BaseLLM,
+      driverClass,
+      apiKey
+    );
   }
-});
+
+  async generateTableDoc(params: {
+    promptFile: string;
+    variables: Record<string, any>;
+  }): Promise<AITableDocResponse> {
+    // Load prompt template from file
+    const promptTemplate = await loadPromptTemplate(params.promptFile);
+    const prompt = substituteVariables(promptTemplate, params.variables);
+
+    // Use BaseLLM's ChatCompletion
+    const result = await this.llm.ChatCompletion({
+      model: this.modelAPIName,
+      messages: [
+        { role: 'system', content: 'You are a database documentation expert.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      responseFormat: 'JSON'
+    });
+
+    return JSON.parse(result.data.choices[0].message.content);
+  }
+}
 ```
 
-#### 1b. User-Configurable Settings (Days 2-3)
+#### 1b. Update Init Command for Model API Name (Days 2)
+- **Update `init` Command**
+  - Prompt for AI Model API name (not provider + model separately)
+  - Examples shown: "gpt-4", "claude-3-5-sonnet", "llama-3.1-70b", "mixtral-8x7b"
+  - Detect provider from model name and prompt for correct API key
+  - Store as `AI_MODEL` in .env
+  - Store provider-specific API key (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
+
+  **Example Init Flow**:
+  ```bash
+  $ db-auto-doc init
+
+  Database Configuration:
+  ? Database server? localhost
+  ? Database name? AdventureWorks
+
+  AI Configuration:
+  ? AI Model (gpt-4, claude-3-5-sonnet, llama-3.1-70b, etc.)? gpt-4
+  ℹ Detected provider: OpenAI
+  ? OpenAI API Key? sk-...
+
+  ✓ Created .env file
+  ✓ Created db-doc-state.json
+  ```
+
+#### 1c. User-Configurable Settings (Days 2-3)
 - **Interactive Configuration Prompts**
   - Add prompts at start of `analyze` command
   - Settings: maxIterations, confidenceThreshold, enableBackPropagation, etc.
@@ -705,36 +808,38 @@ const result = await llmClient.generateTableDoc({
   - Validate config values (sensible ranges)
   - Provide clear defaults
 
-#### 1c. Topological Sort (Days 3-4)
+#### 1d. Topological Sort (Days 3-4)
 - Implement `TopologicalSorter` class
 - Add dependency level calculation
 - Update state file structure with `dependencyLevel` and `dependencies` fields
 - Add unit tests for various dependency graphs (cycles, disconnected components, etc.)
 
-#### 1d. Enhanced State File (Days 4-5)
+#### 1e. Enhanced State File (Days 4-5)
 - Migrate from single `aiGenerated` to `descriptionIterations[]` array
 - Add `analysisAttempts` and `locked` fields
 - Add migration utility to upgrade v1.0 state files to v2.0
 - Update `StateManager` methods to work with iterations
 - Add helper methods for common operations
 
-#### 1e. Data Profiler (Days 5-6)
+#### 1f. Data Profiler (Days 5-6)
 - Implement `DataProfiler` class
 - Add cardinality analysis (distinct count, unique/high/medium/low)
 - Add statistical analysis for numeric/date/money columns (MIN/MAX/AVG/STDEV)
 - Add possible values extraction for low-cardinality columns (<= 20 distinct)
 - Add pattern detection utilities (null %, common formats)
 
-#### 1f. Testing (Day 7)
+#### 1g. Testing (Day 7)
 - Unit tests for BaseLLM integration
 - Unit tests for TopologicalSorter
 - Unit tests for DataProfiler
 - Integration test: full analysis on simple test database
 
 **Deliverables**:
-- `src/ai/llm-client.ts` ✨ **NEW**
+- `src/ai/llm-client.ts` ✨ **NEW** (uses MJGlobal.Instance.ClassFactory)
+- `src/ai/model-map.ts` ✨ **NEW** (maps API names to DriverClass)
 - `src/prompts/*.txt` (6 prompt templates) ✨ **NEW**
 - `src/utils/prompt-loader.ts` ✨ **NEW**
+- Updated `src/commands/init.ts` (prompt for model API name)
 - `src/analysis/topological-sort.ts` ✨ **NEW**
 - `src/analysis/data-profiler.ts` ✨ **NEW**
 - Updated `src/types/state-file.ts` (v2.0 with `analysisConfig` and iterations)
@@ -1301,11 +1406,17 @@ db-auto-doc init
 # Prompts:
 # - Database server? localhost
 # - Database name? AdventureWorks
-# - AI provider? openai
-# - AI model? gpt-4
+# - AI Model (e.g., gpt-4, claude-3-5-sonnet, llama-3.1-70b)? gpt-4
+# - API Key for OpenAI? sk-...
 # - Enable back-propagation? Yes
 # - Max iterations per table? 20
 # - Confidence threshold? 0.85
+
+# Creates .env file with:
+# DB_SERVER=localhost
+# DB_DATABASE=AdventureWorks
+# AI_MODEL=gpt-4
+# OPENAI_API_KEY=sk-...
 #
 # Seed questions:
 # - What is the overall purpose? E-commerce and manufacturing ERP
@@ -1470,24 +1581,33 @@ The DBAutoDoc package will be considered **complete** when:
 
 ## Summary of Changes from v1 Plan
 
-1. **BaseLLM Integration moved from Phase 2 to Phase 1a** (Days 1-2)
+1. **BaseLLM Integration moved from Phase 2 to Phase 1a** (Days 1-2) - **CRITICAL CHANGE**
    - Now the FIRST task in implementation
    - Recognized as critical foundation for all subsequent work
    - SimpleAIClient clearly marked as temporary placeholder
+   - **Uses MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM> pattern**
+   - **NOT** direct instantiation (no `new OpenAILLM()`)
 
-2. **User-Configurable Settings added to Phase 1b** (Days 2-3)
+2. **Model API Name Approach** - **NEW PATTERN**
+   - Init command prompts for model API name (e.g., "gpt-4", "claude-3-5-sonnet")
+   - Maps API name to DriverClass (e.g., "gpt-4" → "OpenAILLM")
+   - Uses `GetAIAPIKey(driverClass)` to get provider-specific API key from env
+   - Stores as `AI_MODEL` in .env (not separate provider + model)
+   - Example: User enters "llama-3.1-70b" → maps to "GroqLLM" → gets GROQ_API_KEY
+
+3. **User-Configurable Settings added to Phase 1c** (Days 2-3)
    - All analysis parameters are now user-provided (with defaults)
-   - Settings persist in state file
+   - Settings persist in state file's `analysisConfig`
    - CLI flags allow per-run overrides
    - No more hardcoded values like maxIterations=20
 
-3. **Timeline compressed to 4 weeks** (from 5)
+4. **Timeline compressed to 4 weeks** (from 5)
    - Week 1: Core Infrastructure + BaseLLM + User Config
    - Week 2: Iterative Analysis Workflow
    - Week 3: Schema & Sanity Checks
    - Week 4: Testing & Documentation
 
-4. **State file v2.0 includes `analysisConfig`**
+5. **State file v2.0 includes `analysisConfig`**
    - Stores user's configuration choices
    - Enables consistent behavior across runs
    - Supports `--reconfigure` to update settings
