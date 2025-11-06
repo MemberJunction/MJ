@@ -2904,7 +2904,7 @@ BEGIN
         END,
         CASE
             WHEN RAND(CHECKSUM(NEWID())) < 0.85
-            THEN DATEADD(HOUR, 8 + (RAND(CHECKSUM(NEWID())) * 2), @CurrentEventDate)
+            THEN DATEADD(HOUR, 8 + (RAND(CHECKSUM(NEWID())) * 2), CAST(@CurrentEventDate AS DATETIME))
         END,
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.85 THEN 1 ELSE 0 END
     FROM [AssociationDemo].[Member] m
@@ -3433,7 +3433,7 @@ SELECT
         ELSE 'Renew Now'
     END
 FROM [AssociationDemo].[EmailSend] es
-WHERE es.Status = 'Clicked';
+WHERE es.Status = 'Clicked' AND es.ClickedDate IS NOT NULL;
 
 
 -- Note: No GO statement here - variables must persist within transaction
