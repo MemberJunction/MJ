@@ -19,8 +19,9 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
                 <mj-form-toolbar [form]="formComponent">
                     <mj-form-section-controls
                         toolbar-additional-controls
-                        [expandedCount]="formComponent.getExpandedCount()"
                         [visibleCount]="formComponent.getVisibleSectionCount()"
+                        [totalCount]="formComponent.getTotalSectionCount()"
+                        [searchFilter]="formComponent.searchFilter"
                         (expandAll)="formComponent.expandAllSections()"
                         (collapseAll)="formComponent.collapseAllSections()"
                         (filterChange)="formComponent.onFilterChange($event)">

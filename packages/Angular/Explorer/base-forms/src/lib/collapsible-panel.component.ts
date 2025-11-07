@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList, HostBinding } from '@angular/core';
 import { MJFormField } from './base-field-component';
 
 /**
@@ -16,7 +16,6 @@ import { MJFormField } from './base-field-component';
         <div
             class="form-card collapsible-card"
             [class.related-entity]="variant === 'related-entity'"
-            [class.search-hidden]="!isVisible"
             [attr.data-section-name]="sectionName"
             [attr.data-field-names]="fieldNames">
             <div class="collapsible-header" (click)="toggle()" role="button" tabindex="0">
@@ -48,6 +47,10 @@ import { MJFormField } from './base-field-component';
             display: block;
         }
 
+        :host(.search-hidden) {
+            display: none;
+        }
+
         .form-card {
             background: white;
             border-radius: 8px;
@@ -57,10 +60,6 @@ import { MJFormField } from './base-field-component';
 
         .collapsible-card {
             overflow: hidden;
-        }
-
-        .collapsible-card.search-hidden {
-            display: none;
         }
 
         .collapsible-header {
@@ -144,7 +143,7 @@ import { MJFormField } from './base-field-component';
         .collapsible-title .row-count-badge {
             background: #10b981;
             color: white;
-            padding: 3px 6px 2px 6px;
+            padding: 3px 8px 2px 9px;
             border-radius: 12px;
             font-size: 12px;
             font-weight: 600;
@@ -152,7 +151,10 @@ import { MJFormField } from './base-field-component';
             vertical-align: middle;
             position: relative;
             top: -2px;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 24px;
             line-height: 1;
         }
 
@@ -165,9 +167,10 @@ import { MJFormField } from './base-field-component';
         .collapsible-title h3 ::ng-deep .search-highlight {
             background-color: #fef08a;
             color: #854d0e;
-            padding: 2px 4px;
-            border-radius: 3px;
+            padding: 0;
+            border-radius: 2px;
             font-weight: 700;
+            box-shadow: 0 0 0 2px #fef08a;
         }
     `]
 })
@@ -181,6 +184,11 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
     @Input() badgeCount: number | undefined;
 
     @ContentChildren(MJFormField, { descendants: true }) fieldComponents!: QueryList<MJFormField>;
+
+    @HostBinding('class.search-hidden')
+    get isHidden(): boolean {
+        return !this.isVisible;
+    }
 
     get expanded(): boolean {
         return this.form ? this.form.IsSectionExpanded(this.sectionKey) : true;

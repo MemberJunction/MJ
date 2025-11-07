@@ -1,8 +1,15 @@
 <div class="user-view-grid-wrap" >
-    @if (isLoading || !AllowLoad || neverLoaded) {
-        <kendo-loader></kendo-loader>
+    @if (!AllowLoad || neverLoaded) {
+        <div class="grid-loading-container">
+            <kendo-loader></kendo-loader>
+        </div>
     }
     @else {
+        @if (isLoading) {
+            <div class="grid-loading-overlay">
+                <kendo-loader></kendo-loader>
+            </div>
+        }
         <kendo-grid #kendoGrid
             
             [resizable]="true"
@@ -31,35 +38,35 @@
             <ng-template kendoGridToolbarTemplate>
             @if(!anyModeEnabled){
                 @if(EntityInfo && ShowCreateNewRecordButton && UserCanCreateNewRecord) {
-                    <button kendoButton (click)="doCreateNewRecord()">
+                    <button kendoButton (click)="doCreateNewRecord()" title="Create new record">
                         <span class="fa-solid fa-plus"></span>
                         <span class="button-text">New</span>
                     </button>
                 }
 
-                <button kendoButton (click)="doExcelExport()">
+                <button kendoButton (click)="doExcelExport()" title="Export to Excel">
                     <span class="fa-solid fa-file-excel"></span>
                     <span class="button-text">Export to Excel</span>
                 </button>
-                <button (click)="enableCheckbox(false, 'duplicate')" kendoButton>
+                <button (click)="enableCheckbox(false, 'duplicate')" kendoButton title="Search for duplicate records">
                     <span class="fa-solid fa-magnifying-glass-plus"></span>
                     <span class="button-text">Search For Duplicates</span>
                 </button>
-                <button (click)="enableCheckbox(false, 'addToList')" kendoButton>
+                <button (click)="enableCheckbox(false, 'addToList')" kendoButton title="Add selected records to a list">
                     <span class="fa-solid fa-list-check"></span>
                     <span class="button-text">Add To List</span>
                 </button>
-                <button (click)="enableMergeOrCompare(false, 'merge')" kendoButton>
+                <button (click)="enableMergeOrCompare(false, 'merge')" kendoButton title="Merge selected records">
                     <span class="fa-solid fa-code-merge"></span>
                     <span class="button-text">Merge</span>
                 </button>
-                <button (click)="enableMergeOrCompare(false, 'compare')" kendoButton>
+                <button (click)="enableMergeOrCompare(false, 'compare')" kendoButton title="Compare selected records">
                     <span class="fa-solid fa-code-compare"></span>
                     <span class="button-text">Compare</span>
                 </button>
 
                 @if (ShowCommunicationButton && EntitySupportsCommunication) {
-                    <button (click)="doCommunication()" kendoButton>
+                    <button (click)="doCommunication()" kendoButton title="Send message to selected records">
                         <span class="fa-solid fa-envelope"></span>
                         <span class="button-text">Send Message</span>
                     </button>
@@ -67,7 +74,7 @@
 
                 @if (ShowEntityActionButtons && EntityActions && EntityActions.length > 0) {
                     @for (action of EntityActions; track action) {
-                        <button (click)="doEntityAction(action)" kendoButton>
+                        <button (click)="doEntityAction(action)" kendoButton [title]="action.Action">
                             <span class="fa-solid fa-bolt"></span>
                             <span class="button-text">{{action.Action}}</span>
                         </button>
@@ -75,7 +82,7 @@
                 }
 
                 @if(showRefreshButton){
-                    <button kendoButton (click)="RefreshFromSavedParams()">
+                    <button kendoButton (click)="RefreshFromSavedParams()" title="Refresh data">
                         <span class="fa-solid fa-arrows-rotate"></span>
                         <span class="button-text">Refresh</span>
                     </button>

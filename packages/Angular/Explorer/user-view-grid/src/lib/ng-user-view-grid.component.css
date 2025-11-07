@@ -4,6 +4,31 @@
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     overflow: hidden;
+    position: relative;
+}
+
+/* Loading container - contained within grid space (initial load) */
+.grid-loading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    padding: 40px;
+}
+
+/* Loading overlay - shown on top of grid during refresh */
+.grid-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
 }
 
 .user-view-grid-column-header {
@@ -109,9 +134,19 @@
     border-radius: 6px !important;
     display: inline-flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 8px !important;
     font-weight: 500 !important;
     transition: all 0.2s ease !important;
+}
+
+/* Hide button text labels on toolbar buttons to save space, rely on icons + tooltips */
+::ng-deep .user-view-grid-wrap .k-grid-toolbar button .button-text {
+    display: none !important;
+}
+
+/* Icon-only buttons need less horizontal padding */
+::ng-deep .user-view-grid-wrap .k-grid-toolbar button span[class*="fa-"] {
+    font-size: 16px !important;
 }
 
 ::ng-deep .user-view-grid-wrap .k-grid-toolbar button:hover {

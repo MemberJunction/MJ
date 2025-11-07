@@ -42,9 +42,10 @@ markdown {
 .record-form-row label ::ng-deep .search-highlight {
   background-color: #fef08a;
   color: #854d0e;
-  padding: 2px 4px;
-  border-radius: 3px;
+  padding: 0;
+  border-radius: 2px;
   font-weight: 700;
+  box-shadow: 0 0 0 2px #fef08a;
 }
 
 

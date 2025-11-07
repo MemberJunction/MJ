@@ -32,7 +32,9 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
                 </button>
             }
         </div>
-        <span class="section-count">{{expandedCount}}/{{visibleCount}}</span>
+        @if (searchFilter && searchFilter.trim()) {
+            <span class="section-count">{{visibleCount}}/{{totalCount}}</span>
+        }
     `,
     styles: [`
         /* Note: positioning (display, gap, align-items, margin-left) is handled by parent toolbar CSS */
@@ -111,8 +113,9 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
     `]
 })
 export class FormSectionControlsComponent {
-    @Input() expandedCount: number = 0;
     @Input() visibleCount: number = 0;
+    @Input() totalCount: number = 0;
+    @Input() searchFilter: string = '';
     @Output() expandAll = new EventEmitter<void>();
     @Output() collapseAll = new EventEmitter<void>();
     @Output() filterChange = new EventEmitter<string>();

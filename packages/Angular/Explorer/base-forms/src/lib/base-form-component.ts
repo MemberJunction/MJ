@@ -1,4 +1,4 @@
-import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild, ChangeDetectorRef, ContentChildren } from '@angular/core';
 
 import { Subject, Subscription, debounceTime, fromEvent } from 'rxjs';
 import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
@@ -10,6 +10,7 @@ import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
          RunViewResult} from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormSectionInfo } from './base-form-section-info';
+import { CollapsiblePanelComponent } from './collapsible-panel.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
@@ -48,6 +49,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   @ViewChildren(MJTabStripComponent) tabStrips!: QueryList<MJTabStripComponent>;
 
+  @ViewChildren(CollapsiblePanelComponent) collapsiblePanels!: QueryList<CollapsiblePanelComponent>;
+
   public get TabStripComponent(): MJTabStripComponent {
     return this.tabComponent;
   }
@@ -66,7 +69,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         this.StartEditMode();
       }
       const md: Metadata = new Metadata();
-   
+
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
 
@@ -88,9 +91,16 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         })
         const end = new Date().getTime();
         console.log(dataObject);
-        console.log('Time to get full record info: ' + (end - start) + 'ms');  
+        console.log('Time to get full record info: ' + (end - start) + 'ms');
       }
     }
+
+    // Set up debounced filter subscription
+    this.filterSubscription = this.filterSubject
+      .pipe(debounceTime(250))
+      .subscribe(searchTerm => {
+        this.searchFilter = searchTerm;
+      });
   }
 
   @ViewChild('topArea') topArea!: ElementRef;
@@ -141,6 +151,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   ngOnDestroy(): void {
     if (this.resizeSub) {
       this.resizeSub.unsubscribe();
+    }
+    if (this.filterSubscription) {
+      this.filterSubscription.unsubscribe();
     }
   }
 
@@ -629,6 +642,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public searchFilter: string = '';
 
   /**
+   * Subject for debouncing filter changes.
+   */
+  private filterSubject = new Subject<string>();
+  private filterSubscription?: Subscription;
+
+  /**
    * Initializes the sections array. Called by subclasses in ngOnInit.
    * Accepts either BaseFormSectionInfo instances or plain objects that will be converted.
    * @param sections Array of section information or plain objects
@@ -736,19 +755,31 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   /**
-   * Gets the total count of visible sections.
-   * @returns Total number of sections
+   * Gets the count of visible sections after filtering.
+   * @returns Number of sections currently visible (not hidden by search filter)
    */
   public getVisibleSectionCount(): number {
+    if (!this.collapsiblePanels || this.collapsiblePanels.length === 0) {
+      return this.sections.length;
+    }
+    return this.collapsiblePanels.filter(panel => panel.isVisible).length;
+  }
+
+  /**
+   * Gets the total count of all sections (regardless of filter).
+   * @returns Total number of sections
+   */
+  public getTotalSectionCount(): number {
     return this.sections.length;
   }
 
   /**
    * Handles filter change events from the section controls.
+   * Debounces the filter updates by 250ms to avoid excessive re-rendering during typing.
    * @param searchTerm The search term to filter sections
    */
   public onFilterChange(searchTerm: string): void {
-    this.searchFilter = searchTerm;
+    this.filterSubject.next(searchTerm);
   }
 
   // #endregion
