@@ -2,19 +2,37 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 8 expanded
+            </span>
+        </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="promptid prompt id modelid model id vendorid vendor id agentid agent id configurationid configuration id runat run at completedat completed at executiontimems execution time ms messages result tokensused tokens used tokensprompt tokens prompt tokenscompletion tokens completion totalcost total cost success errormessage error message __mj_createdat created at __mj_updatedat updated at parentid parent id runtype run type executionorder execution order agentrunid agent run id cost costcurrency cost currency tokensusedrollup tokens used rollup tokenspromptrollup tokens prompt rollup tokenscompletionrollup tokens completion rollup temperature topp top p topk top k minp min p frequencypenalty frequency penalty presencepenalty presence penalty seed stopsequences stop sequences responseformat response format logprobs log probs toplogprobs top log probs descendantcost descendant cost validationattemptcount validation attempt count successfulvalidationcount successful validation count finalvalidationpassed final validation passed validationbehavior validation behavior retrystrategy retry strategy maxretriesconfigured max retries configured finalvalidationerror final validation error validationerrorcount validation error count commonvalidationerror common validation error firstattemptat first attempt at lastattemptat last attempt at totalretrydurationms total retry duration ms validationattempts validation attempts validationsummary validation summary failoverattempts failover attempts failovererrors failover errors failoverdurations failover durations originalmodelid original model id originalrequeststarttime original request start time totalfailoverduration total failover duration rerunfrompromptrunid rerun from prompt run id modelselection model selection status cancelled cancellationreason cancellation reason modelpowerrank model power rank selectionstrategy selection strategy cachehit cache hit cachekey cache key judgeid judge id judgescore judge score wasselectedresult was selected result streamingenabled streaming enabled firsttokentime first token time errordetails error details childpromptid child prompt id queuetime queue time prompttime prompt time completiontime completion time modelspecificresponsedetails model specific response details effortlevel effort level runname run name comments prompt model vendor agent configuration originalmodel original model judge childprompt child prompt rootparentid root parent id rootrerunfrompromptrunid root rerun from prompt run id">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Run Execution Core Section -->
+        <div class="form-card collapsible-card" data-section-name="run execution core" data-field-names="promptid prompt id modelid model id vendorid vendor id agentid agent id configurationid configuration id runat run at completedat completed at executiontimems execution time ms success errormessage error message parentid parent id runtype run type executionorder execution order agentrunid agent run id rerunfrompromptrunid rerun from prompt run id status cancelled cancellationreason cancellation reason cachehit cache hit cachekey cache key wasselectedresult was selected result streamingenabled streaming enabled firsttokentime first token time errordetails error details childpromptid child prompt id runname run name comments rootparentid root parent id rootrerunfrompromptrunid root rerun from prompt run id">
+            <div class="collapsible-header" (click)="toggleSection('runExecutionCore')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">Run Execution Core</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.runExecutionCore ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.runExecutionCore">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -85,48 +103,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Messages"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Result"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TokensUsed"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TokensPrompt"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TokensCompletion"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TotalCost"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="Success"
             Type="checkbox"
             [EditMode]="EditMode"
@@ -136,20 +112,6 @@
             [ShowLabel]="true"
             FieldName="ErrorMessage"
             Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -187,6 +149,286 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="RerunFromPromptRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Cancelled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CancellationReason"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheHit"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheKey"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="WasSelectedResult"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StreamingEnabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FirstTokenTime"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ErrorDetails"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ChildPromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RunName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Comments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootRerunFromPromptRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Prompt & Result Content Section -->
+        <div class="form-card collapsible-card" data-section-name="prompt & result content" data-field-names="messages result stopsequences stop sequences responseformat response format judgeid judge id judgescore judge score modelspecificresponsedetails model specific response details prompt model vendor agent configuration originalmodel original model judge childprompt child prompt">
+            <div class="collapsible-header" (click)="toggleSection('promptResultContent')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Prompt & Result Content</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.promptResultContent ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.promptResultContent">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Messages"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Result"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StopSequences"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ResponseFormat"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="JudgeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="JudgeScore"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelSpecificResponseDetails"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Prompt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Model"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Vendor"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Agent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OriginalModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Judge"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ChildPrompt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance & Cost Metrics Section -->
+        <div class="form-card collapsible-card" data-section-name="performance & cost metrics" data-field-names="tokensused tokens used tokensprompt tokens prompt tokenscompletion tokens completion totalcost total cost cost costcurrency cost currency tokensusedrollup tokens used rollup tokenspromptrollup tokens prompt rollup tokenscompletionrollup tokens completion rollup descendantcost descendant cost failoverattempts failover attempts failovererrors failover errors failoverdurations failover durations originalmodelid original model id originalrequeststarttime original request start time totalfailoverduration total failover duration queuetime queue time prompttime prompt time completiontime completion time">
+            <div class="collapsible-header" (click)="toggleSection('performanceCostMetrics')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-chart-line"></i>
+                    <h3><span class="section-name">Performance & Cost Metrics</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.performanceCostMetrics ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.performanceCostMetrics">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensUsed"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensPrompt"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensCompletion"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TotalCost"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Cost"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -219,6 +461,96 @@
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DescendantCost"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverAttempts"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverErrors"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverDurations"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OriginalModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OriginalRequestStartTime"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TotalFailoverDuration"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="QueueTime"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptTime"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CompletionTime"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Parameters & Settings Section -->
+        <div class="form-card collapsible-card" data-section-name="model parameters & settings" data-field-names="temperature topp top p topk top k minp min p frequencypenalty frequency penalty presencepenalty presence penalty seed logprobs log probs toplogprobs top log probs modelselection model selection modelpowerrank model power rank selectionstrategy selection strategy effortlevel effort level">
+            <div class="collapsible-header" (click)="toggleSection('modelParametersSettings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sliders-h"></i>
+                    <h3><span class="section-name">Model Parameters & Settings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.modelParametersSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.modelParametersSettings">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -271,20 +603,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="StopSequences"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ResponseFormat"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="LogProbs"
             Type="checkbox"
             [EditMode]="EditMode"
@@ -299,10 +617,49 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DescendantCost"
+            FieldName="ModelSelection"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelPowerRank"
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SelectionStrategy"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EffortLevel"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Validation & Retry Details Section -->
+        <div class="form-card collapsible-card" data-section-name="validation & retry details" data-field-names="validationattemptcount validation attempt count successfulvalidationcount successful validation count finalvalidationpassed final validation passed validationbehavior validation behavior retrystrategy retry strategy maxretriesconfigured max retries configured finalvalidationerror final validation error validationerrorcount validation error count commonvalidationerror common validation error firstattemptat first attempt at lastattemptat last attempt at totalretrydurationms total retry duration ms validationattempts validation attempts validationsummary validation summary">
+            <div class="collapsible-header" (click)="toggleSection('validationRetryDetails')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-check-circle"></i>
+                    <h3><span class="section-name">Validation & Retry Details</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.validationRetryDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.validationRetryDetails">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -401,284 +758,35 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="FailoverAttempts"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="FailoverErrors"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="FailoverDurations"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OriginalModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OriginalRequestStartTime"
-            Type="datepicker"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TotalFailoverDuration"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RerunFromPromptRunID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ModelSelection"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Cancelled"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CancellationReason"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ModelPowerRank"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SelectionStrategy"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheHit"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheKey"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="JudgeID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="JudgeScore"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="WasSelectedResult"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="StreamingEnabled"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="FirstTokenTime"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ErrorDetails"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ChildPromptID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="QueueTime"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PromptTime"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CompletionTime"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ModelSpecificResponseDetails"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EffortLevel"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RunName"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Comments"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Prompt"
+            FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Model"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Vendor"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Agent"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OriginalModel"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Judge"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ChildPrompt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RootRerunFromPromptRunID"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -692,7 +800,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt runs" data-field-names="mj: ai prompt runs" data-section-key="mJAIPromptRuns">
             <div class="collapsible-header" (click)="toggleSection('mJAIPromptRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Prompt Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptRuns']">{{sectionRowCounts['mJAIPromptRuns']}}</span>
@@ -720,7 +828,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai result cache" data-field-names="ai result cache" data-section-key="aIResultCache">
             <div class="collapsible-header" (click)="toggleSection('aIResultCache')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Result Cache</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIResultCache']">{{sectionRowCounts['aIResultCache']}}</span>

@@ -3,18 +3,18 @@
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="listid list id recordid record sequence __mj_createdat created at __mj_updatedat updated at status additionaldata additional data list">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- List Reference Section -->
+        <div class="form-card collapsible-card" data-section-name="list reference" data-field-names="listid list id recordid record list">
+            <div class="collapsible-header" (click)="toggleSection('listReference')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-list"></i>
+                    <h3><span class="section-name">List Reference</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.listReference ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.listReference">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -35,22 +35,33 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="List"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Detail Attributes Section -->
+        <div class="form-card collapsible-card" data-section-name="detail attributes" data-field-names="sequence status additionaldata additional data">
+            <div class="collapsible-header" (click)="toggleSection('detailAttributes')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sliders-h"></i>
+                    <h3><span class="section-name">Detail Attributes</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.detailAttributes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.detailAttributes">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Sequence"
             Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -67,10 +78,35 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="List"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

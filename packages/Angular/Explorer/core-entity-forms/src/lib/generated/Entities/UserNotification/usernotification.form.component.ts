@@ -14,7 +14,9 @@ export class UserNotificationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        notificationOverview: true,
+        relatedResource: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

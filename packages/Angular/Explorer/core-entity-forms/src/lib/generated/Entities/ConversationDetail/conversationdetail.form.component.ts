@@ -15,7 +15,10 @@ export class ConversationDetailFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        conversationLinksArtifacts: true,
+        messageDetails: true,
+        userFeedbackInsights: false,
+        systemMetadata: false,
         reports: false,
         mJConversationDetailArtifacts: false,
         mJConversationDetailRatings: false,

@@ -3,18 +3,18 @@
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="agentid agent id requestedat requested at requestforuserid request for user id status request response responsebyuserid response by user id respondedat responded at comments __mj_createdat created at __mj_updatedat updated at agent requestforuser request for user responsebyuser response by user">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Request Summary Section -->
+        <div class="form-card collapsible-card" data-section-name="request summary" data-field-names="agentid agent id requestedat requested at requestforuserid request for user id status request comments agent requestforuser request for user">
+            <div class="collapsible-header" (click)="toggleSection('requestSummary')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Request Summary</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.requestSummary ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.requestSummary">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -58,6 +58,45 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="Comments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Agent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RequestForUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Response Summary Section -->
+        <div class="form-card collapsible-card" data-section-name="response summary" data-field-names="response responsebyuserid response by user id respondedat responded at responsebyuser response by user">
+            <div class="collapsible-header" (click)="toggleSection('responseSummary')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-comment"></i>
+                    <h3><span class="section-name">Response Summary</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.responseSummary ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.responseSummary">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Response"
             Type="textarea"
             [EditMode]="EditMode"
@@ -81,10 +120,28 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Comments"
-            Type="textarea"
+            FieldName="ResponseByUser"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -96,27 +153,6 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Agent"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RequestForUser"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ResponseByUser"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

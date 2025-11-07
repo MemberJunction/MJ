@@ -15,7 +15,11 @@ export class ComponentFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        identificationVersioning: true,
+        specificationDesign: true,
+        developerOwnership: false,
+        registrySynchronization: false,
+        systemMetadata: false,
         mJComponentDependencies: false,
         mJComponentLibraryLinks: false,
         mJComponentDependencies1: false

@@ -14,7 +14,9 @@ export class QueryFieldFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        fieldDefinitionPresentation: true,
+        dataTypeSourceMapping: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

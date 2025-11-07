@@ -3,18 +3,18 @@
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description __mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Provider Information Section -->
+        <div class="form-card collapsible-card" data-section-name="provider information" data-field-names="name description">
+            <div class="collapsible-header" (click)="toggleSection('providerInformation')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-id-card"></i>
+                    <h3><span class="section-name">Provider Information</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.providerInformation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.providerInformation">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -30,6 +30,24 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -54,7 +72,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="recommendation runs" data-field-names="recommendation runs" data-section-key="recommendationRuns">
             <div class="collapsible-header" (click)="toggleSection('recommendationRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-rocket"></i>
                     <h3>
                         <span class="section-name">Recommendation Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['recommendationRuns']">{{sectionRowCounts['recommendationRuns']}}</span>

@@ -15,7 +15,10 @@ export class ProjectFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        systemStatus: true,
+        projectHierarchy: true,
+        projectOverview: false,
+        systemMetadata: false,
         mJProjects: false,
         conversations: false,
         mJTasks: false

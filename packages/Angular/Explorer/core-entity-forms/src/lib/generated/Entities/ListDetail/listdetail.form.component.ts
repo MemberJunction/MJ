@@ -14,7 +14,9 @@ export class ListDetailFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        listReference: true,
+        detailAttributes: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

@@ -14,7 +14,9 @@ export class ActionResultCodeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        actionMapping: true,
+        resultCodeDetails: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

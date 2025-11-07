@@ -3,18 +3,18 @@
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="agentid agent id artifacttypeid artifact type id sequence __mj_createdat created at __mj_updatedat updated at agent artifacttype artifact type">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Link Definition Section -->
+        <div class="form-card collapsible-card" data-section-name="link definition" data-field-names="agentid agent id artifacttypeid artifact type id sequence">
+            <div class="collapsible-header" (click)="toggleSection('linkDefinition')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-link"></i>
+                    <h3><span class="section-name">Link Definition</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.linkDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.linkDefinition">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -41,20 +41,24 @@
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Display Names Section -->
+        <div class="form-card collapsible-card" data-section-name="display names" data-field-names="agent artifacttype artifact type">
+            <div class="collapsible-header" (click)="toggleSection('displayNames')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-tag"></i>
+                    <h3><span class="section-name">Display Names</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.displayNames ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.displayNames">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -66,6 +70,38 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="ArtifactType"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

@@ -14,7 +14,9 @@ export class CompanyIntegrationRecordMapFormComponent extends BaseFormComponent 
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        integrationKeys: true,
+        mappingDetails: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

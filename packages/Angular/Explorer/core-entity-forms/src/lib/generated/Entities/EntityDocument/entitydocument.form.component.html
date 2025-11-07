@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 7 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name typeid type id entityid entity id vectordatabaseid vector database id status templateid template id aimodelid aimodel id potentialmatchthreshold potential match threshold absolutematchthreshold absolute match threshold __mj_createdat __mj _created at __mj_updatedat __mj _updated at type entity vectordatabase vector database template aimodel">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Document Details Section -->
+        <div class="form-card collapsible-card" data-section-name="document details" data-field-names="name type">
+            <div class="collapsible-header" (click)="toggleSection('documentDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Document Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.documentDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.documentDetails">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -41,6 +41,31 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Relationships Section -->
+        <div class="form-card collapsible-card" data-section-name="relationships" data-field-names="typeid type id entityid entity id vectordatabaseid vector database id templateid template id aimodelid aimodel id entity vectordatabase vector database template aimodel">
+            <div class="collapsible-header" (click)="toggleSection('relationships')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-link"></i>
+                    <h3><span class="section-name">Relationships</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.relationships ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.relationships">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -71,13 +96,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="TemplateID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -92,41 +110,6 @@
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PotentialMatchThreshold"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AbsoluteMatchThreshold"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Type"
-            Type="textbox"
-            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -160,13 +143,84 @@
                 </div>
             </div>
         </div>
+
+        <!-- Matching Configuration Section -->
+        <div class="form-card collapsible-card" data-section-name="matching configuration" data-field-names="status potentialmatchthreshold potential match threshold absolutematchthreshold absolute match threshold">
+            <div class="collapsible-header" (click)="toggleSection('matchingConfiguration')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sliders-h"></i>
+                    <h3><span class="section-name">Matching Configuration</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.matchingConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.matchingConfiguration">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PotentialMatchThreshold"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AbsoluteMatchThreshold"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
         <div class="related-entity-grid">
 
         <!-- Entity Document Runs Section -->
         <div class="form-card collapsible-card related-entity" data-section-name="entity document runs" data-field-names="entity document runs" data-section-key="entityDocumentRuns">
             <div class="collapsible-header" (click)="toggleSection('entityDocumentRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Document Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocumentRuns']">{{sectionRowCounts['entityDocumentRuns']}}</span>
@@ -194,7 +248,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity document settings" data-field-names="entity document settings" data-section-key="entityDocumentSettings">
             <div class="collapsible-header" (click)="toggleSection('entityDocumentSettings')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-sliders-h"></i>
                     <h3>
                         <span class="section-name">Entity Document Settings</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocumentSettings']">{{sectionRowCounts['entityDocumentSettings']}}</span>
@@ -222,7 +276,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity record documents" data-field-names="entity record documents" data-section-key="entityRecordDocuments">
             <div class="collapsible-header" (click)="toggleSection('entityRecordDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Record Documents</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityRecordDocuments']">{{sectionRowCounts['entityRecordDocuments']}}</span>

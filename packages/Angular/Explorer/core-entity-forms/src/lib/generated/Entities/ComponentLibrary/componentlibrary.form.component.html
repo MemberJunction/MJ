@@ -2,19 +2,37 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
+            </span>
+        </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name displayname display name version globalvariable global variable category cdnurl cdn url cdncssurl cdn css url description __mj_createdat created at __mj_updatedat updated at status lintrules lint rules dependencies usagetype usage type">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Library Identification Section -->
+        <div class="form-card collapsible-card" data-section-name="library identification" data-field-names="name displayname display name version globalvariable global variable category">
+            <div class="collapsible-header" (click)="toggleSection('libraryIdentification')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-puzzle-piece"></i>
+                    <h3><span class="section-name">Library Identification</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.libraryIdentification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.libraryIdentification">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -51,6 +69,24 @@
             Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Distribution & Assets Section -->
+        <div class="form-card collapsible-card" data-section-name="distribution & assets" data-field-names="cdnurl cdn url cdncssurl cdn css url description">
+            <div class="collapsible-header" (click)="toggleSection('distributionAssets')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cloud-download-alt"></i>
+                    <h3><span class="section-name">Distribution & Assets</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.distributionAssets ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.distributionAssets">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -72,20 +108,24 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Governance & Dependencies Section -->
+        <div class="form-card collapsible-card" data-section-name="governance & dependencies" data-field-names="status lintrules lint rules dependencies usagetype usage type">
+            <div class="collapsible-header" (click)="toggleSection('governanceDependencies')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cogs"></i>
+                    <h3><span class="section-name">Governance & Dependencies</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.governanceDependencies ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.governanceDependencies">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -118,13 +158,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
         <div class="related-entity-grid">
 
         <!-- MJ: Component Library Links Section -->
         <div class="form-card collapsible-card related-entity" data-section-name="mj: component library links" data-field-names="mj: component library links" data-section-key="mJComponentLibraryLinks">
             <div class="collapsible-header" (click)="toggleSection('mJComponentLibraryLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-plug"></i>
                     <h3>
                         <span class="section-name">MJ: Component Library Links</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJComponentLibraryLinks']">{{sectionRowCounts['mJComponentLibraryLinks']}}</span>

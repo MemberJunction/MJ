@@ -15,7 +15,10 @@ export class EntityDocumentFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        documentDetails: true,
+        relationships: true,
+        matchingConfiguration: false,
+        systemMetadata: false,
         entityDocumentRuns: false,
         entityDocumentSettings: false,
         entityRecordDocuments: false

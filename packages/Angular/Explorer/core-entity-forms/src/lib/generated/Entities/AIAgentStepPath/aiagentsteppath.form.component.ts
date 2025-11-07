@@ -14,7 +14,9 @@ export class AIAgentStepPathFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        pathCoreDetails: true,
+        routingRules: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

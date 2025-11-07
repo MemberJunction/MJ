@@ -15,7 +15,10 @@ export class ArtifactVersionFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        versionIdentity: true,
+        contentMetadata: false,
+        ownershipAttribution: false,
+        systemMetadata: false,
         mJArtifactVersionAttributes: false,
         mJCollectionArtifacts: false,
         mJArtifactUses: false,

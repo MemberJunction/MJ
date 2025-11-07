@@ -15,7 +15,11 @@ export class UserViewFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        userOwnership: true,
+        entityContext: true,
+        viewDefinitionSettings: false,
+        filteringSmartSearch: false,
+        systemMetadata: false,
         dataContextItems: false,
         entityRelationships: false,
         userViewRuns: false

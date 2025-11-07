@@ -14,7 +14,9 @@ export class CollectionPermissionFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        sharingRelationships: true,
+        permissionSettings: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

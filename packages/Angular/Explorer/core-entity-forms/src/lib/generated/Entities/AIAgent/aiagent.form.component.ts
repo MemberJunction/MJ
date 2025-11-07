@@ -15,7 +15,12 @@ export class AIAgentFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        agentIdentityPresentation: true,
+        hierarchyInvocation: true,
+        contextCompression: false,
+        payloadDataFlow: false,
+        runtimeLimitsExecutionSettings: false,
+        systemMetadata: false,
         aIAgentActions: false,
         aIAgentLearningCycles: false,
         aIAgentModels: false,

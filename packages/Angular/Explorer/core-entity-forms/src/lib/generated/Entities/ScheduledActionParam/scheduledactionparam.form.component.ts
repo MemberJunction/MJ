@@ -14,7 +14,9 @@ export class ScheduledActionParamFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        coreIdentifiers: true,
+        parameterSettings: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

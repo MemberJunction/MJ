@@ -3,18 +3,18 @@
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="recommendationrunid recommendation run id sourceentityid source entity id sourceentityrecordid source entity record id __mj_createdat created at __mj_updatedat updated at sourceentity source entity">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Recommendation Core Section -->
+        <div class="form-card collapsible-card" data-section-name="recommendation core" data-field-names="recommendationrunid recommendation run id sourceentityid source entity id sourceentityrecordid source entity record id sourceentity source entity">
+            <div class="collapsible-header" (click)="toggleSection('recommendationCore')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-clipboard"></i>
+                    <h3><span class="section-name">Recommendation Core</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.recommendationCore ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recommendationCore">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -44,6 +44,31 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="SourceEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -52,13 +77,6 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SourceEntity"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -72,7 +90,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="recommendation items" data-field-names="recommendation items" data-section-key="recommendationItems">
             <div class="collapsible-header" (click)="toggleSection('recommendationItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-lightbulb"></i>
                     <h3>
                         <span class="section-name">Recommendation Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['recommendationItems']">{{sectionRowCounts['recommendationItems']}}</span>

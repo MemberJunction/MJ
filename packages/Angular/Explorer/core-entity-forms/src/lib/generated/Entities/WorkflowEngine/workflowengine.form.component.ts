@@ -15,7 +15,8 @@ export class WorkflowEngineFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        engineSpecification: true,
+        systemMetadata: false,
         workflows: false
     };
 

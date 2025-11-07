@@ -14,7 +14,9 @@ export class ConversationDetailRatingFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        referenceIDs: true,
+        ratingInformation: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

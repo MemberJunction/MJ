@@ -15,7 +15,8 @@ export class RoleFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        coreRoleDetails: true,
+        systemMetadata: false,
         authorizationRoles: false,
         employeeRoles: false,
         entityPermissions: false,

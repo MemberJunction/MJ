@@ -14,7 +14,9 @@ export class ReportSnapshotFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        snapshotIdentification: true,
+        snapshotDescriptors: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

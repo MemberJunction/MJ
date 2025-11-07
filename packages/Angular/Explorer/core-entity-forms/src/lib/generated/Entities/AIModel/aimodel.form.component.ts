@@ -15,7 +15,10 @@ export class AIModelFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        modelOverview: true,
+        performanceMetrics: true,
+        technicalSpecifications: false,
+        systemMetadata: false,
         aIActions: false,
         aIModelActions: false,
         entityDocuments: false,

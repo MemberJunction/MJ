@@ -15,7 +15,8 @@ export class ActionContextTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        contextDefinition: true,
+        systemMetadata: false,
         actionContexts: false
     };
 

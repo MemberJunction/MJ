@@ -15,7 +15,11 @@ export class QueryFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        queryDefinition: true,
+        performanceQuality: true,
+        cachingExecutionSettings: false,
+        aIEmbeddings: false,
+        systemMetadata: false,
         dataContextItems: false,
         queryFields: false,
         queryPermissions: false,

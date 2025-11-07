@@ -15,7 +15,10 @@ export class ReportFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        reportDetails: true,
+        dataContextRelationships: true,
+        outputScheduling: false,
+        systemMetadata: false,
         reportSnapshots: false,
         mJReportVersions: false,
         mJReportUserStates: false

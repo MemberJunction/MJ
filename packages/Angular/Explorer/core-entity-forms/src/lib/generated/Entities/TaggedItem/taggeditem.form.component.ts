@@ -14,7 +14,9 @@ export class TaggedItemFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        tagDefinition: true,
+        linkedRecord: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

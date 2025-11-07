@@ -14,7 +14,9 @@ export class EntityDocumentRunFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        documentAssociation: true,
+        runTimingStatus: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

@@ -15,7 +15,8 @@ export class RecommendationProviderFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        providerInformation: true,
+        systemMetadata: false,
         recommendationRuns: false
     };
 

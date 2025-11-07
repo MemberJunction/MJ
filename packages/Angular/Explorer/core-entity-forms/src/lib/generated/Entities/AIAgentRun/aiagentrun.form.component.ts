@@ -15,7 +15,12 @@ export class AIAgentRunFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        runIdentificationHierarchy: true,
+        executionDetailsOutcome: true,
+        contextualRelationships: false,
+        resourceUsageCost: false,
+        configurationOverrides: false,
+        systemMetadata: false,
         aIAgentNotes: false,
         mJAIAgentExamples: false,
         mJAIAgentRunSteps: false,

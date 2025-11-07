@@ -15,7 +15,10 @@ export class EmployeeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        identifiers: true,
+        personalContact: true,
+        employmentDetails: false,
+        systemMetadata: false,
         employeeCompanyIntegrations: false,
         employeeRoles: false,
         employeeSkills: false,

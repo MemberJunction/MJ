@@ -15,7 +15,8 @@ export class EntityRelationshipDisplayComponentFormComponent extends BaseFormCom
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        componentDefinition: true,
+        systemMetadata: false,
         entityRelationships: false
     };
 

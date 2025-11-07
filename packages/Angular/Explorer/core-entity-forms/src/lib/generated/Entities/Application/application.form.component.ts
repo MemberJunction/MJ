@@ -15,7 +15,9 @@ export class ApplicationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        applicationConfiguration: true,
+        generalInformation: true,
+        systemMetadata: false,
         entities: false,
         applicationSettings: false,
         userApplications: false,

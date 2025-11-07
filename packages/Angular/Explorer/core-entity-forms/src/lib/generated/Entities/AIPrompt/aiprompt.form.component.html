@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 13 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 18 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description templateid template id categoryid category id typeid type id status __mj_createdat created at __mj_updatedat updated at responseformat response format modelspecificresponseformat model specific response format aimodeltypeid ai model type id minpowerrank min power rank selectionstrategy selection strategy powerpreference power preference parallelizationmode parallelization mode parallelcount parallel count parallelconfigparam parallel config param outputtype output type outputexample output example validationbehavior validation behavior maxretries max retries retrydelayms retry delay ms retrystrategy retry strategy resultselectorpromptid result selector prompt id enablecaching enable caching cachettlseconds cache ttl seconds cachematchtype cache match type cachesimilaritythreshold cache similarity threshold cachemustmatchmodel cache must match model cachemustmatchvendor cache must match vendor cachemustmatchagent cache must match agent cachemustmatchconfig cache must match config promptrole prompt role promptposition prompt position temperature topp top p topk top k minp min p frequencypenalty frequency penalty presencepenalty presence penalty seed stopsequences stop sequences includelogprobs include log probs toplogprobs top log probs failoverstrategy failover strategy failovermaxattempts failover max attempts failoverdelayseconds failover delay seconds failovermodelstrategy failover model strategy failovererrorscope failover error scope effortlevel effort level template category type aimodeltype ai model type resultselectorprompt result selector prompt rootresultselectorpromptid root result selector prompt id">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Prompt Definition & Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="prompt definition & metadata" data-field-names="name description templateid template id categoryid category id typeid type id status responseformat response format modelspecificresponseformat model specific response format aimodeltypeid ai model type id resultselectorpromptid result selector prompt id promptrole prompt role promptposition prompt position template category type aimodeltype ai model type resultselectorprompt result selector prompt rootresultselectorpromptid root result selector prompt id">
+            <div class="collapsible-header" (click)="toggleSection('promptDefinitionMetadata')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Prompt Definition & Metadata</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.promptDefinitionMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.promptDefinitionMetadata">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -85,20 +85,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="ResponseFormat"
             Type="dropdownlist"
             [EditMode]="EditMode"
@@ -119,6 +105,89 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ResultSelectorPromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptRole"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptPosition"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Template"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModelType"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ResultSelectorPrompt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootResultSelectorPromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Selection & Execution Settings Section -->
+        <div class="form-card collapsible-card" data-section-name="model selection & execution settings" data-field-names="minpowerrank min power rank selectionstrategy selection strategy powerpreference power preference parallelizationmode parallelization mode parallelcount parallel count parallelconfigparam parallel config param temperature topp top p topk top k minp min p frequencypenalty frequency penalty presencepenalty presence penalty seed stopsequences stop sequences includelogprobs include log probs toplogprobs top log probs effortlevel effort level">
+            <div class="collapsible-header" (click)="toggleSection('modelSelectionExecutionSettings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sliders-h"></i>
+                    <h3><span class="section-name">Model Selection & Execution Settings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.modelSelectionExecutionSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.modelSelectionExecutionSettings">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -159,127 +228,6 @@
             [ShowLabel]="true"
             FieldName="ParallelConfigParam"
             Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OutputType"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OutputExample"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ValidationBehavior"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MaxRetries"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RetryDelayMS"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RetryStrategy"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ResultSelectorPromptID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EnableCaching"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheTTLSeconds"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheMatchType"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheSimilarityThreshold"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheMustMatchModel"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheMustMatchVendor"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheMustMatchAgent"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CacheMustMatchConfig"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PromptRole"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PromptPosition"
-            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -355,6 +303,91 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="EffortLevel"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Output & Validation Section -->
+        <div class="form-card collapsible-card" data-section-name="output & validation" data-field-names="outputtype output type outputexample output example validationbehavior validation behavior">
+            <div class="collapsible-header" (click)="toggleSection('outputValidation')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-check-circle"></i>
+                    <h3><span class="section-name">Output & Validation</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.outputValidation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.outputValidation">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputExample"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ValidationBehavior"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Retry & Failover Policies Section -->
+        <div class="form-card collapsible-card" data-section-name="retry & failover policies" data-field-names="maxretries max retries retrydelayms retry delay ms retrystrategy retry strategy failoverstrategy failover strategy failovermaxattempts failover max attempts failoverdelayseconds failover delay seconds failovermodelstrategy failover model strategy failovererrorscope failover error scope">
+            <div class="collapsible-header" (click)="toggleSection('retryFailoverPolicies')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sync-alt"></i>
+                    <h3><span class="section-name">Retry & Failover Policies</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.retryFailoverPolicies ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.retryFailoverPolicies">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxRetries"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RetryDelayMS"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RetryStrategy"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="FailoverStrategy"
             Type="dropdownlist"
             [EditMode]="EditMode"
@@ -387,52 +420,109 @@
             Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Caching & Performance Section -->
+        <div class="form-card collapsible-card" data-section-name="caching & performance" data-field-names="enablecaching enable caching cachettlseconds cache ttl seconds cachematchtype cache match type cachesimilaritythreshold cache similarity threshold cachemustmatchmodel cache must match model cachemustmatchvendor cache must match vendor cachemustmatchagent cache must match agent cachemustmatchconfig cache must match config">
+            <div class="collapsible-header" (click)="toggleSection('cachingPerformance')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3><span class="section-name">Caching & Performance</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.cachingPerformance ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.cachingPerformance">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EffortLevel"
+            FieldName="EnableCaching"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheTTLSeconds"
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Template"
+            FieldName="CacheMatchType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheSimilarityThreshold"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchModel"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchVendor"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchAgent"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMustMatchConfig"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Category"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Type"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AIModelType"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ResultSelectorPrompt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RootResultSelectorPromptID"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -446,7 +536,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai agent actions" data-field-names="ai agent actions" data-section-key="aIAgentActions">
             <div class="collapsible-header" (click)="toggleSection('aIAgentActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Agent Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentActions']">{{sectionRowCounts['aIAgentActions']}}</span>
@@ -474,7 +564,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai result cache" data-field-names="ai result cache" data-section-key="aIResultCache">
             <div class="collapsible-header" (click)="toggleSection('aIResultCache')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Result Cache</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIResultCache']">{{sectionRowCounts['aIResultCache']}}</span>
@@ -502,7 +592,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent types" data-field-names="mj: ai agent types" data-section-key="mJAIAgentTypes">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Types</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentTypes']">{{sectionRowCounts['mJAIAgentTypes']}}</span>
@@ -530,7 +620,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai configurations" data-field-names="mj: ai configurations" data-section-key="mJAIConfigurations">
             <div class="collapsible-header" (click)="toggleSection('mJAIConfigurations')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-brain"></i>
                     <h3>
                         <span class="section-name">MJ: AI Configurations</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIConfigurations']">{{sectionRowCounts['mJAIConfigurations']}}</span>
@@ -558,7 +648,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai prompts" data-field-names="ai prompts" data-section-key="aIPrompts">
             <div class="collapsible-header" (click)="toggleSection('aIPrompts')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Prompts</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIPrompts']">{{sectionRowCounts['aIPrompts']}}</span>
@@ -586,7 +676,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai configurations" data-field-names="mj: ai configurations" data-section-key="mJAIConfigurations">
             <div class="collapsible-header" (click)="toggleSection('mJAIConfigurations')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-brain"></i>
                     <h3>
                         <span class="section-name">MJ: AI Configurations</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIConfigurations']">{{sectionRowCounts['mJAIConfigurations']}}</span>
@@ -614,7 +704,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent prompts" data-field-names="mj: ai agent prompts" data-section-key="mJAIAgentPrompts">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentPrompts')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Prompts</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentPrompts']">{{sectionRowCounts['mJAIAgentPrompts']}}</span>
@@ -642,7 +732,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent steps" data-field-names="mj: ai agent steps" data-section-key="mJAIAgentSteps">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentSteps')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Steps</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentSteps']">{{sectionRowCounts['mJAIAgentSteps']}}</span>
@@ -670,7 +760,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt models" data-field-names="mj: ai prompt models" data-section-key="mJAIPromptModels">
             <div class="collapsible-header" (click)="toggleSection('mJAIPromptModels')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Prompt Models</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptModels']">{{sectionRowCounts['mJAIPromptModels']}}</span>
@@ -698,7 +788,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt runs" data-field-names="mj: ai prompt runs" data-section-key="mJAIPromptRuns">
             <div class="collapsible-header" (click)="toggleSection('mJAIPromptRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Prompt Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptRuns']">{{sectionRowCounts['mJAIPromptRuns']}}</span>
@@ -726,7 +816,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai agents" data-field-names="ai agents" data-section-key="aIAgents">
             <div class="collapsible-header" (click)="toggleSection('aIAgents')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Agents</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgents']">{{sectionRowCounts['aIAgents']}}</span>

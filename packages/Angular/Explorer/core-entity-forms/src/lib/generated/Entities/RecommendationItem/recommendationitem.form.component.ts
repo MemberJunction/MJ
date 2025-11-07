@@ -14,7 +14,9 @@ export class RecommendationItemFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        technicalIdentifiers: true,
+        recommendationData: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

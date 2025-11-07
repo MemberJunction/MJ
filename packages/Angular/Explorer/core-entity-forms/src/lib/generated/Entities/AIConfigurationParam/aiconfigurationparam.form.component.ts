@@ -14,7 +14,9 @@ export class AIConfigurationParamFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        parameterAssignment: true,
+        parameterDetails: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

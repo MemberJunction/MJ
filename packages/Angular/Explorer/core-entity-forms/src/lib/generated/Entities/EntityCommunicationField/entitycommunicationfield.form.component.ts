@@ -14,7 +14,9 @@ export class EntityCommunicationFieldFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        identification: true,
+        mappingConfiguration: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

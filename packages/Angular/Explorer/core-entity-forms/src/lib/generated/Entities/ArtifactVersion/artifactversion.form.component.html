@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 8 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="artifactid artifact id versionnumber version number content configuration comments userid user id __mj_createdat created at __mj_updatedat updated at contenthash content hash name description artifact user">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Version Identity Section -->
+        <div class="form-card collapsible-card" data-section-name="version identity" data-field-names="artifactid artifact id versionnumber version number name description">
+            <div class="collapsible-header" (click)="toggleSection('versionIdentity')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-history"></i>
+                    <h3><span class="section-name">Version Identity</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.versionIdentity ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.versionIdentity">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -50,6 +50,38 @@
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Content & Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="content & metadata" data-field-names="content configuration comments contenthash content hash">
+            <div class="collapsible-header" (click)="toggleSection('contentMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Content & Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.contentMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -74,46 +106,36 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ContentHash"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Ownership & Attribution Section -->
+        <div class="form-card collapsible-card" data-section-name="ownership & attribution" data-field-names="userid user id artifact user">
+            <div class="collapsible-header" (click)="toggleSection('ownershipAttribution')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-user"></i>
+                    <h3><span class="section-name">Ownership & Attribution</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.ownershipAttribution ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.ownershipAttribution">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentHash"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -133,13 +155,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
         <div class="related-entity-grid">
 
         <!-- MJ: Artifact Version Attributes Section -->
         <div class="form-card collapsible-card related-entity" data-section-name="mj: artifact version attributes" data-field-names="mj: artifact version attributes" data-section-key="mJArtifactVersionAttributes">
             <div class="collapsible-header" (click)="toggleSection('mJArtifactVersionAttributes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-cube"></i>
                     <h3>
                         <span class="section-name">MJ: Artifact Version Attributes</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJArtifactVersionAttributes']">{{sectionRowCounts['mJArtifactVersionAttributes']}}</span>
@@ -167,7 +221,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: collection artifacts" data-field-names="mj: collection artifacts" data-section-key="mJCollectionArtifacts">
             <div class="collapsible-header" (click)="toggleSection('mJCollectionArtifacts')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-folder-open"></i>
                     <h3>
                         <span class="section-name">MJ: Collection Artifacts</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJCollectionArtifacts']">{{sectionRowCounts['mJCollectionArtifacts']}}</span>
@@ -195,7 +249,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: artifact uses" data-field-names="mj: artifact uses" data-section-key="mJArtifactUses">
             <div class="collapsible-header" (click)="toggleSection('mJArtifactUses')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-eye"></i>
                     <h3>
                         <span class="section-name">MJ: Artifact Uses</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJArtifactUses']">{{sectionRowCounts['mJArtifactUses']}}</span>
@@ -223,7 +277,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation detail artifacts" data-field-names="mj: conversation detail artifacts" data-section-key="mJConversationDetailArtifacts">
             <div class="collapsible-header" (click)="toggleSection('mJConversationDetailArtifacts')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-comment"></i>
                     <h3>
                         <span class="section-name">MJ: Conversation Detail Artifacts</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJConversationDetailArtifacts']">{{sectionRowCounts['mJConversationDetailArtifacts']}}</span>

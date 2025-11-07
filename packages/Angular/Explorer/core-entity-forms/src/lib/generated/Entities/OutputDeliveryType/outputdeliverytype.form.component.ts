@@ -15,7 +15,8 @@ export class OutputDeliveryTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        deliveryTypeDetails: true,
+        systemMetadata: false,
         reports: false
     };
 

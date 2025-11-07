@@ -15,7 +15,8 @@ export class EntityActionInvocationTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        invocationTypeDefinition: true,
+        systemMetadata: false,
         entityActionInvocations: false
     };
 

@@ -15,7 +15,10 @@ export class TemplateFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        templateContent: true,
+        associations: true,
+        availabilityStatus: false,
+        systemMetadata: false,
         templateContents: false,
         templateParams: false,
         aIPrompts: false,

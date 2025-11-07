@@ -14,7 +14,9 @@ export class ArtifactUseFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        artifactDetails: true,
+        userInteraction: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

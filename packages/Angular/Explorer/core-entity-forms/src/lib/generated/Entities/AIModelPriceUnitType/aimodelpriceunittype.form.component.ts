@@ -15,7 +15,8 @@ export class AIModelPriceUnitTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        unitDefinition: true,
+        systemMetadata: false,
         mJAIModelCosts: false
     };
 

@@ -14,7 +14,9 @@ export class ActionLibraryFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        referenceIDs: true,
+        actionLibraryInformation: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

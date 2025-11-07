@@ -15,7 +15,8 @@ export class DatasetFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        datasetCore: true,
+        systemMetadata: false,
         datasetItems: false
     };
 

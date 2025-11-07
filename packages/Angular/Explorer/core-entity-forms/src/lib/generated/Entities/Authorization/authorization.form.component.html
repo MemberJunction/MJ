@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 8 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="parentid parent id name isactive is active useauditlog use audit log description __mj_createdat __mj _created at __mj_updatedat __mj _updated at parent rootparentid root parent id">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Authorization Hierarchy Section -->
+        <div class="form-card collapsible-card" data-section-name="authorization hierarchy" data-field-names="parentid parent id parent rootparentid root parent id">
+            <div class="collapsible-header" (click)="toggleSection('authorizationHierarchy')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-sitemap"></i>
+                    <h3><span class="section-name">Authorization Hierarchy</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.authorizationHierarchy ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.authorizationHierarchy">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -43,6 +43,38 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Authorization Core Section -->
+        <div class="form-card collapsible-card" data-section-name="authorization core" data-field-names="name isactive is active useauditlog use audit log description">
+            <div class="collapsible-header" (click)="toggleSection('authorizationCore')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-key"></i>
+                    <h3><span class="section-name">Authorization Core</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.authorizationCore ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.authorizationCore">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -71,6 +103,24 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -85,20 +135,6 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Parent"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
                 </div>
             </div>
@@ -109,7 +145,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="action authorizations" data-field-names="action authorizations" data-section-key="actionAuthorizations">
             <div class="collapsible-header" (click)="toggleSection('actionAuthorizations')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-shield-alt"></i>
                     <h3>
                         <span class="section-name">Action Authorizations</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['actionAuthorizations']">{{sectionRowCounts['actionAuthorizations']}}</span>
@@ -137,7 +173,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="audit log types" data-field-names="audit log types" data-section-key="auditLogTypes">
             <div class="collapsible-header" (click)="toggleSection('auditLogTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-clipboard-list"></i>
                     <h3>
                         <span class="section-name">Audit Log Types</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['auditLogTypes']">{{sectionRowCounts['auditLogTypes']}}</span>
@@ -193,7 +229,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="authorization roles" data-field-names="authorization roles" data-section-key="authorizationRoles">
             <div class="collapsible-header" (click)="toggleSection('authorizationRoles')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-user-shield"></i>
                     <h3>
                         <span class="section-name">Authorization Roles</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['authorizationRoles']">{{sectionRowCounts['authorizationRoles']}}</span>

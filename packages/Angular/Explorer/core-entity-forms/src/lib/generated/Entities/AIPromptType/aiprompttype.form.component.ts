@@ -15,7 +15,8 @@ export class AIPromptTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        promptTypeInformation: true,
+        systemMetadata: false,
         aIPrompts: false
     };
 

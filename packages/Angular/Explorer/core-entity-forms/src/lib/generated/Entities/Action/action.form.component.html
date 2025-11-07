@@ -1,13 +1,7 @@
 <div class="record-form-container">
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
-            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
-                <div #topArea class="record-form-group">
-                    <mj-form-section Entity="Actions" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
-                </div>
-            </kendo-splitter-pane>
-            <kendo-splitter-pane>
+
         <div class="form-section-controls">
             <div class="control-group">
                 <button (click)="expandAllSections()" title="Expand all sections">
@@ -23,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 13 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 16 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="categoryid category id description type usercomments user comments codecomments code comments codeapprovalstatus code approval status codeapprovalcomments code approval comments codeapprovedbyuserid code approved by user id codeapprovedat code approved at codelocked code locked forcecodegeneration force code generation retentionperiod retention period status __mj_createdat __mj _created at __mj_updatedat __mj _updated at driverclass driver class parentid parent id iconclass icon class defaultcompactpromptid default compact prompt id category codeapprovedbyuser code approved by user parent defaultcompactprompt default compact prompt rootparentid root parent id">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Identification & Hierarchy Section -->
+        <div class="form-card collapsible-card" data-section-name="identification & hierarchy" data-field-names="categoryid category id parentid parent id category parent rootparentid root parent id">
+            <div class="collapsible-header" (click)="toggleSection('identificationHierarchy')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-sitemap"></i>
+                    <h3><span class="section-name">Identification & Hierarchy</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.identificationHierarchy ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identificationHierarchy">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -48,6 +42,61 @@
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Definition & Prompting Section -->
+        <div class="form-card collapsible-card" data-section-name="definition & prompting" data-field-names="name description type userprompt user prompt usercomments user comments driverclass driver class defaultcompactpromptid default compact prompt id defaultcompactprompt default compact prompt">
+            <div class="collapsible-header" (click)="toggleSection('definitionPrompting')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-pencil-alt"></i>
+                    <h3><span class="section-name">Definition & Prompting</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.definitionPrompting ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.definitionPrompting">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -66,8 +115,63 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="UserPrompt"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="UserComments"
             Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultCompactPromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultCompactPrompt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Code & Approval Section -->
+        <div class="form-card collapsible-card" data-section-name="code & approval" data-field-names="code codecomments code comments codeapprovalstatus code approval status codeapprovalcomments code approval comments codeapprovedbyuserid code approved by user id codeapprovedat code approved at codelocked code locked forcecodegeneration force code generation codeapprovedbyuser code approved by user">
+            <div class="collapsible-header" (click)="toggleSection('codeApproval')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-code"></i>
+                    <h3><span class="section-name">Code & Approval</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.codeApproval ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.codeApproval">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Code"
+            Type="code"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -124,6 +228,31 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="CodeApprovedByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Display & Execution Section -->
+        <div class="form-card collapsible-card" data-section-name="display & execution" data-field-names="retentionperiod retention period status iconclass icon class">
+            <div class="collapsible-header" (click)="toggleSection('displayExecution')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sliders-h"></i>
+                    <h3><span class="section-name">Display & Execution</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.displayExecution ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.displayExecution">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="RetentionPeriod"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -138,6 +267,31 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="IconClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -147,98 +301,6 @@
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DriverClass"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="IconClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DefaultCompactPromptID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Category"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CodeApprovedByUser"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Parent"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DefaultCompactPrompt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-
-                </div>
-            </div>
-        </div>
-
-        <!-- Code Section -->
-        <div class="form-card collapsible-card" data-section-name="code" data-field-names="code">
-            <div class="collapsible-header" (click)="toggleSection('code')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-info-circle"></i>
-                    <h3><span class="section-name">Code</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.code ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.code">
-                <div class="form-body">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="false"
-            FieldName="Code"
-            Type="code"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -251,7 +313,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="params" data-field-names="action params" data-section-key="params">
             <div class="collapsible-header" (click)="toggleSection('params')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-plug"></i>
                     <h3>
                         <span class="section-name">Params</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['params']">{{sectionRowCounts['params']}}</span>
@@ -307,7 +369,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="result codes" data-field-names="action result codes" data-section-key="resultCodes">
             <div class="collapsible-header" (click)="toggleSection('resultCodes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-code"></i>
                     <h3>
                         <span class="section-name">Result Codes</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['resultCodes']">{{sectionRowCounts['resultCodes']}}</span>
@@ -335,7 +397,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="aiagent actions" data-field-names="ai agent actions" data-section-key="aIAgentActions">
             <div class="collapsible-header" (click)="toggleSection('aIAgentActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AIAgent Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentActions']">{{sectionRowCounts['aIAgentActions']}}</span>
@@ -363,7 +425,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="scheduled actions" data-field-names="scheduled actions" data-section-key="scheduledActions">
             <div class="collapsible-header" (click)="toggleSection('scheduledActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-calendar"></i>
                     <h3>
                         <span class="section-name">Scheduled Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['scheduledActions']">{{sectionRowCounts['scheduledActions']}}</span>
@@ -391,7 +453,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="action contexts" data-field-names="action contexts" data-section-key="actionContexts">
             <div class="collapsible-header" (click)="toggleSection('actionContexts')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Action Contexts</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['actionContexts']">{{sectionRowCounts['actionContexts']}}</span>
@@ -419,7 +481,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity actions" data-field-names="entity actions" data-section-key="entityActions">
             <div class="collapsible-header" (click)="toggleSection('entityActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">Entity Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActions']">{{sectionRowCounts['entityActions']}}</span>
@@ -447,7 +509,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent steps" data-field-names="mj: ai agent steps" data-section-key="mJAIAgentSteps">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentSteps')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Steps</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentSteps']">{{sectionRowCounts['mJAIAgentSteps']}}</span>
@@ -475,7 +537,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="execution logs" data-field-names="action execution logs" data-section-key="executionLogs">
             <div class="collapsible-header" (click)="toggleSection('executionLogs')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-history"></i>
                     <h3>
                         <span class="section-name">Execution Logs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['executionLogs']">{{sectionRowCounts['executionLogs']}}</span>
@@ -503,7 +565,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="authorizations" data-field-names="action authorizations" data-section-key="authorizations">
             <div class="collapsible-header" (click)="toggleSection('authorizations')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-shield-alt"></i>
                     <h3>
                         <span class="section-name">Authorizations</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['authorizations']">{{sectionRowCounts['authorizations']}}</span>
@@ -556,8 +618,6 @@
         </div>
         </div>
         </div>
-            </kendo-splitter-pane>
-        </kendo-splitter>
     </form>
 </div>
         

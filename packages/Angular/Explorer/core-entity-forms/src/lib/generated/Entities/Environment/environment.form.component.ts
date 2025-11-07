@@ -15,7 +15,10 @@ export class EnvironmentFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        technicalMetadata: false,
+        environmentDefinition: true,
+        environmentSettings: false,
+        systemMetadata: false,
         mJArtifacts: false,
         mJCollections: false,
         mJProjects: false,

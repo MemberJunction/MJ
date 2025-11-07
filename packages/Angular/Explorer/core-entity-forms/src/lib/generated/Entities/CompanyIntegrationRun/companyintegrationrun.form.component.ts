@@ -15,7 +15,10 @@ export class CompanyIntegrationRunFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        runOverview: true,
+        scheduleStatus: true,
+        diagnosticDetails: false,
+        systemMetadata: false,
         companyIntegrationRunAPILogs: false,
         companyIntegrationRunDetails: false,
         errorLogs: false

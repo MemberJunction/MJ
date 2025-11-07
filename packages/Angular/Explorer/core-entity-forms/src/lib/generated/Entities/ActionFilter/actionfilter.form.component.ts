@@ -15,7 +15,8 @@ export class ActionFilterFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        filterDetails: true,
+        systemMetadata: false,
         entityActionFilters: false
     };
 

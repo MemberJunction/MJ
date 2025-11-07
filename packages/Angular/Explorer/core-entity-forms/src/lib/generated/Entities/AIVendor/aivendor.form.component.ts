@@ -15,7 +15,8 @@ export class AIVendorFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        vendorDetails: true,
+        systemMetadata: false,
         aIResultCache: false,
         mJAIModelCosts: false,
         mJAIModelVendors: false,

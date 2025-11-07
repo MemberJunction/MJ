@@ -15,11 +15,13 @@ export class EntityFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
-        audit: true,
-        aPI: false,
-        dB: false,
-        uI: false,
+        identityStructure: true,
+        userInterfaceCustomization: true,
+        auditingLifecycle: false,
+        aPISearchSettings: false,
+        proceduresDeletion: false,
+        rowStatistics: false,
+        systemMetadata: false,
         applicationEntities: false,
         auditLogs: false,
         companyIntegrationRecordMaps: false,

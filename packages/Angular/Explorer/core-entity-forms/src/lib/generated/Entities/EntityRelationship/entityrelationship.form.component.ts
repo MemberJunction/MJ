@@ -14,10 +14,11 @@ export class EntityRelationshipFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        coreRelationshipDefinition: true,
+        relationshipCore: true,
         aPIQuerySettings: true,
-        displayUIConfiguration: false,
-        technicalMetadata: false
+        displayConfiguration: false,
+        technicalMetadata: false,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

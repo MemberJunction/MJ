@@ -17,22 +17,54 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 8 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description icon defaultfornewuser default for new user __mj_createdat __mj _created at __mj_updatedat __mj _updated at schemaautoaddnewentities schema auto add new entities">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Application Configuration Section -->
+        <div class="form-card collapsible-card" data-section-name="application configuration" data-field-names="defaultfornewuser default for new user schemaautoaddnewentities schema auto add new entities">
+            <div class="collapsible-header" (click)="toggleSection('applicationConfiguration')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-cogs"></i>
+                    <h3><span class="section-name">Application Configuration</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.applicationConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.applicationConfiguration">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultForNewUser"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SchemaAutoAddNewEntities"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- General Information Section -->
+        <div class="form-card collapsible-card" data-section-name="general information" data-field-names="name description icon">
+            <div class="collapsible-header" (click)="toggleSection('generalInformation')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-info-circle"></i>
+                    <h3><span class="section-name">General Information</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.generalInformation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.generalInformation">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -55,13 +87,24 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DefaultForNewUser"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -76,13 +119,6 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SchemaAutoAddNewEntities"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
                 </div>
             </div>
@@ -93,7 +129,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entities" data-field-names="application entities" data-section-key="entities">
             <div class="collapsible-header" (click)="toggleSection('entities')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-cubes"></i>
                     <h3>
                         <span class="section-name">Entities</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entities']">{{sectionRowCounts['entities']}}</span>
@@ -121,7 +157,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="application settings" data-field-names="application settings" data-section-key="applicationSettings">
             <div class="collapsible-header" (click)="toggleSection('applicationSettings')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-sliders-h"></i>
                     <h3>
                         <span class="section-name">Application Settings</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['applicationSettings']">{{sectionRowCounts['applicationSettings']}}</span>
@@ -149,7 +185,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="user applications" data-field-names="user applications" data-section-key="userApplications">
             <div class="collapsible-header" (click)="toggleSection('userApplications')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-th"></i>
                     <h3>
                         <span class="section-name">User Applications</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['userApplications']">{{sectionRowCounts['userApplications']}}</span>
@@ -205,7 +241,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: dashboard user preferences" data-field-names="mj: dashboard user preferences" data-section-key="mJDashboardUserPreferences">
             <div class="collapsible-header" (click)="toggleSection('mJDashboardUserPreferences')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-tachometer-alt"></i>
                     <h3>
                         <span class="section-name">MJ: Dashboard User Preferences</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJDashboardUserPreferences']">{{sectionRowCounts['mJDashboardUserPreferences']}}</span>

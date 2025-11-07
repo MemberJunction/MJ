@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Core Relationship Definition Section -->
-        <div class="form-card collapsible-card" data-section-name="core relationship definition" data-field-names="entityid entity id sequence relatedentityid related entity id type entitykeyfield entity key field relatedentityjoinfield related entity join field joinview join view joinentityjoinfield join entity join field joinentityinversejoinfield join entity inverse join field">
-            <div class="collapsible-header" (click)="toggleSection('coreRelationshipDefinition')" role="button" tabindex="0">
+<!-- Relationship Core Section -->
+        <div class="form-card collapsible-card" data-section-name="relationship core" data-field-names="entityid entity id sequence relatedentityid related entity id type entitykeyfield entity key field relatedentityjoinfield related entity join field joinview join view joinentityjoinfield join entity join field joinentityinversejoinfield join entity inverse join field entity entitybasetable entity base table entitybaseview entity base view relatedentity related entity relatedentitybasetable related entity base table relatedentitybaseview related entity base view relatedentityclassname related entity class name relatedentitycodename related entity code name relatedentitybasetablecodename related entity base table code name">
+            <div class="collapsible-header" (click)="toggleSection('relationshipCore')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-code-branch"></i>
-                    <h3><span class="section-name">Core Relationship Definition</span></h3>
+                    <i class="fa fa-link"></i>
+                    <h3><span class="section-name">Relationship Core</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.coreRelationshipDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.relationshipCore ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.coreRelationshipDefinition">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.relationshipCore">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -101,16 +101,79 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityBaseTable"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityBaseView"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelatedEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelatedEntityBaseTable"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelatedEntityBaseView"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelatedEntityClassName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelatedEntityCodeName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelatedEntityBaseTableCodeName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
                 </div>
             </div>
         </div>
 
         <!-- API & Query Settings Section -->
-        <div class="form-card collapsible-card" data-section-name="api & query settings" data-field-names="bundleinapi bundle in api includeinparentallquery include in parent all query autoupdatefromschema auto update from schema additionalfieldstoinclude additional fields to include autoupdateadditionalfieldstoinclude auto update additional fields to include">
+        <div class="form-card collapsible-card" data-section-name="api & query settings" data-field-names="bundleinapi bundle in api includeinparentallquery include in parent all query additionalfieldstoinclude additional fields to include autoupdateadditionalfieldstoinclude auto update additional fields to include">
             <div class="collapsible-header" (click)="toggleSection('aPIQuerySettings')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-cloud-download-alt"></i>
+                    <i class="fa fa-server"></i>
                     <h3><span class="section-name">API & Query Settings</span></h3>
                 </div>
                 <div class="collapse-icon">
@@ -136,13 +199,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AutoUpdateFromSchema"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="AdditionalFieldsToInclude"
             Type="textarea"
             [EditMode]="EditMode"
@@ -159,18 +215,18 @@
             </div>
         </div>
 
-        <!-- Display & UI Configuration Section -->
-        <div class="form-card collapsible-card" data-section-name="display & ui configuration" data-field-names="displayinform display in form displaylocation display location displayname display name displayicontype display icon type displayicon display icon displayuserviewid display user view id displaycomponentid display component id displaycomponentconfiguration display component configuration displayuserviewname display user view name">
-            <div class="collapsible-header" (click)="toggleSection('displayUIConfiguration')" role="button" tabindex="0">
+        <!-- Display Configuration Section -->
+        <div class="form-card collapsible-card" data-section-name="display configuration" data-field-names="displayinform display in form displaylocation display location displayname display name displayicontype display icon type displayicon display icon displayuserviewid display user view id displaycomponentid display component id displaycomponentconfiguration display component configuration displayuserviewname display user view name">
+            <div class="collapsible-header" (click)="toggleSection('displayConfiguration')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-eye"></i>
-                    <h3><span class="section-name">Display & UI Configuration</span></h3>
+                    <i class="fa fa-paint-brush"></i>
+                    <h3><span class="section-name">Display Configuration</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.displayUIConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.displayConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.displayUIConfiguration">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.displayConfiguration">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -245,10 +301,10 @@
         </div>
 
         <!-- Technical Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="technical metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at entity entitybasetable entity base table entitybaseview entity base view relatedentity related entity relatedentitybasetable related entity base table relatedentitybaseview related entity base view relatedentityclassname related entity class name relatedentitycodename related entity code name relatedentitybasetablecodename related entity base table code name">
+        <div class="form-card collapsible-card" data-section-name="technical metadata" data-field-names="autoupdatefromschema auto update from schema">
             <div class="collapsible-header" (click)="toggleSection('technicalMetadata')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
+                    <i class="fa fa-cog"></i>
                     <h3><span class="section-name">Technical Metadata</span></h3>
                 </div>
                 <div class="collapse-icon">
@@ -256,6 +312,31 @@
                 </div>
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.technicalMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="AutoUpdateFromSchema"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -268,69 +349,6 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Entity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EntityBaseTable"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EntityBaseView"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RelatedEntity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RelatedEntityBaseTable"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RelatedEntityBaseView"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RelatedEntityClassName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RelatedEntityCodeName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RelatedEntityBaseTableCodeName"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

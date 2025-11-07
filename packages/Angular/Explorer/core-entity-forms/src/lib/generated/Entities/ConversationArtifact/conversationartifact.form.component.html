@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description conversationid conversation id artifacttypeid artifact type id sharingscope sharing scope comments __mj_createdat created at __mj_updatedat updated at conversation artifacttype artifact type">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Artifact Details Section -->
+        <div class="form-card collapsible-card" data-section-name="artifact details" data-field-names="name description sharingscope sharing scope comments">
+            <div class="collapsible-header" (click)="toggleSection('artifactDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-info-circle"></i>
+                    <h3><span class="section-name">Artifact Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.artifactDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.artifactDetails">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -48,6 +48,38 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SharingScope"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Comments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Conversation Context Section -->
+        <div class="form-card collapsible-card" data-section-name="conversation context" data-field-names="conversationid conversation id artifacttypeid artifact type id conversation artifacttype artifact type">
+            <div class="collapsible-header" (click)="toggleSection('conversationContext')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-comments"></i>
+                    <h3><span class="section-name">Conversation Context</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.conversationContext ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.conversationContext">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -69,34 +101,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SharingScope"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Comments"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="Conversation"
             Type="textbox"
             [EditMode]="EditMode"
@@ -112,13 +116,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
         <div class="related-entity-grid">
 
         <!-- MJ: Conversation Artifact Permissions Section -->
         <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifact permissions" data-field-names="mj: conversation artifact permissions" data-section-key="mJConversationArtifactPermissions">
             <div class="collapsible-header" (click)="toggleSection('mJConversationArtifactPermissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-lock"></i>
                     <h3>
                         <span class="section-name">MJ: Conversation Artifact Permissions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJConversationArtifactPermissions']">{{sectionRowCounts['mJConversationArtifactPermissions']}}</span>
@@ -146,7 +182,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: conversation artifact versions" data-field-names="mj: conversation artifact versions" data-section-key="mJConversationArtifactVersions">
             <div class="collapsible-header" (click)="toggleSection('mJConversationArtifactVersions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-comment-dots"></i>
                     <h3>
                         <span class="section-name">MJ: Conversation Artifact Versions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJConversationArtifactVersions']">{{sectionRowCounts['mJConversationArtifactVersions']}}</span>
@@ -174,7 +210,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="conversation details" data-field-names="conversation details" data-section-key="conversationDetails">
             <div class="collapsible-header" (click)="toggleSection('conversationDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-comments"></i>
                     <h3>
                         <span class="section-name">Conversation Details</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['conversationDetails']">{{sectionRowCounts['conversationDetails']}}</span>

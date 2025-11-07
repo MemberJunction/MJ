@@ -14,7 +14,9 @@ export class EntityActionInvocationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        invocationConfiguration: true,
+        invocationStatus: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

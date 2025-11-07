@@ -15,7 +15,12 @@ export class AIPromptFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        promptDefinitionMetadata: false,
+        modelSelectionExecutionSettings: true,
+        outputValidation: false,
+        retryFailoverPolicies: false,
+        cachingPerformance: false,
+        systemMetadata: false,
         aIAgentActions: false,
         aIResultCache: false,
         mJAIAgentTypes: false,

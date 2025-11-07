@@ -15,11 +15,12 @@ export class EntityFieldFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        coreFieldDefinition: true,
-        systemMetadataStatus: false,
-        displayFormSettings: false,
-        aPISearchControls: false,
-        relationshipsLinks: false,
+        identificationKeys: true,
+        userInterfaceDisplaySettings: true,
+        dataConstraintsValidation: false,
+        relationshipsLinking: false,
+        systemAuditMetadata: false,
+        systemMetadata: false,
         entityFieldValues: false
     };
 

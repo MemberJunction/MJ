@@ -14,7 +14,9 @@ export class EntityActionFilterFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        identifierKeys: true,
+        executionSettings: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

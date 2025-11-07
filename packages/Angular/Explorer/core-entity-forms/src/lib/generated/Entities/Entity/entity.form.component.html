@@ -1,13 +1,7 @@
 <div class="record-form-container">
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
-            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
-                <div #topArea class="record-form-group">
-                    <mj-form-section Entity="Entities" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
-                </div>
-            </kendo-splitter-pane>
-            <kendo-splitter-pane>
+
         <div class="form-section-controls">
             <div class="control-group">
                 <button (click)="expandAllSections()" title="Expand all sections">
@@ -23,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 45 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 47 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="parentid parent id namesuffix name suffix autoupdatedescription auto update description baseviewgenerated base view generated virtualentity virtual entity fulltextsearchenabled full text search enabled fulltextcatalog full text catalog fulltextcataloggenerated full text catalog generated fulltextindex full text index fulltextindexgenerated full text index generated fulltextsearchfunction full text search function fulltextsearchfunctiongenerated full text search function generated userviewmaxrows user view max rows cascadedeletes cascade deletes deletetype delete type allowrecordmerge allow record merge spmatch sp match relationshipdefaultdisplaytype relationship default display type entityobjectsubclassname entity object subclass name entityobjectsubclassimport entity object subclass import preferredcommunicationfield preferred communication field icon __mj_createdat __mj _created at __mj_updatedat __mj _updated at scopedefault scope default rowstopackwithschema rows to pack with schema rowstopacksamplemethod rows to pack sample method rowstopacksamplecount rows to pack sample count rowstopacksampleorder rows to pack sample order autorowcountfrequency auto row count frequency rowcount row count rowcountrunat row count run at status displayname display name codename code name classname class name basetablecodename base table code name parententity parent entity parentbasetable parent base table parentbaseview parent base view">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Identity & Structure Section -->
+        <div class="form-card collapsible-card" data-section-name="identity & structure" data-field-names="parentid parent id name namesuffix name suffix basetable base table baseview base view baseviewgenerated base view generated schemaname schema name virtualentity virtual entity displayname display name codename code name classname class name basetablecodename base table code name parententity parent entity parentbasetable parent base table parentbaseview parent base view">
+            <div class="collapsible-header" (click)="toggleSection('identityStructure')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-cube"></i>
+                    <h3><span class="section-name">Identity & Structure</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.identityStructure ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identityStructure">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -52,6 +46,13 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="NameSuffix"
             Type="textarea"
             [EditMode]="EditMode"
@@ -59,8 +60,15 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AutoUpdateDescription"
-            Type="checkbox"
+            FieldName="BaseTable"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="BaseView"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -73,7 +81,250 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="SchemaName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="VirtualEntity"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ClassName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="BaseTableCodeName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentBaseTable"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentBaseView"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- User Interface & Customization Section -->
+        <div class="form-card collapsible-card" data-section-name="user interface & customization" data-field-names="description relationshipdefaultdisplaytype relationship default display type userformgenerated user form generated entityobjectsubclassname entity object subclass name entityobjectsubclassimport entity object subclass import">
+            <div class="collapsible-header" (click)="toggleSection('userInterfaceCustomization')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-paint-brush"></i>
+                    <h3><span class="section-name">User Interface & Customization</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.userInterfaceCustomization ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.userInterfaceCustomization">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelationshipDefaultDisplayType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UserFormGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityObjectSubclassName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityObjectSubclassImport"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Auditing & Lifecycle Section -->
+        <div class="form-card collapsible-card" data-section-name="auditing & lifecycle" data-field-names="autoupdatedescription auto update description trackrecordchanges track record changes auditrecordaccess audit record access auditviewruns audit view runs preferredcommunicationfield preferred communication field icon status">
+            <div class="collapsible-header" (click)="toggleSection('auditingLifecycle')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-history"></i>
+                    <h3><span class="section-name">Auditing & Lifecycle</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.auditingLifecycle ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.auditingLifecycle">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoUpdateDescription"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TrackRecordChanges"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AuditRecordAccess"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AuditViewRuns"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PreferredCommunicationField"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- API & Search Settings Section -->
+        <div class="form-card collapsible-card" data-section-name="api & search settings" data-field-names="includeinapi include in api allowallrowsapi allow all rows api allowupdateapi allow update api allowcreateapi allow create api allowdeleteapi allow delete api customresolverapi custom resolver api allowusersearchapi allow user search api fulltextsearchenabled full text search enabled fulltextcatalog full text catalog fulltextcataloggenerated full text catalog generated fulltextindex full text index fulltextindexgenerated full text index generated fulltextsearchfunction full text search function fulltextsearchfunctiongenerated full text search function generated userviewmaxrows user view max rows scopedefault scope default rowstopackwithschema rows to pack with schema rowstopacksamplemethod rows to pack sample method rowstopacksamplecount rows to pack sample count rowstopacksampleorder rows to pack sample order">
+            <div class="collapsible-header" (click)="toggleSection('aPISearchSettings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-search"></i>
+                    <h3><span class="section-name">API & Search Settings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aPISearchSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aPISearchSettings">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IncludeInAPI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowAllRowsAPI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowUpdateAPI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowCreateAPI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowDeleteAPI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CustomResolverAPI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowUserSearchAPI"
             Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -136,83 +387,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CascadeDeletes"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DeleteType"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowRecordMerge"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="spMatch"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RelationshipDefaultDisplayType"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EntityObjectSubclassName"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EntityObjectSubclassImport"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PreferredCommunicationField"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Icon"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="ScopeDefault"
             Type="textbox"
             [EditMode]="EditMode"
@@ -245,199 +419,23 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AutoRowCountFrequency"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RowCount"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RowCountRunAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DisplayName"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CodeName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ClassName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BaseTableCodeName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentEntity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentBaseTable"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentBaseView"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
                 </div>
             </div>
         </div>
 
-        <!-- Audit Section -->
-        <div class="form-card collapsible-card" data-section-name="audit" data-field-names="auditrecordaccess audit record access auditviewruns audit view runs">
-            <div class="collapsible-header" (click)="toggleSection('audit')" role="button" tabindex="0">
+        <!-- Procedures & Deletion Section -->
+        <div class="form-card collapsible-card" data-section-name="procedures & deletion" data-field-names="spcreate spupdate spdelete spcreategenerated sp creategenerated spupdategenerated sp update generated spdeletegenerated sp delete generated cascadedeletes cascade deletes deletetype delete type allowrecordmerge allow record merge spmatch sp match">
+            <div class="collapsible-header" (click)="toggleSection('proceduresDeletion')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-info-circle"></i>
-                    <h3><span class="section-name">Audit</span></h3>
+                    <i class="fa fa-code"></i>
+                    <h3><span class="section-name">Procedures & Deletion</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.audit ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.proceduresDeletion ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.audit">
-                <div class="form-body">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AuditRecordAccess"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AuditViewRuns"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-
-                </div>
-            </div>
-        </div>
-
-        <!-- API Section -->
-        <div class="form-card collapsible-card" data-section-name="api" data-field-names="includeinapi include in api allowallrowsapi allow all rows api allowupdateapi allow update api allowcreateapi allow create api allowdeleteapi allow delete api customresolverapi custom resolver api allowusersearchapi allow user search api">
-            <div class="collapsible-header" (click)="toggleSection('aPI')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-info-circle"></i>
-                    <h3><span class="section-name">API</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.aPI ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aPI">
-                <div class="form-body">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="IncludeInAPI"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowAllRowsAPI"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowUpdateAPI"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowCreateAPI"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowDeleteAPI"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CustomResolverAPI"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowUserSearchAPI"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-
-                </div>
-            </div>
-        </div>
-
-        <!-- DB Section -->
-        <div class="form-card collapsible-card" data-section-name="db" data-field-names="spcreate spupdate spdelete spcreategenerated sp creategenerated spupdategenerated sp update generated spdeletegenerated sp delete generated">
-            <div class="collapsible-header" (click)="toggleSection('dB')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-info-circle"></i>
-                    <h3><span class="section-name">DB</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.dB ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.dB">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.proceduresDeletion">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -481,29 +479,103 @@
             Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CascadeDeletes"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DeleteType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowRecordMerge"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="spMatch"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
                 </div>
             </div>
         </div>
 
-        <!-- UI Section -->
-        <div class="form-card collapsible-card" data-section-name="ui" data-field-names="userformgenerated user form generated">
-            <div class="collapsible-header" (click)="toggleSection('uI')" role="button" tabindex="0">
+        <!-- Row Statistics Section -->
+        <div class="form-card collapsible-card" data-section-name="row statistics" data-field-names="autorowcountfrequency auto row count frequency rowcount row count rowcountrunat row count run at">
+            <div class="collapsible-header" (click)="toggleSection('rowStatistics')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-info-circle"></i>
-                    <h3><span class="section-name">UI</span></h3>
+                    <i class="fa fa-chart-bar"></i>
+                    <h3><span class="section-name">Row Statistics</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.uI ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.rowStatistics ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.uI">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.rowStatistics">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="false"
-            FieldName="UserFormGenerated"
-            Type="checkbox"
+            [ShowLabel]="true"
+            FieldName="AutoRowCountFrequency"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RowCount"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RowCountRunAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -516,7 +588,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="application entities" data-field-names="application entities" data-section-key="applicationEntities">
             <div class="collapsible-header" (click)="toggleSection('applicationEntities')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-cubes"></i>
                     <h3>
                         <span class="section-name">Application Entities</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['applicationEntities']">{{sectionRowCounts['applicationEntities']}}</span>
@@ -572,7 +644,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="company integration record maps" data-field-names="company integration record maps" data-section-key="companyIntegrationRecordMaps">
             <div class="collapsible-header" (click)="toggleSection('companyIntegrationRecordMaps')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-sync"></i>
                     <h3>
                         <span class="section-name">Company Integration Record Maps</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['companyIntegrationRecordMaps']">{{sectionRowCounts['companyIntegrationRecordMaps']}}</span>
@@ -600,7 +672,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="company integration run details" data-field-names="company integration run details" data-section-key="companyIntegrationRunDetails">
             <div class="collapsible-header" (click)="toggleSection('companyIntegrationRunDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-sync"></i>
                     <h3>
                         <span class="section-name">Company Integration Run Details</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['companyIntegrationRunDetails']">{{sectionRowCounts['companyIntegrationRunDetails']}}</span>
@@ -656,7 +728,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="data context items" data-field-names="data context items" data-section-key="dataContextItems">
             <div class="collapsible-header" (click)="toggleSection('dataContextItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-database"></i>
                     <h3>
                         <span class="section-name">Data Context Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['dataContextItems']">{{sectionRowCounts['dataContextItems']}}</span>
@@ -684,7 +756,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="dataset items" data-field-names="dataset items" data-section-key="datasetItems">
             <div class="collapsible-header" (click)="toggleSection('datasetItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-database"></i>
                     <h3>
                         <span class="section-name">Dataset Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['datasetItems']">{{sectionRowCounts['datasetItems']}}</span>
@@ -712,7 +784,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="duplicate runs" data-field-names="duplicate runs" data-section-key="duplicateRuns">
             <div class="collapsible-header" (click)="toggleSection('duplicateRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-search"></i>
                     <h3>
                         <span class="section-name">Duplicate Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['duplicateRuns']">{{sectionRowCounts['duplicateRuns']}}</span>
@@ -768,7 +840,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity actions" data-field-names="entity actions" data-section-key="entityActions">
             <div class="collapsible-header" (click)="toggleSection('entityActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">Entity Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActions']">{{sectionRowCounts['entityActions']}}</span>
@@ -796,7 +868,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai actions" data-field-names="entity ai actions" data-section-key="aIActions">
             <div class="collapsible-header" (click)="toggleSection('aIActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIActions']">{{sectionRowCounts['aIActions']}}</span>
@@ -824,7 +896,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity communication message types" data-field-names="entity communication message types" data-section-key="entityCommunicationMessageTypes">
             <div class="collapsible-header" (click)="toggleSection('entityCommunicationMessageTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-comment-dots"></i>
                     <h3>
                         <span class="section-name">Entity Communication Message Types</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityCommunicationMessageTypes']">{{sectionRowCounts['entityCommunicationMessageTypes']}}</span>
@@ -852,7 +924,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity documents" data-field-names="entity documents" data-section-key="entityDocuments">
             <div class="collapsible-header" (click)="toggleSection('entityDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Documents</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocuments']">{{sectionRowCounts['entityDocuments']}}</span>
@@ -908,7 +980,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="permissions" data-field-names="entity permissions" data-section-key="permissions">
             <div class="collapsible-header" (click)="toggleSection('permissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-shield-alt"></i>
                     <h3>
                         <span class="section-name">Permissions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['permissions']">{{sectionRowCounts['permissions']}}</span>
@@ -936,7 +1008,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity record documents" data-field-names="entity record documents" data-section-key="entityRecordDocuments">
             <div class="collapsible-header" (click)="toggleSection('entityRecordDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Record Documents</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityRecordDocuments']">{{sectionRowCounts['entityRecordDocuments']}}</span>
@@ -964,7 +1036,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="relationships" data-field-names="entity relationships" data-section-key="relationships">
             <div class="collapsible-header" (click)="toggleSection('relationships')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
+                    <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">Relationships</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['relationships']">{{sectionRowCounts['relationships']}}</span>
@@ -992,7 +1064,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity settings" data-field-names="entity settings" data-section-key="entitySettings">
             <div class="collapsible-header" (click)="toggleSection('entitySettings')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-cog"></i>
                     <h3>
                         <span class="section-name">Entity Settings</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entitySettings']">{{sectionRowCounts['entitySettings']}}</span>
@@ -1020,7 +1092,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="file entity record links" data-field-names="file entity record links" data-section-key="fileEntityRecordLinks">
             <div class="collapsible-header" (click)="toggleSection('fileEntityRecordLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">File Entity Record Links</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['fileEntityRecordLinks']">{{sectionRowCounts['fileEntityRecordLinks']}}</span>
@@ -1048,7 +1120,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="integration url formats" data-field-names="integration url formats" data-section-key="integrationURLFormats">
             <div class="collapsible-header" (click)="toggleSection('integrationURLFormats')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Integration URL Formats</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['integrationURLFormats']">{{sectionRowCounts['integrationURLFormats']}}</span>
@@ -1076,7 +1148,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="lists" data-field-names="lists" data-section-key="lists">
             <div class="collapsible-header" (click)="toggleSection('lists')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-list-ul"></i>
                     <h3>
                         <span class="section-name">Lists</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['lists']">{{sectionRowCounts['lists']}}</span>
@@ -1132,7 +1204,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="recommendation items" data-field-names="recommendation items" data-section-key="recommendationItems">
             <div class="collapsible-header" (click)="toggleSection('recommendationItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-lightbulb"></i>
                     <h3>
                         <span class="section-name">Recommendation Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['recommendationItems']">{{sectionRowCounts['recommendationItems']}}</span>
@@ -1188,7 +1260,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="record changes" data-field-names="record changes" data-section-key="recordChanges">
             <div class="collapsible-header" (click)="toggleSection('recordChanges')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-history"></i>
                     <h3>
                         <span class="section-name">Record Changes</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['recordChanges']">{{sectionRowCounts['recordChanges']}}</span>
@@ -1216,7 +1288,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="record merge logs" data-field-names="record merge logs" data-section-key="recordMergeLogs">
             <div class="collapsible-header" (click)="toggleSection('recordMergeLogs')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-clone"></i>
                     <h3>
                         <span class="section-name">Record Merge Logs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['recordMergeLogs']">{{sectionRowCounts['recordMergeLogs']}}</span>
@@ -1244,7 +1316,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="resource types" data-field-names="resource types" data-section-key="resourceTypes">
             <div class="collapsible-header" (click)="toggleSection('resourceTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-layer-group"></i>
                     <h3>
                         <span class="section-name">Resource Types</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['resourceTypes']">{{sectionRowCounts['resourceTypes']}}</span>
@@ -1272,7 +1344,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="tagged items" data-field-names="tagged items" data-section-key="taggedItems">
             <div class="collapsible-header" (click)="toggleSection('taggedItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-tags"></i>
                     <h3>
                         <span class="section-name">Tagged Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['taggedItems']">{{sectionRowCounts['taggedItems']}}</span>
@@ -1300,7 +1372,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="template params" data-field-names="template params" data-section-key="templateParams">
             <div class="collapsible-header" (click)="toggleSection('templateParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-cog"></i>
                     <h3>
                         <span class="section-name">Template Params</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['templateParams']">{{sectionRowCounts['templateParams']}}</span>
@@ -1328,7 +1400,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="user application entities" data-field-names="user application entities" data-section-key="userApplicationEntities">
             <div class="collapsible-header" (click)="toggleSection('userApplicationEntities')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">User Application Entities</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['userApplicationEntities']">{{sectionRowCounts['userApplicationEntities']}}</span>
@@ -1356,7 +1428,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="user favorites" data-field-names="user favorites" data-section-key="userFavorites">
             <div class="collapsible-header" (click)="toggleSection('userFavorites')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-star"></i>
                     <h3>
                         <span class="section-name">User Favorites</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['userFavorites']">{{sectionRowCounts['userFavorites']}}</span>
@@ -1384,7 +1456,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="user record logs" data-field-names="user record logs" data-section-key="userRecordLogs">
             <div class="collapsible-header" (click)="toggleSection('userRecordLogs')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-history"></i>
                     <h3>
                         <span class="section-name">User Record Logs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['userRecordLogs']">{{sectionRowCounts['userRecordLogs']}}</span>
@@ -1412,7 +1484,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="user view categories" data-field-names="user view categories" data-section-key="userViewCategories">
             <div class="collapsible-header" (click)="toggleSection('userViewCategories')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-folder-open"></i>
                     <h3>
                         <span class="section-name">User View Categories</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['userViewCategories']">{{sectionRowCounts['userViewCategories']}}</span>
@@ -1496,7 +1568,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: access control rules" data-field-names="mj: access control rules" data-section-key="mJAccessControlRules">
             <div class="collapsible-header" (click)="toggleSection('mJAccessControlRules')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-lock"></i>
                     <h3>
                         <span class="section-name">MJ: Access Control Rules</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAccessControlRules']">{{sectionRowCounts['mJAccessControlRules']}}</span>
@@ -1524,7 +1596,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: record links" data-field-names="mj: record links" data-section-key="mJRecordLinks">
             <div class="collapsible-header" (click)="toggleSection('mJRecordLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">MJ: Record Links</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJRecordLinks']">{{sectionRowCounts['mJRecordLinks']}}</span>
@@ -1552,7 +1624,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="query entities" data-field-names="query entities" data-section-key="queryEntities">
             <div class="collapsible-header" (click)="toggleSection('queryEntities')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-search"></i>
                     <h3>
                         <span class="section-name">Query Entities</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['queryEntities']">{{sectionRowCounts['queryEntities']}}</span>
@@ -1580,7 +1652,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="generated codes" data-field-names="generated codes" data-section-key="generatedCodes">
             <div class="collapsible-header" (click)="toggleSection('generatedCodes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">Generated Codes</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['generatedCodes']">{{sectionRowCounts['generatedCodes']}}</span>
@@ -1608,7 +1680,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: record links" data-field-names="mj: record links" data-section-key="mJRecordLinks">
             <div class="collapsible-header" (click)="toggleSection('mJRecordLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">MJ: Record Links</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJRecordLinks']">{{sectionRowCounts['mJRecordLinks']}}</span>
@@ -1633,8 +1705,6 @@
         </div>
         </div>
         </div>
-            </kendo-splitter-pane>
-        </kendo-splitter>
     </form>
 </div>
         

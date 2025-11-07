@@ -15,7 +15,8 @@ export class OutputTriggerTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        triggerDetails: true,
+        systemMetadata: false,
         reports: false
     };
 

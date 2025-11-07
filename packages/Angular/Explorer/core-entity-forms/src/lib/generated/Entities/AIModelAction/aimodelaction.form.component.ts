@@ -14,7 +14,9 @@ export class AIModelActionFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        modelConfiguration: true,
+        actionSettings: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

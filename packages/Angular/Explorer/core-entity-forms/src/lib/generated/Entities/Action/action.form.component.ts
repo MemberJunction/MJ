@@ -15,8 +15,11 @@ export class ActionFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
-        code: true,
+        identificationHierarchy: true,
+        definitionPrompting: true,
+        codeApproval: false,
+        displayExecution: false,
+        systemMetadata: false,
         params: false,
         libraries: false,
         resultCodes: false,

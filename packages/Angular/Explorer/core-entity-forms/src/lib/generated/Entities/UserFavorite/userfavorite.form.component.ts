@@ -14,7 +14,9 @@ export class UserFavoriteFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        favoriteIdentification: true,
+        entityMetadata: false,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

@@ -14,7 +14,9 @@ export class ContentProcessRunFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        runMetadata: false,
+        executionMetrics: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

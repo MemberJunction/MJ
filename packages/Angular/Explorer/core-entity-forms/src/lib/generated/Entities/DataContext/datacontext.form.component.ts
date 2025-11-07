@@ -15,7 +15,9 @@ export class DataContextFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        identifiers: true,
+        contextDetails: true,
+        systemMetadata: false,
         dataContextItems: false,
         reports: false,
         conversations: false

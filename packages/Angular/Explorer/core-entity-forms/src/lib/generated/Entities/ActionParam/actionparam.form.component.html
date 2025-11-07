@@ -2,19 +2,37 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
+            </span>
+        </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="actionid action id name defaultvalue default value type valuetype value type isarray is array description isrequired is required __mj_createdat created at __mj_updatedat updated at action">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Action Association Section -->
+        <div class="form-card collapsible-card" data-section-name="action association" data-field-names="actionid action id action">
+            <div class="collapsible-header" (click)="toggleSection('actionAssociation')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-link"></i>
+                    <h3><span class="section-name">Action Association</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.actionAssociation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.actionAssociation">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -25,6 +43,31 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Action"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Parameter Definition Section -->
+        <div class="form-card collapsible-card" data-section-name="parameter definition" data-field-names="name defaultvalue default value type valuetype value type isarray is array description isrequired is required">
+            <div class="collapsible-header" (click)="toggleSection('parameterDefinition')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-list-alt"></i>
+                    <h3><span class="section-name">Parameter Definition</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.parameterDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.parameterDefinition">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -74,6 +117,24 @@
             Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -88,13 +149,6 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Action"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
                 </div>
             </div>
@@ -105,7 +159,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity action params" data-field-names="entity action params" data-section-key="entityActionParams">
             <div class="collapsible-header" (click)="toggleSection('entityActionParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-sliders-h"></i>
                     <h3>
                         <span class="section-name">Entity Action Params</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActionParams']">{{sectionRowCounts['entityActionParams']}}</span>
@@ -133,7 +187,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="scheduled action params" data-field-names="scheduled action params" data-section-key="scheduledActionParams">
             <div class="collapsible-header" (click)="toggleSection('scheduledActionParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-calendar-alt"></i>
                     <h3>
                         <span class="section-name">Scheduled Action Params</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['scheduledActionParams']">{{sectionRowCounts['scheduledActionParams']}}</span>

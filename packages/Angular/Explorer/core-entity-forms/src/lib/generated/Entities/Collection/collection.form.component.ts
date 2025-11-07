@@ -15,7 +15,10 @@ export class CollectionFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        collectionBasics: true,
+        structuralHierarchy: true,
+        ownershipAccess: false,
+        systemMetadata: false,
         mJCollectionArtifacts: false,
         mJCollectionPermissions: false,
         mJCollections: false

@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 18 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 21 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description aimodeltypeid ai model type id powerrank power rank isactive is active __mj_createdat created at __mj_updatedat updated at speedrank speed rank costrank cost rank modelselectioninsights model selection insights aimodeltype aimodel type vendor driverclass driver class driverimportpath driver import path apiname inputtokenlimit input token limit supportedresponseformats supported response formats supportseffortlevel supports effort level">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Model Overview Section -->
+        <div class="form-card collapsible-card" data-section-name="model overview" data-field-names="name description aimodeltypeid ai model type id isactive is active modelselectioninsights model selection insights aimodeltype aimodel type vendor">
+            <div class="collapsible-header" (click)="toggleSection('modelOverview')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-info-circle"></i>
+                    <h3><span class="section-name">Model Overview</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.modelOverview ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.modelOverview">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -60,43 +60,8 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="PowerRank"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="IsActive"
             Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SpeedRank"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CostRank"
-            Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -120,6 +85,63 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics Section -->
+        <div class="form-card collapsible-card" data-section-name="performance metrics" data-field-names="powerrank power rank speedrank speed rank costrank cost rank">
+            <div class="collapsible-header" (click)="toggleSection('performanceMetrics')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-tachometer-alt"></i>
+                    <h3><span class="section-name">Performance Metrics</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.performanceMetrics ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.performanceMetrics">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PowerRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SpeedRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CostRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Specifications Section -->
+        <div class="form-card collapsible-card" data-section-name="technical specifications" data-field-names="driverclass driver class driverimportpath driver import path apiname inputtokenlimit input token limit supportedresponseformats supported response formats supportseffortlevel supports effort level">
+            <div class="collapsible-header" (click)="toggleSection('technicalSpecifications')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">Technical Specifications</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.technicalSpecifications ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.technicalSpecifications">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -166,13 +188,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
         <div class="related-entity-grid">
 
         <!-- AI Actions Section -->
         <div class="form-card collapsible-card related-entity" data-section-name="ai actions" data-field-names="ai actions" data-section-key="aIActions">
             <div class="collapsible-header" (click)="toggleSection('aIActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIActions']">{{sectionRowCounts['aIActions']}}</span>
@@ -200,7 +254,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai model actions" data-field-names="ai model actions" data-section-key="aIModelActions">
             <div class="collapsible-header" (click)="toggleSection('aIModelActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Model Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIModelActions']">{{sectionRowCounts['aIModelActions']}}</span>
@@ -228,7 +282,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity documents" data-field-names="entity documents" data-section-key="entityDocuments">
             <div class="collapsible-header" (click)="toggleSection('entityDocuments')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Documents</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocuments']">{{sectionRowCounts['entityDocuments']}}</span>
@@ -256,7 +310,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="vector indexes" data-field-names="vector indexes" data-section-key="vectorIndexes">
             <div class="collapsible-header" (click)="toggleSection('vectorIndexes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-database"></i>
                     <h3>
                         <span class="section-name">Vector Indexes</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['vectorIndexes']">{{sectionRowCounts['vectorIndexes']}}</span>
@@ -284,7 +338,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai agent notes" data-field-names="ai agent notes" data-section-key="aIAgentNotes">
             <div class="collapsible-header" (click)="toggleSection('aIAgentNotes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Agent Notes</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentNotes']">{{sectionRowCounts['aIAgentNotes']}}</span>
@@ -312,7 +366,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="ai result cache" data-field-names="ai result cache" data-section-key="aIResultCache">
             <div class="collapsible-header" (click)="toggleSection('aIResultCache')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Result Cache</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIResultCache']">{{sectionRowCounts['aIResultCache']}}</span>
@@ -340,7 +394,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="content types" data-field-names="content types" data-section-key="contentTypes">
             <div class="collapsible-header" (click)="toggleSection('contentTypes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-folder"></i>
                     <h3>
                         <span class="section-name">Content Types</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentTypes']">{{sectionRowCounts['contentTypes']}}</span>
@@ -368,7 +422,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="entity ai actions" data-field-names="entity ai actions" data-section-key="entityAIActions">
             <div class="collapsible-header" (click)="toggleSection('entityAIActions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">Entity AI Actions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityAIActions']">{{sectionRowCounts['entityAIActions']}}</span>
@@ -396,7 +450,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent examples" data-field-names="mj: ai agent examples" data-section-key="mJAIAgentExamples">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentExamples')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Examples</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentExamples']">{{sectionRowCounts['mJAIAgentExamples']}}</span>
@@ -424,7 +478,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="aiagent models" data-field-names="ai agent models" data-section-key="aIAgentModels">
             <div class="collapsible-header" (click)="toggleSection('aIAgentModels')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AIAgent Models</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentModels']">{{sectionRowCounts['aIAgentModels']}}</span>
@@ -452,7 +506,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai model vendors" data-field-names="mj: ai model vendors" data-section-key="mJAIModelVendors">
             <div class="collapsible-header" (click)="toggleSection('mJAIModelVendors')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Model Vendors</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIModelVendors']">{{sectionRowCounts['mJAIModelVendors']}}</span>
@@ -480,7 +534,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="generated codes" data-field-names="generated codes" data-section-key="generatedCodes">
             <div class="collapsible-header" (click)="toggleSection('generatedCodes')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">Generated Codes</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['generatedCodes']">{{sectionRowCounts['generatedCodes']}}</span>
@@ -508,7 +562,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai model costs" data-field-names="mj: ai model costs" data-section-key="mJAIModelCosts">
             <div class="collapsible-header" (click)="toggleSection('mJAIModelCosts')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Model Costs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIModelCosts']">{{sectionRowCounts['mJAIModelCosts']}}</span>
@@ -536,7 +590,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt models" data-field-names="mj: ai prompt models" data-section-key="mJAIPromptModels">
             <div class="collapsible-header" (click)="toggleSection('mJAIPromptModels')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Prompt Models</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptModels']">{{sectionRowCounts['mJAIPromptModels']}}</span>
@@ -564,7 +618,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai prompt runs" data-field-names="mj: ai prompt runs" data-section-key="mJAIPromptRuns">
             <div class="collapsible-header" (click)="toggleSection('mJAIPromptRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Prompt Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptRuns']">{{sectionRowCounts['mJAIPromptRuns']}}</span>
@@ -592,7 +646,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent runs" data-field-names="mj: ai agent runs" data-section-key="mJAIAgentRuns">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentRuns']">{{sectionRowCounts['mJAIAgentRuns']}}</span>

@@ -1944,20 +1944,39 @@ NumberedRows AS (
             return true;
          }
 
-         // Get list of entities to process (only new or modified)
-         // Deduplicate in case an entity appears in both lists
-         const entitiesToProcess = [
-            ...new Set([
-               ...ManageMetadataBase.newEntityList,
-               ...ManageMetadataBase.modifiedEntityList
-            ])
-         ];
+         // Get list of entities to process
+         // If forceRegeneration.enabled is true, process ALL entities
+         // Otherwise, only process new or modified entities
+         let entitiesToProcess: string[] = [];
+         let whereClause = '';
 
-         if (entitiesToProcess.length === 0) {
-            return true;
+         if (configInfo.forceRegeneration?.enabled) {
+            // Force regeneration mode - process all entities (or filtered by entityWhereClause)
+            logStatus(`      Force regeneration enabled - processing all entities...`);
+
+            whereClause = 'e.VirtualEntity = 0';
+            if (configInfo.forceRegeneration.entityWhereClause && configInfo.forceRegeneration.entityWhereClause.trim().length > 0) {
+               whereClause += ` AND (${configInfo.forceRegeneration.entityWhereClause})`;
+               logStatus(`         Filtered by: ${configInfo.forceRegeneration.entityWhereClause}`);
+            }
+            whereClause += ` AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         } else {
+            // Normal mode - only process new or modified entities
+            // Deduplicate in case an entity appears in both lists
+            entitiesToProcess = [
+               ...new Set([
+                  ...ManageMetadataBase.newEntityList,
+                  ...ManageMetadataBase.modifiedEntityList
+               ])
+            ];
+
+            if (entitiesToProcess.length === 0) {
+               return true;
+            }
+
+            logStatus(`      Advanced Generation enabled, processing ${entitiesToProcess.length} entities...`);
+            whereClause = `e.VirtualEntity = 0 AND e.Name IN (${entitiesToProcess.map(name => `'${name}'`).join(',')}) AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          }
-
-         logStatus(`      Advanced Generation enabled, processing ${entitiesToProcess.length} entities...`);
 
          // Get entity details for entities that need processing
          const entitiesSQL = `
@@ -1970,9 +1989,7 @@ NumberedRows AS (
             FROM
                [${mj_core_schema()}].vwEntities e
             WHERE
-               e.VirtualEntity = 0
-               AND e.Name IN (${entitiesToProcess.map(name => `'${name}'`).join(',')})
-               AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
+               ${whereClause}
             ORDER BY
                e.Name
          `;
@@ -2177,22 +2194,36 @@ NumberedRows AS (
       fields: any[],
       result: FormLayoutResult
    ): Promise<void> {
+      // Collect all SQL statements for batch execution
+      const sqlStatements: string[] = [];
+
       // Assign category to each field
       for (const fieldCategory of result.fieldCategories) {
          const field = fields.find(f => f.Name === fieldCategory.fieldName);
 
          if (field && field.AutoUpdateCategory && field.ID) {
-            const updateSQL = `
-               UPDATE [${mj_core_schema()}].EntityField
-               SET Category = '${fieldCategory.category.replace(/'/g, "''")}',
-                   GeneratedFormSection = 'Category'
-               WHERE ID = '${field.ID}'
-               AND AutoUpdateCategory = 1
-            `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Set Category '${fieldCategory.category}' and GeneratedFormSection to 'Category' for ${fieldCategory.fieldName}`, false);
+            // Override category to "System Metadata" for __mj_ fields (system audit fields)
+            let category = fieldCategory.category;
+            if (field.Name.startsWith('__mj_')) {
+               category = 'System Metadata';
+            }
+
+            const updateSQL = `UPDATE [${mj_core_schema()}].EntityField
+   SET Category = '${category.replace(/'/g, "''")}',
+       GeneratedFormSection = 'Category'
+   WHERE ID = '${field.ID}'
+   AND AutoUpdateCategory = 1`;
+
+            sqlStatements.push(updateSQL);
          } else if (!field) {
             logError(`Form layout generation returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
          }
+      }
+
+      // Execute all field updates in one batch
+      if (sqlStatements.length > 0) {
+         const combinedSQL = sqlStatements.join('\n');
+         await this.LogSQLAndExecute(pool, combinedSQL, `Set categories for ${sqlStatements.length} fields`, false);
       }
 
       // Store entity icon if provided and entity doesn't already have one

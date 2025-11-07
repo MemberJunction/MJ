@@ -95,17 +95,24 @@ button {
   background-color: #F5F6FA;
 }
 
-/* All sections take full width */
-.form-panels-container > .form-card,
-.form-panels-container .related-entity-grid {
+/* All field sections take full width */
+.form-panels-container > .form-card {
   width: 100%;
 }
 
-/* Related entity grid container - all items full width */
+/* Related entity grid container - responsive layout */
 .form-panels-container .related-entity-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 16px;
+  width: 100%;
+}
+
+/* Responsive multi-column layout for related entities on wider screens */
+@media (min-width: 1400px) {
+  .form-panels-container .related-entity-grid {
+    grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+  }
 }
 
 .form-card {
@@ -308,4 +315,7 @@ button {
   font-size: 12px;
   font-weight: 600;
   margin-left: 8px;
+  vertical-align: middle;
+  position: relative;
+  top: -5px;
 }

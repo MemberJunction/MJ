@@ -15,7 +15,9 @@ export class CompanyFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        coreCompanyInfo: true,
+        brandingDigitalPresence: true,
+        systemMetadata: false,
         companyIntegrations: false,
         employees: false,
         workflows: false,

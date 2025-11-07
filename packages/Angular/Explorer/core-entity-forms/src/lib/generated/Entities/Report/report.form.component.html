@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 7 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description categoryid category id userid user id sharingscope sharing scope conversationid conversation id conversationdetailid conversation detail id datacontextid data context id configuration outputtriggertypeid output trigger type id outputformattypeid output format type id outputdeliverytypeid output delivery type id outputfrequency output frequency outputtargetemail output target email outputworkflowid output workflow id __mj_createdat created at __mj_updatedat updated at thumbnail environmentid environment id category user conversation datacontext data context outputtriggertype output trigger type outputformattype output format type outputdeliverytype output delivery type outputworkflow output workflow environment">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Report Details Section -->
+        <div class="form-card collapsible-card" data-section-name="report details" data-field-names="name description categoryid category id sharingscope sharing scope thumbnail environmentid environment id category environment">
+            <div class="collapsible-header" (click)="toggleSection('reportDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Report Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.reportDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.reportDetails">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -60,7 +60,21 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
+            FieldName="SharingScope"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Thumbnail"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EnvironmentID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -69,9 +83,43 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SharingScope"
-            Type="dropdownlist"
+            FieldName="Category"
+            Type="textbox"
             [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Environment"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Context & Relationships Section -->
+        <div class="form-card collapsible-card" data-section-name="data context & relationships" data-field-names="userid user id conversationid conversation id conversationdetailid conversation detail id datacontextid data context id outputworkflowid output workflow id user conversation datacontext data context outputworkflow output workflow">
+            <div class="collapsible-header" (click)="toggleSection('dataContextRelationships')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sitemap"></i>
+                    <h3><span class="section-name">Data Context & Relationships</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.dataContextRelationships ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.dataContextRelationships">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -100,6 +148,61 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputWorkflowID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="User"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Conversation"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DataContext"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputWorkflow"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Output & Scheduling Section -->
+        <div class="form-card collapsible-card" data-section-name="output & scheduling" data-field-names="configuration outputtriggertypeid output trigger type id outputformattypeid output format type id outputdeliverytypeid output delivery type id outputfrequency output frequency outputtargetemail output target email outputtriggertype output trigger type outputformattype output format type outputdeliverytype output delivery type">
+            <div class="collapsible-header" (click)="toggleSection('outputScheduling')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-calendar"></i>
+                    <h3><span class="section-name">Output & Scheduling</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.outputScheduling ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.outputScheduling">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -151,73 +254,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="OutputWorkflowID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Thumbnail"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EnvironmentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Category"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="User"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Conversation"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DataContext"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="OutputTriggerType"
             Type="textbox"
             [EditMode]="EditMode"
@@ -236,17 +272,35 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="OutputWorkflow"
+            FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Environment"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -260,7 +314,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="report snapshots" data-field-names="report snapshots" data-section-key="reportSnapshots">
             <div class="collapsible-header" (click)="toggleSection('reportSnapshots')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-camera"></i>
                     <h3>
                         <span class="section-name">Report Snapshots</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['reportSnapshots']">{{sectionRowCounts['reportSnapshots']}}</span>
@@ -288,7 +342,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: report versions" data-field-names="mj: report versions" data-section-key="mJReportVersions">
             <div class="collapsible-header" (click)="toggleSection('mJReportVersions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">MJ: Report Versions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJReportVersions']">{{sectionRowCounts['mJReportVersions']}}</span>
@@ -316,7 +370,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: report user states" data-field-names="mj: report user states" data-section-key="mJReportUserStates">
             <div class="collapsible-header" (click)="toggleSection('mJReportUserStates')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-chart-line"></i>
                     <h3>
                         <span class="section-name">MJ: Report User States</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJReportUserStates']">{{sectionRowCounts['mJReportUserStates']}}</span>

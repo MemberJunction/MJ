@@ -2,19 +2,37 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
+            </span>
+        </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description aimodelid aimodel id mintags min tags maxtags max tags __mj_createdat created at __mj_updatedat updated at aimodel">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Content Type Specification Section -->
+        <div class="form-card collapsible-card" data-section-name="content type specification" data-field-names="name description mintags min tags maxtags max tags">
+            <div class="collapsible-header" (click)="toggleSection('contentTypeSpecification')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-tag"></i>
+                    <h3><span class="section-name">Content Type Specification</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.contentTypeSpecification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentTypeSpecification">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -33,15 +51,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AIModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="MinTags"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -53,6 +62,58 @@
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Model Settings Section -->
+        <div class="form-card collapsible-card" data-section-name="ai model settings" data-field-names="aimodelid aimodel id aimodel">
+            <div class="collapsible-header" (click)="toggleSection('aIModelSettings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-robot"></i>
+                    <h3><span class="section-name">AI Model Settings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIModelSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIModelSettings">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -67,13 +128,6 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AIModel"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
                 </div>
             </div>
@@ -84,7 +138,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="content sources" data-field-names="content sources" data-section-key="contentSources">
             <div class="collapsible-header" (click)="toggleSection('contentSources')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-plug"></i>
                     <h3>
                         <span class="section-name">Content Sources</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentSources']">{{sectionRowCounts['contentSources']}}</span>
@@ -112,7 +166,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="content items" data-field-names="content items" data-section-key="contentItems">
             <div class="collapsible-header" (click)="toggleSection('contentItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Content Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentItems']">{{sectionRowCounts['contentItems']}}</span>

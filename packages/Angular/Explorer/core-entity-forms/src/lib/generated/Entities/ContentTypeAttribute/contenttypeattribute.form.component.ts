@@ -14,7 +14,9 @@ export class ContentTypeAttributeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        attributeMetadata: false,
+        extractionPrompt: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

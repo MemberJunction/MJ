@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 10 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name categoryid category id userquestion user question description sql technicaldescription technical description originalsql original sql feedback status qualityrank quality rank executioncostrank execution cost rank __mj_createdat __mj _created at __mj_updatedat __mj _updated at usestemplate uses template auditqueryruns audit query runs cacheenabled cache enabled cachettlminutes cache ttl minutes cachemaxsize cache max size embeddingvector embedding vector embeddingmodelid embedding model id category embeddingmodel embedding model">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Query Definition Section -->
+        <div class="form-card collapsible-card" data-section-name="query definition" data-field-names="name categoryid category id userquestion user question description sql technicaldescription technical description originalsql original sql usestemplate uses template category">
+            <div class="collapsible-header" (click)="toggleSection('queryDefinition')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-file-code"></i>
+                    <h3><span class="section-name">Query Definition</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.queryDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryDefinition">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -88,6 +88,38 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="UsesTemplate"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance & Quality Section -->
+        <div class="form-card collapsible-card" data-section-name="performance & quality" data-field-names="feedback status qualityrank quality rank executioncostrank execution cost rank">
+            <div class="collapsible-header" (click)="toggleSection('performanceQuality')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-chart-line"></i>
+                    <h3><span class="section-name">Performance & Quality</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.performanceQuality ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.performanceQuality">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Feedback"
             Type="textarea"
             [EditMode]="EditMode"
@@ -113,27 +145,24 @@
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="UsesTemplate"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Caching & Execution Settings Section -->
+        <div class="form-card collapsible-card" data-section-name="caching & execution settings" data-field-names="auditqueryruns audit query runs cacheenabled cache enabled cachettlminutes cache ttl minutes cachemaxsize cache max size">
+            <div class="collapsible-header" (click)="toggleSection('cachingExecutionSettings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sliders-h"></i>
+                    <h3><span class="section-name">Caching & Execution Settings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.cachingExecutionSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.cachingExecutionSettings">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -162,6 +191,24 @@
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- AI & Embeddings Section -->
+        <div class="form-card collapsible-card" data-section-name="ai & embeddings" data-field-names="embeddingvector embedding vector embeddingmodelid embedding model id embeddingmodel embedding model">
+            <div class="collapsible-header" (click)="toggleSection('aIEmbeddings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-brain"></i>
+                    <h3><span class="section-name">AI & Embeddings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIEmbeddings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIEmbeddings">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -181,14 +228,39 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Category"
+            FieldName="EmbeddingModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EmbeddingModel"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -202,7 +274,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="data context items" data-field-names="data context items" data-section-key="dataContextItems">
             <div class="collapsible-header" (click)="toggleSection('dataContextItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-database"></i>
                     <h3>
                         <span class="section-name">Data Context Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['dataContextItems']">{{sectionRowCounts['dataContextItems']}}</span>
@@ -258,7 +330,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="query permissions" data-field-names="query permissions" data-section-key="queryPermissions">
             <div class="collapsible-header" (click)="toggleSection('queryPermissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-shield-alt"></i>
                     <h3>
                         <span class="section-name">Query Permissions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['queryPermissions']">{{sectionRowCounts['queryPermissions']}}</span>
@@ -286,7 +358,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: query parameters" data-field-names="mj: query parameters" data-section-key="mJQueryParameters">
             <div class="collapsible-header" (click)="toggleSection('mJQueryParameters')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-code"></i>
                     <h3>
                         <span class="section-name">MJ: Query Parameters</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJQueryParameters']">{{sectionRowCounts['mJQueryParameters']}}</span>
@@ -314,7 +386,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="query entities" data-field-names="query entities" data-section-key="queryEntities">
             <div class="collapsible-header" (click)="toggleSection('queryEntities')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-search"></i>
                     <h3>
                         <span class="section-name">Query Entities</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['queryEntities']">{{sectionRowCounts['queryEntities']}}</span>

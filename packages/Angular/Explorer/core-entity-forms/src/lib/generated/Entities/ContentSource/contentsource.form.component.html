@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name contenttypeid content type id contentsourcetypeid content source type id contentfiletypeid content file type id url __mj_createdat created at __mj_updatedat updated at contenttype content type contentsourcetype content source type contentfiletype content file type">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Connection Details Section -->
+        <div class="form-card collapsible-card" data-section-name="connection details" data-field-names="name contentsourcetypeid content source type id url contentsourcetype content source type">
+            <div class="collapsible-header" (click)="toggleSection('connectionDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-plug"></i>
+                    <h3><span class="section-name">Connection Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.connectionDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.connectionDetails">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -44,7 +44,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ContentTypeID"
+            FieldName="ContentSourceTypeID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -53,7 +53,39 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ContentSourceTypeID"
+            FieldName="URL"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentSourceType"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Classification Section -->
+        <div class="form-card collapsible-card" data-section-name="content classification" data-field-names="contenttypeid content type id contentfiletypeid content file type id contenttype content type contentfiletype content file type">
+            <div class="collapsible-header" (click)="toggleSection('contentClassification')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-tags"></i>
+                    <h3><span class="section-name">Content Classification</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.contentClassification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentClassification">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentTypeID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -71,35 +103,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="URL"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="ContentType"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentSourceType"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -114,13 +118,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
         <div class="related-entity-grid">
 
         <!-- Content Items Section -->
         <div class="form-card collapsible-card related-entity" data-section-name="content items" data-field-names="content items" data-section-key="contentItems">
             <div class="collapsible-header" (click)="toggleSection('contentItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Content Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentItems']">{{sectionRowCounts['contentItems']}}</span>
@@ -148,7 +184,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="content process runs" data-field-names="content process runs" data-section-key="contentProcessRuns">
             <div class="collapsible-header" (click)="toggleSection('contentProcessRuns')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-cogs"></i>
                     <h3>
                         <span class="section-name">Content Process Runs</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentProcessRuns']">{{sectionRowCounts['contentProcessRuns']}}</span>
@@ -176,7 +212,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="content source params" data-field-names="content source params" data-section-key="contentSourceParams">
             <div class="collapsible-header" (click)="toggleSection('contentSourceParams')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-cogs"></i>
                     <h3>
                         <span class="section-name">Content Source Params</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentSourceParams']">{{sectionRowCounts['contentSourceParams']}}</span>

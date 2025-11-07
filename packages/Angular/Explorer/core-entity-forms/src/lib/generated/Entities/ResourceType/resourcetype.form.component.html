@@ -17,22 +17,40 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 8 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name displayname display name description icon entityid entity id __mj_createdat __mj _created at __mj_updatedat __mj _updated at categoryentityid category entity id entity categoryentity category entity">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Technical Details Section -->
+        <div class="form-card collapsible-card" data-section-name="technical details" data-field-names="">
+            <div class="collapsible-header" (click)="toggleSection('technicalDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">Technical Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.technicalDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.technicalDetails">
+                <div class="form-body">
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Resource Type Definition Section -->
+        <div class="form-card collapsible-card" data-section-name="resource type definition" data-field-names="name displayname display name description icon">
+            <div class="collapsible-header" (click)="toggleSection('resourceTypeDefinition')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-tag"></i>
+                    <h3><span class="section-name">Resource Type Definition</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.resourceTypeDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resourceTypeDefinition">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -62,6 +80,24 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Entity Associations Section -->
+        <div class="form-card collapsible-card" data-section-name="entity associations" data-field-names="entityid entity id categoryentityid category entity id entity categoryentity category entity">
+            <div class="collapsible-header" (click)="toggleSection('entityAssociations')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-link"></i>
+                    <h3><span class="section-name">Entity Associations</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.entityAssociations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityAssociations">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -70,20 +106,6 @@
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Dropdown"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -112,13 +134,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
         <div class="related-entity-grid">
 
         <!-- Workspace Items Section -->
         <div class="form-card collapsible-card related-entity" data-section-name="workspace items" data-field-names="workspace items" data-section-key="workspaceItems">
             <div class="collapsible-header" (click)="toggleSection('workspaceItems')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-th"></i>
                     <h3>
                         <span class="section-name">Workspace Items</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['workspaceItems']">{{sectionRowCounts['workspaceItems']}}</span>
@@ -146,7 +200,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="user notifications" data-field-names="user notifications" data-section-key="userNotifications">
             <div class="collapsible-header" (click)="toggleSection('userNotifications')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-bell"></i>
                     <h3>
                         <span class="section-name">User Notifications</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['userNotifications']">{{sectionRowCounts['userNotifications']}}</span>
@@ -174,7 +228,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="resource links" data-field-names="resource links" data-section-key="resourceLinks">
             <div class="collapsible-header" (click)="toggleSection('resourceLinks')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Resource Links</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['resourceLinks']">{{sectionRowCounts['resourceLinks']}}</span>
@@ -202,7 +256,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="resource permissions" data-field-names="resource permissions" data-section-key="resourcePermissions">
             <div class="collapsible-header" (click)="toggleSection('resourcePermissions')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-lock"></i>
                     <h3>
                         <span class="section-name">Resource Permissions</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['resourcePermissions']">{{sectionRowCounts['resourcePermissions']}}</span>

@@ -15,7 +15,9 @@ export class IntegrationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        integrationOverview: true,
+        technicalSettings: true,
+        systemMetadata: false,
         companyIntegrations: false,
         uRLFormats: false,
         recordChanges: false

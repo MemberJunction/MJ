@@ -14,7 +14,9 @@ export class AIAgentModelFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        mappingIdentifiers: true,
+        agentModelConfiguration: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

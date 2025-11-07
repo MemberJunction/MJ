@@ -15,7 +15,9 @@ export class AIConfigurationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        basicInformation: true,
+        configurationSettings: true,
+        systemMetadata: false,
         mJAIAgentPrompts: false,
         mJAIConfigurationParams: false,
         aIResultCache: false,

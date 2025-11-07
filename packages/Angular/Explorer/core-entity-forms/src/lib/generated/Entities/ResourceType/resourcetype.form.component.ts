@@ -15,7 +15,10 @@ export class ResourceTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        technicalDetails: true,
+        resourceTypeDefinition: true,
+        entityAssociations: false,
+        systemMetadata: false,
         workspaceItems: false,
         userNotifications: false,
         resourceLinks: false,

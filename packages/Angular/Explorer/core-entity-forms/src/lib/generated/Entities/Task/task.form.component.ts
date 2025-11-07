@@ -15,7 +15,10 @@ export class TaskFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        relationshipsOwnership: true,
+        taskDetails: true,
+        timelineMilestones: false,
+        systemMetadata: false,
         mJTaskDependencies: false,
         mJTaskDependencies1: false,
         mJTasks: false

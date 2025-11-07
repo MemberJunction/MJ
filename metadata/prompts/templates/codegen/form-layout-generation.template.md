@@ -68,7 +68,7 @@ Create categories that are **specific to this entity's business domain**, not ge
 
 **Use broader semantic groupings:**
 - "Customer Information" can include CustomerID, CustomerName, AccountType, etc.
-- "System Metadata" can include all __mj_* fields, IDs, timestamps, audit fields
+- **"System Metadata"** - ALWAYS use this category for __mj_CreatedAt, __mj_UpdatedAt, and similar system/audit fields. This category will be displayed at the very bottom of forms (even after related entity sections) as it's the least important for normal usage.
 
 ### Category Naming Rules
 

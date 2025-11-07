@@ -15,7 +15,9 @@ export class AuthorizationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        authorizationHierarchy: true,
+        authorizationCore: true,
+        systemMetadata: false,
         actionAuthorizations: false,
         auditLogTypes: false,
         auditLogs: false,

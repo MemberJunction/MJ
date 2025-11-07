@@ -14,7 +14,9 @@ export class ActionAuthorizationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        authorizationMapping: true,
+        actionAuthorizationDetails: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

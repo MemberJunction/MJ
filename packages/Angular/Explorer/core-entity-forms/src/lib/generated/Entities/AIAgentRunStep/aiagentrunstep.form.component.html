@@ -2,19 +2,37 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
+            </span>
+        </div>
         <div class="form-panels-container">
-<!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="agentrunid agent run id stepnumber step number steptype step type stepname step name targetid target id status startedat started at completedat completed at success errormessage error message inputdata input data outputdata output data __mj_createdat created at __mj_updatedat updated at targetlogid target log id payloadatstart payload at start payloadatend payload at end finalpayloadvalidationresult final payload validation result finalpayloadvalidationmessages final payload validation messages parentid parent id comments rootparentid root parent id">
-            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+<!-- Step Identification & Hierarchy Section -->
+        <div class="form-card collapsible-card" data-section-name="step identification & hierarchy" data-field-names="agentrunid agent run id stepnumber step number steptype step type stepname step name targetid target id targetlogid target log id parentid parent id rootparentid root parent id">
+            <div class="collapsible-header" (click)="toggleSection('stepIdentificationHierarchy')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Details</span></h3>
+                    <i class="fa fa-layer-group"></i>
+                    <h3><span class="section-name">Step Identification & Hierarchy</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.stepIdentificationHierarchy ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.stepIdentificationHierarchy">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -56,6 +74,47 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="TargetLogID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution Status & Validation Section -->
+        <div class="form-card collapsible-card" data-section-name="execution status & validation" data-field-names="status startedat started at completedat completed at success errormessage error message finalpayloadvalidationresult final payload validation result finalpayloadvalidationmessages final payload validation messages">
+            <div class="collapsible-header" (click)="toggleSection('executionStatusValidation')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-flag-checkered"></i>
+                    <h3><span class="section-name">Execution Status & Validation</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.executionStatusValidation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.executionStatusValidation">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
@@ -91,6 +150,38 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="FinalPayloadValidationResult"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FinalPayloadValidationMessages"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Data & Payload Section -->
+        <div class="form-card collapsible-card" data-section-name="data & payload" data-field-names="inputdata input data outputdata output data payloadatstart payload at start payloadatend payload at end">
+            <div class="collapsible-header" (click)="toggleSection('dataPayload')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3><span class="section-name">Data & Payload</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.dataPayload ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.dataPayload">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="InputData"
             Type="textarea"
             [EditMode]="EditMode"
@@ -100,27 +191,6 @@
             [ShowLabel]="true"
             FieldName="OutputData"
             Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TargetLogID"
-            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -137,40 +207,60 @@
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes & System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="notes & system metadata" data-field-names="comments">
+            <div class="collapsible-header" (click)="toggleSection('notesSystemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">Notes & System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.notesSystemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.notesSystemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
-            FieldName="FinalPayloadValidationResult"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="FinalPayloadValidationMessages"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="Comments"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="RootParentID"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -184,7 +274,7 @@
         <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent run steps" data-field-names="mj: ai agent run steps" data-section-key="mJAIAgentRunSteps">
             <div class="collapsible-header" (click)="toggleSection('mJAIAgentRunSteps')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-table"></i>
+                    <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Run Steps</span>
                         <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentRunSteps']">{{sectionRowCounts['mJAIAgentRunSteps']}}</span>

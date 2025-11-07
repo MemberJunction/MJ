@@ -15,7 +15,8 @@ export class RecommendationFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        recommendationCore: true,
+        systemMetadata: false,
         recommendationItems: false
     };
 

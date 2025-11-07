@@ -14,7 +14,9 @@ export class ApplicationEntityFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true
+        applicationLinkage: true,
+        entityDefinition: true,
+        systemMetadata: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

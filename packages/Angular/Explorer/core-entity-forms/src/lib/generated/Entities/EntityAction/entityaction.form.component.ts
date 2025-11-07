@@ -15,7 +15,9 @@ export class EntityActionFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        relationshipKeys: true,
+        actionConfiguration: true,
+        systemMetadata: false,
         entityActionFilters: false,
         entityActionInvocations: false,
         entityActionParams: false

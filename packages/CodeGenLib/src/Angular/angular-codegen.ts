@@ -615,10 +615,19 @@ export function Load${entity.ClassName}FormComponent() {
               }
           }
 
-          // Sort sections by minimum sequence (Top sections first, then by MinSequence)
+          // Sort sections by minimum sequence (Top sections first, System sections last, then by MinSequence)
           sections.sort((a, b) => {
+              // Top sections always first
               if (a.Type === GeneratedFormSectionType.Top) return -1;
               if (b.Type === GeneratedFormSectionType.Top) return 1;
+
+              // System sections always last (after related entities)
+              const aIsSystem = a.Name.toLowerCase() === 'system' || a.Name.toLowerCase() === 'system metadata';
+              const bIsSystem = b.Name.toLowerCase() === 'system' || b.Name.toLowerCase() === 'system metadata';
+              if (aIsSystem && !bIsSystem) return 1;
+              if (!aIsSystem && bIsSystem) return -1;
+
+              // Otherwise sort by sequence
               const aSeq = a.MinSequence ?? Number.MAX_SAFE_INTEGER;
               const bSeq = b.MinSequence ?? Number.MAX_SAFE_INTEGER;
               return aSeq - bSeq;

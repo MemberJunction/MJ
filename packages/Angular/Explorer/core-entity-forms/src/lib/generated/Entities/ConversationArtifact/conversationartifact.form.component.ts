@@ -15,7 +15,9 @@ export class ConversationArtifactFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        details: true,
+        artifactDetails: true,
+        conversationContext: true,
+        systemMetadata: false,
         mJConversationArtifactPermissions: false,
         mJConversationArtifactVersions: false,
         conversationDetails: false
