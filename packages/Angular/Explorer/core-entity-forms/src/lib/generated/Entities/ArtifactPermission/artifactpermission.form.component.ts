@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: Artifact Permissions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-artifactpermission-form',
-    templateUrl: './artifactpermission.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './artifactpermission.form.component.html'
 })
 export class ArtifactPermissionFormComponent extends BaseFormComponent {
     public record!: ArtifactPermissionEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        permissionRelationships: true,
-        artifactAccessRights: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'permissionRelationships', sectionName: 'Permission Relationships', isExpanded: true },
+            { sectionKey: 'artifactAccessRights', sectionName: 'Artifact Access Rights', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

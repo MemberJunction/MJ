@@ -1,27 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Recommendation Core Section -->
-        <div class="form-card collapsible-card" data-section-name="recommendation core" data-field-names="recommendationrunid recommendation run id sourceentityid source entity id sourceentityrecordid source entity record id sourceentity source entity">
-            <div class="collapsible-header" (click)="toggleSection('recommendationCore')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-clipboard"></i>
-                    <h3><span class="section-name">Recommendation Core</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.recommendationCore ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recommendationCore">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Recommendation Core Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="recommendationCore"
+        sectionName="Recommendation Core"
+        icon="fa fa-clipboard"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="RecommendationRunID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -31,6 +26,7 @@
             FieldName="SourceEntityID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -40,6 +36,7 @@
             FieldName="SourceEntityRecordID"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -47,31 +44,43 @@
             FieldName="SourceEntity"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="RecommendationRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -79,46 +88,33 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Recommendation Items Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="recommendation items" data-field-names="recommendation items" data-section-key="recommendationItems">
-            <div class="collapsible-header" (click)="toggleSection('recommendationItems')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-lightbulb"></i>
-                    <h3>
-                        <span class="section-name">Recommendation Items</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['recommendationItems'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['recommendationItems'] === 0">
-                            {{sectionRowCounts['recommendationItems']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.recommendationItems ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recommendationItems" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Items','RecommendationID')"
-                        [NewRecordValues]="NewRecordValues('Recommendation Items')"
-                        [AllowLoad]="IsCurrentSection('recommendationItems')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['recommendationItems'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Recommendation Items Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="recommendationItems"
+        sectionName="Recommendation Items"
+        icon="fa fa-lightbulb"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('recommendationItems')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Items','RecommendationID')"
+                [NewRecordValues]="NewRecordValues('Recommendation Items')"
+                [AllowLoad]="IsSectionExpanded('recommendationItems')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('recommendationItems', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

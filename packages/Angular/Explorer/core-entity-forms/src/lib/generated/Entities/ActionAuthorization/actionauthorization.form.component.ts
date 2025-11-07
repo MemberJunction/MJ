@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Action Authorizations') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-actionauthorization-form',
-    templateUrl: './actionauthorization.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './actionauthorization.form.component.html'
 })
 export class ActionAuthorizationFormComponent extends BaseFormComponent {
     public record!: ActionAuthorizationEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        authorizationMapping: true,
-        actionAuthorizationDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'authorizationMapping', sectionName: 'Authorization Mapping', isExpanded: true },
+            { sectionKey: 'actionAuthorizationDetails', sectionName: 'Action & Authorization Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

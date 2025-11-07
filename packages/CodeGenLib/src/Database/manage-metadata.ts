@@ -1021,10 +1021,14 @@ NumberedRows AS (
     * @returns
     */
    protected getPendingEntityFieldINSERTSQL(newEntityFieldUUID: string, n: any): string {
-      const bDefaultInView: boolean = (n.FieldName?.trim().toLowerCase() === 'id' ||
-                                       n.FieldName?.trim().toLowerCase() === 'name' ||
-                                       n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView ||
-                                       n.IsNameField ? true : false);
+      // DefaultInView logic: Include name fields and early sequence fields, but EXCLUDE primary keys and foreign keys
+      // Primary keys (ID) and foreign keys are UUIDs that aren't useful for end users
+      const isPrimaryKey = n.FieldName?.trim().toLowerCase() === 'id';
+      const isForeignKey = n.RelatedEntityID && n.RelatedEntityID.length > 0; // Foreign keys have RelatedEntityID set
+      const isNameField = n.FieldName?.trim().toLowerCase() === 'name' || n.IsNameField;
+      const isEarlySequence = n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView;
+
+      const bDefaultInView: boolean = (isNameField || isEarlySequence) && !isPrimaryKey && !isForeignKey;
       const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
       let fieldDisplayName: string = '';
       switch (n.FieldName.trim().toLowerCase()) {
@@ -2245,9 +2249,31 @@ NumberedRows AS (
                category = 'System Metadata';
             }
 
+            // Build SET clause with all available metadata
+            const setClauses: string[] = [
+               `Category = '${category.replace(/'/g, "''")}'`,
+               `GeneratedFormSection = 'Category'`
+            ];
+
+            // Add DisplayName if provided and field allows auto-update
+            if (fieldCategory.displayName && field.AutoUpdateDisplayName) {
+               setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
+            }
+
+            // Add ExtendedType if provided
+            if (fieldCategory.extendedType !== undefined) {
+               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${fieldCategory.extendedType.replace(/'/g, "''")}'`;
+               setClauses.push(`ExtendedType = ${extendedType}`);
+            }
+
+            // Add CodeType if provided
+            if (fieldCategory.codeType !== undefined) {
+               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${fieldCategory.codeType.replace(/'/g, "''")}'`;
+               setClauses.push(`CodeType = ${codeType}`);
+            }
+
             const updateSQL = `UPDATE [${mj_core_schema()}].EntityField
-   SET Category = '${category.replace(/'/g, "''")}',
-       GeneratedFormSection = 'Category'
+   SET ${setClauses.join(',\n       ')}
    WHERE ID = '${field.ID}'
    AND AutoUpdateCategory = 1`;
 

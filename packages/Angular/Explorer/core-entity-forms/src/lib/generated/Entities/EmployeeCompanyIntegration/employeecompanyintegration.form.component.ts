@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Employee Company Integrations') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-employeecompanyintegration-form',
-    templateUrl: './employeecompanyintegration.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './employeecompanyintegration.form.component.html'
 })
 export class EmployeeCompanyIntegrationFormComponent extends BaseFormComponent {
     public record!: EmployeeCompanyIntegrationEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        integrationMapping: true,
-        externalIdentifier: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'integrationMapping', sectionName: 'Integration Mapping', isExpanded: true },
+            { sectionKey: 'externalIdentifier', sectionName: 'External Identifier', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

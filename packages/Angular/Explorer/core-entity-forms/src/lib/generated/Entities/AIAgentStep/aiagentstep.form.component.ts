@@ -2,88 +2,27 @@ import { Component } from '@angular/core';
 import { AIAgentStepEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Steps') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiagentstep-form',
-    templateUrl: './aiagentstep.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aiagentstep.form.component.html'
 })
 export class AIAgentStepFormComponent extends BaseFormComponent {
     public record!: AIAgentStepEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        coreDefinition: true,
-        executionControls: true,
-        targetResources: false,
-        visualLayout: false,
-        systemMetadata: false,
-        mJAIAgentStepPaths: false,
-        mJAIAgentStepPaths1: false
-    };
-
-    // Row counts for related entity sections (populated after grids load)
-    public sectionRowCounts: { [key: string]: number } = {};
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
-    }
-
-    public expandAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = true;
-        });
-    }
-
-    public collapseAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = false;
-        });
-    }
-
-    public getExpandedCount(): number {
-        return Object.values(this.sectionsExpanded).filter(v => v === true).length;
-    }
-
-    public filterSections(event: Event): void {
-        const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
-        const panels = document.querySelectorAll('.form-card.collapsible-card');
-
-        panels.forEach((panel: Element) => {
-            const sectionName = panel.getAttribute('data-section-name') || '';
-            const fieldNames = panel.getAttribute('data-field-names') || '';
-
-            // Show section if search term matches section name OR any field name
-            const matches = sectionName.includes(searchTerm) || fieldNames.includes(searchTerm);
-
-            if (matches) {
-                panel.classList.remove('search-hidden');
-
-                // Add highlighting to matched text in section name
-                if (searchTerm && sectionName.includes(searchTerm)) {
-                    const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                    if (h3) {
-                        const originalText = h3.textContent || '';
-                        const regex = new RegExp(`(${searchTerm})`, 'gi');
-                        h3.innerHTML = originalText.replace(regex, '<span class="search-highlight">$1</span>');
-                    }
-                }
-            } else {
-                panel.classList.add('search-hidden');
-            }
-        });
-
-        // Clear highlighting when search is empty
-        if (!searchTerm) {
-            panels.forEach((panel: Element) => {
-                const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                if (h3) {
-                    h3.innerHTML = h3.textContent || '';
-                }
-            });
-        }
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'coreDefinition', sectionName: 'Core Definition', isExpanded: true },
+            { sectionKey: 'executionControls', sectionName: 'Execution Controls', isExpanded: true },
+            { sectionKey: 'targetResources', sectionName: 'Target Resources', isExpanded: false },
+            { sectionKey: 'visualLayout', sectionName: 'Visual Layout', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentStepPaths', sectionName: 'MJ: AI Agent Step Paths', isExpanded: false },
+            { sectionKey: 'mJAIAgentStepPaths1', sectionName: 'MJ: AI Agent Step Paths', isExpanded: false }
+        ]);
     }
 }
 

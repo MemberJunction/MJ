@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Action Libraries') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-actionlibrary-form',
-    templateUrl: './actionlibrary.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './actionlibrary.form.component.html'
 })
 export class ActionLibraryFormComponent extends BaseFormComponent {
     public record!: ActionLibraryEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        referenceIDs: true,
-        actionLibraryInformation: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'referenceIDs', sectionName: 'Reference IDs', isExpanded: true },
+            { sectionKey: 'actionLibraryInformation', sectionName: 'Action & Library Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

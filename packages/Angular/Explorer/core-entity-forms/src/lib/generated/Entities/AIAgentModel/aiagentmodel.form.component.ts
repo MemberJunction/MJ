@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'AI Agent Models') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiagentmodel-form',
-    templateUrl: './aiagentmodel.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aiagentmodel.form.component.html'
 })
 export class AIAgentModelFormComponent extends BaseFormComponent {
     public record!: AIAgentModelEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        mappingIdentifiers: true,
-        agentModelConfiguration: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'mappingIdentifiers', sectionName: 'Mapping Identifiers', isExpanded: true },
+            { sectionKey: 'agentModelConfiguration', sectionName: 'Agent Model Configuration', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

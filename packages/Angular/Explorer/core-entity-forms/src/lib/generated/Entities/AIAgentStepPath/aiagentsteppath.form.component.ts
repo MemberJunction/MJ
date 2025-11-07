@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Step Paths') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiagentsteppath-form',
-    templateUrl: './aiagentsteppath.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aiagentsteppath.form.component.html'
 })
 export class AIAgentStepPathFormComponent extends BaseFormComponent {
     public record!: AIAgentStepPathEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        pathCoreDetails: true,
-        routingRules: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'pathCoreDetails', sectionName: 'Path Core Details', isExpanded: true },
+            { sectionKey: 'routingRules', sectionName: 'Routing Rules', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

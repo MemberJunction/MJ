@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'File Entity Record Links') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-fileentityrecordlink-form',
-    templateUrl: './fileentityrecordlink.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './fileentityrecordlink.form.component.html'
 })
 export class FileEntityRecordLinkFormComponent extends BaseFormComponent {
     public record!: FileEntityRecordLinkEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        technicalIdentifiers: true,
-        linkDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'technicalIdentifiers', sectionName: 'Technical Identifiers', isExpanded: true },
+            { sectionKey: 'linkDetails', sectionName: 'Link Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

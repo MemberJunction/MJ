@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Content Process Runs') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contentprocessrun-form',
-    templateUrl: './contentprocessrun.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './contentprocessrun.form.component.html'
 })
 export class ContentProcessRunFormComponent extends BaseFormComponent {
     public record!: ContentProcessRunEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        runMetadata: false,
-        executionMetrics: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'runMetadata', sectionName: 'Run Metadata', isExpanded: false },
+            { sectionKey: 'executionMetrics', sectionName: 'Execution Metrics', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

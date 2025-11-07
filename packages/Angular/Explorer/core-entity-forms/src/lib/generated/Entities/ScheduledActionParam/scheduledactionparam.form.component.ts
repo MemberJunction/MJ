@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Scheduled Action Params') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-scheduledactionparam-form',
-    templateUrl: './scheduledactionparam.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './scheduledactionparam.form.component.html'
 })
 export class ScheduledActionParamFormComponent extends BaseFormComponent {
     public record!: ScheduledActionParamEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        coreIdentifiers: true,
-        parameterSettings: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'coreIdentifiers', sectionName: 'Core Identifiers', isExpanded: true },
+            { sectionKey: 'parameterSettings', sectionName: 'Parameter Settings', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

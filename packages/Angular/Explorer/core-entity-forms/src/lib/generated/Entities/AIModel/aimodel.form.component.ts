@@ -2,102 +2,41 @@ import { Component } from '@angular/core';
 import { AIModelEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'AI Models') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aimodel-form',
-    templateUrl: './aimodel.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aimodel.form.component.html'
 })
 export class AIModelFormComponent extends BaseFormComponent {
     public record!: AIModelEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        modelOverview: true,
-        performanceMetrics: true,
-        technicalSpecifications: false,
-        systemMetadata: false,
-        aIActions: false,
-        aIModelActions: false,
-        entityDocuments: false,
-        vectorIndexes: false,
-        aIAgentNotes: false,
-        aIResultCache: false,
-        contentTypes: false,
-        entityAIActions: false,
-        mJAIAgentExamples: false,
-        aIAgentModels: false,
-        mJAIModelVendors: false,
-        generatedCodes: false,
-        mJAIModelCosts: false,
-        mJAIPromptModels: false,
-        mJAIPromptRuns: false,
-        mJAIAgentRuns: false,
-        queries: false
-    };
-
-    // Row counts for related entity sections (populated after grids load)
-    public sectionRowCounts: { [key: string]: number } = {};
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
-    }
-
-    public expandAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = true;
-        });
-    }
-
-    public collapseAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = false;
-        });
-    }
-
-    public getExpandedCount(): number {
-        return Object.values(this.sectionsExpanded).filter(v => v === true).length;
-    }
-
-    public filterSections(event: Event): void {
-        const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
-        const panels = document.querySelectorAll('.form-card.collapsible-card');
-
-        panels.forEach((panel: Element) => {
-            const sectionName = panel.getAttribute('data-section-name') || '';
-            const fieldNames = panel.getAttribute('data-field-names') || '';
-
-            // Show section if search term matches section name OR any field name
-            const matches = sectionName.includes(searchTerm) || fieldNames.includes(searchTerm);
-
-            if (matches) {
-                panel.classList.remove('search-hidden');
-
-                // Add highlighting to matched text in section name
-                if (searchTerm && sectionName.includes(searchTerm)) {
-                    const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                    if (h3) {
-                        const originalText = h3.textContent || '';
-                        const regex = new RegExp(`(${searchTerm})`, 'gi');
-                        h3.innerHTML = originalText.replace(regex, '<span class="search-highlight">$1</span>');
-                    }
-                }
-            } else {
-                panel.classList.add('search-hidden');
-            }
-        });
-
-        // Clear highlighting when search is empty
-        if (!searchTerm) {
-            panels.forEach((panel: Element) => {
-                const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                if (h3) {
-                    h3.innerHTML = h3.textContent || '';
-                }
-            });
-        }
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'modelOverview', sectionName: 'Model Overview', isExpanded: true },
+            { sectionKey: 'performanceMetrics', sectionName: 'Performance Metrics', isExpanded: true },
+            { sectionKey: 'technicalSpecifications', sectionName: 'Technical Specifications', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'aIActions', sectionName: 'AI Actions', isExpanded: false },
+            { sectionKey: 'aIModelActions', sectionName: 'AI Model Actions', isExpanded: false },
+            { sectionKey: 'entityDocuments', sectionName: 'Entity Documents', isExpanded: false },
+            { sectionKey: 'vectorIndexes', sectionName: 'Vector Indexes', isExpanded: false },
+            { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
+            { sectionKey: 'contentTypes', sectionName: 'Content Types', isExpanded: false },
+            { sectionKey: 'entityAIActions', sectionName: 'Entity AI Actions', isExpanded: false },
+            { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
+            { sectionKey: 'aIAgentModels', sectionName: 'AIAgent Models', isExpanded: false },
+            { sectionKey: 'mJAIModelVendors', sectionName: 'MJ: AI Model Vendors', isExpanded: false },
+            { sectionKey: 'generatedCodes', sectionName: 'Generated Codes', isExpanded: false },
+            { sectionKey: 'mJAIModelCosts', sectionName: 'MJ: AI Model Costs', isExpanded: false },
+            { sectionKey: 'mJAIPromptModels', sectionName: 'MJ: AI Prompt Models', isExpanded: false },
+            { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
+            { sectionKey: 'queries', sectionName: 'Queries', isExpanded: false }
+        ]);
     }
 }
 

@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Action Contexts') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-actioncontext-form',
-    templateUrl: './actioncontext.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './actioncontext.form.component.html'
 })
 export class ActionContextFormComponent extends BaseFormComponent {
     public record!: ActionContextEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        actionCore: true,
-        contextMapping: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'actionCore', sectionName: 'Action Core', isExpanded: true },
+            { sectionKey: 'contextMapping', sectionName: 'Context Mapping', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

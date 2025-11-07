@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Action Information Section -->
-        <div class="form-card collapsible-card" data-section-name="action information" data-field-names="name description actionid action id action">
-            <div class="collapsible-header" (click)="toggleSection('actionInformation')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-bolt"></i>
-                    <h3><span class="section-name">Action Information</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.actionInformation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.actionInformation">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Action Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="actionInformation"
+        sectionName="Action Information"
+        icon="fa fa-bolt"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -47,6 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -54,6 +32,7 @@
             FieldName="ActionID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -63,31 +42,25 @@
             FieldName="Action"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Ownership & Status Section -->
-        <div class="form-card collapsible-card" data-section-name="ownership & status" data-field-names="createdbyuserid created by user id status createdbyuser created by user">
-            <div class="collapsible-header" (click)="toggleSection('ownershipStatus')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-user"></i>
-                    <h3><span class="section-name">Ownership & Status</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.ownershipStatus ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.ownershipStatus">
-                <div class="form-body">
+    <!-- Ownership & Status Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="ownershipStatus"
+        sectionName="Ownership & Status"
+        icon="fa fa-user"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="CreatedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -97,6 +70,7 @@
             FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -104,31 +78,25 @@
             FieldName="CreatedByUser"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Schedule Settings Section -->
-        <div class="form-card collapsible-card" data-section-name="schedule settings" data-field-names="type cronexpression cron expression timezone intervaldays interval days dayofweek day of week dayofmonth day of month month customcronexpression custom cron expression">
-            <div class="collapsible-header" (click)="toggleSection('scheduleSettings')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-calendar-alt"></i>
-                    <h3><span class="section-name">Schedule Settings</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.scheduleSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.scheduleSettings">
-                <div class="form-body">
+    <!-- Schedule Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="scheduleSettings"
+        sectionName="Schedule Settings"
+        icon="fa fa-calendar-alt"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Type"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -136,6 +104,7 @@
             FieldName="CronExpression"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -143,6 +112,7 @@
             FieldName="Timezone"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -150,6 +120,7 @@
             FieldName="IntervalDays"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -157,6 +128,7 @@
             FieldName="DayOfWeek"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -164,6 +136,7 @@
             FieldName="DayOfMonth"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -171,6 +144,7 @@
             FieldName="Month"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -178,31 +152,25 @@
             FieldName="CustomCronExpression"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -210,46 +178,33 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Scheduled Action Params Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="scheduled action params" data-field-names="scheduled action params" data-section-key="scheduledActionParams">
-            <div class="collapsible-header" (click)="toggleSection('scheduledActionParams')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-calendar-alt"></i>
-                    <h3>
-                        <span class="section-name">Scheduled Action Params</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['scheduledActionParams'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['scheduledActionParams'] === 0">
-                            {{sectionRowCounts['scheduledActionParams']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.scheduledActionParams ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.scheduledActionParams" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ScheduledActionID')"
-                        [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
-                        [AllowLoad]="IsCurrentSection('scheduledActionParams')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['scheduledActionParams'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Scheduled Action Params Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="scheduledActionParams"
+        sectionName="Scheduled Action Params"
+        icon="fa fa-calendar-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('scheduledActionParams')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ScheduledActionID')"
+                [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
+                [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

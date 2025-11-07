@@ -6,20 +6,17 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Library Items') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-libraryitem-form',
-    templateUrl: './libraryitem.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './libraryitem.form.component.html'
 })
 export class LibraryItemFormComponent extends BaseFormComponent {
     public record!: LibraryItemEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        itemInformation: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'itemInformation', sectionName: 'Item Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

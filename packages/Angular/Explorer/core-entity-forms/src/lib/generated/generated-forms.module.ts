@@ -282,8 +282,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -329,7 +328,6 @@ imports: [
     ContainerDirectivesModule,
     DropDownListModule,
     ComboBoxModule,
-    UserViewGridModule,
     JoinGridModule
 ],
 exports: [
@@ -375,8 +373,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -421,8 +418,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -467,8 +463,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -513,8 +508,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -559,8 +553,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -605,8 +598,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -651,8 +643,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -697,8 +688,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -741,8 +731,7 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule,
-    UserViewGridModule
+    ComboBoxModule
 ],
 exports: [
 ]

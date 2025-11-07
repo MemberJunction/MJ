@@ -2,29 +2,23 @@ import { Component } from '@angular/core';
 import { AIModelPriceUnitTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Price Unit Types') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aimodelpriceunittype-form',
-    templateUrl: './aimodelpriceunittype.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aimodelpriceunittype.form.component.html'
 })
 export class AIModelPriceUnitTypeFormComponent extends BaseFormComponent {
     public record!: AIModelPriceUnitTypeEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        unitDefinition: true,
-        systemMetadata: false,
-        mJAIModelCosts: false
-    };
-
-    // Row counts for related entity sections (populated after grids load)
-    public sectionRowCounts: { [key: string]: number } = {};
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'unitDefinition', sectionName: 'Unit Definition', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIModelCosts', sectionName: 'MJ: AI Model Costs', isExpanded: false }
+        ]);
     }
 }
 

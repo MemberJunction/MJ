@@ -26,16 +26,10 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
     }
     /**
      * Returns the Angular component information needed for imports and module declarations
-     * @returns Array containing the UserViewGridComponent import details
+     * @returns Empty array since UserViewGrid uses module-level imports, not component imports
      */
     public get ImportItems(): AngularComponentInfo[] {
-        return [
-            { 
-                ClassName: "UserViewGridComponent",  
-                AngularSelectorName: "mj-user-view-grid",
-                ModuleName: "UserViewGridModule" 
-            }
-        ];
+        return [];
     }
     /**
      * Generates the Angular template for a UserViewGrid component that displays related entity data.
@@ -45,14 +39,14 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
      * @returns Promise resolving to the generation result with the Angular grid template
      */
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
-        // Use IsCurrentSection for new collapsible section-based forms, IsCurrentTab for legacy tab-based forms
+        // Use IsSectionExpanded for new collapsible section-based forms, IsCurrentTab for legacy tab-based forms
         const allowLoadCheck = input.SectionKey && input.SectionKey.length > 0
-            ? `IsCurrentSection('${input.SectionKey.trim()}')`
+            ? `IsSectionExpanded('${input.SectionKey.trim()}')`
             : `IsCurrentTab('${input.TabName.trim()}')`;
 
         // Add dataLoaded event binding to capture row count
         const dataLoadedEvent = input.SectionKey && input.SectionKey.length > 0
-            ? `(dataLoaded)="sectionRowCounts['${input.SectionKey.trim()}'] = $event.totalRowCount"`
+            ? `(dataLoaded)="SetSectionRowCount('${input.SectionKey.trim()}', $event.totalRowCount)"`
             : '';
 
         const template = `<mj-user-view-grid

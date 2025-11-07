@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Vendors') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aimodelvendor-form',
-    templateUrl: './aimodelvendor.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aimodelvendor.form.component.html'
 })
 export class AIModelVendorFormComponent extends BaseFormComponent {
     public record!: AIModelVendorEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        modelVendorLinkage: true,
-        implementationConfiguration: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'modelVendorLinkage', sectionName: 'Model-Vendor Linkage', isExpanded: true },
+            { sectionKey: 'implementationConfiguration', sectionName: 'Implementation Configuration', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

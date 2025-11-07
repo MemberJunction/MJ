@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Entity Action Filters') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entityactionfilter-form',
-    templateUrl: './entityactionfilter.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './entityactionfilter.form.component.html'
 })
 export class EntityActionFilterFormComponent extends BaseFormComponent {
     public record!: EntityActionFilterEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        identifierKeys: true,
-        executionSettings: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifierKeys', sectionName: 'Identifier Keys', isExpanded: true },
+            { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

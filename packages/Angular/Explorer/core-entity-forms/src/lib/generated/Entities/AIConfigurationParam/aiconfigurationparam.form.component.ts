@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: AI Configuration Params') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiconfigurationparam-form',
-    templateUrl: './aiconfigurationparam.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aiconfigurationparam.form.component.html'
 })
 export class AIConfigurationParamFormComponent extends BaseFormComponent {
     public record!: AIConfigurationParamEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        parameterAssignment: true,
-        parameterDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'parameterAssignment', sectionName: 'Parameter Assignment', isExpanded: true },
+            { sectionKey: 'parameterDetails', sectionName: 'Parameter Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

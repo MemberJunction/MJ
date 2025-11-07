@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: Artifact Uses') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-artifactuse-form',
-    templateUrl: './artifactuse.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './artifactuse.form.component.html'
 })
 export class ArtifactUseFormComponent extends BaseFormComponent {
     public record!: ArtifactUseEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        artifactDetails: true,
-        userInteraction: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'artifactDetails', sectionName: 'Artifact Details', isExpanded: true },
+            { sectionKey: 'userInteraction', sectionName: 'User Interaction', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 
