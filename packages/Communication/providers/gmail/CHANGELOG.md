@@ -1,5 +1,16 @@
 # @memberjunction/communication-gmail
 
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+- Updated dependencies [f294854]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/communication-types@2.116.0
+
 ## 2.115.0
 
 ### Patch Changes
