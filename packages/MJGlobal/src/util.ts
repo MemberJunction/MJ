@@ -1,6 +1,7 @@
 import { MJGlobal } from ".";
 import { MJEventType } from "./interface";
 import { v4 } from 'uuid';
+import * as _ from 'lodash';
 
 /**
  * The Global Object Store is a place to store global objects that need to be shared across the application. Depending on the execution environment, this could be the window object in a browser, or the global object in a node environment, or something else in other contexts. The key here is that in some cases static variables are not truly shared
@@ -38,27 +39,115 @@ export function GetGlobalObjectStore() {
 }
 
 /**
- * This utility function will copy all scalar and array properties from an object to a new object and return the new object. This function will NOT copy functions or non-plain objects.
- * @param input 
- * @returns 
+ * This utility function will copy all scalar and array properties from an object to a new object and return the new object.
+ * This function will NOT copy functions or non-plain objects (unless resolveCircularReferences is true).
+ *
+ * @param input - The object to copy
+ * @param resolveCircularReferences - If true, handles circular references and complex objects for safe JSON serialization.
+ *                                     When enabled, circular references are replaced with '[Circular Reference]',
+ *                                     complex objects (Sockets, Streams, etc.) are replaced with their type names,
+ *                                     Error objects are specially handled to extract name/message/stack,
+ *                                     and Dates are converted to ISO strings. Default: false
+ * @param maxDepth - Maximum recursion depth when resolveCircularReferences is true (default: 10)
+ * @returns A new object with scalars and arrays copied
  */
-export function CopyScalarsAndArrays<T extends object>(input: T): Partial<T> {
-    const result: Partial<T> = {};
-    Object.keys(input).forEach((key) => {
-        const value = input[key as keyof T];
-        // Check for null or scalar types directly
-        if (value === null || typeof value !== 'object') {
-            result[key as keyof T] = value;
-        } else if (Array.isArray(value)) {
-            // Handle arrays by creating a new array with the same elements
-            result[key as keyof T] = [...value] as any;
-        } else if (typeof value === 'object' && value.constructor === Object) {
-            // Recursively copy plain objects
-            result[key as keyof T] = CopyScalarsAndArrays(value) as any;
-        }
-        // Functions and non-plain objects are intentionally ignored
-    });
-    return result;
+export function CopyScalarsAndArrays<T extends object>(
+    input: T,
+    resolveCircularReferences: boolean = false,
+    maxDepth: number = 10
+): Partial<T> {
+    if (resolveCircularReferences) {
+        // Use the enhanced version with circular reference detection
+        const seen = new WeakSet();
+
+        const copy = (value: any, depth: number): any => {
+            // Stop at max depth
+            if (depth > maxDepth) {
+                return '[Max Depth Reached]';
+            }
+
+            // Handle null/undefined
+            if (value === null || value === undefined) {
+                return value;
+            }
+
+            // Handle primitives (string, number, boolean)
+            if (typeof value !== 'object' && typeof value !== 'function') {
+                return value;
+            }
+
+            // Skip functions
+            if (typeof value === 'function') {
+                return '[Function]';
+            }
+
+            // Detect circular references
+            if (seen.has(value)) {
+                return '[Circular Reference]';
+            }
+            seen.add(value);
+
+            // Handle arrays
+            if (_.isArray(value)) {
+                return value.map(item => copy(item, depth + 1));
+            }
+
+            // Handle Date objects
+            if (_.isDate(value)) {
+                return value.toISOString();
+            }
+
+            // Handle Error objects specially to get their properties
+            if (value instanceof Error) {
+                return {
+                    name: value.name,
+                    message: value.message,
+                    stack: value.stack,
+                    // Spread any custom properties added to the error
+                    ...copy(_.omit(value, ['name', 'message', 'stack']), depth + 1)
+                };
+            }
+
+            // Handle plain objects (POJOs)
+            if (_.isPlainObject(value)) {
+                const result: any = {};
+                for (const key in value) {
+                    if (value.hasOwnProperty(key)) {
+                        result[key] = copy(value[key], depth + 1);
+                    }
+                }
+                return result;
+            }
+
+            // For complex objects (Socket, Stream, Buffer, etc.), just use the type name
+            const typeName = value.constructor?.name || 'Object';
+            if (typeName !== 'Object') {
+                return `[${typeName}]`;
+            }
+
+            return '[Complex Object]';
+        };
+
+        return copy(input, 0);
+    } else {
+        // Original implementation for backward compatibility
+        const result: Partial<T> = {};
+        Object.keys(input).forEach((key) => {
+            const value = input[key as keyof T];
+            // Check for null or scalar types directly
+            if (value === null || typeof value !== 'object') {
+                result[key as keyof T] = value;
+            } else if (Array.isArray(value)) {
+                // Handle arrays by creating a new array with the same elements
+                result[key as keyof T] = [...value] as any;
+            } else if (typeof value === 'object' && value.constructor === Object) {
+                // Recursively copy plain objects
+                result[key as keyof T] = CopyScalarsAndArrays(value) as any;
+            }
+            // Functions and non-plain objects are intentionally ignored
+        });
+        return result;
+    }
 }
 
 /**
@@ -957,3 +1046,4 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
   // If we get here, return the original string
   return str;
 }
+

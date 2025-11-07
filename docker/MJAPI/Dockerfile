@@ -1,5 +1,5 @@
 ARG TARGETPLATFORM=linux/amd64
-FROM --platform=$TARGETPLATFORM openjdk:17-slim
+FROM --platform=$TARGETPLATFORM eclipse-temurin:17.0.2_8-jre-focal
 
 ARG FLYWAY_VERSION=9.0.0
 ARG TARGETARCH
@@ -12,7 +12,7 @@ ENV PATH=/opt/mssql-tools/bin:$PATH
 RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2
 
 # Install Node
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 RUN apt-get install -y nodejs
 
 # Install Microsoft SQL Server tools

@@ -182,32 +182,87 @@ export abstract class BaseRecordMutationAction extends BaseAction {
         let message = `Failed to ${operation} ${entityName} record`;
 
         if (latestResult) {
-            if (latestResult.Message) {
-                message += `: ${latestResult.Message}`;
+            // Build detailed error message from structured error data
+            let detailedErrors: string[] = [];
+            
+            // Use the structured Error property if available
+            if (latestResult.Error) {
+                if (typeof latestResult.Error === 'string') {
+                    detailedErrors.push(latestResult.Error);
+                } else if (latestResult.Error.message) {
+                    detailedErrors.push(latestResult.Error.message);
+                } else if (latestResult.Error.Message) {
+                    detailedErrors.push(latestResult.Error.Message);
+                } else {
+                    detailedErrors.push(JSON.stringify(latestResult.Error));
+                }
             }
             
-            // Check for specific error types
-            if (latestResult.Message?.toLowerCase().includes('permission') || 
-                latestResult.Message?.toLowerCase().includes('denied')) {
+            // Use the structured Errors array if available
+            if (latestResult.Errors && Array.isArray(latestResult.Errors)) {
+                for (const error of latestResult.Errors) {
+                    if (typeof error === 'string') {
+                        detailedErrors.push(error);
+                    } else if (error.message) {
+                        detailedErrors.push(error.message);
+                    } else if (error.Message) {
+                        detailedErrors.push(error.Message);
+                    } else if (error.fieldName && error.error) {
+                        // Field-specific validation error
+                        detailedErrors.push(`${error.fieldName}: ${error.error}`);
+                    } else {
+                        detailedErrors.push(JSON.stringify(error));
+                    }
+                }
+            }
+            
+            // Fall back to the user-facing Message if no structured errors found
+            if (detailedErrors.length === 0 && latestResult.Message) {
+                detailedErrors.push(latestResult.Message);
+            }
+            
+            // Build comprehensive error message
+            if (detailedErrors.length > 0) {
+                message += `: ${detailedErrors.join('; ')}`;
+            }
+            
+            // Analyze error types based on structured error content
+            const errorText = detailedErrors.join(' ').toLowerCase();
+            
+            if (errorText.includes('permission') || errorText.includes('denied') || errorText.includes('unauthorized')) {
                 resultCode = 'PERMISSION_DENIED';
-            } else if (latestResult.Message?.toLowerCase().includes('validation') ||
-                       latestResult.Message?.toLowerCase().includes('required')) {
+            } else if (errorText.includes('validation') || errorText.includes('required') || 
+                      errorText.includes('cannot be null') || errorText.includes('not null') ||
+                      errorText.includes('constraint') || errorText.includes('invalid')) {
                 resultCode = 'VALIDATION_ERROR';
             } else if (operation === 'update' && 
-                      (latestResult.Message?.toLowerCase().includes('concurrent') ||
-                       latestResult.Message?.toLowerCase().includes('modified'))) {
+                      (errorText.includes('concurrent') || errorText.includes('modified') || 
+                       errorText.includes('conflict') || errorText.includes('optimistic'))) {
                 resultCode = 'CONCURRENT_UPDATE';
             } else if (operation === 'delete') {
-                if (latestResult.Message?.toLowerCase().includes('reference') ||
-                    latestResult.Message?.toLowerCase().includes('constraint') ||
-                    latestResult.Message?.toLowerCase().includes('foreign key')) {
+                if (errorText.includes('reference') || errorText.includes('constraint') ||
+                    errorText.includes('foreign key') || errorText.includes('dependent')) {
                     resultCode = 'REFERENCE_CONSTRAINT';
                     message = `Cannot delete ${entityName} record: It is referenced by other records`;
-                } else if (latestResult.Message?.toLowerCase().includes('cascade')) {
+                } else if (errorText.includes('cascade')) {
                     resultCode = 'CASCADE_CONSTRAINT';
                     message = `Cannot delete ${entityName} record: Cascade delete is not allowed`;
                 }
             }
+            
+            // Log detailed error information for debugging
+            const errorDetails = {
+                entityName,
+                operation,
+                resultCode,
+                userMessage: latestResult.Message,
+                structuredError: latestResult.Error,
+                structuredErrors: latestResult.Errors,
+                allDetailedErrors: detailedErrors,
+                success: latestResult.Success,
+                timestamp: new Date().toISOString()
+            };
+            LogError(`Entity operation failed with structured errors: ${JSON.stringify(errorDetails)}`);
         }
 
         return {
@@ -222,10 +277,28 @@ export abstract class BaseRecordMutationAction extends BaseAction {
      */
     protected handleError(e: any, operation: string): ActionResultSimple {
         LogError(e);
+        
+        // Build detailed error message
+        let errorMessage = `Error ${operation} record: ${e.message}`;
+        
+        // If this is an entity error, include more details
+        if (e.LatestResult) {
+            errorMessage += ` (Entity Error: ${e.LatestResult.Message || 'Unknown entity error'})`;
+        }
+        
+        // Include stack trace in verbose mode for debugging
+        const errorDetails = {
+            originalError: e.message,
+            stack: e.stack,
+            timestamp: new Date().toISOString()
+        };
+        
+        LogError(`Detailed error information: ${JSON.stringify(errorDetails)}`);
+        
         return {
             Success: false,
             ResultCode: 'FAILED',
-            Message: `Error ${operation} record: ${e.message}`
+            Message: errorMessage
         };
     }
 }

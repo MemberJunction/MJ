@@ -68,6 +68,9 @@ export * from './custom/integration/gamma-generate-presentation.action';
 // Security Actions
 export * from './custom/security/password-strength.action';
 
+// Code Execution Actions
+export * from './custom/code-execution/execute-code.action';
+
 // Workflow Control Actions
 export * from './custom/workflow/conditional.action';
 export * from './custom/workflow/loop.action';
@@ -187,6 +190,8 @@ import { LoadCreateSVGSketchDiagramAction } from './custom/visualization/create-
 import { LoadCreateMermaidDiagramAction } from './custom/visualization/create-mermaid-diagram.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+import { LoadGetRecordsAction } from './custom/crud';
+import { LoadCodeExecutionAction } from './custom/code-execution/execute-code.action';
 
 export function LoadAllCoreActions() {
     LoadGeneratedActions()
@@ -197,6 +202,7 @@ export function LoadAllCoreActions() {
     LoadTeamsWebhookAction();
     LoadCreateRecordAction();
     LoadGetRecordAction();
+    LoadGetRecordsAction();
     LoadUpdateRecordAction();
     LoadDeleteRecordAction();
     LoadGetWeatherAction();
@@ -274,6 +280,7 @@ export function LoadAllCoreActions() {
     LoadCreateSVGInfographicAction();
     LoadCreateSVGSketchDiagramAction();
     LoadCreateMermaidDiagramAction();
+    LoadCodeExecutionAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

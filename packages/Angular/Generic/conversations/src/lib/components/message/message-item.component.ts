@@ -108,16 +108,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      LogStatusEx({message: `🎯 Message ${this.message.ID} status changed to Complete, stopping timer`, verboseOnly: true});
-
       // Stop the elapsed time interval
       if (this._elapsedTimeInterval !== null) {
         clearInterval(this._elapsedTimeInterval);
         this._elapsedTimeInterval = null;
       }
 
-      // Force change detection to update the pill color
-      this.cdRef.markForCheck();
+      // Force immediate synchronous change detection for dynamically created components
+      // markForCheck() only schedules a check which may not run for dynamic components
+      // detectChanges() forces immediate view update so UI shows timer stopped right away
+      this.cdRef.detectChanges();
     }
 
     // Update previous status for next check
@@ -348,11 +348,49 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     for (const mention of parseResult.mentions) {
       const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
 
+      // Get icon or image for the mention
+      let iconHTML = '';
+      if (mention.type === 'agent') {
+        // For agents, look up their LogoURL or IconClass from AIEngineBase cached agents
+        const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === mention.id);
+
+        // Debug logging
+        if (agent) {
+          console.log(`[MessageItem] Agent ${agent.Name}: LogoURL="${agent.LogoURL}", IconClass="${agent.IconClass}"`);
+        } else {
+          console.warn(`[MessageItem] Agent not found for mention ID: ${mention.id}, name: ${mention.name}`);
+        }
+
+        if (agent?.LogoURL && agent.LogoURL.trim()) {
+          // Use LogoURL image if available (takes precedence)
+          // Escape any quotes in the URL for safety
+          const safeUrl = agent.LogoURL.replace(/"/g, '&quot;');
+          iconHTML = `<img src="${safeUrl}" alt="${mention.name}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;"> `;
+        } else {
+          // Fallback to IconClass
+          const iconClass = agent?.IconClass || 'fa-solid fa-robot';
+
+          // Special handling for mj-icon-skip (and other custom CSS icons with background-image)
+          // Extract the SVG data URI and use it as an img src instead of relying on CSS
+          if (iconClass === 'mj-icon-skip') {
+            const skipSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 101.89918457031249 96.83947368421053'%3E%3Cg transform='translate(-0.1288232421875,-0.0)'%3E%3Cpath d='M93.85,41.56c-.84,0-1.62.2-2.37.55-3-4.35-7.49-8.12-13.04-11.04l.04-7.18v-14.44h-10.24v17.6c-1.52-.43-3.07-.8-4.67-1.11V0h-10.24v24.72s-.09,0-.14,0h-4.38s-.1,0-.14,0V7.3h-10.24v18.62c-1.6.32-3.15.69-4.67,1.11v-11.67h-10.24v6.09l.04,9.6c-5.55,2.92-10.04,6.7-13.04,11.04-.75-.35-1.53-.55-2.37-.55-4.5,0-8.14,5.61-8.14,12.51s3.64,12.53,8.14,12.53c.58,0,1.14-.12,1.67-.29,4.1,6.62,11.54,12.06,20.98,15.28l.79.13v7.05c0,2.97,1.45,5.58,3.87,6.99,1.18.69,2.5,1.04,3.85,1.03,1.4,0,2.83-.37,4.15-1.12l7.54-4.29,7.56,4.3c1.31.74,2.73,1.12,4.13,1.12s2.67-.35,3.85-1.04c2.42-1.41,3.86-4.02,3.86-6.98v-7.05l.79-.13c9.44-3.22,16.89-8.66,20.98-15.28.54.17,1.09.29,1.68.29,4.5,0,8.14-5.61,8.14-12.53s-3.63-12.51-8.14-12.51' fill='%23AAAAAA'/%3E%3Cpath d='M86.69,50.87c0-12.22-13.6-19.1-28.94-20.66-4.48-.47-9.19-.54-13.52,0-15.34,1.53-28.93,8.41-28.93,20.66,0,8.55,5.7,15.55,12.68,15.55h7.94c3.05,2.5,6.93,4.1,11.08,4.71,2.65.4,5.44.46,8.01,0,4.15-.6,8.05-2.2,11.1-4.71h7.92c6.97,0,12.68-7,12.68-15.55' fill='white' opacity='0.9'/%3E%3Cpath d='M57.83,55.82c-1.19,2.58-3.8,4.35-6.84,4.35s-5.65-1.77-6.84-4.35h13.68Z' fill='%23AAAAAA'/%3E%3Cpath d='M32.52,41.14c1.74,0,3.18,2.13,3.18,4.76s-1.44,4.74-3.18,4.74-3.16-2.13-3.16-4.74,1.41-4.76,3.16-4.76' fill='%23AAAAAA'/%3E%3Cpath d='M69.46,41.14c1.74,0,3.16,2.13,3.16,4.76s-1.41,4.74-3.16,4.74-3.18-2.13-3.18-4.74,1.41-4.76,3.18-4.76' fill='%23AAAAAA'/%3E%3Cpath d='M63.91,76.15c-.82-.48-1.84-.43-2.8.12l-10.13,5.75-10.11-5.75c-.96-.55-1.98-.59-2.8-.12-.82.47-1.29,1.38-1.29,2.49v10.12c0,1.11.47,2.02,1.28,2.49.38.22.8.33,1.24.33.51,0,1.05-.15,1.57-.44l10.12-5.75,10.11,5.75c.52.29,1.05.44,1.56.44.44,0,.86-.11,1.24-.33.81-.48,1.28-1.38,1.28-2.49v-10.12c0-1.11-.47-2.02-1.28-2.49' fill='white' opacity='0.9'/%3E%3C/g%3E%3C/svg%3E";
+            iconHTML = `<img src="${skipSvg}" alt="${mention.name}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;"> `;
+          } else {
+            // Regular icon font class
+            iconHTML = `<i class="${iconClass}"></i> `;
+          }
+        }
+      } else {
+        // For users, use user icon
+        iconHTML = '<i class="fa-solid fa-user"></i> ';
+      }
+
       // Match both quoted and unquoted versions
       const quotedPattern = new RegExp(`@"${this.escapeRegex(mention.name)}"`, 'gi');
       const unquotedPattern = new RegExp(`@${this.escapeRegex(mention.name)}(?![\\w"])`, 'gi');
 
-      const badgeHTML = `<span class="${badgeClass}">@${mention.name}</span>`;
+      // Create badge HTML with icon and NO @ sign
+      const badgeHTML = `<span class="${badgeClass}">${iconHTML}${mention.name}</span>`;
 
       // Replace quoted version first, then unquoted
       transformedText = transformedText.replace(quotedPattern, badgeHTML);
@@ -492,6 +530,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * - Failed messages: Time before failure
    */
   public get timePillText(): string | null {
+    return this.calculateTimePillText();
+  }
+
+  private calculateTimePillText(): string | null {
     if (this.isUserMessage) {
       return null;
     }

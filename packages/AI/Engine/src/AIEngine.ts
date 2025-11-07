@@ -113,8 +113,6 @@ export class AIEngine extends AIEngineBase {
      * @param contextUser - User context for database operations (required on server-side)
      */
     public async RegenerateEmbeddings(contextUser?: UserInfo): Promise<void> {
-        console.log('AIEngine: Force regenerating all embeddings...');
-
         try {
             // Clear the caches
             this._agentEmbeddingsCache.clear();
@@ -131,7 +129,6 @@ export class AIEngine extends AIEngineBase {
             await this.loadActionEmbeddings();
             this._embeddingsGenerated = true;
 
-            console.log('AIEngine: Embedding regeneration complete');
         } catch (error) {
             console.error('AIEngine: Failed to regenerate embeddings:', error);
             throw error;
@@ -232,39 +229,38 @@ export class AIEngine extends AIEngineBase {
     /**
      * Override AdditionalLoading to load Actions and compute embeddings.
      * Called automatically during AIEngine initialization after base loading completes.
-     * Only generates embeddings on the first load to avoid wasteful regeneration during auto-refresh.
+     * Embeddings are generated incrementally - only new agents/actions get embeddings computed.
      * @param contextUser - User context for any additional operations
      */
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Call parent first (sets up prompt-category associations, agent relationships, etc.)
         await super.AdditionalLoading(contextUser);
 
-        // Only generate embeddings on the very first load
-        // On subsequent auto-refreshes (when configs are updated), skip embedding generation
-        // since the embeddings are still valid and expensive to regenerate
-        if (!this._embeddingsGenerated) {
-            // Must load actions first since action embeddings depend on them
-            await this.loadActions(contextUser);
+        // Always load actions and embeddings
+        // The embedding methods have built-in incremental checks:
+        // - loadAgentEmbeddings() and loadActionEmbeddings() filter to only items not in cache
+        // - Early returns if no new items (lines 296, 375) - minimal overhead (~1ms)
+        // - First load: generates all embeddings
+        // - Subsequent loads: only generates embeddings for new items
+        await this.loadActions(contextUser);
 
-            // now load all the related embeddings and we can do this all in parallel as well
-            // since they are independent of each other
-            const promises = [];
-            // Compute agent embeddings using agents already loaded by base class
-            promises.push(this.loadAgentEmbeddings());
+        // Load all embeddings in parallel since they are independent
+        const promises = [];
+        // Compute agent embeddings using agents already loaded by base class
+        promises.push(this.loadAgentEmbeddings());
 
-            // Compute action embeddings using actions we just loaded
-            promises.push(this.loadActionEmbeddings());
+        // Compute action embeddings using actions we just loaded
+        promises.push(this.loadActionEmbeddings());
 
-            // Load note embeddings
-            promises.push(this.loadNoteEmbeddings(contextUser));
+        // Load note embeddings
+        promises.push(this.loadNoteEmbeddings(contextUser));
 
-            // Load example embeddings
-            promises.push(this.loadExampleEmbeddings(contextUser));
+        // Load example embeddings
+        promises.push(this.loadExampleEmbeddings(contextUser));
 
-            await Promise.all(promises);
+        await Promise.all(promises);
 
-            this._embeddingsGenerated = true;
-        }
+        this._embeddingsGenerated = true;
     }
 
     /**
@@ -281,7 +277,6 @@ export class AIEngine extends AIEngineBase {
             const agents = this.Agents;  // Already filtered, cached, ready!
 
             if (!agents || agents.length === 0) {
-                console.log('AIEngine: No agents found to generate embeddings for');
                 return;
             }
 
@@ -294,11 +289,8 @@ export class AIEngine extends AIEngineBase {
             );
 
             if (agentsNeedingEmbeddings.length === 0) {
-                console.log(`AIEngine: All ${nonRestrictedAgents.length} non-restricted agents already have embeddings`);
                 return;
             }
-
-            console.log(`AIEngine: Generating embeddings for ${agentsNeedingEmbeddings.length} agents (${agents.length - agentsNeedingEmbeddings.length} already cached)...`);
 
             // Generate embeddings using static utility method
             const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
@@ -316,9 +308,6 @@ export class AIEngine extends AIEngineBase {
                 this._agentVectorService = new SimpleVectorService();
             }
             this._agentVectorService.LoadVectors(entries);
-
-            const duration = Date.now() - startTime;
-            console.log(`AIEngine: Generated embeddings for ${agentsNeedingEmbeddings.length} new agents in ${duration}ms`);
 
         } catch (error) {
             console.error(`Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
@@ -363,7 +352,6 @@ export class AIEngine extends AIEngineBase {
             const actions = this._actions;
 
             if (!actions || actions.length === 0) {
-                console.log('AIEngine: No actions found to generate embeddings for');
                 return;
             }
 
@@ -373,11 +361,8 @@ export class AIEngine extends AIEngineBase {
             );
 
             if (actionsNeedingEmbeddings.length === 0) {
-                console.log(`AIEngine: All ${actions.length} actions already have embeddings`);
                 return;
             }
-
-            console.log(`AIEngine: Generating embeddings for ${actionsNeedingEmbeddings.length} actions (${actions.length - actionsNeedingEmbeddings.length} already cached)...`);
 
             // Generate embeddings using static utility method
             const entries = await ActionEmbeddingService.GenerateActionEmbeddings(
@@ -396,9 +381,6 @@ export class AIEngine extends AIEngineBase {
             }
             this._actionVectorService.LoadVectors(entries);
 
-            const duration = Date.now() - startTime;
-            console.log(`AIEngine: Generated embeddings for ${actionsNeedingEmbeddings.length} new actions in ${duration}ms`);
-
         } catch (error) {
             console.error(`Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
             // Don't throw - allow AIEngine to continue loading even if embeddings fail
@@ -415,7 +397,6 @@ export class AIEngine extends AIEngineBase {
             const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
 
             if (notes.length === 0) {
-                console.log('AIEngine: No active notes with embeddings found');
                 return;
             }
 
@@ -450,7 +431,6 @@ export class AIEngine extends AIEngineBase {
             const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
 
             if (examples.length === 0) {
-                console.log('AIEngine: No examples with embeddings found');
                 return;
             }
 
@@ -516,7 +496,6 @@ export class AIEngine extends AIEngineBase {
                     // New agent created - generate embeddings only for this agent
                     const agent = this.Agents.find(a => a.ID === event.baseEntity.PrimaryKey.ToString());
                     if (agent && !this._agentEmbeddingsCache.has(agent.ID)) {
-                        console.log(`AIEngine: Generating embeddings for new agent: ${agent.Name}`);
                         await this.generateSingleAgentEmbedding(agent);
                     }
                     break;
@@ -525,7 +504,6 @@ export class AIEngine extends AIEngineBase {
                     // New action created - generate embeddings only for this action
                     const action = this._actions.find(a => a.ID === event.baseEntity.PrimaryKey.ToString());
                     if (action && !this._actionEmbeddingsCache.has(action.ID)) {
-                        console.log(`AIEngine: Generating embeddings for new action: ${action.Name}`);
                         await this.generateSingleActionEmbedding(action);
                     }
                     break;
@@ -545,7 +523,6 @@ export class AIEngine extends AIEngineBase {
         try {
             // Skip restricted agents - they should not be discoverable
             if (agent.IsRestricted) {
-                console.log(`AIEngine: Skipping embedding generation for restricted agent ${agent.Name}`);
                 return;
             }
 
@@ -560,7 +537,6 @@ export class AIEngine extends AIEngineBase {
                     this._agentVectorService = new SimpleVectorService();
                 }
                 this._agentVectorService.LoadVectors(entries);
-                console.log(`AIEngine: Generated embedding for agent ${agent.Name}`);
             }
         } catch (error) {
             console.error(`Failed to generate embedding for agent ${agent.Name}:`, error);
@@ -586,7 +562,6 @@ export class AIEngine extends AIEngineBase {
                     this._actionVectorService = new SimpleVectorService();
                 }
                 this._actionVectorService.LoadVectors(entries);
-                console.log(`AIEngine: Generated embedding for action ${action.Name}`);
             }
         } catch (error) {
             console.error(`Failed to generate embedding for action ${action.Name}:`, error);

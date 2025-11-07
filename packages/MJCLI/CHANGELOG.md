@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/cli
 
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [723a32d]
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a860a7d]
+- Updated dependencies [85542e4]
+  - @memberjunction/codegen-lib@2.116.0
+  - @memberjunction/core@2.116.0
+  - @memberjunction/ai-cli@2.116.0
+  - @memberjunction/metadata-sync@2.116.0
+  - @memberjunction/sqlserver-dataprovider@2.116.0
+  - @memberjunction/db-auto-doc@2.116.0
+
+## 2.115.0
+
+### Patch Changes
+
+- Updated dependencies [c29e21b]
+  - @memberjunction/codegen-lib@2.115.0
+  - @memberjunction/ai-cli@2.115.0
+  - @memberjunction/sqlserver-dataprovider@2.115.0
+  - @memberjunction/metadata-sync@2.115.0
+  - @memberjunction/db-auto-doc@2.115.0
+  - @memberjunction/core@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- Updated dependencies [8f91cbe]
+  - @memberjunction/codegen-lib@2.114.0
+  - @memberjunction/ai-cli@2.114.0
+  - @memberjunction/db-auto-doc@2.114.0
+  - @memberjunction/core@2.114.0
+  - @memberjunction/metadata-sync@2.114.0
+  - @memberjunction/sqlserver-dataprovider@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.113.2
+- @memberjunction/codegen-lib@2.113.2
+- @memberjunction/metadata-sync@2.113.2
+- @memberjunction/sqlserver-dataprovider@2.113.2
+- @memberjunction/db-auto-doc@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/actions-base
 
+## 2.116.0
+
+### Patch Changes
+
+- 88f60e7: Fix action parameters not appearing in agent system prompts
+
+  Fixed three critical issues preventing action parameters from appearing in loop agent system prompts:
+
+  **UserViewMaxRows truncation**: Action Params entity has MaxRows=1000, loading only first 1000 of 1899+ params
+
+  The primary fix overrides LoadMultipleEntityConfigs in ActionEngineBase to pass IgnoreMaxRows=true, ensuring all action metadata is loaded regardless of entity MaxRows settings.
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/core-entities@2.116.0
+
+## 2.115.0
+
+### Patch Changes
+
+- @memberjunction/core@2.115.0
+- @memberjunction/core-entities@2.115.0
+- @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/core@2.114.0
+- @memberjunction/core-entities@2.114.0
+- @memberjunction/global@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- Updated dependencies [61d1df4]
+  - @memberjunction/core@2.113.2
+  - @memberjunction/core-entities@2.113.2
+  - @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

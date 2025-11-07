@@ -9,7 +9,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { MSSQLConnection } from './Config/db-connection';
+import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue } from './Config/config';
 import { logError, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
@@ -25,6 +25,7 @@ import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+import { AIEngine } from '@memberjunction/aiengine';
 
 LoadCoreEntitiesServerSubClasses(); // Load the core entities server subclasses to ensure they are registered and not tree shaken
 
@@ -79,7 +80,17 @@ export class RunCodeGenBase {
     const pool = await MSSQLConnection(); // get the MSSQL connection pool
     const config = new SQLServerProviderConfigData(pool, mj_core_schema());
     const sqlServerProvider: SQLServerDataProvider = await setupSQLServerClient(config);
-    succeedSpinner('Database connection initialized');
+
+    // Get connection details from the sqlConfig
+    let connectionInfo = sqlConfig.server;
+    if (sqlConfig.port) {
+      connectionInfo += `:${sqlConfig.port}`;
+    }
+    if (sqlConfig.options?.instanceName) {
+      connectionInfo += `\\${sqlConfig.options.instanceName}`;
+    }
+    connectionInfo += `/${sqlConfig.database}`;
+    succeedSpinner(`Database connection initialized: ${connectionInfo}`);
     return sqlServerProvider;
   }
 
@@ -128,6 +139,13 @@ export class RunCodeGenBase {
         process.exit(1);
       }
       succeedSpinner(`Loaded ${md.Entities.length} entities from metadata`);
+
+      // Initialize AIEngine for advanced generation features (needed for prompt metadata access)
+      if (configInfo.advancedGeneration?.enableAdvancedGeneration) {
+        startSpinner('Initializing AI Engine for advanced generation...');
+        await AIEngine.Instance.Config(false, currentUser);
+        succeedSpinner('AI Engine initialized');
+      }
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;

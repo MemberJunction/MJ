@@ -526,13 +526,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     async rejectCode() {
         if (!this.EditMode) return;
-        
+
         this.record.CodeApprovalStatus = 'Rejected';
         await this.record.Save();
-    }
-
-    toggleSection(section: keyof typeof this.expandedSections) {
-        this.expandedSections[section] = !this.expandedSections[section];
     }
 
     async copyToClipboard(text: string) {

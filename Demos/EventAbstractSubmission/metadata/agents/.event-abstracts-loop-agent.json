@@ -1,0 +1,93 @@
+[
+  {
+    "fields": {
+      "Name": "Event Abstracts",
+      "Description": "Conversational agent for event abstract submission processing. Helps users select an event and TypeForm, then processes new form responses to create submission records. Provides a user-friendly interface for managing conference abstract submissions",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "PayloadSelfWritePaths": [
+        "*"
+      ],
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-calendar-check",
+      "ArtifactCreationMode": "System Only"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Event Abstracts Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EBBF321B-6707-4007-8722-6548F182F2BA"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T15:39:39.316Z",
+            "checksum": "15c321a66e191382bdc496681d10ce2f20ac830ae9b26e85ae85198db0c750d8"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Records",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "85D8B7C1-0F81-4892-B519-48FC85563912"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T15:39:39.329Z",
+            "checksum": "4146c35256704b866c1905be7d5bffa30875108bed1452e7109b21da8ae38bb4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Typeform Forms",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7E2AFD21-3782-4535-8B39-34F964E39744"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T15:39:39.342Z",
+            "checksum": "215dd8d7afe6c3387ec477894dd6cc0679b144331dcff6ade3f2793c9c7d95b6"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Event Abstract Submission Flow Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"processingResult\"}",
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "2A39238C-9D1E-454D-8796-548B9B21C151"
+          },
+          "sync": {
+            "lastModified": "2025-11-01T15:39:39.353Z",
+            "checksum": "e0807b4f340ee077441415904dda87d5c0040ff06a24c424b118257d74726acd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "32055FD3-CE42-49A9-BA55-ACD3E311B40D"
+    },
+    "sync": {
+      "lastModified": "2025-11-01T15:39:39.238Z",
+      "checksum": "7b6c1619152ec1aa92c777f619555a46ba78f63638e485882d0dedf5d8347d7d"
+    }
+  }
+]

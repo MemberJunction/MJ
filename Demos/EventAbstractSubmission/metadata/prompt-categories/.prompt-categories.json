@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Event Abstract Submission",
+      "Description": "Prompts for managing Event Abstract Submission functionality"
+    },
+    "primaryKey": {
+      "ID": "E822AA00-D86E-4951-BD2E-9CF43DD95390"
+    },
+    "sync": {
+      "lastModified": "2025-11-01T15:39:33.543Z",
+      "checksum": "292350b94745004af454c673538d332cf2d02ddfd4118295aa2a1dc7ed75ea4c"
+    }
+  }
+]

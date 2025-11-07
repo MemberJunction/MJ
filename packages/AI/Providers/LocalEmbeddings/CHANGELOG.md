@@ -1,5 +1,34 @@
 # @memberjunction/ai-local-embeddings
 
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [a8d5592]
+  - @memberjunction/global@2.116.0
+  - @memberjunction/ai@2.116.0
+
+## 2.115.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.115.0
+- @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.114.0
+- @memberjunction/global@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.113.2
+- @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

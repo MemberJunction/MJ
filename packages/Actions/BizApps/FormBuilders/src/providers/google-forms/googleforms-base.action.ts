@@ -385,7 +385,8 @@ export abstract class GoogleFormsBaseAction extends BaseFormBuilderAction {
             formId: '', // Form ID is not included in response object, needs to be passed separately
             submittedAt,
             completed,
-            answers,
+            answerDetails: answers, // For now, use answers as answerDetails since Google Forms doesn't have simpleAnswers
+            answers: {}, // Empty object for now - could be implemented later
             metadata: {
                 userAgent: gfResponse.respondentEmail,
                 platform: 'Google Forms'

@@ -23,7 +23,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Typeform Details')
+@RegisterClass(BaseAction, 'GetTypeformAction')
 export class GetTypeformAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -170,4 +170,11 @@ export class GetTypeformAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetTypeformAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

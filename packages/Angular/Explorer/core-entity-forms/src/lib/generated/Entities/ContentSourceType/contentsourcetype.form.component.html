@@ -1,47 +1,156 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Content Source Types" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Content Sources" [Visible]="record.IsSaved"> 
-                        Content Sources
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Content Sources','ContentSourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Content Sources')"
-                            [AllowLoad]="IsCurrentTab('Content Sources')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
+            </span>
+        </div>
+        <div class="form-panels-container">
+<!-- Source Type Definition Section -->
+        <div class="form-card collapsible-card" data-section-name="source type definition" data-field-names="name description">
+            <div class="collapsible-header" (click)="toggleSection('sourceTypeDefinition')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3><span class="section-name">Source Type Definition</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.sourceTypeDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.sourceTypeDefinition">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
-                    <mj-tab Name="Content Items" [Visible]="record.IsSaved"> 
-                        Content Items
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Content Items','ContentSourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Content Items')"
-                            [AllowLoad]="IsCurrentTab('Content Items')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+        <div class="related-entity-grid">
+
+        <!-- Content Sources Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="content sources" data-field-names="content sources" data-section-key="contentSources">
+            <div class="collapsible-header" (click)="toggleSection('contentSources')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-plug"></i>
+                    <h3>
+                        <span class="section-name">Content Sources</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentSources'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentSources'] === 0">
+                            {{sectionRowCounts['contentSources']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.contentSources ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentSources" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Content Sources','ContentSourceTypeID')"
+                        [NewRecordValues]="NewRecordValues('Content Sources')"
+                        [AllowLoad]="IsCurrentSection('contentSources')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['contentSources'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Items Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="content items" data-field-names="content items" data-section-key="contentItems">
+            <div class="collapsible-header" (click)="toggleSection('contentItems')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-file-alt"></i>
+                    <h3>
+                        <span class="section-name">Content Items</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentItems'] === 0">
+                            {{sectionRowCounts['contentItems']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.contentItems ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentItems" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Content Items','ContentSourceTypeID')"
+                        [NewRecordValues]="NewRecordValues('Content Items')"
+                        [AllowLoad]="IsCurrentSection('contentItems')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['contentItems'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
     </form>
 </div>
         

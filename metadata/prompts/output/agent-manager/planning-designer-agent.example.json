@@ -1,148 +1,17 @@
 {
-  "action": "return_to_parent",
-  "output": {
-    "payload": {
-      "metadata": {
-        "sessionId": "session-12345",
-        "status": "prompting",
-        "originalRequest": "Create an agent that can analyze customer feedback and generate weekly summary reports",
-        "lastModifiedBy": "Planning Designer Agent"
-      },
-      "requirements": {
-        "businessGoal": "Automate the analysis of customer feedback to provide actionable insights through weekly summary reports, enabling data-driven product improvements and customer satisfaction monitoring.",
-        "functionalRequirements": "## Functional Requirements\n\n- Aggregate customer feedback from multiple sources (database, support tickets, reviews)\n- Perform sentiment analysis on all feedback items\n- Categorize feedback by product feature, issue type, and severity\n- Generate weekly summary reports with key metrics and trends\n- Identify recurring themes and emerging issues\n- Provide actionable recommendations based on analysis",
-        "technicalRequirements": "## Technical Requirements\n\n- Connect to Customer Feedback Database via SQL\n- Access Support Ticket system through API\n- Parse and process unstructured text data\n- Implement NLP for sentiment analysis\n- Store analysis results for historical tracking\n- Generate reports in multiple formats (PDF, HTML, JSON)",
-        "dataRequirements": "## Data Requirements\n\n- Customer feedback text and metadata\n- Support ticket content and resolution data\n- Product review ratings and comments\n- Historical trend data for comparison\n- Product feature mapping for categorization",
-        "integrationRequirements": "## Integration Requirements\n\n- Read access to Customer Feedback Database\n- API access to Support Ticket system\n- Write access to Report Storage system\n- Email integration for report distribution",
-        "assumptions": "- Feedback data is available in structured format\n- Historical data exists for trend analysis\n- Stakeholders will act on report insights\n- English language support is sufficient for v1\n- Existing infrastructure can support the solution",
-        "risks": "## Technical Risks\n\n- **Data Quality**: Inconsistent feedback formats may affect analysis accuracy\n- **API Limitations**: Rate limits could delay processing during peak times\n- **Scale**: Large feedback volumes may exceed performance constraints\n\n## Business Risks\n\n- **Adoption**: Stakeholders may not act on insights\n- **Accuracy**: False insights could lead to poor decisions\n- **Maintenance**: Ongoing tuning required for accuracy",
-        "outOfScope": "- Real-time feedback analysis (batch processing only)\n- Direct customer response automation\n- Feedback collection mechanisms\n- Multi-language support (English only for v1)\n- Integration with external analytics platforms\n- Custom visualization dashboards\n- Predictive analytics or forecasting",
-        "successCriteria": "## Primary Success Criteria\n\n1. 95% of feedback items successfully analyzed each week\n2. Reports delivered by Monday 9 AM each week\n3. Sentiment analysis accuracy above 85%\n\n## Secondary Success Criteria\n\n- Report generation time under 5 minutes\n- Zero PII data exposure in reports\n- Actionable insights identified in 80% of reports\n\n## Key Metrics\n\n- Number of feedback items processed\n- Sentiment analysis accuracy rate\n- Report delivery timeliness\n- User satisfaction with report insights"
-      },
-      "design": {
-        "agentHierarchy": {
-          "name": "Customer Feedback Analyzer",
-          "description": "Orchestrates the analysis of customer feedback from multiple sources and generates comprehensive weekly reports with actionable insights.",
-          "type": "Loop",
-          "purpose": "Automate customer feedback analysis and reporting",
-          "actions": [
-            {
-              "id": "run-query-001",
-              "name": "Run Query",
-              "reason": "Execute SQL queries to fetch customer feedback data from the database weekly"
-            },
-            {
-              "id": "web-api-call-001",
-              "name": "Web API Call",
-              "reason": "Retrieve support ticket data from the support system API"
-            },
-            {
-              "id": "generate-report-001",
-              "name": "Generate Report",
-              "reason": "Create formatted reports in PDF/HTML/JSON formats for distribution"
-            },
-            {
-              "id": "send-email-001",
-              "name": "Send Email",
-              "reason": "Distribute weekly reports to stakeholders every Monday morning"
-            }
-          ],
-          "prompt": {
-            "systemPrompt": "",
-            "templateVariables": "",
-            "promptNotes": ""
-          },
-          "payloadDownstreamPaths": ["*"],
-          "payloadUpstreamPaths": ["analysis.*", "reports.*"],
-          "subAgents": [
-            {
-              "name": "Data Collector Agent",
-              "description": "Gathers customer feedback data from all configured sources",
-              "type": "Loop",
-              "purpose": "Aggregate and normalize feedback data from multiple sources",
-              "actions": [
-                {
-                  "id": "run-query-001",
-                  "name": "Run Query",
-                  "reason": "Query feedback database for raw customer feedback"
-                },
-                {
-                  "id": "web-api-call-001",
-                  "name": "Web API Call",
-                  "reason": "Fetch support tickets from API"
-                }
-              ],
-              "prompt": {
-                "systemPrompt": "",
-                "templateVariables": "",
-                "promptNotes": ""
-              },
-              "payloadDownstreamPaths": ["metadata.*", "requirements.*"],
-              "payloadUpstreamPaths": ["data.*"],
-              "executionOrder": 1,
-              "exposeAsAction": false,
-              "iconClass": "fa-solid fa-database"
-            },
-            {
-              "name": "Sentiment Analyzer Agent",
-              "description": "Performs sentiment analysis and categorization on collected feedback",
-              "type": "Loop",
-              "purpose": "Analyze emotional tone and categorize feedback by type",
-              "actions": [
-                {
-                  "id": "text-analyzer-001",
-                  "name": "Text Analyzer",
-                  "reason": "Analyze sentiment and extract themes from feedback text"
-                }
-              ],
-              "prompt": {
-                "systemPrompt": "",
-                "templateVariables": "",
-                "promptNotes": ""
-              },
-              "payloadDownstreamPaths": ["metadata.*", "data.*"],
-              "payloadUpstreamPaths": ["analysis.sentiment.*"],
-              "executionOrder": 2,
-              "exposeAsAction": false,
-              "iconClass": "fa-solid fa-heart"
-            },
-            {
-              "name": "Report Builder Agent",
-              "description": "Compiles analysis results into formatted reports",
-              "type": "Loop",
-              "purpose": "Create comprehensive reports with visualizations",
-              "actions": [
-                {
-                  "id": "generate-report-001",
-                  "name": "Generate Report",
-                  "reason": "Compile analysis into multiple report formats"
-                }
-              ],
-              "prompt": {
-                "systemPrompt": "",
-                "templateVariables": "",
-                "promptNotes": ""
-              },
-              "payloadDownstreamPaths": ["metadata.*", "analysis.*"],
-              "payloadUpstreamPaths": ["reports.*"],
-              "executionOrder": 3,
-              "exposeAsAction": false,
-              "iconClass": "fa-solid fa-file-chart"
-            }
-          ],
-          "executionOrder": 0,
-          "exposeAsAction": true,
-          "iconClass": "fa-solid fa-comments"
-        },
-        "architecture": {
-          "executionFlow": "Sequential execution: Data Collector → Sentiment Analyzer → Report Builder. Each sub-agent completes before the next begins.",
-          "dataFlow": "Data flows through payload sections: raw data → analysis results → formatted reports. Each agent updates specific payload sections.",
-          "errorHandling": "Graceful degradation with partial results. Failed sub-agents log errors but don't block subsequent agents. Final report includes processing status."
-        }
-      }
+  "description": "Planning Designer Agent has two modes: Creation (writes TechnicalDesign) and Modification (writes modificationPlan)",
+
+  "example_1_creation_mode": {
+    "action": "return_to_parent",
+    "output": {
+      "TechnicalDesign": "# Customer Feedback Analyzer – Technical Design\n\n## Overview\n\n**Agent Name**: Customer Feedback Analyzer  \n**Agent Type**: Loop  \n**Description**: Analyzes customer feedback from database, performs sentiment analysis, and generates weekly email reports with actionable insights  \n**Icon**: fa-solid fa-chart-line  \n**DefaultArtifactTypeID**: null (orchestration agent, no direct artifact output)\n\n## Agent Architecture\n\nThis is a Loop-type orchestrator that coordinates database research, text analysis, and email delivery. It uses existing sub-agents for specialized tasks rather than duplicating functionality with actions.\n\n## Research Results\n\n### Available Sub-Agents (from Find Candidate Agents)\n\n**Database Research Agent** (ID: 5ddf4f5d-b977-42b0-bed5-4a2f0021bc58)\n- Can query CustomerFeedback entity\n- Returns structured data with all fields including ID, FeedbackText, Rating, Category, CreatedAt\n- Supports date range filtering\n\n### Available Actions (from Find Candidate Actions)\n\n**Text Analyzer** (ID: 82169F64-8566-4AE7-9C87-190A885C98A9)\n- Performs sentiment analysis and theme extraction\n- Input: text content\n- Output: sentiment (positive/negative/neutral), themes, confidence scores\n\n**Send Single Message** (ID: A3B4C5D6-E7F8-9A0B-1C2D-3E4F5A6B7C8D)\n- Sends emails via SendGrid or Microsoft Graph\n- Required params: Provider ('SendGrid'), MessageType ('Email'), Subject, Body, To, From\n\n### Database Schema (from Database Research Agent)\n\n**Entity**: CustomerFeedback  \n**Primary Key**: ID (uniqueidentifier)  \n**Fields**:\n- ID: uniqueidentifier (primary key)\n- FeedbackText: nvarchar(max)\n- Rating: int (1-5)\n- Category: nvarchar(100)\n- CustomerID: uniqueidentifier\n- CreatedAt: datetime\n- UpdatedAt: datetime\n\n## Related Sub-Agents\n\n### Database Research Agent\n- **Type**: related\n- **Existing Agent ID**: 5ddf4f5d-b977-42b0-bed5-4a2f0021bc58\n- **Purpose**: Query CustomerFeedback table for past week's data\n- **Input Mapping**: {\"*\": \"query\"}\n- **Output Mapping**: {\"*\": \"feedbackData\"}\n- **Context Paths**: [\"*\"]\n\n## Actions\n\n### Text Analyzer\n- **ID**: 82169F64-8566-4AE7-9C87-190A885C98A9\n- **Purpose**: Analyze sentiment and extract themes from feedback text\n- **When Used**: After collecting feedback data, analyze each feedback item\n\n### Send Single Message\n- **ID**: A3B4C5D6-E7F8-9A0B-1C2D-3E4F5A6B7C8D\n- **Purpose**: Email the weekly report to stakeholders\n- **When Used**: After completing analysis and generating report summary\n\n## Main Agent Prompt\n\n```\n# Customer Feedback Analyzer\n\nYou orchestrate weekly customer feedback analysis and reporting.\n\n## Your Workflow\n\n### Step 1: Collect Feedback Data (READ operation)\nCall Database Research Agent sub-agent with this query:\n\"Find CustomerFeedback records where CreatedAt is within the past 7 days. Return in JSON format. Show all columns in max length. Include ID, FeedbackText, Rating, Category, CustomerID, CreatedAt fields.\"\n\n**IMPORTANT**: Request JSON format (defaults to CSV) and \"show all columns in max length\" to get full field values (default truncates at 50 characters).\n\nExtract feedback items from the JSON results.\n\n### Step 2: Analyze Each Feedback Item\nFor each feedback item:\n- Call Text Analyzer action with FeedbackText as input\n- Extract: sentiment (positive/negative/neutral), themes, confidence\n- Store results with feedback ID for aggregation\n\n### Step 3: Aggregate Insights\nCalculate:\n- Total feedback count\n- Sentiment distribution (% positive, negative, neutral)\n- Average rating\n- Top 10 recurring themes (by frequency)\n- Critical issues: feedback with Rating ≤ 2 AND negative sentiment\n\n### Step 4: Generate Report Email\nCompose HTML email report with:\n- **Header**: \"Weekly Customer Feedback Analysis - [Date Range]\"\n- **Summary Stats**: Total count, sentiment breakdown, average rating\n- **Top Themes**: List with frequencies\n- **Critical Issues**: Flagged feedback requiring attention (include FeedbackText excerpt)\n- **Trends**: Compare to previous week if historical data available\n- **Recommendations**: 3-5 actionable insights based on analysis\n\n### Step 5: Send Report\nCall Send Single Message action:\n- Provider: 'SendGrid' (case-sensitive)\n- MessageType: 'Email' (case-sensitive)\n- Subject: \"Weekly Customer Feedback Report - [Date]\"\n- Body: [HTML report from Step 4]\n- To: \"product@company.com,support@company.com\"\n- From: \"feedback-analyzer@company.com\"\n\n## Output Format\n\nReturn JSON with:\n```json\n{\n  \"status\": \"success\",\n  \"feedbackAnalyzed\": 1234,\n  \"sentimentBreakdown\": {\"positive\": 60, \"neutral\": 30, \"negative\": 10},\n  \"criticalIssues\": 15,\n  \"reportSent\": true,\n  \"executionTime\": \"4m 23s\"\n}\n```\n```\n\n## Payload Structure\n\n### Input\n```json\n{\n  \"dateRangeStart\": \"2025-10-22T00:00:00Z\",\n  \"dateRangeEnd\": \"2025-10-29T00:00:00Z\"\n}\n```\n\n### Output\n```json\n{\n  \"feedbackData\": [\n    {\"ID\": \"...\", \"FeedbackText\": \"...\", \"Rating\": 4, \"Category\": \"...\", \"CreatedAt\": \"...\"}\n  ],\n  \"analysis\": [\n    {\"feedbackID\": \"...\", \"sentiment\": \"positive\", \"themes\": [\"...\"], \"confidence\": 0.92}\n  ],\n  \"report\": {\n    \"totalCount\": 1234,\n    \"sentimentBreakdown\": {\"positive\": 60, \"neutral\": 30, \"negative\": 10},\n    \"avgRating\": 3.8,\n    \"topThemes\": [{\"theme\": \"shipping delays\", \"count\": 156}],\n    \"criticalIssues\": [{\"feedbackID\": \"...\", \"text\": \"...\", \"rating\": 1}]\n  },\n  \"emailSent\": true\n}\n```\n\n## Execution Flow\n\n1. **Database Research Agent** queries CustomerFeedback → stores in `feedbackData`\n2. **Loop through feedback** → call Text Analyzer for each → store in `analysis`\n3. **Aggregate results** → compute metrics → store in `report`\n4. **Send Single Message** → email report → set `emailSent: true`\n5. **Return** summary status\n\n## Why This Design is Optimal\n\n✅ Reuses Database Research Agent for READ operations (no redundant Execute Research Query action)  \n✅ Uses Text Analyzer action for sentiment analysis  \n✅ Database entity/fields verified via Database Research Agent consultation  \n✅ Minimal actions (only Text Analyzer and Send Single Message)  \n✅ Clear delegation to sub-agents in prompt  \n✅ Proper payload flow: data → analysis → report → email"
     }
   },
-  "reasoning": "Designed a hierarchical agent structure with clear separation of concerns. Each sub-agent handles a specific aspect of the analysis pipeline. The design supports proper payload isolation and includes robust error handling.",
-  "actionDiscoveryComplete": true,
-  "designValidated": true
+
+  "example_2_modification_mode": {
+    "action": "return_to_parent",
+    "output": {
+      "modificationPlan": "# Modification Plan for Customer Feedback Analyzer\n\n## Current State\n\n**Agent Type**: Loop  \n**Current Actions**:\n- Text Analyzer (ID: 82169F64-8566-4AE7-9C87-190A885C98A9)\n- Send Single Message (ID: A3B4C5D6-E7F8-9A0B-1C2D-3E4F5A6B7C8D)\n\n**Current Sub-Agents**:\n- Database Research Agent (ID: 5ddf4f5d-b977-42b0-bed5-4a2f0021bc58)\n\n**Current Capabilities**:\n- Queries customer feedback from database\n- Analyzes sentiment and themes\n- Emails weekly reports\n\n## User Request\n\n\"Add the ability to save the analysis results back to the database so we can track trends over time.\"\n\n## Research Findings\n\n### Available Actions (from Find Candidate Actions)\n\n**Create Record** (ID: 7C8D9E0F-1A2B-3C4D-5E6F-7A8B9C0D1E2F)\n- Creates new database records\n- Params: EntityName (string), Fields (object with field:value pairs)\n- Returns: PrimaryKey (object with created record ID)\n\n### Database Schema (from Database Research Agent)\n\n**Existing Entity**: FeedbackAnalysis  \n**Primary Key**: ID (uniqueidentifier)  \n**Fields**:\n- ID: uniqueidentifier (primary key)\n- AnalysisDate: datetime\n- FeedbackCount: int\n- PositivePercent: decimal\n- NegativePercent: decimal\n- NeutralPercent: decimal\n- AverageRating: decimal\n- TopThemes: nvarchar(max) (JSON array)\n- CriticalIssueCount: int\n- CreatedAt: datetime\n\n**Result**: FeedbackAnalysis entity exists and has all necessary fields!\n\n## Recommended Changes\n\n### Add Action: Create Record\n\n- **Action ID**: 7C8D9E0F-1A2B-3C4D-5E6F-7A8B9C0D1E2F\n- **Why**: Enables saving analysis results to FeedbackAnalysis table\n- **How It Helps**: Allows tracking trends over time, historical comparison, and data-driven insights\n\n### Update Main Agent Prompt\n\n**Add Step 5.5 (between current Step 4 and Step 5)**:\n\n```\n### Step 5.5: Save Analysis to Database (CREATE operation)\nCall Create Record action:\n- EntityName: \"FeedbackAnalysis\"\n- Fields: {\n    AnalysisDate: [current date],\n    FeedbackCount: [total count from Step 3],\n    PositivePercent: [% positive from Step 3],\n    NegativePercent: [% negative from Step 3],\n    NeutralPercent: [% neutral from Step 3],\n    AverageRating: [average rating from Step 3],\n    TopThemes: [JSON.stringify(top themes array)],\n    CriticalIssueCount: [count of critical issues from Step 3]\n  }\n\n**Note**: Create Record returns PrimaryKey with the created record ID.\n```\n\n**Update Output Format** to include:\n```json\n{\n  \"analysisSaved\": true,\n  \"analysisRecordID\": \"...\"\n}\n```\n\n## Updated Workflow\n\n1. Call Database Research Agent (collect feedback)\n2. Loop through + Text Analyzer (analyze sentiment)\n3. Aggregate insights (calculate metrics)\n4. Generate report email (compose HTML)\n5. **[NEW]** Call Create Record (save to FeedbackAnalysis table)\n6. Call Send Single Message (email report)\n7. Return summary\n\n## Validation\n\n✅ No redundant actions (Create Record is new capability)  \n✅ Action ID from actual Find Candidate Actions results  \n✅ Database entity verified via Database Research Agent  \n✅ Entity fields match what we need to store  \n✅ Prompt updated with clear instructions for CREATE operation  \n✅ Proper field mapping (analysis data → FeedbackAnalysis fields)  \n✅ Maintains existing workflow, just adds persistence step\n\n## Why This Change Works\n\n- **Minimal Impact**: Adds one action, one prompt step\n- **No Breaking Changes**: Existing workflow unchanged\n- **Proper Abstraction**: Uses CRUD action (Create Record) for database write\n- **Complete Solution**: All fields needed for trend tracking are captured"
+    }
+  }
 }

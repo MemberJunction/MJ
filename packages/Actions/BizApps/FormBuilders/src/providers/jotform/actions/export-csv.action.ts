@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Export JotForm Submissions to CSV')
+@RegisterClass(BaseAction, 'ExportJotFormCSVAction')
 export class ExportJotFormCSVAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -186,4 +186,11 @@ export class ExportJotFormCSVAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadExportJotFormCSVAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

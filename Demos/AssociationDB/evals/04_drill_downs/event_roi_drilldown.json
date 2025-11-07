@@ -1,0 +1,60 @@
+{
+  "eval_id": "event-roi-drilldown",
+  "category": "drill_down",
+  "difficulty": "hard",
+  "tags": ["events", "finance", "roi", "drill-down", "interactive"],
+
+  "business_context": "Event planners need to analyze event profitability at both summary and detail levels, understanding overall ROI while being able to drill into individual registrations and costs.",
+
+  "prompt": "Show event ROI with drill-down to individual registrants",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "events_with_financial_data",
+        "expected_range": [25, 35],
+        "description": "Should show all events that have revenue and cost data"
+      },
+      {
+        "metric": "drill_down_to_registrants",
+        "expected_value": true,
+        "description": "Should be able to drill into any event to see individual registrant details"
+      }
+    ],
+    "visualization": {
+      "type": "interactive_table",
+      "alternatives": ["master_detail", "expandable_cards"],
+      "should_not_be": ["static_pie_chart", "line_chart", "single_metric"],
+      "reasoning": "ROI analysis with drill-down requires interactive hierarchical view"
+    },
+    "required_features": ["event_name", "revenue", "roi_percentage", "drill_down_interaction"],
+    "optional_features": ["cost_breakdown", "profit_margin", "attendee_count", "revenue_per_attendee"],
+    "interactivity": [
+      {
+        "action": "Click on event row",
+        "expected_result": "Expand to show all registrants with registration details and payment status"
+      },
+      {
+        "action": "Click on registrant",
+        "expected_result": "Show member profile and registration history"
+      },
+      {
+        "action": "Filter by event type",
+        "expected_result": "Show only selected event types"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Event ROI with drill-down\n-- Level 1: Event summary with ROI\nSELECT \n  e.Name as EventName,\n  e.EventType,\n  e.StartDate,\n  SUM(inv.Total) as Revenue,\n  COUNT(DISTINCT er.ID) as Registrations,\n  SUM(inv.Total) / NULLIF(COUNT(DISTINCT er.ID), 0) as RevenuePerAttendee\nFROM events.Event e\nLEFT JOIN events.EventRegistration er ON e.ID = er.EventID\nLEFT JOIN finance.Invoice inv ON inv.RelatedEntityID = er.ID AND inv.Status IN ('Paid', 'Partial')\nGROUP BY e.ID, e.Name, e.EventType, e.StartDate\nORDER BY Revenue DESC;\n\n-- Level 2: Registrants within event (drill-down)\nSELECT \n  m.FirstName + ' ' + m.LastName as AttendeeNae,\n  er.RegistrationDate,\n  er.Status,\n  inv.Total as AmountPaid,\n  inv.Status as PaymentStatus\nFROM events.EventRegistration er\nJOIN membership.Member m ON er.MemberID = m.ID\nLEFT JOIN finance.Invoice inv ON inv.RelatedEntityID = er.ID\nWHERE er.EventID = @SelectedEventID\nORDER BY er.RegistrationDate;",
+
+  "human_eval_guidance": "Test drill-down functionality on multiple events. Verify revenue calculations are correct. Check that registrant details appear when drilling down. Confirm ROI/profit calculations if shown.",
+
+  "common_pitfalls": "Including unpaid registrations in revenue; not linking registrations to invoices correctly; drill-down performance issues with large events; missing registrant details; incorrect ROI calculations."
+}

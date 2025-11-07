@@ -9,13 +9,88 @@ import { RegisterClass } from "@memberjunction/global";
 import { SQLCodeGenBase } from './sql_codegen';
 import { sqlConfig } from "../Config/db-connection";
 
-import { exec } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
 import { mkdirSync } from "fs-extra";
 import { attemptDeleteFile, logIf } from "../Misc/util";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Escapes special characters in a string for safe use as a shell command argument.
+ * Handles both Unix-like shells (bash/sh) and Windows (cmd.exe).
+ *
+ * For Unix systems: Designed to work with single quotes, which prevent all shell expansion.
+ * Only single quotes themselves need escaping (by ending the quoted string, adding an escaped quote, and starting a new quoted string).
+ *
+ * For Windows: Uses standard cmd.exe escaping for double-quoted strings.
+ *
+ * @param value The string to escape
+ * @returns The escaped string safe for shell use
+ */
+function escapeShellArg(value: string): string {
+    const isWindows = process.platform === 'win32';
+
+    if (isWindows) {
+        // Windows cmd.exe escaping for double-quoted strings
+        return value
+            .replace(/"/g, '""')      // Double quotes -> doubled
+            .replace(/\^/g, '^^')     // Caret escape
+            .replace(/%/g, '%%')      // Percent for environment vars
+            .replace(/&/g, '^&')      // Ampersand
+            .replace(/\|/g, '^|')     // Pipe
+            .replace(/</g, '^<')      // Less than
+            .replace(/>/g, '^>')      // Greater than
+            .replace(/\(/g, '^(')     // Left paren
+            .replace(/\)/g, '^)');    // Right paren
+    } else {
+        // Unix-like shell escaping for single-quoted strings
+        // In single quotes, everything is literal except single quotes themselves
+        // To include a single quote: end the quoted string, add an escaped single quote, start a new quoted string
+        // Example: 'It'\''s working' produces: It's working
+        return value.replace(/'/g, "'\\''");
+    }
+}
+
+/**
+ * Escapes special characters in a string specifically for use as sqlcmd parameter values.
+ * When values are passed to sqlcmd wrapped in quotes, the quotes protect most special characters
+ * from cmd.exe interpretation, but certain characters need additional escaping.
+ *
+ * For Windows: We need to escape:
+ * 1. Double quotes using """ (three quotes) - cmd.exe rule for quotes in quoted strings
+ * 2. Special characters (>, <, |, &, ^) using ^ prefix - even inside quoted strings these need escaping
+ * 3. Percent signs %% - to prevent variable expansion
+ *
+ * For Unix: Single quotes protect everything except single quotes themselves.
+ *
+ * @param value The string to escape for sqlcmd parameter
+ * @returns The escaped string safe for use in sqlcmd parameters
+ */
+function escapeSqlcmdParam(value: string): string {
+    const isWindows = process.platform === 'win32';
+
+    if (isWindows) {
+        // For Windows cmd.exe with double-quoted strings:
+        // Must escape special characters even inside quotes when using child_process.exec()
+        return value
+            .replace(/"/g, '"""')      // Double quotes -> triple quotes (must be first)
+            .replace(/\^/g, '^^')      // Caret escape
+            .replace(/%/g, '%%')       // Percent for environment vars
+            .replace(/>/g, '^>')       // Greater than (redirection)
+            .replace(/</g, '^<')       // Less than (redirection)
+            .replace(/\|/g, '^|')      // Pipe
+            .replace(/&/g, '^&')       // Ampersand
+            .replace(/\(/g, '^(')      // Left paren
+            .replace(/\)/g, '^)');     // Right paren
+    } else {
+        // For Unix sqlcmd parameters in single quotes:
+        // Only single quotes need escaping
+        return value.replace(/'/g, "'\\''");
+    }
+}
 
 /**
  * Base class for SQL Utility functions, you can sub-class this class to create your own SQL Utility functions/override existing functionality.
@@ -302,39 +377,114 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       throw new Error("SQL Server user, password, and database must be provided in the configuration");
     }
 
-    // Construct the sqlcmd command with optional port and instance
-    let command = `sqlcmd -S ${sqlConfig.server}`;
+    // Build the server specification string (server[,port][\instance])
+    let serverSpec = sqlConfig.server;
     if (sqlConfig.port) {
-      command += `,${sqlConfig.port}`;
+      serverSpec += `,${sqlConfig.port}`;
     }
     if (sqlConfig.options?.instanceName) {
-      const escapedInstanceName = `"${sqlConfig.options.instanceName.replace(/"/g, '\\"')}"`;
-      command += `\\${escapedInstanceName}`;
+      serverSpec += `\\${sqlConfig.options.instanceName}`;
     }
 
-    // Escape and wrap user and password in double quotes
-    const escapedUser = `"${sqlConfig.user.replace(/"/g, '\\"')}"`;
-    const escapedPassword = `"${sqlConfig.password.replace(/"/g, '\\"')}"`;
-    const escapedDatabase = `"${sqlConfig.database.replace(/"/g, '\\"')}"`;
-
     const cwd = path.resolve(process.cwd());
-    const absoluteFilePath = path.resolve(cwd, filePath);
-    // Add -I flag to enable QUOTED_IDENTIFIER (required for indexed views, computed columns, etc.)
-    // Add -V 17 to only fail on severity >= 17 (system errors), allowing informational messages and warnings
-    command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -I -V 17 -i "${absoluteFilePath}"`;
+    let absoluteFilePath = path.resolve(cwd, filePath);
 
-    // Execute the command
+    // On Windows, convert to short path (8.3 format) if the path contains spaces
+    // This avoids quoting issues when using windowsVerbatimArguments
+    const isWindows = process.platform === 'win32';
+    if (isWindows && absoluteFilePath.includes(' ')) {
+      try {
+        // Use fsutil to get the short path name on Windows
+        const { execSync } = require('child_process');
+        const result = execSync(`for %I in ("${absoluteFilePath}") do @echo %~sI`, {
+          encoding: 'utf8',
+          shell: 'cmd.exe'
+        }).trim();
+        if (result && !result.includes('ERROR') && !result.includes('%~sI')) {
+          absoluteFilePath = result;
+          logIf(configInfo.verboseOutput, `Converted path to short format: ${absoluteFilePath}`);
+        }
+      } catch (e) {
+        // If short path conversion fails, we'll try with the original path
+        logIf(configInfo.verboseOutput, `Could not convert to short path, using original: ${e}`);
+      }
+    }
+
+    // Build arguments array for spawn (bypasses shell, no escaping needed!)
+    const args = [
+      '-S', serverSpec,
+      '-U', sqlConfig.user,
+      '-P', sqlConfig.password,
+      '-d', sqlConfig.database,
+      '-I',  // Enable QUOTED_IDENTIFIER (required for indexed views, computed columns, etc.)
+      '-V', '17',  // Only fail on severity >= 17 (system errors)
+      '-i', absoluteFilePath
+    ];
+
+    // Execute the command using spawn to completely bypass shell escaping issues
     logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);
 
+    // Debug logging for Windows password issues
+    if (process.platform === 'win32' && configInfo.verboseOutput) {
+      const maskedArgs = args.map((arg, i) =>
+        args[i-1] === '-P' ? '[MASKED]' : arg
+      );
+      logMessage(`sqlcmd args (password masked): ${JSON.stringify(maskedArgs)}`, 'Info');
+      logMessage(`Password length: ${sqlConfig.password.length}, contains special chars: ${/[^a-zA-Z0-9]/.test(sqlConfig.password)}`, 'Info');
+    }
+
     try {
-      const { stdout, stderr } = await execAsync(command);
+      // Use spawn instead of execFile for better Windows compatibility
+      // spawn with shell:false ensures no cmd.exe interpretation of arguments
+      const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
+
+        const spawnOptions: any = {
+          shell: false  // Critical: bypass shell entirely on all platforms
+        };
+
+        // On Windows, use windowsVerbatimArguments to pass args exactly as-is
+        // File paths with spaces are handled by converting to 8.3 short format above
+        if (isWindows) {
+          spawnOptions.windowsVerbatimArguments = true;
+        }
+
+        const child = spawn(sqlcmdCommand, args, spawnOptions);
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('error', (error) => {
+          reject(error);
+        });
+
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve({ stdout, stderr });
+          } else {
+            const error: any = new Error(`sqlcmd exited with code ${code}`);
+            error.stdout = stdout;
+            error.stderr = stderr;
+            error.code = code;
+            reject(error);
+          }
+        });
+      });
 
       // Log any output as warnings (they're non-fatal since we didn't throw)
-      if (stdout && stdout.trim().length > 0) {
-        logWarning(`SQL Server message: ${stdout.trim()}`);
+      if (result.stdout && result.stdout.trim().length > 0) {
+        logWarning(`SQL Server message: ${result.stdout.trim()}`);
       }
-      if (stderr && stderr.trim().length > 0) {
-        logWarning(`SQL Server stderr: ${stderr.trim()}`);
+      if (result.stderr && result.stderr.trim().length > 0) {
+        logWarning(`SQL Server stderr: ${result.stderr.trim()}`);
       }
 
       return true;
@@ -345,7 +495,17 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     }
   }
   catch (e) {
-    const message = (e as any).message || e;
+    let message = (e as any).message || e;
+
+    // Include stdout and stderr if available from exec error
+    if ((e as any).stdout) {
+      message += `\n SQL Server message: ${(e as any).stdout}`;
+    }
+    if ((e as any).stderr) {
+      message += `\n SQL Server error: ${(e as any).stderr}`;
+    }
+
+    // Mask password in error messages
     const errorMessage = sqlConfig.password ? this.maskPassword(message, sqlConfig.password) : message;
     logError("Error executing batch SQL file: " + errorMessage);
     return false;

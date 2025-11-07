@@ -1,5 +1,65 @@
 # @memberjunction/ai-provider-bundle
 
+## 2.116.0
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@2.116.0
+- @memberjunction/ai-cerebras@2.116.0
+- @memberjunction/ai-groq@2.116.0
+- @memberjunction/ai-lmstudio@2.116.0
+- @memberjunction/ai-local-embeddings@2.116.0
+- @memberjunction/ai-mistral@2.116.0
+- @memberjunction/ai-ollama@2.116.0
+- @memberjunction/ai-openai@2.116.0
+- @memberjunction/ai-openrouter@2.116.0
+- @memberjunction/ai-xai@2.116.0
+
+## 2.115.0
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@2.115.0
+- @memberjunction/ai-cerebras@2.115.0
+- @memberjunction/ai-groq@2.115.0
+- @memberjunction/ai-lmstudio@2.115.0
+- @memberjunction/ai-local-embeddings@2.115.0
+- @memberjunction/ai-mistral@2.115.0
+- @memberjunction/ai-ollama@2.115.0
+- @memberjunction/ai-openai@2.115.0
+- @memberjunction/ai-openrouter@2.115.0
+- @memberjunction/ai-xai@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@2.114.0
+- @memberjunction/ai-cerebras@2.114.0
+- @memberjunction/ai-groq@2.114.0
+- @memberjunction/ai-lmstudio@2.114.0
+- @memberjunction/ai-local-embeddings@2.114.0
+- @memberjunction/ai-mistral@2.114.0
+- @memberjunction/ai-ollama@2.114.0
+- @memberjunction/ai-openai@2.114.0
+- @memberjunction/ai-openrouter@2.114.0
+- @memberjunction/ai-xai@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@2.113.2
+- @memberjunction/ai-cerebras@2.113.2
+- @memberjunction/ai-groq@2.113.2
+- @memberjunction/ai-lmstudio@2.113.2
+- @memberjunction/ai-local-embeddings@2.113.2
+- @memberjunction/ai-mistral@2.113.2
+- @memberjunction/ai-ollama@2.113.2
+- @memberjunction/ai-openai@2.113.2
+- @memberjunction/ai-openrouter@2.113.2
+- @memberjunction/ai-xai@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

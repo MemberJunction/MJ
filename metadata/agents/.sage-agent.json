@@ -266,6 +266,20 @@
             "lastModified": "2025-10-24T17:55:20.827Z",
             "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Typeform Responses",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B455ECE7-DD6D-4BF1-A1E5-A0E284718290"
+          },
+          "sync": {
+            "lastModified": "2025-10-31T00:28:48.783Z",
+            "checksum": "6e0da71beb9748ba7ac036186631c86ff7b0aaaef45655f39c00c7d41229372a"
+          }
         }
       ]
     },

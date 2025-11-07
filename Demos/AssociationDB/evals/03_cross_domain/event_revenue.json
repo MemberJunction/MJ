@@ -1,0 +1,57 @@
+{
+  "eval_id": "event-revenue-ranking",
+  "category": "cross_domain",
+  "difficulty": "medium",
+  "tags": ["events", "finance", "revenue", "ranking"],
+
+  "business_context": "Finance and event teams need to understand which events generate the most revenue to inform future event planning, pricing strategies, and resource allocation.",
+
+  "prompt": "Which events generated the most revenue?",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "events_with_revenue",
+        "expected_range": [25, 35],
+        "sql_validation": "SELECT COUNT(DISTINCT e.ID) FROM events.Event e JOIN events.EventRegistration er ON e.ID = er.EventID JOIN finance.Invoice inv ON inv.RelatedEntityID = er.ID WHERE inv.Status IN ('Paid', 'Partial')",
+        "description": "Number of events that have generated revenue"
+      },
+      {
+        "metric": "top_event_revenue",
+        "expected_range": [15000, 50000],
+        "description": "Highest grossing single event revenue"
+      }
+    ],
+    "visualization": {
+      "type": "bar_chart",
+      "alternatives": ["column_chart", "horizontal_bar"],
+      "should_not_be": ["pie_chart", "line_chart", "single_metric"],
+      "reasoning": "Ranking of events by revenue is best shown with horizontal or vertical bar chart"
+    },
+    "required_features": ["event_name", "revenue_amount", "sorted_by_revenue"],
+    "optional_features": ["event_type", "attendee_count", "avg_ticket_price", "date"],
+    "interactivity": [
+      {
+        "action": "Click on event bar",
+        "expected_result": "Show event details, registrations, and revenue breakdown"
+      },
+      {
+        "action": "Filter by event type",
+        "expected_result": "Show only selected event types"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Event revenue ranking\nSELECT TOP 10\n  e.Name as EventName,\n  e.EventType,\n  e.StartDate,\n  COUNT(DISTINCT er.ID) as Registrations,\n  SUM(inv.Total) as TotalRevenue,\n  AVG(inv.Total) as AvgTicketPrice\nFROM events.Event e\nJOIN events.EventRegistration er ON e.ID = er.EventID\nJOIN finance.Invoice inv ON inv.RelatedEntityID = er.ID\nWHERE inv.Status IN ('Paid', 'Partial')\nGROUP BY e.Name, e.EventType, e.StartDate\nORDER BY TotalRevenue DESC;",
+
+  "human_eval_guidance": "Verify revenue amounts are properly formatted as currency. Check that events are sorted from highest to lowest revenue. Confirm only paid invoices are included.",
+
+  "common_pitfalls": "Including unpaid invoices; not linking events to registrations to invoices correctly; double-counting multi-day events; missing event details; incorrect aggregation."
+}

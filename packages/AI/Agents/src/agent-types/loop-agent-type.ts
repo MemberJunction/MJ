@@ -99,6 +99,26 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createRetryStep(validationResult.message);
             }
 
+            // Check for Chat nextStep BEFORE checking taskComplete
+            // This allows agents to ask for user clarification even when taskComplete=true
+            if (response.nextStep?.type === 'Chat') {
+                if (!response.message) {
+                    return this.createRetryStep('Chat type specified but no user message provided');
+                }
+                LogStatusEx({
+                    message: '💬 Loop Agent: Requesting user interaction. Message: ' + response.message,
+                    verboseOnly: true
+                });
+                return this.createNextStep('Chat', {
+                    message: response.message,
+                    terminate: true, // Chat always terminates to return to user
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    suggestedResponses: response.suggestedResponses,
+                    reasoning: response.reasoning,
+                    confidence: response.confidence
+                });
+            }
+
             // Check if task is complete
             if (response.taskComplete) {
                 LogStatusEx({
@@ -154,17 +174,6 @@ export class LoopAgentType extends BaseAgentType {
                             name: action.name,
                             params: action.params
                         }))
-                    }
-                    break;
-                case 'Chat':
-                    if (!response.message) {
-                        retVal.step = 'Retry';
-                        retVal.errorMessage = 'Chat type specified but no user message provided';
-                    }
-                    else {
-                        retVal.step = 'Chat';
-                        retVal.message = response.message;
-                        retVal.terminate = true; // when chat request, this agent needs to return back to the caller/user
                     }
                     break;
                 case 'ForEach':
@@ -422,165 +431,8 @@ export class LoopAgentType extends BaseAgentType {
         // Loop agents always use the default prompt from configuration
         return config.childPrompt || null;
     }
-
-    /**
-     * Loop agents need to resolve template variables before each iteration
-     * @override
-     */
-    public BeforeLoopIteration<P>(
-        context: {
-            item: any;
-            index: number;
-            payload: P;
-            loopType: 'ForEach' | 'While';
-            itemVariable: string;
-            actionParams: Record<string, unknown>;
-            subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
-        } 
-    ): {
-        actionParams?: Record<string, unknown>;
-        subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
-        payload?: P;
-    } | null {
-        // Resolve templates in action params if present
-        if (context.actionParams) {
-            const resolvedParams = this.resolveTemplates(context.actionParams, {
-                item: context.item,
-                index: context.index,
-                payload: context.payload
-            }, context.itemVariable);
-
-            return { actionParams: resolvedParams };
-        }
-
-        // TODO: Handle subAgentRequest template resolution if needed
-
-        return null;
-    }
-
-    // AfterLoopIteration: Not needed - default behavior (collect results) is correct
-
-    /**
-     * Resolves template variables in an object recursively
-     */
-    private resolveTemplates(
-        obj: Record<string, unknown>,
-        context: Record<string, any>,
-        itemVariable: string
-    ): Record<string, unknown> {
-        const result: Record<string, unknown> = {};
-
-        for (const [key, value] of Object.entries(obj)) {
-            if (typeof value === 'string') {
-                result[key] = this.resolveValueFromContext(value, context, itemVariable);
-            } else if (Array.isArray(value)) {
-                result[key] = value.map(v =>
-                    typeof v === 'string' ? this.resolveValueFromContext(v, context, itemVariable) : v
-                );
-            } else if (typeof value === 'object' && value !== null) {
-                result[key] = this.resolveTemplates(value as Record<string, unknown>, context, itemVariable);
-            } else {
-                result[key] = value;
-            }
-        }
-
-        return result;
-    }
-
-    // /**
-    //  * Resolves template string with variable interpolation
-    //  */
-    // private resolveTemplateString(template: string, context: Record<string, any>): string {
-    //     let result = template;
-
-    //     // Simple variable replacement for now
-    //     for (const [varName, varValue] of Object.entries(context)) {
-    //         const placeholder = `{{${varName}}}`;
-    //         if (result.includes(placeholder)) {
-    //             result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-    //                 typeof varValue === 'string' ? varValue : JSON.stringify(varValue));
-    //         }
-    //     }
-
-    //     return result;
-    // }
-
-    /**
-     * Resolves a value from context using variable references
-     */
-    private resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
-        // check to see if value is wrapped in a nunjucks style template like {{variable}} and
-        // if so, remove that wrapping to get the actual variable name.
-        // we only do this if the string starts and ends with the {{ }} pattern
-        // and we trim whitespace first
-        const trimmedValue = value.trim();
-        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
-            value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
-        }
-
-        // first check itemVariable name
-        const ivToLower = itemVariable?.trim().toLowerCase();
-        if (value?.toLowerCase().startsWith(`${ivToLower}.`)) {
-            const path = value.substring(ivToLower.length + 1);
-            return this.getValueFromPath(context.item, path);
-        }
-
-        // Check for direct context variable references
-        for (const [varName, varValue] of Object.entries(context)) {
-            if (value === varName) {
-                return varValue;
-            }
-
-            if (value?.trim().toLowerCase().startsWith(`${varName}.`)) {
-                const path = value.substring(varName.length + 1);
-                return this.getValueFromPath(varValue, path);
-            }
-        }
-
-        // Static value
-        return value;
-    }
-
-    /**
-     * Helper to get value from nested object path
-     */
-    private getValueFromPath(obj: any, path: string): unknown {
-        const parts = path.split('.');
-        let current = obj;
-
-        for (const part of parts) {
-            if (!part) continue;
-
-            // Check for array indexing
-            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
-
-            if (arrayMatch) {
-                const arrayName = arrayMatch[1];
-                const index = parseInt(arrayMatch[2], 10);
-
-                if (current && typeof current === 'object' && arrayName in current) {
-                    current = current[arrayName];
-
-                    if (Array.isArray(current) && index >= 0 && index < current.length) {
-                        current = current[index];
-                    } else {
-                        return undefined;
-                    }
-                } else {
-                    return undefined;
-                }
-            } else {
-                // Regular property access
-                if (current && typeof current === 'object' && part in current) {
-                    current = current[part];
-                } else {
-                    return undefined;
-                }
-            }
-        }
-
-        return current;
-    }
+ 
+    
 }
 
 /**

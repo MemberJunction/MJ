@@ -1,31 +1,242 @@
 {
-  "action": "return_to_parent",
-  "output": {
-    "agentSpec": {
+  "description": "Architect Agent returns a complete, validated AgentSpec. All fields are at root level (not nested in 'agentSpec' wrapper).",
+
+  "example_1_loop_agent": {
+    "action": "return_to_parent",
+    "output": {
       "ID": "",
       "Name": "Customer Feedback Analyzer",
-      "Description": "Analyzes customer feedback from multiple sources and generates comprehensive weekly reports with actionable insights",
+      "Description": "Analyzes customer feedback from database, performs sentiment analysis, and generates weekly email reports with actionable insights",
+      "TypeID": "F7926101-5099-4FA5-836A-479D9707C818",
+      "Status": "Active",
       "StartingPayloadValidationMode": "Fail",
-      "InvocationMode": "Any",
       "IconClass": "fa-solid fa-chart-line",
+      "InvocationMode": "Any",
       "PayloadDownstreamPaths": ["*"],
-      "PayloadUpstreamPaths": ["analysis.*", "reports.*"],
+      "PayloadUpstreamPaths": ["analysis.*", "report.*"],
       "Actions": [
         {
-          "ActionID": "abc-123-run-query",
+          "ActionID": "82169F64-8566-4AE7-9C87-190A885C98A9",
+          "AgentActionID": "",
           "Status": "Active"
         },
         {
-          "ActionID": "def-456-send-email",
+          "ActionID": "A3B4C5D6-E7F8-9A0B-1C2D-3E4F5A6B7C8D",
+          "AgentActionID": "",
           "Status": "Active"
         }
       ],
-      "SubAgents": [],
+      "SubAgents": [
+        {
+          "Type": "related",
+          "SubAgent": {
+            "ID": "5ddf4f5d-b977-42b0-bed5-4a2f0021bc58",
+            "Name": "Database Research Agent",
+            "StartingPayloadValidationMode": "Fail"
+          },
+          "AgentRelationshipID": "",
+          "SubAgentInputMapping": {
+            "*": "query"
+          },
+          "SubAgentOutputMapping": {
+            "*": "feedbackData"
+          },
+          "SubAgentContextPaths": ["*"]
+        }
+      ],
       "Prompts": [
         {
-          "PromptText": "You are a customer feedback analyzer specialized in extracting insights from customer data. Your role is to analyze feedback, identify trends, and generate actionable recommendations.",
+          "ID": "",
+          "PromptID": "",
+          "PromptName": "Customer Feedback Analyzer System Prompt",
+          "PromptDescription": "Orchestrates weekly feedback analysis workflow",
+          "PromptText": "# Customer Feedback Analyzer\n\nYou orchestrate weekly customer feedback analysis and reporting.\n\n## Your Workflow\n\n### Step 1: Collect Feedback Data\nCall Database Research Agent sub-agent with query for past 7 days of CustomerFeedback records.\n\n### Step 2: Analyze Each Feedback Item\nFor each feedback item, call Text Analyzer action to extract sentiment and themes.\n\n### Step 3: Aggregate Insights\nCalculate total count, sentiment distribution, top themes, and critical issues.\n\n### Step 4: Generate Report Email\nCompose HTML email with summary stats, top themes, critical issues, and recommendations.\n\n### Step 5: Send Report\nCall Send Single Message action with Provider='SendGrid', MessageType='Email', report content.\n\n## Output Format\nReturn JSON with status, feedbackAnalyzed, sentimentBreakdown, criticalIssues, reportSent.",
+          "PromptTypeID": "A46E3D59-D76F-4E58-B4C2-EA59774F5508",
           "PromptRole": "System",
           "PromptPosition": "First"
+        }
+      ]
+    }
+  },
+
+  "example_2_flow_agent_with_loop_subagent": {
+    "action": "return_to_parent",
+    "output": {
+      "ID": "",
+      "Name": "Support Ticket Router",
+      "Description": "Routes support tickets through validation, classification, and assignment workflow",
+      "TypeID": "4F6A189B-C068-4736-9F23-3FF540B40FDD",
+      "Status": "Active",
+      "StartingPayloadValidationMode": "Fail",
+      "IconClass": "fa-solid fa-ticket",
+      "PayloadDownstreamPaths": ["*"],
+      "PayloadUpstreamPaths": ["validation.*", "classification.*", "routing.*"],
+      "Actions": [
+        {
+          "ActionID": "validate-ticket-guid",
+          "AgentActionID": "",
+          "Status": "Active"
+        },
+        {
+          "ActionID": "route-ticket-guid",
+          "AgentActionID": "",
+          "Status": "Active"
+        }
+      ],
+      "SubAgents": [
+        {
+          "Type": "child",
+          "SubAgent": {
+            "ID": "",
+            "Name": "Ticket Classifier",
+            "Description": "Uses LLM reasoning to classify support tickets by type, category, and priority",
+            "TypeID": "F7926101-5099-4FA5-836A-479D9707C818",
+            "Status": "Active",
+            "StartingPayloadValidationMode": "Fail",
+            "Actions": [],
+            "SubAgents": [],
+            "Prompts": [
+              {
+                "ID": "",
+                "PromptID": "",
+                "PromptName": "Ticket Classifier Prompt",
+                "PromptDescription": "Classifies tickets into categories with priority",
+                "PromptText": "# Ticket Classifier\n\nClassify support tickets into type (Technical/Billing/General), category (Bug/Invoice/Question), and priority (low/medium/high) based on content and keywords.\n\nReturn JSON: {\"type\": \"...\", \"category\": \"...\", \"priority\": \"...\", \"confidence\": 0.95}",
+                "PromptTypeID": "A46E3D59-D76F-4E58-B4C2-EA59774F5508",
+                "PromptRole": "System",
+                "PromptPosition": "First"
+              }
+            ]
+          }
+        }
+      ],
+      "Prompts": [],
+      "Steps": [
+        {
+          "ID": "",
+          "Name": "Validate Ticket",
+          "Description": "Validates ticket has required fields and normalizes data",
+          "StepType": "Action",
+          "StartingStep": true,
+          "ActionID": "validate-ticket-guid",
+          "ActionInputMapping": {
+            "ticket": "payload.ticket",
+            "requiredFields": ["subject", "description", "customerEmail"]
+          },
+          "ActionOutputMapping": {
+            "isValid": "validation.passed",
+            "errors": "validation.errors",
+            "normalizedData": "ticket"
+          }
+        },
+        {
+          "ID": "",
+          "Name": "Classify Ticket",
+          "Description": "LLM-based classification of ticket type and priority",
+          "StepType": "Sub-Agent",
+          "StartingStep": false,
+          "SubAgentID": ""
+        },
+        {
+          "ID": "",
+          "Name": "Route Ticket",
+          "Description": "Assigns ticket to appropriate team based on classification",
+          "StepType": "Action",
+          "StartingStep": false,
+          "ActionID": "route-ticket-guid",
+          "ActionInputMapping": {
+            "ticketId": "payload.ticket.id",
+            "category": "payload.classification.category",
+            "priority": "payload.classification.priority"
+          },
+          "ActionOutputMapping": {
+            "assignedTo": "routing.assignedTo",
+            "team": "routing.team"
+          }
+        }
+      ],
+      "Paths": [
+        {
+          "ID": "",
+          "OriginStepID": "Validate Ticket",
+          "DestinationStepID": "Classify Ticket",
+          "Condition": "payload.validation.passed == true",
+          "Description": "Proceed to classification if validation passes",
+          "Priority": 10
+        },
+        {
+          "ID": "",
+          "OriginStepID": "Classify Ticket",
+          "DestinationStepID": "Route Ticket",
+          "Condition": null,
+          "Description": "Always route after classification",
+          "Priority": 10
+        }
+      ]
+    }
+  },
+
+  "example_3_modification_mode": {
+    "description": "In modification mode, the payload already contains the full AgentSpec. Architect applies changes from modificationPlan and validates.",
+    "action": "return_to_parent",
+    "output": {
+      "ID": "existing-agent-guid-123",
+      "Name": "Customer Feedback Analyzer",
+      "Description": "Analyzes customer feedback from database, performs sentiment analysis, and generates weekly email reports with actionable insights",
+      "TypeID": "F7926101-5099-4FA5-836A-479D9707C818",
+      "Status": "Active",
+      "StartingPayloadValidationMode": "Fail",
+      "IconClass": "fa-solid fa-chart-line",
+      "InvocationMode": "Any",
+      "PayloadDownstreamPaths": ["*"],
+      "PayloadUpstreamPaths": ["analysis.*", "report.*"],
+      "Actions": [
+        {
+          "ActionID": "82169F64-8566-4AE7-9C87-190A885C98A9",
+          "AgentActionID": "existing-relation-guid-1",
+          "Status": "Active"
+        },
+        {
+          "ActionID": "A3B4C5D6-E7F8-9A0B-1C2D-3E4F5A6B7C8D",
+          "AgentActionID": "existing-relation-guid-2",
+          "Status": "Active"
+        },
+        {
+          "ActionID": "7C8D9E0F-1A2B-3C4D-5E6F-7A8B9C0D1E2F",
+          "AgentActionID": "",
+          "Status": "Active",
+          "comment": "NEW: Create Record action added per modificationPlan"
+        }
+      ],
+      "SubAgents": [
+        {
+          "Type": "related",
+          "SubAgent": {
+            "ID": "5ddf4f5d-b977-42b0-bed5-4a2f0021bc58",
+            "Name": "Database Research Agent",
+            "StartingPayloadValidationMode": "Fail"
+          },
+          "AgentRelationshipID": "existing-relationship-guid",
+          "SubAgentInputMapping": {
+            "*": "query"
+          },
+          "SubAgentOutputMapping": {
+            "*": "feedbackData"
+          },
+          "SubAgentContextPaths": ["*"]
+        }
+      ],
+      "Prompts": [
+        {
+          "ID": "existing-prompt-guid",
+          "PromptID": "existing-ai-prompt-guid",
+          "PromptName": "Customer Feedback Analyzer System Prompt",
+          "PromptDescription": "Orchestrates weekly feedback analysis workflow",
+          "PromptText": "# Customer Feedback Analyzer\n\nYou orchestrate weekly customer feedback analysis and reporting.\n\n## Your Workflow\n\n### Step 1: Collect Feedback Data\nCall Database Research Agent sub-agent with query for past 7 days of CustomerFeedback records.\n\n### Step 2: Analyze Each Feedback Item\nFor each feedback item, call Text Analyzer action to extract sentiment and themes.\n\n### Step 3: Aggregate Insights\nCalculate total count, sentiment distribution, top themes, and critical issues.\n\n### Step 4: Generate Report Email\nCompose HTML email with summary stats, top themes, critical issues, and recommendations.\n\n### Step 5: Save Analysis to Database\nCall Create Record action with EntityName='FeedbackAnalysis' and Fields containing analysis metrics.\n\n### Step 6: Send Report\nCall Send Single Message action with Provider='SendGrid', MessageType='Email', report content.\n\n## Output Format\nReturn JSON with status, feedbackAnalyzed, sentimentBreakdown, analysisSaved, reportSent.",
+          "PromptTypeID": "A46E3D59-D76F-4E58-B4C2-EA59774F5508",
+          "PromptRole": "System",
+          "PromptPosition": "First",
+          "comment": "UPDATED: Added Step 5 for Create Record action, updated output format"
         }
       ]
     }

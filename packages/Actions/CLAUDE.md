@@ -624,6 +624,161 @@ Need to expose functionality?
          └─ Direct class instantiation
 ```
 
+---
+
+## Generated Actions: AI-Powered Action Creation
+
+MemberJunction includes a powerful capability to **automatically generate action implementations from natural language descriptions**. This is particularly useful for creating entity-specific CRUD wrappers and simple parameter mapping actions.
+
+### What Are Generated Actions?
+
+Generated Actions are Action records with `Type='Generated'` where:
+- You provide a **natural language UserPrompt** describing what the action should do
+- AI automatically generates the **TypeScript implementation code**
+- The system creates **parameter definitions** and **result codes** automatically
+- Generated code is stored in the database for review before deployment
+
+### Quick Example
+
+**Create an Action Record:**
+```yaml
+Name: Create Conversation Record
+Type: Generated
+ParentID: <Create Record action ID>
+UserPrompt: Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters
+```
+
+**AI Automatically Generates:**
+- TypeScript code implementing the action
+- 10 input parameters (all Conversations entity fields)
+- 1 output parameter (ConversationID)
+- 5 result codes (Success, ValidationError, ParentActionFailed, etc.)
+
+**Result:** A working action that creates Conversation records without manually writing code.
+
+### When to Use Generated Actions
+
+**✅ Good Use Cases:**
+- Entity-specific CRUD wrappers (Create Conversation, Get User, Update Order)
+- Parameter mapping between external APIs and MJ entities
+- Simple validation + CRUD operations
+- Actions with straightforward business logic
+
+**❌ Better as Custom Actions:**
+- Complex multi-step workflows
+- External integrations requiring special handling
+- Performance-critical operations
+- Security-sensitive operations
+
+### The Child Action Pattern
+
+One of the most powerful uses is creating **entity-specific wrappers** around generic parent actions:
+
+**Parent Action:** "Create Record" (requires EntityName parameter, complex Fields object)
+
+**Generated Child Action:** "Create Conversation Record" (simple entity-specific parameters)
+
+**⚠️ CRITICAL ARCHITECTURAL NOTE: Composition, Not Inheritance**
+
+Despite the name "child action," this is **NOT TypeScript class inheritance**:
+
+```typescript
+// ✅ CORRECT - How it actually works
+@RegisterClass(BaseAction, "Create Conversation Record")
+export class Create_Conversation_Record_Action extends BaseAction {
+    //                                            ^^^^^^^^^^^ Always BaseAction!
+
+    protected override async InternalRunAction(params: RunActionParams) {
+        // Maps child parameters to parent format
+        const mappedParams = [
+            { Name: 'EntityName', Type: 'Input', Value: 'Conversations' },
+            { Name: 'Fields', Type: 'Input', Value: {...} }
+        ];
+
+        // Invokes parent via ActionEngine (runtime composition)
+        const parentAction = ActionEngineServer.Instance.Actions.find(a =>
+            a.ID === '2504e288-...'
+        );
+        return await ActionEngineServer.Instance.RunAction({
+            Action: parentAction,
+            Params: mappedParams,
+            ContextUser: params.ContextUser
+        });
+    }
+}
+
+// ❌ WRONG - Child does NOT extend parent class
+export class Create_Conversation_Record_Action extends Create_Record_Action { }
+```
+
+**Why Composition Instead of Inheritance?**
+- **ParentID is metadata-only** - stored in database, not in TypeScript code
+- **Flexibility** - can change parent action without recompiling child
+- **Independence** - child works without parent's TypeScript code being present
+- **Runtime discovery** - ActionEngine finds parent by ID at runtime
+- **No coupling** - child doesn't depend on parent's implementation details
+
+**See Real Generated Examples:**
+- [CoreActions/src/generated/action_subclasses.ts:98-215](./CoreActions/src/generated/action_subclasses.ts#L98-L215) - Create Conversation Record
+- [CoreActions/src/generated/action_subclasses.ts:218-317](./CoreActions/src/generated/action_subclasses.ts#L218-L317) - Get AI Model Cost
+
+**Benefits:**
+- Type-safe, entity-specific parameters
+- Better discoverability for workflow designers
+- Simplified interface (no need to know EntityName)
+- Entity-specific validation
+- Metadata-driven parent relationship (can change without recompiling)
+
+### How It Works
+
+**Two-Phase Process:**
+
+1. **AI Generation (Design Time)**: When you save an Action record with `Type='Generated'`:
+   - AI reads your UserPrompt
+   - **If `ParentID` is set:** System loads parent action metadata and passes to AI
+     - Sets `IsChildAction: !!this.ParentID` flag
+     - Loads parent via `LoadParentAction()`
+     - Passes `ChildActionInfo`, `parentAction`, and `actionParams` to AI prompt
+   - AI receives complete entity schemas and library documentation
+   - AI generates TypeScript code, parameters, and result codes
+   - Generated code saved to database for review
+
+   **Key Files:**
+   - [ActionEntity.server.ts:PreparePromptData()](./../../MJCoreEntitiesServer/src/custom/ActionEntity.server.ts#L272-L324) - Prepares data for AI
+   - [action-generation.template.md](./../../metadata/prompts/templates/system/action-generation.template.md) - AI prompt template
+
+2. **Code Wrapping (Build Time)**: When you run `npm run build`:
+   - CodeGen reads approved generated code from database
+   - Wraps it in BaseAction class template (always BaseAction, never parent class)
+   - Outputs to `action_subclasses.ts`
+   - No AI calls during build (fast and deterministic)
+
+   **Key Files:**
+   - [action_subclasses_codegen.ts:generateSingleAction()](./../../CodeGenLib/src/Misc/action_subclasses_codegen.ts#L98-L132) - Wraps code in template
+
+### Code Review Workflow
+
+1. **Create** Action record with UserPrompt
+2. **Save** → AI generates code automatically
+3. **Review** generated code in database (Action.Code field)
+4. **Approve** by setting `CodeApprovalStatus='Approved'`
+5. **Build** → Generated code included in `action_subclasses.ts`
+6. **Lock** (optional) → Set `CodeLocked=true` to prevent accidental changes
+
+### Complete Documentation
+
+For comprehensive documentation on generated actions, including:
+- Detailed architecture explanation
+- UserPrompt patterns and best practices
+- Child action pattern deep dive
+- Step-by-step creation guide
+- Troubleshooting guide
+- Complete examples
+
+**See: [GENERATED-ACTIONS.md](./GENERATED-ACTIONS.md)**
+
+---
+
 ## Key Takeaways
 
 1. **Actions = External Interface**: Use Actions only as an interface layer for non-code consumers
@@ -631,5 +786,6 @@ Need to expose functionality?
 3. **Direct Imports for Code**: Never call Actions from other Actions or code - use direct imports
 4. **Type Safety First**: Preserve TypeScript types by using classes and interfaces, not string-based action names
 5. **Thin Wrappers**: Actions should just extract params, delegate to services, and return results
+6. **Generate Simple Actions**: Use Generated Actions for entity-specific CRUD and simple logic
 
 Following these principles will result in cleaner, more maintainable, and more performant code.

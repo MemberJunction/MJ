@@ -1,5 +1,79 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.116.0
+
+### Minor Changes
+
+- 85542e4: migration
+
+### Patch Changes
+
+- 723a32d: Handle special characters in sql server connection parameters for sqlcmd on Mac and Windows
+- a860a7d: fix(agents): Pass dataSource context to agent execution.
+
+  feat(codegen): Sync SchemaInfo from database schemas with extended properties. CodeGen now automatically synchronizes SchemaInfo records from database schemas, capturing MS_Description extended properties as schema descriptions. This includes a new Description column on SchemaInfo table, vwSQLSchemas view for querying schemas with extended properties, spUpdateSchemaInfoFromDatabase stored procedure for automatic sync, and integration into the CodeGen workflow to run on every execution.
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/aiengine@2.116.0
+  - @memberjunction/actions@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/core-entities-server@2.116.0
+  - @memberjunction/sqlserver-dataprovider@2.116.0
+  - @memberjunction/ai@2.116.0
+  - @memberjunction/ai-provider-bundle@2.116.0
+
+## 2.115.0
+
+### Minor Changes
+
+- c29e21b: migration
+
+### Patch Changes
+
+- Updated dependencies [2e0fe8b]
+  - @memberjunction/aiengine@2.115.0
+  - @memberjunction/actions@2.115.0
+  - @memberjunction/core-entities-server@2.115.0
+  - @memberjunction/sqlserver-dataprovider@2.115.0
+  - @memberjunction/ai@2.115.0
+  - @memberjunction/ai-provider-bundle@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- 8f91cbe: Bug fixes and logging improvements to codegen
+  - @memberjunction/ai@2.114.0
+  - @memberjunction/aiengine@2.114.0
+  - @memberjunction/ai-provider-bundle@2.114.0
+  - @memberjunction/actions@2.114.0
+  - @memberjunction/core@2.114.0
+  - @memberjunction/core-entities@2.114.0
+  - @memberjunction/core-entities-server@2.114.0
+  - @memberjunction/global@2.114.0
+  - @memberjunction/sqlserver-dataprovider@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- Updated dependencies [61d1df4]
+  - @memberjunction/core@2.113.2
+  - @memberjunction/aiengine@2.113.2
+  - @memberjunction/actions@2.113.2
+  - @memberjunction/core-entities@2.113.2
+  - @memberjunction/core-entities-server@2.113.2
+  - @memberjunction/sqlserver-dataprovider@2.113.2
+  - @memberjunction/ai@2.113.2
+  - @memberjunction/ai-provider-bundle@2.113.2
+  - @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

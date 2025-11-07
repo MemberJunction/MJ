@@ -96,17 +96,20 @@ export class LoadAgentSpecAction extends BaseAction {
                 agentSpec.TechnicalDesign = null;
             }
 
-            // Add ONLY AgentSpec output parameter
+            // Create truncated version for both output param and Message
+            const truncatedSpec = this.truncatePromptTexts(agentSpec);
+
+            // Add truncated AgentSpec as output parameter
             params.Params.push({
                 Name: 'AgentSpec',
                 Type: 'Output',
-                Value: agentSpec
+                Value: truncatedSpec
             });
 
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: JSON.stringify(agentSpec, null, 2)
+                Message: JSON.stringify(truncatedSpec, null, 2)
             };
 
         } catch (error) {
@@ -137,6 +140,50 @@ export class LoadAgentSpecAction extends BaseAction {
     private getParamValue(params: RunActionParams, name: string): any {
         const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
         return param?.Value;
+    }
+
+    /**
+     * Truncates PromptText fields in SubAgents (and nested SubAgents) recursively.
+     * Top-level agent prompts are NOT truncated - only subagent prompts.
+     * Applied to both the AgentSpec output parameter and Message to avoid super long outputs.
+     */
+    private truncatePromptTexts(spec: any, maxLength: number = 100): any {
+        // Deep clone to avoid modifying the original
+        const truncated = JSON.parse(JSON.stringify(spec));
+
+        // Recursively truncate SubAgents only (not top-level prompts)
+        if (truncated.SubAgents && Array.isArray(truncated.SubAgents)) {
+            for (const subAgentWrapper of truncated.SubAgents) {
+                if (subAgentWrapper.SubAgent) {
+                    this.truncateSubAgent(subAgentWrapper.SubAgent, maxLength);
+                }
+            }
+        }
+
+        return truncated;
+    }
+
+    /**
+     * Recursively truncates PromptText in a subagent and its nested subagents
+     */
+    private truncateSubAgent(subAgent: any, maxLength: number): void {
+        // Truncate prompts in this subagent
+        if (subAgent.Prompts && Array.isArray(subAgent.Prompts)) {
+            for (const prompt of subAgent.Prompts) {
+                if (prompt.PromptText && typeof prompt.PromptText === 'string' && prompt.PromptText.length > maxLength) {
+                    prompt.PromptText = prompt.PromptText.substring(0, maxLength) + '...';
+                }
+            }
+        }
+
+        // Recursively process nested subagents
+        if (subAgent.SubAgents && Array.isArray(subAgent.SubAgents)) {
+            for (const nestedWrapper of subAgent.SubAgents) {
+                if (nestedWrapper.SubAgent) {
+                    this.truncateSubAgent(nestedWrapper.SubAgent, maxLength);
+                }
+            }
+        }
     }
 }
 

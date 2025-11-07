@@ -1,5 +1,96 @@
 # @memberjunction/ng-conversations
 
+## 2.116.0
+
+### Minor Changes
+
+- b80fe44: Migration
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/ai-engine-base@2.116.0
+  - @memberjunction/ai-core-plus@2.116.0
+  - @memberjunction/ng-artifacts@2.116.0
+  - @memberjunction/ng-base-types@2.116.0
+  - @memberjunction/ng-code-editor@2.116.0
+  - @memberjunction/ng-container-directives@2.116.0
+  - @memberjunction/ng-notifications@2.116.0
+  - @memberjunction/ng-tasks@2.116.0
+  - @memberjunction/graphql-dataprovider@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/ai@2.116.0
+
+## 2.115.0
+
+### Minor Changes
+
+- 751e3d1: Fixed Conversations Hamburger Functionality
+- 5b7d788: Migration
+
+### Patch Changes
+
+- dffe12f: code fixes
+- 1a96840: Conversation UI Improvement
+  - @memberjunction/ai-engine-base@2.115.0
+  - @memberjunction/ai@2.115.0
+  - @memberjunction/ai-core-plus@2.115.0
+  - @memberjunction/ng-artifacts@2.115.0
+  - @memberjunction/ng-base-types@2.115.0
+  - @memberjunction/ng-code-editor@2.115.0
+  - @memberjunction/ng-container-directives@2.115.0
+  - @memberjunction/ng-notifications@2.115.0
+  - @memberjunction/ng-tasks@2.115.0
+  - @memberjunction/graphql-dataprovider@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Minor Changes
+
+- a17ec8e: Migration
+
+### Patch Changes
+
+- 12ae685: chat mobile fixes
+  - @memberjunction/ai-engine-base@2.114.0
+  - @memberjunction/ai@2.114.0
+  - @memberjunction/ai-core-plus@2.114.0
+  - @memberjunction/ng-artifacts@2.114.0
+  - @memberjunction/ng-base-types@2.114.0
+  - @memberjunction/ng-code-editor@2.114.0
+  - @memberjunction/ng-container-directives@2.114.0
+  - @memberjunction/ng-notifications@2.114.0
+  - @memberjunction/ng-tasks@2.114.0
+  - @memberjunction/graphql-dataprovider@2.114.0
+  - @memberjunction/core@2.114.0
+  - @memberjunction/core-entities@2.114.0
+  - @memberjunction/global@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- Updated dependencies [61d1df4]
+  - @memberjunction/core@2.113.2
+  - @memberjunction/ai-engine-base@2.113.2
+  - @memberjunction/ai-core-plus@2.113.2
+  - @memberjunction/ng-artifacts@2.113.2
+  - @memberjunction/ng-base-types@2.113.2
+  - @memberjunction/ng-code-editor@2.113.2
+  - @memberjunction/ng-container-directives@2.113.2
+  - @memberjunction/ng-notifications@2.113.2
+  - @memberjunction/ng-tasks@2.113.2
+  - @memberjunction/graphql-dataprovider@2.113.2
+  - @memberjunction/core-entities@2.113.2
+  - @memberjunction/ai@2.113.2
+  - @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Minor Changes

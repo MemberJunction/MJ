@@ -1,0 +1,48 @@
+{
+  "eval_id": "active-members-basic",
+  "category": "simple_aggregation",
+  "difficulty": "easy",
+  "tags": ["membership", "count", "basic", "kpi"],
+
+  "business_context": "Association leadership needs to quickly understand current active membership size for board reports, capacity planning, and performance tracking.",
+
+  "prompt": "How many active members do we have?",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "active_member_count",
+        "expected_range": [380, 420],
+        "sql_validation": "SELECT COUNT(*) FROM membership.Member m JOIN membership.Membership ms ON m.ID = ms.MemberID WHERE ms.Status = 'Active' AND ms.EndDate >= GETDATE()",
+        "description": "Count of members with active memberships (approximately 80% of 500 total members)"
+      }
+    ],
+    "visualization": {
+      "type": "kpi_card",
+      "alternatives": ["single_metric", "stat_card"],
+      "should_not_be": ["pie_chart", "bar_chart", "line_chart"],
+      "reasoning": "Single numeric metric is best displayed as a prominent KPI card or statistic"
+    },
+    "required_features": ["show_count"],
+    "optional_features": ["percentage_of_total", "trend_indicator", "click_to_drill"],
+    "interactivity": [
+      {
+        "action": "Click on the count",
+        "expected_result": "Show list or table of all active members"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Count active members\nSELECT COUNT(*) as ActiveMembers\nFROM membership.Member m\nJOIN membership.Membership ms ON m.ID = ms.MemberID\nWHERE ms.Status = 'Active' \n  AND ms.EndDate >= GETDATE();",
+
+  "human_eval_guidance": "Verify the count is in the 380-420 range. Check that the visualization is simple and prominent (not a complex chart). If interactive, verify clicking shows the member list.",
+
+  "common_pitfalls": "Including expired or cancelled memberships in the count; using an overly complex visualization for a simple metric; not handling members with multiple memberships correctly."
+}

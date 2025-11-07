@@ -1,5 +1,37 @@
 # @memberjunction/react-test-harness
 
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/interactive-component-types@2.116.0
+  - @memberjunction/react-runtime@2.116.0
+
+## 2.115.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.115.0
+- @memberjunction/core@2.115.0
+- @memberjunction/react-runtime@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.114.0
+- @memberjunction/core@2.114.0
+- @memberjunction/react-runtime@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.113.2
+- @memberjunction/react-runtime@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

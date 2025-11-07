@@ -75,7 +75,6 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         // Create loading promise
         // The modelName should be the Hugging Face model ID (e.g., 'Xenova/all-MiniLM-L6-v2')
-        console.log(`Loading local embedding model: ${modelName}`);
         const loadingPromise = this.loadPipeline(modelName);
         LocalEmbedding.loadingPromises.set(modelName, loadingPromise);
 
@@ -83,7 +82,6 @@ export class LocalEmbedding extends BaseEmbeddings {
             const pipeline = await loadingPromise;
             LocalEmbedding.pipelines.set(modelName, pipeline);
             LocalEmbedding.loadingPromises.delete(modelName);
-            console.log(`Successfully loaded model: ${modelName}`);
             return pipeline;
         } catch (error) {
             LocalEmbedding.loadingPromises.delete(modelName);

@@ -30,7 +30,7 @@ import { FormResponse } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get JotForm Submissions')
+@RegisterClass(BaseAction, 'GetJotFormSubmissionsAction')
 export class GetJotFormSubmissionsAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -217,4 +217,11 @@ export class GetJotFormSubmissionsAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetJotFormSubmissionsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

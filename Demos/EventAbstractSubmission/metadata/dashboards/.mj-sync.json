@@ -1,0 +1,23 @@
+{
+  "entity": "Dashboards",
+  "filePattern": ".*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".dashboards.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "lookupFields": {
+      "ParentID": {
+        "entity": "Dashboard Categories",
+        "field": "Name"
+      }
+    }, 
+    "excludeFields": [
+      "Parent"
+    ]
+  }
+}

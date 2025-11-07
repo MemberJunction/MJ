@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "Name": "Generate Abstract Summary",
+      "Description": "Generate AI summary and comprehensive quality evaluation from session proposal. Returns summary, key topics, dimensional scoring (relevance, quality, innovation, speaker experience, practicality), overall score, pass/fail determination, and actionable feedback for failed submissions.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Event Abstract Submission",
+      "TemplateText": "@file:templates/generate-abstract-summary.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "primaryKey": {
+      "ID": "874DC90D-7840-4D5F-8E1C-70C93481556D"
+    },
+    "sync": {
+      "lastModified": "2025-11-01T17:39:47.604Z",
+      "checksum": "6a26dcf015be69e74e1e815e52273b085a82486c497aeedf95767ac2f43bffce"
+    }
+  }
+]

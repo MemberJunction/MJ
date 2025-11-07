@@ -99,9 +99,12 @@ export class AgentContextInjector {
      */
     private async queryNotesWithScoping(params: GetNotesParams): Promise<AIAgentNoteEntity[]> {
         const filter = this.buildNotesScopingFilter(params);
-        const orderBy = params.strategy === 'Recent'
-            ? '__mj_CreatedAt DESC'
-            : 'AgentNoteType.Priority ASC, __mj_CreatedAt DESC';
+        // const orderBy = params.strategy === 'Recent'
+        //     ? '__mj_CreatedAt DESC'
+        //     : 'AgentNoteType.Priority ASC, __mj_CreatedAt DESC';
+
+        // temporarily only use createdAt DESC
+        const orderBy = '__mj_CreatedAt DESC';
 
         const rv = new RunView();
         const result = await rv.RunView<AIAgentNoteEntity>({

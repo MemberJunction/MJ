@@ -15,7 +15,6 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { EntityFormExtendedComponent, LoadEntitiesFormComponent } from "./Entities/entities-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
-import { ActionTopComponentExtended, LoadActionExtendedTopComponent } from "./Actions/actions-top-area-extended";
 import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
 import { TemplatesFormExtendedComponent, LoadTemplatesFormExtendedComponent } from "./Templates/templates-form.component";
 import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
@@ -67,7 +66,6 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
     declarations: [
         EntityFormExtendedComponent,
         EntityActionExtendedFormComponent,
-        ActionTopComponentExtended,
         TemplatesFormExtendedComponent,
         TemplateParamDialogComponent,
         TemplateParamsGridComponent,
@@ -147,7 +145,6 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
     ],
     exports: [
         EntityFormExtendedComponent,
-        ActionTopComponentExtended,
         EntityActionExtendedFormComponent,
         TemplatesFormExtendedComponent,
         TemplateEditorComponent,
@@ -178,7 +175,6 @@ export class MemberJunctionCoreEntityFormsModule { }
 
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
-    LoadActionExtendedTopComponent();
     LoadEntityActionExtendedFormComponent();
     LoadTemplatesFormExtendedComponent();
     LoadAIPromptFormComponentExtended();

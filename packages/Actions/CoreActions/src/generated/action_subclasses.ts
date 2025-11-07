@@ -14,90 +14,6 @@ import { Metadata, RunView, RunQuery } from "@memberjunction/core";
 
             
 /**
- * Execute Scheduled Job Now
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Execute Scheduled Job Now")
-export class Execute_Scheduled_Job_Now_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Query Scheduled Jobs
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Query Scheduled Jobs")
-export class Query_Scheduled_Jobs_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Create Scheduled Job
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Create Scheduled Job")
-export class Create_Scheduled_Job_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Delete Scheduled Job
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Delete Scheduled Job")
-export class Delete_Scheduled_Job_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Get Scheduled Job Statistics
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Get Scheduled Job Statistics")
-export class Get_Scheduled_Job_Statistics_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Update Scheduled Job
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Update Scheduled Job")
-export class Update_Scheduled_Job_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
  * Create Conversation Record
  * Generated Class
  * User Prompt: Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters
@@ -219,6 +135,48 @@ export class Create_Conversation_Record_Action extends BaseAction {
             
             
 /**
+ * Create Scheduled Job
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Create Scheduled Job")
+export class Create_Scheduled_Job_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Delete Scheduled Job
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Delete Scheduled Job")
+export class Delete_Scheduled_Job_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Execute Scheduled Job Now
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Execute Scheduled Job Now")
+export class Execute_Scheduled_Job_Now_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
  * Get AI Model Cost
  * Generated Class
  * User Prompt: Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters
@@ -316,6 +274,48 @@ export class Get_AI_Model_Cost_Action extends BaseAction {
 		    Message: 'Unhandled exception while retrieving AI Model Cost record: ' + (error?.message || error?.toString() || 'Unknown error')
 		  };
 		}
+    }
+}        
+            
+            
+/**
+ * Get Scheduled Job Statistics
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Get Scheduled Job Statistics")
+export class Get_Scheduled_Job_Statistics_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Query Scheduled Jobs
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Query Scheduled Jobs")
+export class Query_Scheduled_Jobs_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Update Scheduled Job
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Update Scheduled Job")
+export class Update_Scheduled_Job_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
     }
 }        
             

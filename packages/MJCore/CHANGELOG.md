@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/core
 
+## 2.116.0
+
+### Minor Changes
+
+- 81bb7a4: Update SingleRecordView Generic Component (metadata)
+
+### Patch Changes
+
+- Updated dependencies [a8d5592]
+  - @memberjunction/global@2.116.0
+
+## 2.115.0
+
+### Patch Changes
+
+- @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/global@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- 61d1df4: Bump patch version
+  - @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

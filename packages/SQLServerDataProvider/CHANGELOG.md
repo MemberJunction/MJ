@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/aiengine@2.116.0
+  - @memberjunction/ai-vector-dupe@2.116.0
+  - @memberjunction/actions@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/queue@2.116.0
+  - @memberjunction/ai@2.116.0
+  - @memberjunction/ai-provider-bundle@2.116.0
+
+## 2.115.0
+
+### Patch Changes
+
+- Updated dependencies [2e0fe8b]
+  - @memberjunction/aiengine@2.115.0
+  - @memberjunction/ai-vector-dupe@2.115.0
+  - @memberjunction/actions@2.115.0
+  - @memberjunction/queue@2.115.0
+  - @memberjunction/ai@2.115.0
+  - @memberjunction/ai-provider-bundle@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+
+## 2.114.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.114.0
+- @memberjunction/aiengine@2.114.0
+- @memberjunction/ai-provider-bundle@2.114.0
+- @memberjunction/ai-vector-dupe@2.114.0
+- @memberjunction/actions@2.114.0
+- @memberjunction/core@2.114.0
+- @memberjunction/core-entities@2.114.0
+- @memberjunction/global@2.114.0
+- @memberjunction/queue@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- Updated dependencies [61d1df4]
+  - @memberjunction/core@2.113.2
+  - @memberjunction/aiengine@2.113.2
+  - @memberjunction/ai-vector-dupe@2.113.2
+  - @memberjunction/actions@2.113.2
+  - @memberjunction/core-entities@2.113.2
+  - @memberjunction/queue@2.113.2
+  - @memberjunction/ai@2.113.2
+  - @memberjunction/ai-provider-bundle@2.113.2
+  - @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes

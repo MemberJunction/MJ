@@ -241,6 +241,46 @@ export class ConversationStateService {
   }
 
   /**
+   * Deletes multiple conversations in a batch operation
+   * @param ids - Array of conversation IDs to delete
+   * @param currentUser - Current user info
+   * @returns Object with successful deletions and failed deletions with error info
+   */
+  async deleteMultipleConversations(
+    ids: string[],
+    currentUser: UserInfo
+  ): Promise<{
+    successful: string[];
+    failed: Array<{ id: string; name: string; error: string }>;
+  }> {
+    const successful: string[] = [];
+    const failed: Array<{ id: string; name: string; error: string }> = [];
+
+    for (const id of ids) {
+      try {
+        const conversation = this.conversations.find(c => c.ID === id);
+        const name = conversation?.Name || 'Unknown';
+
+        const deleted = await this.deleteConversation(id, currentUser);
+        if (deleted) {
+          successful.push(id);
+        } else {
+          failed.push({ id, name, error: 'Delete returned false' });
+        }
+      } catch (error) {
+        const conversation = this.conversations.find(c => c.ID === id);
+        failed.push({
+          id,
+          name: conversation?.Name || 'Unknown',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    return { successful, failed };
+  }
+
+  /**
    * Updates a conversation - saves to database AND updates in-place in the array
    * @param id The conversation ID
    * @param updates The fields to update

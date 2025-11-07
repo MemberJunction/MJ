@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Single JotForm Submission')
+@RegisterClass(BaseAction, 'GetSingleJotFormSubmissionAction')
 export class GetSingleJotFormSubmissionAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -134,4 +134,11 @@ export class GetSingleJotFormSubmissionAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSingleJotFormSubmissionAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

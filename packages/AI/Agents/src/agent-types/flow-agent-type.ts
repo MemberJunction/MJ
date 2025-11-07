@@ -14,7 +14,7 @@
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
-import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { LogError, LogStatus, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -145,17 +145,17 @@ export class FlowAgentType extends BaseAgentType {
             
             // Get current step to check if it was a Prompt step
             const currentStep = await this.getStepById(flowState.currentStepId);
-            
+
             // If current step was a Prompt, update payload with the prompt result
             if (currentStep?.StepType === 'Prompt' && promptResult) {
-                
+
                 // Parse the prompt result as JSON
                 const promptResponse = this.parseJSONResponse<any>(promptResult);
-                
+
                 if (promptResponse) {
                     // Check if the prompt response contains a Chat step request
                     // This handles the case where a Prompt step wants to return a message to the user
-                    if (promptResponse.nextStep?.type === 'Chat' || 
+                    if (promptResponse.nextStep?.type === 'Chat' ||
                         (promptResponse.taskComplete && promptResponse.message)) {
                         // Return a Chat step to bubble the message back to the user
                         return this.createNextStep('Chat', {
@@ -176,8 +176,26 @@ export class FlowAgentType extends BaseAgentType {
                     // Copy merged result back to payload reference (modifying in place for consistency)
                     Object.assign(payload, mergedPayload);
                 }
+
+                // Store the prompt step result so path conditions can access it
+                // Create a result object with Success: true (prompt executed successfully)
+                const promptStepResult = {
+                    Success: true,
+                    step: 'Success',
+                    result: promptResponse,
+                    rawResult: promptResult
+                };
+                flowState.stepResults.set(flowState.currentStepId, promptStepResult);
+
+                // Add to execution path if not already present
+                if (!flowState.executionPath.includes(flowState.currentStepId)) {
+                    flowState.executionPath.push(flowState.currentStepId);
+                }
+
+                // Mark step as completed
+                flowState.completedStepIds.add(flowState.currentStepId);
             }
-            
+
             // Find valid paths from current step
             const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState);
             
@@ -363,8 +381,44 @@ export class FlowAgentType extends BaseAgentType {
     }
     
     /**
+     * Helper to set a value on a target object, supporting array append syntax.
+     * If key ends with '[]', the value is pushed to an array (auto-initialized if needed).
+     *
+     * @private
+     */
+    private setMappedValue(
+        target: Record<string, unknown>,
+        key: string,
+        value: unknown
+    ): void {
+        const isArrayAppend = key.endsWith('[]');
+        const actualKey = isArrayAppend ? key.slice(0, -2) : key;
+
+        if (isArrayAppend) {
+            // Initialize array if it doesn't exist
+            if (!(actualKey in target)) {
+                target[actualKey] = [];
+            }
+
+            // Validate it's actually an array
+            if (!Array.isArray(target[actualKey])) {
+                throw new Error(
+                    `Cannot append to '${actualKey}': target is not an array. ` +
+                    `Use '${actualKey}' without [] suffix for property update.`
+                );
+            }
+
+            // Append the value
+            (target[actualKey] as unknown[]).push(value);
+        } else {
+            // Standard property assignment
+            target[actualKey] = value;
+        }
+    }
+
+    /**
      * Applies action output mapping to update the payload
-     * 
+     *
      * @private
      */
     private applyActionOutputMapping<P>(
@@ -411,16 +465,19 @@ export class FlowAgentType extends BaseAgentType {
                     // Parse the path and build nested object
                     const pathParts = payloadPath.split('.');
                     let current = updateObj;
-                    
+
                     for (let i = 0; i < pathParts.length - 1; i++) {
                         const part = pathParts[i];
-                        if (!(part in current)) {
-                            current[part] = {};
+                        // Remove [] suffix for intermediate path parts
+                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
+                        if (!(cleanPart in current)) {
+                            current[cleanPart] = {};
                         }
-                        current = current[part] as Record<string, unknown>;
+                        current = current[cleanPart] as Record<string, unknown>;
                     }
-                    
-                    current[pathParts[pathParts.length - 1]] = value;
+
+                    // Use helper to support array append on final path part
+                    this.setMappedValue(current, pathParts[pathParts.length - 1], value);
                 }
             }
             
@@ -520,7 +577,7 @@ export class FlowAgentType extends BaseAgentType {
                 return this.createNextStep('Sub-Agent', {
                     subAgent: {
                         name: subAgentName,
-                        message: node.Description || `Execute sub-agent: ${subAgentName}`,
+                        message: node.Description || '',
                         terminateAfter: false
                     },
                     terminate: false,
@@ -624,7 +681,8 @@ export class FlowAgentType extends BaseAgentType {
         actions: AgentAction[],
         currentPayload: P,
         agentTypeState: ATS,
-        currentStep: BaseAgentNextStep<P>
+        currentStep: BaseAgentNextStep<P>,
+        params?: ExecuteAgentParams<P>
     ): Promise<void> {
         // Try to find the flow state and use its payload if available
         const stepMetadata = currentStep as Record<string, unknown>;
@@ -684,7 +742,7 @@ export class FlowAgentType extends BaseAgentType {
             // Apply each mapping
             for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
                 // Use recursive resolution to handle nested objects, arrays, and primitive values
-                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload);
+                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload, params);
                 
                 // Set the parameter value
                 action.params[paramName] = resolvedValue;
@@ -750,25 +808,32 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private resolveNestedValue(value: unknown, currentPayload: any): unknown {
+    private resolveNestedValue(value: unknown, currentPayload: any, params?: ExecuteAgentParams): unknown {
         if (typeof value === 'string') {
-            // Handle string values with payload/static resolution
-            if (value.startsWith('static:')) {
-                return value.substring(7);
-            } else if (value.startsWith('payload.')) {
-                const path = value.substring(8);
+            // Handle string values with payload/static/data resolution (case-insensitive)
+            const trimmedValue = value.trim();
+            
+            if (trimmedValue.toLowerCase().startsWith('static:')) {
+                return value.substring(value.indexOf(':') + 1);
+            } else if (trimmedValue.toLowerCase().startsWith('payload.')) {
+                const pathStart = value.indexOf('.') + 1;
+                const path = value.substring(pathStart);
                 return this.getValueFromPath(currentPayload, path);
+            } else if (trimmedValue.toLowerCase().startsWith('data.') && params?.data) {
+                const pathStart = value.indexOf('.') + 1;
+                const path = value.substring(pathStart);
+                return this.getValueFromPath(params.data, path);
             } else {
                 return value;
             }
         } else if (Array.isArray(value)) {
             // Handle arrays - recursively resolve each element
-            return value.map(item => this.resolveNestedValue(item, currentPayload));
+            return value.map(item => this.resolveNestedValue(item, currentPayload, params));
         } else if (value && typeof value === 'object') {
             // Handle objects - recursively resolve each property
             const resolvedObj: Record<string, unknown> = {};
             for (const [key, val] of Object.entries(value)) {
-                resolvedObj[key] = this.resolveNestedValue(val, currentPayload);
+                resolvedObj[key] = this.resolveNestedValue(val, currentPayload, params);
             }
             return resolvedObj;
         } else {
@@ -937,7 +1002,19 @@ export class FlowAgentType extends BaseAgentType {
                 previousPayload: currentPayload
             });
         }
-        
+
+        // Store the step result so path conditions can access it via stepResult
+        // The step parameter contains the result from the just-completed step (Sub-Agent, Action, or Prompt)
+        flowState.stepResults.set(flowState.currentStepId, step);
+
+        // Add to execution path if not already present
+        if (!flowState.executionPath.includes(flowState.currentStepId)) {
+            flowState.executionPath.push(flowState.currentStepId);
+        }
+
+        // Mark step as completed
+        flowState.completedStepIds.add(flowState.currentStepId);
+
         // Find valid paths from current step using updated payload
         const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
         
@@ -1196,6 +1273,55 @@ export class FlowAgentType extends BaseAgentType {
         return false;
     }
 
+    /**
+     * Flow agents don't require agent-level prompts - they use step-level prompts exclusively
+     * @override
+     */
+    public get RequiresAgentLevelPrompts(): boolean {
+        return false;
+    }
+
+    /**
+     * Provides Flow-specific guidance for prompt configuration
+     * @override
+     */
+    public GetPromptConfigurationGuidance(): string {
+        return `   - Flow agents use step-level prompts (StepType="Prompt" with PromptID)\n` +
+               `   - Prompts should be configured in agent steps, not AI Agent Prompts relationship\n` +
+               `   - Verify that prompts exist in AI Prompts table and are active`;
+    }
+
+    /**
+     * Flow agents should NEVER fall back to prompt execution for Success/Failed steps.
+     * Flow agents are deterministic and driven by their graph structure (steps and paths).
+     * When a step completes (Success or Failed), the agent should terminate rather than
+     * retry with prompts.
+     *
+     * @override
+     * @since 2.113.0
+     */
+    public async HandleStepFallback<P = any, ATS = any>(
+        step: BaseAgentNextStep<P>,
+        config: AgentConfiguration,
+        params: ExecuteAgentParams<P>,
+        payload: P,
+        agentTypeState: ATS
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Flow agents NEVER fall back to prompt execution
+        // They are driven entirely by their graph structure (steps and paths)
+        // Success/Failed steps should terminate, not retry prompts
+
+        if (step.step === 'Success' || step.step === 'Failed') {
+            // Use spread to preserve all properties and just override terminate
+            return {
+                ...step,
+                terminate: true
+            };
+        }
+
+        // For other step types, use default behavior (should not reach here)
+        return null;
+    }
 
     /**
      * Flow agents apply ActionOutputMapping after each iteration
@@ -1257,6 +1383,7 @@ export class FlowAgentType extends BaseAgentType {
 
         return null;
     }
+ 
 }
 
 /**

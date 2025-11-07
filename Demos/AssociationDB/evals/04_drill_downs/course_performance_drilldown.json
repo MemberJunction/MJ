@@ -1,0 +1,60 @@
+{
+  "eval_id": "course-performance-drilldown",
+  "category": "drill_down",
+  "difficulty": "hard",
+  "tags": ["learning", "courses", "performance", "drill-down"],
+
+  "business_context": "Learning managers need to evaluate course effectiveness by seeing overall performance metrics while being able to drill into individual enrollments to understand completion patterns and identify struggling students.",
+
+  "prompt": "Show course performance with enrollment details",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "courses_shown",
+        "expected_value": 60,
+        "description": "Should show all courses with performance metrics"
+      },
+      {
+        "metric": "completion_rate_calculated",
+        "expected_value": true,
+        "description": "Should calculate completion rate for each course"
+      }
+    ],
+    "visualization": {
+      "type": "interactive_table",
+      "alternatives": ["master_detail", "expandable_rows", "dashboard"],
+      "should_not_be": ["static_bar_chart", "pie_chart", "single_metric"],
+      "reasoning": "Course performance with drill-down requires interactive hierarchical table"
+    },
+    "required_features": ["course_name", "enrollment_count", "completion_rate", "drill_down"],
+    "optional_features": ["avg_completion_time", "rating", "certificate_issued", "revenue"],
+    "interactivity": [
+      {
+        "action": "Click on course row",
+        "expected_result": "Expand to show all enrollments with student names, status, and progress"
+      },
+      {
+        "action": "Click on student name",
+        "expected_result": "Show student profile and complete learning history"
+      },
+      {
+        "action": "Sort by completion rate",
+        "expected_result": "Reorder courses by highest to lowest completion rate"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Course performance with drill-down\n-- Level 1: Course summary\nSELECT \n  c.Title as CourseName,\n  c.Category,\n  COUNT(e.ID) as TotalEnrollments,\n  SUM(CASE WHEN e.Status = 'Completed' THEN 1 ELSE 0 END) as Completions,\n  CAST(SUM(CASE WHEN e.Status = 'Completed' THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(COUNT(e.ID), 0) as CompletionRate,\n  AVG(CASE WHEN e.Status = 'Completed' THEN DATEDIFF(DAY, e.EnrollmentDate, e.CompletionDate) END) as AvgDaysToComplete\nFROM learning.Course c\nLEFT JOIN learning.Enrollment e ON c.ID = e.CourseID\nGROUP BY c.ID, c.Title, c.Category\nORDER BY TotalEnrollments DESC;\n\n-- Level 2: Enrollments within course (drill-down)\nSELECT \n  m.FirstName + ' ' + m.LastName as StudentName,\n  e.EnrollmentDate,\n  e.Status,\n  e.CompletionDate,\n  DATEDIFF(DAY, e.EnrollmentDate, COALESCE(e.CompletionDate, GETDATE())) as DaysInProgress,\n  cert.IssuedDate as CertificateIssued\nFROM learning.Enrollment e\nJOIN membership.Member m ON e.MemberID = m.ID\nLEFT JOIN learning.Certificate cert ON e.ID = cert.EnrollmentID\nWHERE e.CourseID = @SelectedCourseID\nORDER BY e.EnrollmentDate DESC;",
+
+  "human_eval_guidance": "Test drill-down on courses with varying completion rates. Verify completion rate percentages are accurate. Check that enrollment details show status and dates correctly.",
+
+  "common_pitfalls": "Incorrect completion rate calculation; not handling in-progress enrollments; missing certificate information; drill-down performance issues; not showing enough enrollment detail."
+}

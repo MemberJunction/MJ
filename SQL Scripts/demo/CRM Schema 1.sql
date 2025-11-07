@@ -8,6 +8,10 @@ CREATE TABLE CRM.Account (
     Name NVARCHAR(100) NOT NULL,
     Industry NVARCHAR(50),
     AnnualRevenue DECIMAL(18,2),
+    TickerSymbol NVARCHAR(10) NULL,
+    Exchange NVARCHAR(20) NULL,
+    EmployeeCount INT NULL,
+    Founded INT NULL,
     Website NVARCHAR(255),
     Phone NVARCHAR(20),
     Fax NVARCHAR(20),
@@ -25,7 +29,8 @@ CREATE TABLE CRM.Account (
     AccountStatus NVARCHAR(20),
     IsActive BIT DEFAULT 1,
     CONSTRAINT CHK_Account_Type CHECK (AccountType IN ('Prospect', 'Customer', 'Vendor', 'Partner', 'Competitor', 'Other')),
-    CONSTRAINT CHK_Account_Status CHECK (AccountStatus IN ('Active', 'Inactive', 'On Hold', 'Closed'))
+    CONSTRAINT CHK_Account_Status CHECK (AccountStatus IN ('Active', 'Inactive', 'On Hold', 'Closed')),
+    CONSTRAINT CHK_Account_Exchange CHECK (Exchange IN (NULL, 'NYSE', 'NASDAQ', 'AMEX', 'LSE', 'TSE', 'HKEX', 'SSE', 'Other'))
 );
 
 -- Contact table - stores information about individual people associated with accounts
@@ -76,6 +81,29 @@ CREATE TABLE CRM.Activity (
     CONSTRAINT CHK_Activity_Status CHECK (Status IN ('Planned', 'In Progress', 'Completed', 'Canceled', 'Deferred')),
     CONSTRAINT CHK_Activity_Priority CHECK (Priority IN ('High', 'Medium', 'Low')),
     CONSTRAINT CHK_Activity_Direction CHECK (Direction IN ('Inbound', 'Outbound', 'Internal'))
+);
+
+-- AccountInsight table - tracks research, news, and intelligence about accounts
+CREATE TABLE CRM.AccountInsight (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    AccountID INT NOT NULL,
+    InsightType NVARCHAR(50) NOT NULL,
+    Title NVARCHAR(500) NULL,
+    Content NVARCHAR(MAX) NULL,
+    SourceURL NVARCHAR(500) NULL,
+    PublishedDate DATETIME NULL,
+    CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    CreatedByContactID INT NULL,
+    Sentiment NVARCHAR(20) NULL,
+    Priority NVARCHAR(20) NULL,
+    Tags NVARCHAR(MAX) NULL,
+    Summary NVARCHAR(2000) NULL,
+    IsArchived BIT DEFAULT 0,
+    CONSTRAINT FK_AccountInsight_Account FOREIGN KEY (AccountID) REFERENCES CRM.Account(ID),
+    CONSTRAINT FK_AccountInsight_CreatedBy FOREIGN KEY (CreatedByContactID) REFERENCES CRM.Contact(ID),
+    CONSTRAINT CHK_AccountInsight_Type CHECK (InsightType IN ('Manual', 'News Article', 'SEC Filing', 'Press Release', 'Social Media', 'Financial Report', 'Market Analysis', 'Earnings Call', 'Patent Filing', 'Leadership Change')),
+    CONSTRAINT CHK_AccountInsight_Sentiment CHECK (Sentiment IN (NULL, 'Positive', 'Negative', 'Neutral', 'Mixed')),
+    CONSTRAINT CHK_AccountInsight_Priority CHECK (Priority IN (NULL, 'High', 'Medium', 'Low'))
 );
 
 -- Lookup tables for standardizing values
@@ -280,6 +308,38 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'Account',
     @level2type = N'COLUMN', @level2name = N'AnnualRevenue';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Stock ticker symbol for publicly traded companies',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'Account',
+    @level2type = N'COLUMN', @level2name = N'TickerSymbol';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Stock exchange where company is listed (NYSE, NASDAQ, AMEX, LSE, TSE, HKEX, SSE, Other)',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'Account',
+    @level2type = N'COLUMN', @level2name = N'Exchange';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Approximate number of employees',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'Account',
+    @level2type = N'COLUMN', @level2name = N'EmployeeCount';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Year the company was founded',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'Account',
+    @level2type = N'COLUMN', @level2name = N'Founded';
 GO
 
 EXEC sp_addextendedproperty
@@ -642,6 +702,111 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'Activity',
     @level2type = N'COLUMN', @level2name = N'Result';
+GO
+
+-- Table: AccountInsight
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Stores research, news, and intelligence gathered about accounts from various sources',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight';
+GO
+
+-- AccountInsight columns
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Type of insight (Manual, News Article, SEC Filing, Press Release, Social Media, Financial Report, Market Analysis, Earnings Call, Patent Filing, Leadership Change)',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'InsightType';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Title or headline of the insight',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'Title';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Full content or detailed notes about the insight',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'Content';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'URL to the source article, filing, or document',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'SourceURL';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Date the original content was published (not when it was added to CRM)',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'PublishedDate';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Timestamp when this insight was added to the system',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'CreatedAt';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Contact who manually created this insight (NULL for AI-generated insights)',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'CreatedByContactID';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'AI-analyzed sentiment of the insight (Positive, Negative, Neutral, Mixed)',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'Sentiment';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Priority level for follow-up or attention (High, Medium, Low)',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'Priority';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'JSON array of tags for categorization and filtering',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'Tags';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'AI-generated concise summary of the content for quick reading',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'Summary';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Whether this insight has been archived (hidden from default views)',
+    @level0type = N'SCHEMA', @level0name = N'CRM',
+    @level1type = N'TABLE',  @level1name = N'AccountInsight',
+    @level2type = N'COLUMN', @level2name = N'IsArchived';
 GO
 
 -- Table: Industry

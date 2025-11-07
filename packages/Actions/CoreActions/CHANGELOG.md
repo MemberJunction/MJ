@@ -1,5 +1,107 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/ai-agents@2.116.0
+  - @memberjunction/ai-engine-base@2.116.0
+  - @memberjunction/ai-core-plus@2.116.0
+  - @memberjunction/aiengine@2.116.0
+  - @memberjunction/ai-vector-sync@2.116.0
+  - @memberjunction/code-execution@2.116.0
+  - @memberjunction/actions@2.116.0
+  - @memberjunction/communication-engine@2.116.0
+  - @memberjunction/content-autotagging@2.116.0
+  - @memberjunction/external-change-detection@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/core-entities-server@2.116.0
+  - @memberjunction/storage@2.116.0
+  - @memberjunction/sqlserver-dataprovider@2.116.0
+
+## 2.115.0
+
+### Minor Changes
+
+- c29e21b: migration
+- 2e0fe8b: Migration
+
+### Patch Changes
+
+- Updated dependencies [6378103]
+- Updated dependencies [c29e21b]
+- Updated dependencies [2e0fe8b]
+  - @memberjunction/ai-agents@2.115.0
+  - @memberjunction/code-execution@2.115.0
+  - @memberjunction/aiengine@2.115.0
+  - @memberjunction/ai-vector-sync@2.115.0
+  - @memberjunction/actions@2.115.0
+  - @memberjunction/content-autotagging@2.115.0
+  - @memberjunction/core-entities-server@2.115.0
+  - @memberjunction/sqlserver-dataprovider@2.115.0
+  - @memberjunction/external-change-detection@2.115.0
+  - @memberjunction/communication-engine@2.115.0
+  - @memberjunction/ai-engine-base@2.115.0
+  - @memberjunction/ai-core-plus@2.115.0
+  - @memberjunction/core@2.115.0
+  - @memberjunction/core-entities@2.115.0
+  - @memberjunction/global@2.115.0
+  - @memberjunction/storage@2.115.0
+
+## 2.114.0
+
+### Minor Changes
+
+- 3e2fe1d: Migration
+
+### Patch Changes
+
+- Updated dependencies [683eaeb]
+- Updated dependencies [7f46575]
+- Updated dependencies [9af02f0]
+  - @memberjunction/ai-agents@2.114.0
+  - @memberjunction/ai-engine-base@2.114.0
+  - @memberjunction/ai-core-plus@2.114.0
+  - @memberjunction/aiengine@2.114.0
+  - @memberjunction/ai-vector-sync@2.114.0
+  - @memberjunction/code-execution@2.114.0
+  - @memberjunction/actions@2.114.0
+  - @memberjunction/communication-engine@2.114.0
+  - @memberjunction/content-autotagging@2.114.0
+  - @memberjunction/external-change-detection@2.114.0
+  - @memberjunction/core@2.114.0
+  - @memberjunction/core-entities@2.114.0
+  - @memberjunction/core-entities-server@2.114.0
+  - @memberjunction/global@2.114.0
+  - @memberjunction/storage@2.114.0
+  - @memberjunction/sqlserver-dataprovider@2.114.0
+
+## 2.113.2
+
+### Patch Changes
+
+- Updated dependencies [61d1df4]
+  - @memberjunction/core@2.113.2
+  - @memberjunction/ai-agents@2.113.2
+  - @memberjunction/ai-engine-base@2.113.2
+  - @memberjunction/ai-core-plus@2.113.2
+  - @memberjunction/aiengine@2.113.2
+  - @memberjunction/ai-vector-sync@2.113.2
+  - @memberjunction/code-execution@2.113.2
+  - @memberjunction/actions@2.113.2
+  - @memberjunction/communication-engine@2.113.2
+  - @memberjunction/content-autotagging@2.113.2
+  - @memberjunction/external-change-detection@2.113.2
+  - @memberjunction/core-entities@2.113.2
+  - @memberjunction/core-entities-server@2.113.2
+  - @memberjunction/storage@2.113.2
+  - @memberjunction/sqlserver-dataprovider@2.113.2
+  - @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Minor Changes
