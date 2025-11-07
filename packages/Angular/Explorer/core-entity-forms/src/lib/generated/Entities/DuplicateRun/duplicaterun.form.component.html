@@ -221,7 +221,11 @@
                     <i class="fa fa-clone"></i>
                     <h3>
                         <span class="section-name">Duplicate Run Details</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['duplicateRunDetails']">{{sectionRowCounts['duplicateRunDetails']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['duplicateRunDetails'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['duplicateRunDetails'] === 0">
+                            {{sectionRowCounts['duplicateRunDetails']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

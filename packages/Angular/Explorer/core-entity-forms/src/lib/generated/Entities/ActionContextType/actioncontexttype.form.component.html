@@ -75,7 +75,11 @@
                     <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Action Contexts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['actionContexts']">{{sectionRowCounts['actionContexts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['actionContexts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['actionContexts'] === 0">
+                            {{sectionRowCounts['actionContexts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

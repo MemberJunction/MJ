@@ -162,7 +162,11 @@
                     <i class="fa fa-sliders-h"></i>
                     <h3>
                         <span class="section-name">Entity Action Params</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActionParams']">{{sectionRowCounts['entityActionParams']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityActionParams'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityActionParams'] === 0">
+                            {{sectionRowCounts['entityActionParams']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -190,7 +194,11 @@
                     <i class="fa fa-calendar-alt"></i>
                     <h3>
                         <span class="section-name">Scheduled Action Params</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['scheduledActionParams']">{{sectionRowCounts['scheduledActionParams']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['scheduledActionParams'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['scheduledActionParams'] === 0">
+                            {{sectionRowCounts['scheduledActionParams']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

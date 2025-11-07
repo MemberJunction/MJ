@@ -309,7 +309,11 @@
                     <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Step Paths</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentStepPaths']">{{sectionRowCounts['mJAIAgentStepPaths']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentStepPaths'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentStepPaths'] === 0">
+                            {{sectionRowCounts['mJAIAgentStepPaths']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -337,7 +341,11 @@
                     <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Step Paths</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentStepPaths']">{{sectionRowCounts['mJAIAgentStepPaths']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentStepPaths'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentStepPaths'] === 0">
+                            {{sectionRowCounts['mJAIAgentStepPaths']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

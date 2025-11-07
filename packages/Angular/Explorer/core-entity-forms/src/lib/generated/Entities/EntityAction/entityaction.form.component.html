@@ -136,7 +136,11 @@
                     <i class="fa fa-filter"></i>
                     <h3>
                         <span class="section-name">Entity Action Filters</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActionFilters']">{{sectionRowCounts['entityActionFilters']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityActionFilters'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityActionFilters'] === 0">
+                            {{sectionRowCounts['entityActionFilters']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -164,7 +168,11 @@
                     <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Entity Action Invocations</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActionInvocations']">{{sectionRowCounts['entityActionInvocations']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityActionInvocations'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityActionInvocations'] === 0">
+                            {{sectionRowCounts['entityActionInvocations']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -192,7 +200,11 @@
                     <i class="fa fa-sliders-h"></i>
                     <h3>
                         <span class="section-name">Entity Action Params</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActionParams']">{{sectionRowCounts['entityActionParams']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityActionParams'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityActionParams'] === 0">
+                            {{sectionRowCounts['entityActionParams']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

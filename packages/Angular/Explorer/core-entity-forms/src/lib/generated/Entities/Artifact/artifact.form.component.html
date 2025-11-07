@@ -173,7 +173,11 @@
                     <i class="fa fa-history"></i>
                     <h3>
                         <span class="section-name">MJ: Artifact Versions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJArtifactVersions']">{{sectionRowCounts['mJArtifactVersions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJArtifactVersions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJArtifactVersions'] === 0">
+                            {{sectionRowCounts['mJArtifactVersions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -201,7 +205,11 @@
                     <i class="fa fa-folder-open"></i>
                     <h3>
                         <span class="section-name">MJ: Collection Artifacts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJCollectionArtifacts']">{{sectionRowCounts['mJCollectionArtifacts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJCollectionArtifacts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJCollectionArtifacts'] === 0">
+                            {{sectionRowCounts['mJCollectionArtifacts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -229,7 +237,11 @@
                     <i class="fa fa-key"></i>
                     <h3>
                         <span class="section-name">MJ: Artifact Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJArtifactPermissions']">{{sectionRowCounts['mJArtifactPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJArtifactPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJArtifactPermissions'] === 0">
+                            {{sectionRowCounts['mJArtifactPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

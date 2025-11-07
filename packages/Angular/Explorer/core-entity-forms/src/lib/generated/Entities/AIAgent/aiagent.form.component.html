@@ -546,7 +546,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AIAgent Actions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentActions']">{{sectionRowCounts['aIAgentActions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgentActions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgentActions'] === 0">
+                            {{sectionRowCounts['aIAgentActions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -574,7 +578,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AIAgent Learning Cycles</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentLearningCycles']">{{sectionRowCounts['aIAgentLearningCycles']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgentLearningCycles'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgentLearningCycles'] === 0">
+                            {{sectionRowCounts['aIAgentLearningCycles']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -602,7 +610,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AIAgent Models</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentModels']">{{sectionRowCounts['aIAgentModels']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgentModels'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgentModels'] === 0">
+                            {{sectionRowCounts['aIAgentModels']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -630,7 +642,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Agent Requests</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentRequests']">{{sectionRowCounts['aIAgentRequests']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgentRequests'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgentRequests'] === 0">
+                            {{sectionRowCounts['aIAgentRequests']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -658,7 +674,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Artifact Types</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentArtifactTypes']">{{sectionRowCounts['mJAIAgentArtifactTypes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentArtifactTypes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentArtifactTypes'] === 0">
+                            {{sectionRowCounts['mJAIAgentArtifactTypes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -686,7 +706,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Data Sources</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentDataSources']">{{sectionRowCounts['mJAIAgentDataSources']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentDataSources'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentDataSources'] === 0">
+                            {{sectionRowCounts['mJAIAgentDataSources']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -714,7 +738,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentPermissions']">{{sectionRowCounts['mJAIAgentPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentPermissions'] === 0">
+                            {{sectionRowCounts['mJAIAgentPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -742,7 +770,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Relationships</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentRelationships']">{{sectionRowCounts['mJAIAgentRelationships']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentRelationships'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentRelationships'] === 0">
+                            {{sectionRowCounts['mJAIAgentRelationships']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -770,7 +802,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Steps</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentSteps']">{{sectionRowCounts['mJAIAgentSteps']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentSteps'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentSteps'] === 0">
+                            {{sectionRowCounts['mJAIAgentSteps']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -798,7 +834,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AIAgent Notes</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgentNotes']">{{sectionRowCounts['aIAgentNotes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgentNotes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgentNotes'] === 0">
+                            {{sectionRowCounts['aIAgentNotes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -826,7 +866,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Examples</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentExamples']">{{sectionRowCounts['mJAIAgentExamples']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentExamples'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentExamples'] === 0">
+                            {{sectionRowCounts['mJAIAgentExamples']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -854,7 +898,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Prompts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentPrompts']">{{sectionRowCounts['mJAIAgentPrompts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentPrompts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentPrompts'] === 0">
+                            {{sectionRowCounts['mJAIAgentPrompts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -882,7 +930,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Relationships</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentRelationships']">{{sectionRowCounts['mJAIAgentRelationships']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentRelationships'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentRelationships'] === 0">
+                            {{sectionRowCounts['mJAIAgentRelationships']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -910,7 +962,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentRuns']">{{sectionRowCounts['mJAIAgentRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentRuns'] === 0">
+                            {{sectionRowCounts['mJAIAgentRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -938,7 +994,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Steps</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentSteps']">{{sectionRowCounts['mJAIAgentSteps']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentSteps'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentSteps'] === 0">
+                            {{sectionRowCounts['mJAIAgentSteps']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -966,7 +1026,11 @@
                     <i class="fa fa-tasks"></i>
                     <h3>
                         <span class="section-name">MJ: Tasks</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJTasks']">{{sectionRowCounts['mJTasks']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJTasks'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJTasks'] === 0">
+                            {{sectionRowCounts['mJTasks']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -994,7 +1058,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Result Cache</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIResultCache']">{{sectionRowCounts['aIResultCache']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIResultCache'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIResultCache'] === 0">
+                            {{sectionRowCounts['aIResultCache']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -1022,7 +1090,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Prompt Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIPromptRuns']">{{sectionRowCounts['mJAIPromptRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIPromptRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIPromptRuns'] === 0">
+                            {{sectionRowCounts['mJAIPromptRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -1050,7 +1122,11 @@
                     <i class="fa fa-comments"></i>
                     <h3>
                         <span class="section-name">Conversation Details</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['conversationDetails']">{{sectionRowCounts['conversationDetails']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['conversationDetails'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['conversationDetails'] === 0">
+                            {{sectionRowCounts['conversationDetails']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -1078,7 +1154,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Agents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgents']">{{sectionRowCounts['aIAgents']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgents'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgents'] === 0">
+                            {{sectionRowCounts['aIAgents']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

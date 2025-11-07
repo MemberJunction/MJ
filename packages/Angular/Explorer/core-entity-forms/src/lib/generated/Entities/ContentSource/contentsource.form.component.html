@@ -159,7 +159,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Content Items</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentItems']">{{sectionRowCounts['contentItems']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentItems'] === 0">
+                            {{sectionRowCounts['contentItems']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -187,7 +191,11 @@
                     <i class="fa fa-cogs"></i>
                     <h3>
                         <span class="section-name">Content Process Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentProcessRuns']">{{sectionRowCounts['contentProcessRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentProcessRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentProcessRuns'] === 0">
+                            {{sectionRowCounts['contentProcessRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -215,7 +223,11 @@
                     <i class="fa fa-cogs"></i>
                     <h3>
                         <span class="section-name">Content Source Params</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentSourceParams']">{{sectionRowCounts['contentSourceParams']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentSourceParams'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentSourceParams'] === 0">
+                            {{sectionRowCounts['contentSourceParams']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

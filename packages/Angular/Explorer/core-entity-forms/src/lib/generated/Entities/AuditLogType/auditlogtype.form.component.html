@@ -150,7 +150,11 @@
                     <i class="fa fa-clipboard-list"></i>
                     <h3>
                         <span class="section-name">Audit Log Types</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['auditLogTypes']">{{sectionRowCounts['auditLogTypes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['auditLogTypes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['auditLogTypes'] === 0">
+                            {{sectionRowCounts['auditLogTypes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -178,7 +182,11 @@
                     <i class="fa-solid fa-fingerprint"></i>
                     <h3>
                         <span class="section-name">Audit Logs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['auditLogs']">{{sectionRowCounts['auditLogs']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['auditLogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['auditLogs'] === 0">
+                            {{sectionRowCounts['auditLogs']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

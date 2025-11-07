@@ -132,7 +132,11 @@
                     <i class="fa fa-cubes"></i>
                     <h3>
                         <span class="section-name">Entities</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entities']">{{sectionRowCounts['entities']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entities'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entities'] === 0">
+                            {{sectionRowCounts['entities']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -160,7 +164,11 @@
                     <i class="fa fa-sliders-h"></i>
                     <h3>
                         <span class="section-name">Application Settings</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['applicationSettings']">{{sectionRowCounts['applicationSettings']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['applicationSettings'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['applicationSettings'] === 0">
+                            {{sectionRowCounts['applicationSettings']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -188,7 +196,11 @@
                     <i class="fa fa-th"></i>
                     <h3>
                         <span class="section-name">User Applications</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['userApplications']">{{sectionRowCounts['userApplications']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['userApplications'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['userApplications'] === 0">
+                            {{sectionRowCounts['userApplications']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -216,7 +228,11 @@
                     <i class="fa-solid fa-table-columns"></i>
                     <h3>
                         <span class="section-name">Dashboards</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['dashboards']">{{sectionRowCounts['dashboards']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['dashboards'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['dashboards'] === 0">
+                            {{sectionRowCounts['dashboards']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -244,7 +260,11 @@
                     <i class="fa fa-tachometer-alt"></i>
                     <h3>
                         <span class="section-name">MJ: Dashboard User Preferences</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJDashboardUserPreferences']">{{sectionRowCounts['mJDashboardUserPreferences']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJDashboardUserPreferences'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJDashboardUserPreferences'] === 0">
+                            {{sectionRowCounts['mJDashboardUserPreferences']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

@@ -895,7 +895,11 @@ ${formHTML}
                     <i class="${iconClass}"></i>
                     <h3>
                         <span class="section-name">${tabName}</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['${sectionKey}']">{{sectionRowCounts['${sectionKey}']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['${sectionKey}'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['${sectionKey}'] === 0">
+                            {{sectionRowCounts['${sectionKey}']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

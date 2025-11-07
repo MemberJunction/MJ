@@ -93,7 +93,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Model Vendors</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIModelVendors']">{{sectionRowCounts['mJAIModelVendors']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIModelVendors'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIModelVendors'] === 0">
+                            {{sectionRowCounts['mJAIModelVendors']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -121,7 +125,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Vendor Types</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIVendorTypes']">{{sectionRowCounts['mJAIVendorTypes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIVendorTypes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIVendorTypes'] === 0">
+                            {{sectionRowCounts['mJAIVendorTypes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

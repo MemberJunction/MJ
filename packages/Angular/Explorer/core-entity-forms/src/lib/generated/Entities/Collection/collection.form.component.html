@@ -205,7 +205,11 @@
                     <i class="fa fa-folder-open"></i>
                     <h3>
                         <span class="section-name">MJ: Collection Artifacts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJCollectionArtifacts']">{{sectionRowCounts['mJCollectionArtifacts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJCollectionArtifacts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJCollectionArtifacts'] === 0">
+                            {{sectionRowCounts['mJCollectionArtifacts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -233,7 +237,11 @@
                     <i class="fa fa-folder"></i>
                     <h3>
                         <span class="section-name">MJ: Collection Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJCollectionPermissions']">{{sectionRowCounts['mJCollectionPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJCollectionPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJCollectionPermissions'] === 0">
+                            {{sectionRowCounts['mJCollectionPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -261,7 +269,11 @@
                     <i class="fa fa-folder-open"></i>
                     <h3>
                         <span class="section-name">MJ: Collections</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJCollections']">{{sectionRowCounts['mJCollections']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJCollections'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJCollections'] === 0">
+                            {{sectionRowCounts['mJCollections']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

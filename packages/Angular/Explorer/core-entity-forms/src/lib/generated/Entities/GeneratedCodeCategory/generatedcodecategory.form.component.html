@@ -134,7 +134,11 @@
                     <i class="fa fa-code"></i>
                     <h3>
                         <span class="section-name">Generated Code Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['generatedCodeCategories']">{{sectionRowCounts['generatedCodeCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['generatedCodeCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['generatedCodeCategories'] === 0">
+                            {{sectionRowCounts['generatedCodeCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -162,7 +166,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">Generated Codes</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['generatedCodes']">{{sectionRowCounts['generatedCodes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['generatedCodes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['generatedCodes'] === 0">
+                            {{sectionRowCounts['generatedCodes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

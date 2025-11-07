@@ -132,7 +132,11 @@
                     <i class="fa fa-comment"></i>
                     <h3>
                         <span class="section-name">Communication Provider Message Types</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['communicationProviderMessageTypes']">{{sectionRowCounts['communicationProviderMessageTypes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['communicationProviderMessageTypes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['communicationProviderMessageTypes'] === 0">
+                            {{sectionRowCounts['communicationProviderMessageTypes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -160,7 +164,11 @@
                     <i class="fa fa-comment-dots"></i>
                     <h3>
                         <span class="section-name">Entity Communication Message Types</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityCommunicationMessageTypes']">{{sectionRowCounts['entityCommunicationMessageTypes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityCommunicationMessageTypes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityCommunicationMessageTypes'] === 0">
+                            {{sectionRowCounts['entityCommunicationMessageTypes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

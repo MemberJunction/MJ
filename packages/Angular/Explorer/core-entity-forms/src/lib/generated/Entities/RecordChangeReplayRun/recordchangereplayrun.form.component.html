@@ -134,7 +134,11 @@
                     <i class="fa fa-history"></i>
                     <h3>
                         <span class="section-name">Record Changes</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['recordChanges']">{{sectionRowCounts['recordChanges']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['recordChanges'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['recordChanges'] === 0">
+                            {{sectionRowCounts['recordChanges']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

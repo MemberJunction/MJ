@@ -307,7 +307,11 @@
                     <i class="fa fa-database"></i>
                     <h3>
                         <span class="section-name">Data Context Items</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['dataContextItems']">{{sectionRowCounts['dataContextItems']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['dataContextItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['dataContextItems'] === 0">
+                            {{sectionRowCounts['dataContextItems']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -335,7 +339,11 @@
                     <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">Entity Relationships</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityRelationships']">{{sectionRowCounts['entityRelationships']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityRelationships'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityRelationships'] === 0">
+                            {{sectionRowCounts['entityRelationships']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -363,7 +371,11 @@
                     <i class="fa fa-eye"></i>
                     <h3>
                         <span class="section-name">User View Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['userViewRuns']">{{sectionRowCounts['userViewRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['userViewRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['userViewRuns'] === 0">
+                            {{sectionRowCounts['userViewRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

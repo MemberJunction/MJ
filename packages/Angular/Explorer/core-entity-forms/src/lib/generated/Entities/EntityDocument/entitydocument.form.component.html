@@ -223,7 +223,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Document Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocumentRuns']">{{sectionRowCounts['entityDocumentRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityDocumentRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityDocumentRuns'] === 0">
+                            {{sectionRowCounts['entityDocumentRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -251,7 +255,11 @@
                     <i class="fa fa-sliders-h"></i>
                     <h3>
                         <span class="section-name">Entity Document Settings</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocumentSettings']">{{sectionRowCounts['entityDocumentSettings']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityDocumentSettings'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityDocumentSettings'] === 0">
+                            {{sectionRowCounts['entityDocumentSettings']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -279,7 +287,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Record Documents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityRecordDocuments']">{{sectionRowCounts['entityRecordDocuments']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityRecordDocuments'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityRecordDocuments'] === 0">
+                            {{sectionRowCounts['entityRecordDocuments']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

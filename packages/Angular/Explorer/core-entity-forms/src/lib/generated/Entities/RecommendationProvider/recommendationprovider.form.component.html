@@ -75,7 +75,11 @@
                     <i class="fa fa-rocket"></i>
                     <h3>
                         <span class="section-name">Recommendation Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['recommendationRuns']">{{sectionRowCounts['recommendationRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['recommendationRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['recommendationRuns'] === 0">
+                            {{sectionRowCounts['recommendationRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

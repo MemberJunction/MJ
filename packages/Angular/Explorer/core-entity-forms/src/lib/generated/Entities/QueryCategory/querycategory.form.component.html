@@ -178,7 +178,11 @@
                     <i class="fa-solid fa-clipboard-question"></i>
                     <h3>
                         <span class="section-name">Queries</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['queries']">{{sectionRowCounts['queries']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['queries'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['queries'] === 0">
+                            {{sectionRowCounts['queries']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -206,7 +210,11 @@
                     <i class="fa fa-folder"></i>
                     <h3>
                         <span class="section-name">Query Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['queryCategories']">{{sectionRowCounts['queryCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['queryCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['queryCategories'] === 0">
+                            {{sectionRowCounts['queryCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

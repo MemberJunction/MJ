@@ -134,7 +134,11 @@
                     <i class="fa fa-folder"></i>
                     <h3>
                         <span class="section-name">File Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['fileCategories']">{{sectionRowCounts['fileCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['fileCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['fileCategories'] === 0">
+                            {{sectionRowCounts['fileCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -162,7 +166,11 @@
                     <i class="fa fa-file"></i>
                     <h3>
                         <span class="section-name">Files</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['files']">{{sectionRowCounts['files']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['files'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['files'] === 0">
+                            {{sectionRowCounts['files']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

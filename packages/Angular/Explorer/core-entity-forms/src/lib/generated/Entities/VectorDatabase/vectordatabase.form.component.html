@@ -107,7 +107,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Documents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocuments']">{{sectionRowCounts['entityDocuments']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityDocuments'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityDocuments'] === 0">
+                            {{sectionRowCounts['entityDocuments']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -135,7 +139,11 @@
                     <i class="fa fa-database"></i>
                     <h3>
                         <span class="section-name">Vector Indexes</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['vectorIndexes']">{{sectionRowCounts['vectorIndexes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['vectorIndexes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['vectorIndexes'] === 0">
+                            {{sectionRowCounts['vectorIndexes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

@@ -317,7 +317,11 @@
                     <i class="fa fa-camera"></i>
                     <h3>
                         <span class="section-name">Report Snapshots</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['reportSnapshots']">{{sectionRowCounts['reportSnapshots']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['reportSnapshots'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['reportSnapshots'] === 0">
+                            {{sectionRowCounts['reportSnapshots']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -345,7 +349,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">MJ: Report Versions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJReportVersions']">{{sectionRowCounts['mJReportVersions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJReportVersions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJReportVersions'] === 0">
+                            {{sectionRowCounts['mJReportVersions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -373,7 +381,11 @@
                     <i class="fa fa-chart-line"></i>
                     <h3>
                         <span class="section-name">MJ: Report User States</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJReportUserStates']">{{sectionRowCounts['mJReportUserStates']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJReportUserStates'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJReportUserStates'] === 0">
+                            {{sectionRowCounts['mJReportUserStates']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

@@ -127,7 +127,11 @@
                     <i class="fa fa-user-cog"></i>
                     <h3>
                         <span class="section-name">Employee Skills</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['employeeSkills']">{{sectionRowCounts['employeeSkills']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['employeeSkills'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['employeeSkills'] === 0">
+                            {{sectionRowCounts['employeeSkills']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -155,7 +159,11 @@
                     <i class="fa fa-lightbulb"></i>
                     <h3>
                         <span class="section-name">Skills</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['skills']">{{sectionRowCounts['skills']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['skills'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['skills'] === 0">
+                            {{sectionRowCounts['skills']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

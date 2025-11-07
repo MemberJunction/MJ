@@ -168,7 +168,11 @@
                     <i class="fa fa-tags"></i>
                     <h3>
                         <span class="section-name">Template Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['templateCategories']">{{sectionRowCounts['templateCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['templateCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['templateCategories'] === 0">
+                            {{sectionRowCounts['templateCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -196,7 +200,11 @@
                     <i class="fa-regular fa-rectangle-list"></i>
                     <h3>
                         <span class="section-name">Templates</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['templates']">{{sectionRowCounts['templates']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['templates'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['templates'] === 0">
+                            {{sectionRowCounts['templates']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

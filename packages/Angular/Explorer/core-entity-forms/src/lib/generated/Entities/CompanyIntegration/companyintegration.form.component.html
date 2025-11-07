@@ -277,7 +277,11 @@
                     <i class="fa fa-sync"></i>
                     <h3>
                         <span class="section-name">Company Integration Record Maps</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['companyIntegrationRecordMaps']">{{sectionRowCounts['companyIntegrationRecordMaps']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['companyIntegrationRecordMaps'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['companyIntegrationRecordMaps'] === 0">
+                            {{sectionRowCounts['companyIntegrationRecordMaps']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -305,7 +309,11 @@
                     <i class="fa fa-briefcase"></i>
                     <h3>
                         <span class="section-name">Company Integration Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['companyIntegrationRuns']">{{sectionRowCounts['companyIntegrationRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['companyIntegrationRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['companyIntegrationRuns'] === 0">
+                            {{sectionRowCounts['companyIntegrationRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -333,7 +341,11 @@
                     <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Employee Company Integrations</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['employeeCompanyIntegrations']">{{sectionRowCounts['employeeCompanyIntegrations']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['employeeCompanyIntegrations'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['employeeCompanyIntegrations'] === 0">
+                            {{sectionRowCounts['employeeCompanyIntegrations']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -361,7 +373,11 @@
                     <i class="fa fa-list-ul"></i>
                     <h3>
                         <span class="section-name">Lists</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['lists']">{{sectionRowCounts['lists']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['lists'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['lists'] === 0">
+                            {{sectionRowCounts['lists']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

@@ -324,7 +324,11 @@
                     <i class="fa fa-sitemap"></i>
                     <h3>
                         <span class="section-name">MJ: Component Dependencies</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJComponentDependencies']">{{sectionRowCounts['mJComponentDependencies']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJComponentDependencies'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJComponentDependencies'] === 0">
+                            {{sectionRowCounts['mJComponentDependencies']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -352,7 +356,11 @@
                     <i class="fa fa-plug"></i>
                     <h3>
                         <span class="section-name">MJ: Component Library Links</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJComponentLibraryLinks']">{{sectionRowCounts['mJComponentLibraryLinks']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJComponentLibraryLinks'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJComponentLibraryLinks'] === 0">
+                            {{sectionRowCounts['mJComponentLibraryLinks']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -380,7 +388,11 @@
                     <i class="fa fa-sitemap"></i>
                     <h3>
                         <span class="section-name">MJ: Component Dependencies</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJComponentDependencies']">{{sectionRowCounts['mJComponentDependencies']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJComponentDependencies'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJComponentDependencies'] === 0">
+                            {{sectionRowCounts['mJComponentDependencies']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

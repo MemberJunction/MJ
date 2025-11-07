@@ -93,7 +93,11 @@
                     <i class="fa fa-plug"></i>
                     <h3>
                         <span class="section-name">Content Sources</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentSources']">{{sectionRowCounts['contentSources']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentSources'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentSources'] === 0">
+                            {{sectionRowCounts['contentSources']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -121,7 +125,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Content Items</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentItems']">{{sectionRowCounts['contentItems']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentItems'] === 0">
+                            {{sectionRowCounts['contentItems']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

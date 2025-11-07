@@ -236,7 +236,11 @@
                     <i class="fa fa-tasks"></i>
                     <h3>
                         <span class="section-name">Queue Tasks</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['queueTasks']">{{sectionRowCounts['queueTasks']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['queueTasks'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['queueTasks'] === 0">
+                            {{sectionRowCounts['queueTasks']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

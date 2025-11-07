@@ -184,7 +184,11 @@
                     <i class="fa fa-folder-open"></i>
                     <h3>
                         <span class="section-name">User View Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['userViewCategories']">{{sectionRowCounts['userViewCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['userViewCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['userViewCategories'] === 0">
+                            {{sectionRowCounts['userViewCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -212,7 +216,11 @@
                     <i class="fa-solid fa-table-cells"></i>
                     <h3>
                         <span class="section-name">User Views</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['userViews']">{{sectionRowCounts['userViews']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['userViews'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['userViews'] === 0">
+                            {{sectionRowCounts['userViews']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

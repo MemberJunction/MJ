@@ -175,7 +175,11 @@
                     <i class="fa fa-th"></i>
                     <h3>
                         <span class="section-name">Workspace Items</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['workspaceItems']">{{sectionRowCounts['workspaceItems']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['workspaceItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['workspaceItems'] === 0">
+                            {{sectionRowCounts['workspaceItems']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -203,7 +207,11 @@
                     <i class="fa fa-bell"></i>
                     <h3>
                         <span class="section-name">User Notifications</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['userNotifications']">{{sectionRowCounts['userNotifications']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['userNotifications'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['userNotifications'] === 0">
+                            {{sectionRowCounts['userNotifications']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -231,7 +239,11 @@
                     <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Resource Links</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['resourceLinks']">{{sectionRowCounts['resourceLinks']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['resourceLinks'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['resourceLinks'] === 0">
+                            {{sectionRowCounts['resourceLinks']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -259,7 +271,11 @@
                     <i class="fa fa-lock"></i>
                     <h3>
                         <span class="section-name">Resource Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['resourcePermissions']">{{sectionRowCounts['resourcePermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['resourcePermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['resourcePermissions'] === 0">
+                            {{sectionRowCounts['resourcePermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

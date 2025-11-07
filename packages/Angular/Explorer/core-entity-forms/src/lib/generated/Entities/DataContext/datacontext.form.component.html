@@ -134,7 +134,11 @@
                     <i class="fa fa-database"></i>
                     <h3>
                         <span class="section-name">Data Context Items</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['dataContextItems']">{{sectionRowCounts['dataContextItems']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['dataContextItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['dataContextItems'] === 0">
+                            {{sectionRowCounts['dataContextItems']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -162,7 +166,11 @@
                     <i class="fa-solid fa-chart-line"></i>
                     <h3>
                         <span class="section-name">Reports</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['reports']">{{sectionRowCounts['reports']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['reports'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['reports'] === 0">
+                            {{sectionRowCounts['reports']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -190,7 +198,11 @@
                     <i class="fa-regular fa-comments"></i>
                     <h3>
                         <span class="section-name">Conversations</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['conversations']">{{sectionRowCounts['conversations']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['conversations'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['conversations'] === 0">
+                            {{sectionRowCounts['conversations']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

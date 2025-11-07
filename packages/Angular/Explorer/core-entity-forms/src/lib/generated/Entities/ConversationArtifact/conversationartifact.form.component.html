@@ -157,7 +157,11 @@
                     <i class="fa fa-lock"></i>
                     <h3>
                         <span class="section-name">MJ: Conversation Artifact Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJConversationArtifactPermissions']">{{sectionRowCounts['mJConversationArtifactPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJConversationArtifactPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJConversationArtifactPermissions'] === 0">
+                            {{sectionRowCounts['mJConversationArtifactPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -185,7 +189,11 @@
                     <i class="fa fa-comment-dots"></i>
                     <h3>
                         <span class="section-name">MJ: Conversation Artifact Versions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJConversationArtifactVersions']">{{sectionRowCounts['mJConversationArtifactVersions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJConversationArtifactVersions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJConversationArtifactVersions'] === 0">
+                            {{sectionRowCounts['mJConversationArtifactVersions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -213,7 +221,11 @@
                     <i class="fa fa-comments"></i>
                     <h3>
                         <span class="section-name">Conversation Details</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['conversationDetails']">{{sectionRowCounts['conversationDetails']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['conversationDetails'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['conversationDetails'] === 0">
+                            {{sectionRowCounts['conversationDetails']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

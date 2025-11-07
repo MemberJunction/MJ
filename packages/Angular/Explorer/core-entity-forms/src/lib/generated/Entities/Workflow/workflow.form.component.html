@@ -162,7 +162,11 @@
                     <i class="fa-solid fa-chart-line"></i>
                     <h3>
                         <span class="section-name">Reports</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['reports']">{{sectionRowCounts['reports']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['reports'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['reports'] === 0">
+                            {{sectionRowCounts['reports']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -190,7 +194,11 @@
                     <i class="fa fa-running"></i>
                     <h3>
                         <span class="section-name">Workflow Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['workflowRuns']">{{sectionRowCounts['workflowRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['workflowRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['workflowRuns'] === 0">
+                            {{sectionRowCounts['workflowRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

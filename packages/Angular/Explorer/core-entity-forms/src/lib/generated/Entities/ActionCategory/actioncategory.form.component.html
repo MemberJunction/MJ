@@ -141,7 +141,11 @@
                     <i class="fa fa-tags"></i>
                     <h3>
                         <span class="section-name">Action Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['actionCategories']">{{sectionRowCounts['actionCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['actionCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['actionCategories'] === 0">
+                            {{sectionRowCounts['actionCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -169,7 +173,11 @@
                     <i class="fa-solid fa-bolt"></i>
                     <h3>
                         <span class="section-name">Actions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['actions']">{{sectionRowCounts['actions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['actions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['actions'] === 0">
+                            {{sectionRowCounts['actions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

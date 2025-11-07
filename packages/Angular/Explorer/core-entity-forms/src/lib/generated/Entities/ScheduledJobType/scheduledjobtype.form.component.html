@@ -139,7 +139,11 @@
                     <i class="fa fa-calendar"></i>
                     <h3>
                         <span class="section-name">MJ: Scheduled Jobs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJScheduledJobs']">{{sectionRowCounts['mJScheduledJobs']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJScheduledJobs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJScheduledJobs'] === 0">
+                            {{sectionRowCounts['mJScheduledJobs']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

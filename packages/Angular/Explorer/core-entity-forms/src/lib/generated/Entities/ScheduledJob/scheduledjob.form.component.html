@@ -353,7 +353,11 @@
                     <i class="fa fa-tasks"></i>
                     <h3>
                         <span class="section-name">MJ: Scheduled Job Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJScheduledJobRuns']">{{sectionRowCounts['mJScheduledJobRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJScheduledJobRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJScheduledJobRuns'] === 0">
+                            {{sectionRowCounts['mJScheduledJobRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

@@ -150,7 +150,11 @@
                     <i class="fa fa-tachometer-alt"></i>
                     <h3>
                         <span class="section-name">Dashboard Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['dashboardCategories']">{{sectionRowCounts['dashboardCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['dashboardCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['dashboardCategories'] === 0">
+                            {{sectionRowCounts['dashboardCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -178,7 +182,11 @@
                     <i class="fa-solid fa-table-columns"></i>
                     <h3>
                         <span class="section-name">Dashboards</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['dashboards']">{{sectionRowCounts['dashboards']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['dashboards'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['dashboards'] === 0">
+                            {{sectionRowCounts['dashboards']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

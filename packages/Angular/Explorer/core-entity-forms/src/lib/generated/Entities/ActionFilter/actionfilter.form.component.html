@@ -89,7 +89,11 @@
                     <i class="fa fa-filter"></i>
                     <h3>
                         <span class="section-name">Entity Action Filters</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityActionFilters']">{{sectionRowCounts['entityActionFilters']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityActionFilters'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityActionFilters'] === 0">
+                            {{sectionRowCounts['entityActionFilters']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

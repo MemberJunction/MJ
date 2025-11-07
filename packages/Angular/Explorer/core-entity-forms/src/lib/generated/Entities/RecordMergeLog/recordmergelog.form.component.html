@@ -212,7 +212,11 @@
                     <i class="fa fa-clone"></i>
                     <h3>
                         <span class="section-name">Duplicate Run Detail Matches</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['duplicateRunDetailMatches']">{{sectionRowCounts['duplicateRunDetailMatches']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['duplicateRunDetailMatches'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['duplicateRunDetailMatches'] === 0">
+                            {{sectionRowCounts['duplicateRunDetailMatches']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -240,7 +244,11 @@
                     <i class="fa fa-history"></i>
                     <h3>
                         <span class="section-name">Record Merge Deletion Logs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['recordMergeDeletionLogs']">{{sectionRowCounts['recordMergeDeletionLogs']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['recordMergeDeletionLogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['recordMergeDeletionLogs'] === 0">
+                            {{sectionRowCounts['recordMergeDeletionLogs']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

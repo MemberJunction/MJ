@@ -203,7 +203,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Company Integration Run API Logs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['companyIntegrationRunAPILogs']">{{sectionRowCounts['companyIntegrationRunAPILogs']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['companyIntegrationRunAPILogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['companyIntegrationRunAPILogs'] === 0">
+                            {{sectionRowCounts['companyIntegrationRunAPILogs']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -231,7 +235,11 @@
                     <i class="fa fa-sync"></i>
                     <h3>
                         <span class="section-name">Company Integration Run Details</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['companyIntegrationRunDetails']">{{sectionRowCounts['companyIntegrationRunDetails']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['companyIntegrationRunDetails'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['companyIntegrationRunDetails'] === 0">
+                            {{sectionRowCounts['companyIntegrationRunDetails']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -259,7 +267,11 @@
                     <i class="fa fa-bug"></i>
                     <h3>
                         <span class="section-name">Error Logs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['errorLogs']">{{sectionRowCounts['errorLogs']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['errorLogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['errorLogs'] === 0">
+                            {{sectionRowCounts['errorLogs']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

@@ -150,7 +150,11 @@
                     <i class="fa fa-comment"></i>
                     <h3>
                         <span class="section-name">Communication Logs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['communicationLogs']">{{sectionRowCounts['communicationLogs']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['communicationLogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['communicationLogs'] === 0">
+                            {{sectionRowCounts['communicationLogs']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

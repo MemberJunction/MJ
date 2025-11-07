@@ -143,7 +143,11 @@
                     <i class="fa fa-file"></i>
                     <h3>
                         <span class="section-name">MJ: Artifacts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJArtifacts']">{{sectionRowCounts['mJArtifacts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJArtifacts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJArtifacts'] === 0">
+                            {{sectionRowCounts['mJArtifacts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -171,7 +175,11 @@
                     <i class="fa fa-folder-open"></i>
                     <h3>
                         <span class="section-name">MJ: Collections</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJCollections']">{{sectionRowCounts['mJCollections']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJCollections'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJCollections'] === 0">
+                            {{sectionRowCounts['mJCollections']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -199,7 +207,11 @@
                     <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">MJ: Projects</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJProjects']">{{sectionRowCounts['mJProjects']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJProjects'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJProjects'] === 0">
+                            {{sectionRowCounts['mJProjects']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -227,7 +239,11 @@
                     <i class="fa-solid fa-table-columns"></i>
                     <h3>
                         <span class="section-name">Dashboards</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['dashboards']">{{sectionRowCounts['dashboards']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['dashboards'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['dashboards'] === 0">
+                            {{sectionRowCounts['dashboards']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -255,7 +271,11 @@
                     <i class="fa fa-tasks"></i>
                     <h3>
                         <span class="section-name">MJ: Tasks</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJTasks']">{{sectionRowCounts['mJTasks']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJTasks'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJTasks'] === 0">
+                            {{sectionRowCounts['mJTasks']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -283,7 +303,11 @@
                     <i class="fa-solid fa-chart-line"></i>
                     <h3>
                         <span class="section-name">Reports</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['reports']">{{sectionRowCounts['reports']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['reports'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['reports'] === 0">
+                            {{sectionRowCounts['reports']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -311,7 +335,11 @@
                     <i class="fa-regular fa-comments"></i>
                     <h3>
                         <span class="section-name">Conversations</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['conversations']">{{sectionRowCounts['conversations']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['conversations'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['conversations'] === 0">
+                            {{sectionRowCounts['conversations']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

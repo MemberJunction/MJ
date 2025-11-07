@@ -107,7 +107,11 @@
                     <i class="fa fa-user-shield"></i>
                     <h3>
                         <span class="section-name">Authorization Roles</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['authorizationRoles']">{{sectionRowCounts['authorizationRoles']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['authorizationRoles'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['authorizationRoles'] === 0">
+                            {{sectionRowCounts['authorizationRoles']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -135,7 +139,11 @@
                     <i class="fa fa-user-tag"></i>
                     <h3>
                         <span class="section-name">Employee Roles</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['employeeRoles']">{{sectionRowCounts['employeeRoles']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['employeeRoles'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['employeeRoles'] === 0">
+                            {{sectionRowCounts['employeeRoles']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -163,7 +171,11 @@
                     <i class="fa fa-shield-alt"></i>
                     <h3>
                         <span class="section-name">Entity Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityPermissions']">{{sectionRowCounts['entityPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityPermissions'] === 0">
+                            {{sectionRowCounts['entityPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -191,7 +203,11 @@
                     <i class="fa fa-shield-alt"></i>
                     <h3>
                         <span class="section-name">Query Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['queryPermissions']">{{sectionRowCounts['queryPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['queryPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['queryPermissions'] === 0">
+                            {{sectionRowCounts['queryPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -219,7 +235,11 @@
                     <i class="fa fa-user-shield"></i>
                     <h3>
                         <span class="section-name">User Roles</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['userRoles']">{{sectionRowCounts['userRoles']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['userRoles'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['userRoles'] === 0">
+                            {{sectionRowCounts['userRoles']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -247,7 +267,11 @@
                     <i class="fa fa-lock"></i>
                     <h3>
                         <span class="section-name">Resource Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['resourcePermissions']">{{sectionRowCounts['resourcePermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['resourcePermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['resourcePermissions'] === 0">
+                            {{sectionRowCounts['resourcePermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -275,7 +299,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentPermissions']">{{sectionRowCounts['mJAIAgentPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentPermissions'] === 0">
+                            {{sectionRowCounts['mJAIAgentPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

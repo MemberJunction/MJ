@@ -187,7 +187,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Agents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgents']">{{sectionRowCounts['aIAgents']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgents'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgents'] === 0">
+                            {{sectionRowCounts['aIAgents']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

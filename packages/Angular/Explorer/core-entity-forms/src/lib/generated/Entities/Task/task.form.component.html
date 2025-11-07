@@ -276,7 +276,11 @@
                     <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">MJ: Task Dependencies</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJTaskDependencies']">{{sectionRowCounts['mJTaskDependencies']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJTaskDependencies'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJTaskDependencies'] === 0">
+                            {{sectionRowCounts['mJTaskDependencies']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -304,7 +308,11 @@
                     <i class="fa fa-project-diagram"></i>
                     <h3>
                         <span class="section-name">MJ: Task Dependencies</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJTaskDependencies']">{{sectionRowCounts['mJTaskDependencies']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJTaskDependencies'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJTaskDependencies'] === 0">
+                            {{sectionRowCounts['mJTaskDependencies']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -332,7 +340,11 @@
                     <i class="fa fa-tasks"></i>
                     <h3>
                         <span class="section-name">MJ: Tasks</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJTasks']">{{sectionRowCounts['mJTasks']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJTasks'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJTasks'] === 0">
+                            {{sectionRowCounts['mJTasks']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

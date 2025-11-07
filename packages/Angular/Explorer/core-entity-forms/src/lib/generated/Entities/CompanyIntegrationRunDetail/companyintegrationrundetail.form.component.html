@@ -182,7 +182,11 @@
                     <i class="fa fa-bug"></i>
                     <h3>
                         <span class="section-name">Error Logs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['errorLogs']">{{sectionRowCounts['errorLogs']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['errorLogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['errorLogs'] === 0">
+                            {{sectionRowCounts['errorLogs']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

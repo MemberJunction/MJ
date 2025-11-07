@@ -168,7 +168,11 @@
                     <i class="fa fa-list"></i>
                     <h3>
                         <span class="section-name">List Categories</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['listCategories']">{{sectionRowCounts['listCategories']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['listCategories'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['listCategories'] === 0">
+                            {{sectionRowCounts['listCategories']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -196,7 +200,11 @@
                     <i class="fa fa-list-ul"></i>
                     <h3>
                         <span class="section-name">Lists</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['lists']">{{sectionRowCounts['lists']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['lists'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['lists'] === 0">
+                            {{sectionRowCounts['lists']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

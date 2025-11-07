@@ -235,7 +235,11 @@
                     <i class="fa fa-tachometer-alt"></i>
                     <h3>
                         <span class="section-name">MJ: Dashboard User States</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJDashboardUserStates']">{{sectionRowCounts['mJDashboardUserStates']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJDashboardUserStates'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJDashboardUserStates'] === 0">
+                            {{sectionRowCounts['mJDashboardUserStates']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -263,7 +267,11 @@
                     <i class="fa fa-tachometer-alt"></i>
                     <h3>
                         <span class="section-name">MJ: Dashboard User Preferences</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJDashboardUserPreferences']">{{sectionRowCounts['mJDashboardUserPreferences']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJDashboardUserPreferences'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJDashboardUserPreferences'] === 0">
+                            {{sectionRowCounts['mJDashboardUserPreferences']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

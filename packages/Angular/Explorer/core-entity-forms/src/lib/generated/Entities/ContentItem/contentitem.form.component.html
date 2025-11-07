@@ -196,7 +196,11 @@
                     <i class="fa fa-tag"></i>
                     <h3>
                         <span class="section-name">Content Item Attributes</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentItemAttributes']">{{sectionRowCounts['contentItemAttributes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentItemAttributes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentItemAttributes'] === 0">
+                            {{sectionRowCounts['contentItemAttributes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -224,7 +228,11 @@
                     <i class="fa fa-tag"></i>
                     <h3>
                         <span class="section-name">Content Item Tags</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['contentItemTags']">{{sectionRowCounts['contentItemTags']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['contentItemTags'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['contentItemTags'] === 0">
+                            {{sectionRowCounts['contentItemTags']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

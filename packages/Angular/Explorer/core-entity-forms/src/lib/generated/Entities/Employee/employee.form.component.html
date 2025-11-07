@@ -218,7 +218,11 @@
                     <i class="fa fa-link"></i>
                     <h3>
                         <span class="section-name">Employee Company Integrations</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['employeeCompanyIntegrations']">{{sectionRowCounts['employeeCompanyIntegrations']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['employeeCompanyIntegrations'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['employeeCompanyIntegrations'] === 0">
+                            {{sectionRowCounts['employeeCompanyIntegrations']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -246,7 +250,11 @@
                     <i class="fa fa-user-tag"></i>
                     <h3>
                         <span class="section-name">Employee Roles</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['employeeRoles']">{{sectionRowCounts['employeeRoles']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['employeeRoles'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['employeeRoles'] === 0">
+                            {{sectionRowCounts['employeeRoles']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -274,7 +282,11 @@
                     <i class="fa fa-user-cog"></i>
                     <h3>
                         <span class="section-name">Employee Skills</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['employeeSkills']">{{sectionRowCounts['employeeSkills']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['employeeSkills'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['employeeSkills'] === 0">
+                            {{sectionRowCounts['employeeSkills']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -302,7 +314,11 @@
                     <i class="fa-solid fa-users"></i>
                     <h3>
                         <span class="section-name">Direct Reports</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['directReports']">{{sectionRowCounts['directReports']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['directReports'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['directReports'] === 0">
+                            {{sectionRowCounts['directReports']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -330,7 +346,11 @@
                     <i class="fa-solid fa-user"></i>
                     <h3>
                         <span class="section-name">Users</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['users']">{{sectionRowCounts['users']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['users'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['users'] === 0">
+                            {{sectionRowCounts['users']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

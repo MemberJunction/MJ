@@ -182,7 +182,11 @@
                     <i class="fa fa-search"></i>
                     <h3>
                         <span class="section-name">Duplicate Runs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['duplicateRuns']">{{sectionRowCounts['duplicateRuns']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['duplicateRuns'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['duplicateRuns'] === 0">
+                            {{sectionRowCounts['duplicateRuns']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -210,7 +214,11 @@
                     <i class="fa fa-list"></i>
                     <h3>
                         <span class="section-name">Details</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['details']">{{sectionRowCounts['details']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['details'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['details'] === 0">
+                            {{sectionRowCounts['details']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

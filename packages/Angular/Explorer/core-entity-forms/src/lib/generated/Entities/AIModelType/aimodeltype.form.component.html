@@ -93,7 +93,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Models</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIModels']">{{sectionRowCounts['aIModels']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIModels'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIModels'] === 0">
+                            {{sectionRowCounts['aIModels']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -121,7 +125,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Prompts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIPrompts']">{{sectionRowCounts['aIPrompts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIPrompts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIPrompts'] === 0">
+                            {{sectionRowCounts['aIPrompts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

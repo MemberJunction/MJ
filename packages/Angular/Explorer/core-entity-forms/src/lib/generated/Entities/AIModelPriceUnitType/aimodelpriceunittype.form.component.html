@@ -82,7 +82,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Model Costs</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIModelCosts']">{{sectionRowCounts['mJAIModelCosts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIModelCosts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIModelCosts'] === 0">
+                            {{sectionRowCounts['mJAIModelCosts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

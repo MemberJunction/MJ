@@ -143,7 +143,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Record Documents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityRecordDocuments']">{{sectionRowCounts['entityRecordDocuments']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityRecordDocuments'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityRecordDocuments'] === 0">
+                            {{sectionRowCounts['entityRecordDocuments']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

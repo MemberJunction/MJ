@@ -189,7 +189,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Template Contents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['templateContents']">{{sectionRowCounts['templateContents']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['templateContents'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['templateContents'] === 0">
+                            {{sectionRowCounts['templateContents']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -217,7 +221,11 @@
                     <i class="fa fa-cog"></i>
                     <h3>
                         <span class="section-name">Template Params</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['templateParams']">{{sectionRowCounts['templateParams']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['templateParams'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['templateParams'] === 0">
+                            {{sectionRowCounts['templateParams']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -245,7 +253,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Prompts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIPrompts']">{{sectionRowCounts['aIPrompts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIPrompts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIPrompts'] === 0">
+                            {{sectionRowCounts['aIPrompts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -273,7 +285,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">Entity Documents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityDocuments']">{{sectionRowCounts['entityDocuments']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityDocuments'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityDocuments'] === 0">
+                            {{sectionRowCounts['entityDocuments']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

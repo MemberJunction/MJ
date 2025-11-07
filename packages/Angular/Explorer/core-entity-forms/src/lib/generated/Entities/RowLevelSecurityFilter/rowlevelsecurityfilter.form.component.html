@@ -118,7 +118,11 @@
                     <i class="fa fa-shield-alt"></i>
                     <h3>
                         <span class="section-name">Entity Permissions</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['entityPermissions']">{{sectionRowCounts['entityPermissions']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['entityPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['entityPermissions'] === 0">
+                            {{sectionRowCounts['entityPermissions']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

@@ -180,7 +180,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">MJ: AI Agent Artifact Types</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJAIAgentArtifactTypes']">{{sectionRowCounts['mJAIAgentArtifactTypes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJAIAgentArtifactTypes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJAIAgentArtifactTypes'] === 0">
+                            {{sectionRowCounts['mJAIAgentArtifactTypes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -208,7 +212,11 @@
                     <i class="fa fa-file-alt"></i>
                     <h3>
                         <span class="section-name">MJ: Conversation Artifacts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJConversationArtifacts']">{{sectionRowCounts['mJConversationArtifacts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJConversationArtifacts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJConversationArtifacts'] === 0">
+                            {{sectionRowCounts['mJConversationArtifacts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -236,7 +244,11 @@
                     <i class="fa fa-puzzle-piece"></i>
                     <h3>
                         <span class="section-name">MJ: Artifact Types</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJArtifactTypes']">{{sectionRowCounts['mJArtifactTypes']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJArtifactTypes'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJArtifactTypes'] === 0">
+                            {{sectionRowCounts['mJArtifactTypes']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -264,7 +276,11 @@
                     <i class="fa fa-file"></i>
                     <h3>
                         <span class="section-name">MJ: Artifacts</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['mJArtifacts']">{{sectionRowCounts['mJArtifacts']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJArtifacts'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJArtifacts'] === 0">
+                            {{sectionRowCounts['mJArtifacts']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">
@@ -292,7 +308,11 @@
                     <i class="fa fa-robot"></i>
                     <h3>
                         <span class="section-name">AI Agents</span>
-                        <span class="row-count-badge" *ngIf="sectionRowCounts?.['aIAgents']">{{sectionRowCounts['aIAgents']}}</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['aIAgents'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['aIAgents'] === 0">
+                            {{sectionRowCounts['aIAgents']}}
+                        </span>
                     </h3>
                 </div>
                 <div class="collapse-icon">

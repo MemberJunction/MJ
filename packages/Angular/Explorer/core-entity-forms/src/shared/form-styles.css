@@ -310,7 +310,7 @@ button {
 .collapsible-title .row-count-badge {
   background: #10b981;
   color: white;
-  padding: 2px 8px;
+  padding: 3px 6px 2px 6px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
@@ -318,4 +318,11 @@ button {
   vertical-align: middle;
   position: relative;
   top: -2px;
+  display: inline-block;
+  line-height: 1;
+}
+
+/* Gray badge for zero rows (loaded but empty) */
+.collapsible-title .row-count-badge.zero-rows {
+  background: #9ca3af;
 }
