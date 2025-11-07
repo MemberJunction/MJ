@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Identifiers Section -->
-        <div class="form-card collapsible-card" data-section-name="identifiers" data-field-names="entityid entity id recordid record id entity">
-            <div class="collapsible-header" (click)="toggleSection('identifiers')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-id-card"></i>
-                    <h3><span class="section-name">Identifiers</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.identifiers ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identifiers">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Identifiers Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="identifiers"
+        sectionName="Identifiers"
+        icon="fa fa-id-card"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -49,6 +26,7 @@
             FieldName="RecordID"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -56,31 +34,25 @@
             FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Document Definition & Output Section -->
-        <div class="form-card collapsible-card" data-section-name="document definition & output" data-field-names="entitydocumentid entity document id documenttext document text entitydocument entity document">
-            <div class="collapsible-header" (click)="toggleSection('documentDefinitionOutput')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-file-alt"></i>
-                    <h3><span class="section-name">Document Definition & Output</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.documentDefinitionOutput ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.documentDefinitionOutput">
-                <div class="form-body">
+    <!-- Document Definition & Output Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="documentDefinitionOutput"
+        sectionName="Document Definition & Output"
+        icon="fa fa-file-alt"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityDocumentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -90,6 +62,7 @@
             FieldName="DocumentText"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -97,31 +70,25 @@
             FieldName="EntityDocument"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Vector Embedding Section -->
-        <div class="form-card collapsible-card" data-section-name="vector embedding" data-field-names="vectorindexid vector index id vectorid vector id vectorjson vector json vectorindex vector index">
-            <div class="collapsible-header" (click)="toggleSection('vectorEmbedding')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3><span class="section-name">Vector Embedding</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.vectorEmbedding ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.vectorEmbedding">
-                <div class="form-body">
+    <!-- Vector Embedding Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="vectorEmbedding"
+        sectionName="Vector Embedding"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="VectorIndexID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -131,6 +98,7 @@
             FieldName="VectorID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -138,6 +106,7 @@
             FieldName="VectorJSON"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -145,56 +114,43 @@
             FieldName="VectorIndex"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Timestamps & Audit Section -->
-        <div class="form-card collapsible-card" data-section-name="timestamps & audit" data-field-names="entityrecordupdatedat entity record updated at">
-            <div class="collapsible-header" (click)="toggleSection('timestampsAudit')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-calendar"></i>
-                    <h3><span class="section-name">Timestamps & Audit</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.timestampsAudit ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.timestampsAudit">
-                <div class="form-body">
+    <!-- Timestamps & Audit Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="timestampsAudit"
+        sectionName="Timestamps & Audit"
+        icon="fa fa-calendar"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="false"
             FieldName="EntityRecordUpdatedAt"
             Type="datepicker"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -202,12 +158,9 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

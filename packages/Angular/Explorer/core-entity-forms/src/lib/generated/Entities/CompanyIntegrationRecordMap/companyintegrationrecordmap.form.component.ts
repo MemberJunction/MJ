@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Company Integration Record Maps') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-companyintegrationrecordmap-form',
-    templateUrl: './companyintegrationrecordmap.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './companyintegrationrecordmap.form.component.html'
 })
 export class CompanyIntegrationRecordMapFormComponent extends BaseFormComponent {
     public record!: CompanyIntegrationRecordMapEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        integrationKeys: true,
-        mappingDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'integrationKeys', sectionName: 'Integration Keys', isExpanded: true },
+            { sectionKey: 'mappingDetails', sectionName: 'Mapping Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

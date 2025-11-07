@@ -1,14 +1,17 @@
-import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild, ChangeDetectorRef, ContentChildren } from '@angular/core';
 
 import { Subject, Subscription, debounceTime, fromEvent } from 'rxjs';
-import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType, 
-         EntityRelationshipInfo, Metadata, RunViewParams, LogError, 
+import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
+         EntityRelationshipInfo, Metadata, RunViewParams, LogError,
          RecordDependency,
          BaseEntityEvent,
          CompositeKey,
          RunView,
          RunViewResult} from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
+import { BaseFormSectionInfo } from './base-form-section-info';
+import { BaseFormContext } from './base-form-context';
+import { CollapsiblePanelComponent } from './collapsible-panel.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
@@ -47,6 +50,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   @ViewChildren(MJTabStripComponent) tabStrips!: QueryList<MJTabStripComponent>;
 
+  @ViewChildren(CollapsiblePanelComponent) collapsiblePanels!: QueryList<CollapsiblePanelComponent>;
+
   public get TabStripComponent(): MJTabStripComponent {
     return this.tabComponent;
   }
@@ -65,7 +70,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         this.StartEditMode();
       }
       const md: Metadata = new Metadata();
-   
+
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
 
@@ -87,9 +92,16 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         })
         const end = new Date().getTime();
         console.log(dataObject);
-        console.log('Time to get full record info: ' + (end - start) + 'ms');  
+        console.log('Time to get full record info: ' + (end - start) + 'ms');
       }
     }
+
+    // Set up debounced filter subscription
+    this.filterSubscription = this.filterSubject
+      .pipe(debounceTime(100))
+      .subscribe(searchTerm => {
+        this.searchFilter = searchTerm;
+      });
   }
 
   @ViewChild('topArea') topArea!: ElementRef;
@@ -140,6 +152,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   ngOnDestroy(): void {
     if (this.resizeSub) {
       this.resizeSub.unsubscribe();
+    }
+    if (this.filterSubscription) {
+      this.filterSubscription.unsubscribe();
     }
   }
 
@@ -252,23 +267,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     // if we get here we are not in a state where we can determine the current tab, so return false
     return false;
   }
-
-  /**
-   * Returns true if the sectionName specified is currently expanded, otherwise returns false.
-   * This is used with the new collapsible section-based forms (vs the older tab-based forms).
-   * @param sectionName - The section key (camelCase) to check
-   * @returns boolean indicating if section is expanded
-   */
-  public IsCurrentSection(sectionName: string): boolean {
-    // Check if the component has sectionsExpanded property (new collapsible panel forms)
-    const sectionsExpanded = (this as any).sectionsExpanded;
-    if (sectionsExpanded && typeof sectionsExpanded === 'object') {
-      return sectionsExpanded[sectionName] === true;
-    }
-    // If no sectionsExpanded, return false (not a section-based form)
-    return false;
-  }
-
+ 
   public BuildRelationshipViewParams(item: EntityRelationshipInfo): RunViewParams {
     return EntityInfo.BuildRelationshipViewParams(this.record, item); // new helper method in EntityInfo
   }
@@ -624,6 +623,226 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return undefined;
     }
   }
-} 
+
+  // #region Collapsible Section Management
+
+  /**
+   * Array of section information including expanded state and row counts.
+   * Initialized by subclasses via initSections().
+   */
+  protected sections: BaseFormSectionInfo[] = [];
+
+  /**
+   * Map for fast section lookup by key.
+   */
+  private sectionMap: Map<string, BaseFormSectionInfo> = new Map();
+
+  /**
+   * Current search filter text for filtering sections.
+   */
+  public searchFilter: string = '';
+
+  /**
+   * Controls whether empty fields should be shown in read-only mode.
+   * When false (default), empty fields are hidden to reduce visual clutter.
+   */
+  public showEmptyFields: boolean = false;
+
+  /**
+   * Returns the current form context containing all form-level state.
+   * This is a computed property that creates a fresh context object on each access,
+   * ensuring child components always have the latest values.
+   */
+  public get formContext(): BaseFormContext {
+    return {
+      sectionFilter: this.searchFilter,
+      showEmptyFields: this.showEmptyFields
+    };
+  }
+
+  /**
+   * Subject for debouncing filter changes.
+   */
+  private filterSubject = new Subject<string>();
+  private filterSubscription?: Subscription;
+
+  /**
+   * Initializes the sections array. Called by subclasses in ngOnInit.
+   * Accepts either BaseFormSectionInfo instances or plain objects that will be converted.
+   * @param sections Array of section information or plain objects
+   */
+  protected initSections(sections: (BaseFormSectionInfo | { sectionKey: string; sectionName: string; isExpanded: boolean; rowCount?: number; metadata?: any })[]): void {
+    this.sections = sections.map(s =>
+      s instanceof BaseFormSectionInfo
+        ? s
+        : new BaseFormSectionInfo(s.sectionKey, s.sectionName, s.isExpanded, s.rowCount, s.metadata)
+    );
+    this.sectionMap.clear();
+    this.sections.forEach(section => {
+      this.sectionMap.set(section.sectionKey, section);
+    });
+  }
+
+  /**
+   * Gets the section info by key.
+   * @param sectionKey The section key
+   * @returns The section info or undefined
+   */
+  protected getSection(sectionKey: string): BaseFormSectionInfo | undefined {
+    return this.sectionMap.get(sectionKey);
+  }
+
+  /**
+   * Checks if a section is expanded.
+   * @param sectionKey The section key
+   * @returns True if expanded, false otherwise
+   */
+  public IsSectionExpanded(sectionKey: string): boolean {
+    const section = this.sectionMap.get(sectionKey);
+    return section ? section.isExpanded : false;
+  }
+
+  /**
+   * Sets the expanded state of a section.
+   * @param sectionKey The section key
+   * @param isExpanded The new expanded state
+   */
+  public SetSectionExpanded(sectionKey: string, isExpanded: boolean): void {
+    const section = this.sectionMap.get(sectionKey);
+    if (section) {
+      section.isExpanded = isExpanded;
+    }
+  }
+
+  /**
+   * Gets the row count for a section.
+   * @param sectionKey The section key
+   * @returns The row count or undefined
+   */
+  public GetSectionRowCount(sectionKey: string): number | undefined {
+    const section = this.sectionMap.get(sectionKey);
+    return section?.rowCount;
+  }
+
+  /**
+   * Sets the row count for a section.
+   * @param sectionKey The section key
+   * @param rowCount The row count
+   */
+  public SetSectionRowCount(sectionKey: string, rowCount: number): void {
+    const section = this.sectionMap.get(sectionKey);
+    if (section) {
+      section.rowCount = rowCount;
+    }
+  }
+
+  /**
+   * Toggles the expanded state of a section.
+   * @param sectionKey The section key to toggle
+   */
+  public toggleSection(sectionKey: string): void {
+    const section = this.sectionMap.get(sectionKey);
+    if (section) {
+      section.isExpanded = !section.isExpanded;
+    }
+  }
+
+  /**
+   * Expands all sections.
+   */
+  public expandAllSections(): void {
+    this.sections.forEach(section => {
+      section.isExpanded = true;
+    });
+  }
+
+  /**
+   * Collapses all sections.
+   */
+  public collapseAllSections(): void {
+    this.sections.forEach(section => {
+      section.isExpanded = false;
+    });
+  }
+
+  /**
+   * Gets the count of currently expanded sections.
+   * @returns Number of expanded sections
+   */
+  public getExpandedCount(): number {
+    return this.sections.filter(section => section.isExpanded).length;
+  }
+
+  /**
+   * Gets the count of visible sections after filtering.
+   * @returns Number of sections currently visible (not hidden by search filter)
+   */
+  public getVisibleSectionCount(): number {
+    if (!this.collapsiblePanels || this.collapsiblePanels.length === 0) {
+      return this.sections.length;
+    }
+    return this.collapsiblePanels.filter(panel => panel.isVisible).length;
+  }
+
+  /**
+   * Gets the total count of all sections (regardless of filter).
+   * @returns Total number of sections
+   */
+  public getTotalSectionCount(): number {
+    return this.sections.length;
+  }
+
+  /**
+   * Handles filter change events from the section controls.
+   * Debounces the filter updates by 250ms to avoid excessive re-rendering during typing.
+   * @param searchTerm The search term to filter sections
+   */
+  public onFilterChange(searchTerm: string): void {
+    this.filterSubject.next(searchTerm);
+  }
+
+  /**
+   * Gets the entity name for the current record (used for localStorage keys).
+   * @returns Entity name or empty string
+   */
+  public getEntityName(): string {
+    return this.record?.EntityInfo?.Name || '';
+  }
+
+  /**
+   * Resets all panel width modes to normal for the current entity.
+   * Clears localStorage for all panels associated with this entity.
+   */
+  public resetAllPanelWidths(): void {
+    const entityName = this.getEntityName();
+    if (!entityName) return;
+
+    try {
+      // Find all localStorage keys for this entity's panels
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`mj_panel_width_${entityName}_`)) {
+          keysToRemove.push(key);
+        }
+      }
+
+      // Remove all found keys
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // Trigger re-render if we have collapsible panels
+      if (this.collapsiblePanels) {
+        this.collapsiblePanels.forEach(panel => {
+          panel.widthMode = 'normal';
+          panel['cdr'].markForCheck();
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to reset panel widths:', e);
+    }
+  }
+
+  // #endregion
+}
 
  

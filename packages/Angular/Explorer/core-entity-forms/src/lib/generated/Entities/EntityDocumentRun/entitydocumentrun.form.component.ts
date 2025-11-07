@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Entity Document Runs') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entitydocumentrun-form',
-    templateUrl: './entitydocumentrun.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './entitydocumentrun.form.component.html'
 })
 export class EntityDocumentRunFormComponent extends BaseFormComponent {
     public record!: EntityDocumentRunEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        documentAssociation: true,
-        runTimingStatus: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'documentAssociation', sectionName: 'Document Association', isExpanded: true },
+            { sectionKey: 'runTimingStatus', sectionName: 'Run Timing & Status', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

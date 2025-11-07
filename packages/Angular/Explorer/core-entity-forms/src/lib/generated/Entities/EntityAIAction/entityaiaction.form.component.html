@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Identification & Relationships Section -->
-        <div class="form-card collapsible-card" data-section-name="identification & relationships" data-field-names="entityid entity id aimodelid ai model id aiactionid ai action id outputentityid output entity id entity aimodel aiaction outputentity output entity">
-            <div class="collapsible-header" (click)="toggleSection('identificationRelationships')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3><span class="section-name">Identification & Relationships</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.identificationRelationships ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identificationRelationships">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Identification & Relationships Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="identificationRelationships"
+        sectionName="Identification & Relationships"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -49,6 +26,7 @@
             FieldName="AIModelID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -58,6 +36,7 @@
             FieldName="AIActionID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -67,6 +46,7 @@
             FieldName="OutputEntityID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -76,6 +56,7 @@
             FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -83,6 +64,7 @@
             FieldName="AIModel"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -90,6 +72,7 @@
             FieldName="AIAction"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -97,31 +80,25 @@
             FieldName="OutputEntity"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- AI Action Configuration Section -->
-        <div class="form-card collapsible-card" data-section-name="ai action configuration" data-field-names="name prompt triggerevent trigger event usermessage user message outputtype output type outputfield output field skipifoutputfieldnotempty skip if output field not empty">
-            <div class="collapsible-header" (click)="toggleSection('aIActionConfiguration')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-brain"></i>
-                    <h3><span class="section-name">AI Action Configuration</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.aIActionConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIActionConfiguration">
-                <div class="form-body">
+    <!-- AI Action Configuration Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="aIActionConfiguration"
+        sectionName="AI Action Configuration"
+        icon="fa fa-brain"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -129,6 +106,7 @@
             FieldName="Prompt"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -136,6 +114,7 @@
             FieldName="TriggerEvent"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -143,6 +122,7 @@
             FieldName="UserMessage"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -150,6 +130,7 @@
             FieldName="OutputType"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -157,6 +138,7 @@
             FieldName="OutputField"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -164,56 +146,43 @@
             FieldName="SkipIfOutputFieldNotEmpty"
             Type="checkbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Metadata & Notes Section -->
-        <div class="form-card collapsible-card" data-section-name="metadata & notes" data-field-names="comments">
-            <div class="collapsible-header" (click)="toggleSection('metadataNotes')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-info-circle"></i>
-                    <h3><span class="section-name">Metadata & Notes</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.metadataNotes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.metadataNotes">
-                <div class="form-body">
+    <!-- Metadata & Notes Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="metadataNotes"
+        sectionName="Metadata & Notes"
+        icon="fa fa-info-circle"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="false"
             FieldName="Comments"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -221,12 +190,9 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

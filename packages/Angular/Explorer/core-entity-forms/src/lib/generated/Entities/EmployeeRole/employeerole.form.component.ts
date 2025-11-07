@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Employee Roles') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-employeerole-form',
-    templateUrl: './employeerole.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './employeerole.form.component.html'
 })
 export class EmployeeRoleFormComponent extends BaseFormComponent {
     public record!: EmployeeRoleEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        entityKeys: true,
-        roleAssignment: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'entityKeys', sectionName: 'Entity Keys', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'roleAssignment', sectionName: 'Role Assignment', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

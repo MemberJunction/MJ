@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Communication Logs') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-communicationlog-form',
-    templateUrl: './communicationlog.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './communicationlog.form.component.html'
 })
 export class CommunicationLogFormComponent extends BaseFormComponent {
     public record!: CommunicationLogEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        messageIdentification: true,
-        messageDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'messageIdentification', sectionName: 'Message Identification', isExpanded: true },
+            { sectionKey: 'messageDetails', sectionName: 'Message Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

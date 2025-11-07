@@ -1,27 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Application Linkage Section -->
-        <div class="form-card collapsible-card" data-section-name="application linkage" data-field-names="applicationid application id sequence defaultfornewuser default for new user application">
-            <div class="collapsible-header" (click)="toggleSection('applicationLinkage')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3><span class="section-name">Application Linkage</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.applicationLinkage ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.applicationLinkage">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Application Linkage Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="applicationLinkage"
+        sectionName="Application Linkage"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="ApplicationID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -31,6 +26,7 @@
             FieldName="Sequence"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -38,6 +34,7 @@
             FieldName="DefaultForNewUser"
             Type="checkbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -45,31 +42,25 @@
             FieldName="Application"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Entity Definition Section -->
-        <div class="form-card collapsible-card" data-section-name="entity definition" data-field-names="entityid entity id entity entitybasetable entity base table entitycodename entity code name entityclassname entity class name entitybasetablecodename entity base table code name">
-            <div class="collapsible-header" (click)="toggleSection('entityDefinition')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3><span class="section-name">Entity Definition</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.entityDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityDefinition">
-                <div class="form-body">
+    <!-- Entity Definition Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="entityDefinition"
+        sectionName="Entity Definition"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -79,6 +70,7 @@
             FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -86,6 +78,7 @@
             FieldName="EntityBaseTable"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -93,6 +86,7 @@
             FieldName="EntityCodeName"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -100,6 +94,7 @@
             FieldName="EntityClassName"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -107,31 +102,25 @@
             FieldName="EntityBaseTableCodeName"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -139,12 +128,9 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

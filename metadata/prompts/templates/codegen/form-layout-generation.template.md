@@ -87,6 +87,47 @@ Create categories that are **specific to this entity's business domain**, not ge
 - Consider the user's workflow and mental model
 - Prioritize consolidation over fragmentation
 
+### Field Metadata Analysis
+
+For each field, you must also determine:
+
+**1. Display Name** - User-friendly label for the field
+- Remove technical suffixes (ID, FK, etc.) - e.g., "OrganizationID" → "Organization"
+- Use proper spacing and capitalization - e.g., "FirstName" → "First Name"
+- Keep abbreviations if commonly understood - e.g., "URL", "ID" when standalone
+- For Address fields, include line numbers - e.g., "Address1" → "Address Line 1"
+- Examples:
+  - "EmailAddress" → "Email Address"
+  - "CustomerID" → "Customer"
+  - "BillToAddress1" → "Billing Address Line 1"
+  - "__mj_CreatedAt" → "Created At"
+
+**2. Extended Type** - Specifies special UI treatment for the field
+- Valid values: `'Code'`, `'Email'`, `'FaceTime'`, `'Geo'`, `'MSTeams'`, `'SIP'`, `'SMS'`, `'Skype'`, `'Tel'`, `'URL'`, `'WhatsApp'`, `'ZoomMtg'`, or `null`
+- Use `'Email'` for email address fields - creates clickable mailto: links
+- Use `'URL'` for web address fields - creates clickable hyperlinks
+- Use `'Tel'` for phone number fields - creates clickable tel: links
+- Use `'Code'` for code/script fields (requires CodeType to be set)
+- Use `null` for regular text/data fields
+- Examples:
+  - "EmailAddress", "Email", "ContactEmail" → `'Email'`
+  - "Website", "URL", "HomepageURL" → `'URL'`
+  - "Phone", "PhoneNumber", "Mobile" → `'Tel'`
+  - "SkypeID" → `'Skype'`
+  - "JavaScript", "SQLStatement", "CSSCode" → `'Code'`
+
+**3. Code Type** - For fields with ExtendedType='Code', specifies the programming language
+- Valid values: `'CSS'`, `'HTML'`, `'JavaScript'`, `'SQL'`, `'TypeScript'`, `'Other'`, or `null`
+- **Only set when ExtendedType='Code'**
+- Infer from field name and context:
+  - "SQL", "Query", "SQLStatement" → `'SQL'`
+  - "JavaScript", "Script", "JSCode" → `'JavaScript'`
+  - "TypeScript", "TSCode" → `'TypeScript'`
+  - "HTML", "HTMLContent" → `'HTML'`
+  - "CSS", "Styles" → `'CSS'`
+  - Unknown code type → `'Other'`
+- Set to `null` for all non-code fields
+
 ### Common Patterns
 
 **For entities with addresses:**
@@ -116,12 +157,18 @@ Return a JSON object with this exact structure:
     {
       "fieldName": "BillToAddress1",
       "category": "Bill To Address",
-      "reason": "Billing address fields for invoice delivery"
+      "reason": "Billing address fields for invoice delivery",
+      "displayName": "Billing Address Line 1",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "ShipToAddress1",
       "category": "Ship To Address",
-      "reason": "Physical shipping destination for order fulfillment"
+      "reason": "Physical shipping destination for order fulfillment",
+      "displayName": "Shipping Address Line 1",
+      "extendedType": null,
+      "codeType": null
     }
   ],
   "categoryIcons": {
@@ -169,6 +216,8 @@ For each **unique category**, select an appropriate Font Awesome icon class (ver
 - ALL fields from the input must be included
 - Field names must exactly match the provided field list (case-sensitive)
 - Category names should be consistent (if multiple fields in same category, use exact same category string)
+- **Every field must have**: `displayName`, `extendedType`, and `codeType` properties
+- `extendedType` and `codeType` must be valid enum values or `null` - do not use empty strings
 
 ## Important Rules
 
@@ -191,87 +240,138 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
     {
       "fieldName": "OrderNumber",
       "category": "Order Details",
-      "reason": "Core order information and tracking"
+      "reason": "Core order information and tracking",
+      "displayName": "Order Number",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "OrderDate",
       "category": "Order Details",
-      "reason": "Core order information and tracking"
+      "reason": "Core order information and tracking",
+      "displayName": "Order Date",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "CustomerID",
       "category": "Order Details",
-      "reason": "Links order to customer record"
+      "reason": "Links order to customer record",
+      "displayName": "Customer",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "OrderStatus",
       "category": "Order Details",
-      "reason": "Current fulfillment status is core order info"
+      "reason": "Current fulfillment status is core order info",
+      "displayName": "Order Status",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "BillToAddress1",
       "category": "Billing Address",
-      "reason": "Billing address for invoice"
+      "reason": "Billing address for invoice",
+      "displayName": "Billing Address Line 1",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "BillToCity",
       "category": "Billing Address",
-      "reason": "Billing address city"
+      "reason": "Billing address city",
+      "displayName": "Billing City",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "BillToState",
       "category": "Billing Address",
-      "reason": "Billing address state for tax calculation"
+      "reason": "Billing address state for tax calculation",
+      "displayName": "Billing State",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "ShipToAddress1",
       "category": "Shipping Address",
-      "reason": "Physical delivery address"
+      "reason": "Physical delivery address",
+      "displayName": "Shipping Address Line 1",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "ShipToCity",
       "category": "Shipping Address",
-      "reason": "Shipping destination city"
+      "reason": "Shipping destination city",
+      "displayName": "Shipping City",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "ShipToState",
       "category": "Shipping Address",
-      "reason": "Shipping destination state"
+      "reason": "Shipping destination state",
+      "displayName": "Shipping State",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "ShippingCarrier",
       "category": "Shipping Address",
-      "reason": "Shipping logistics grouped with destination"
+      "reason": "Shipping logistics grouped with destination",
+      "displayName": "Shipping Carrier",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "TrackingNumber",
       "category": "Shipping Address",
-      "reason": "Shipping logistics grouped with destination"
+      "reason": "Shipping logistics grouped with destination",
+      "displayName": "Tracking Number",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "SubTotal",
       "category": "Pricing and Charges",
-      "reason": "Order subtotal before tax and shipping"
+      "reason": "Order subtotal before tax and shipping",
+      "displayName": "Subtotal",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "Tax",
       "category": "Pricing and Charges",
-      "reason": "Tax amount calculated"
+      "reason": "Tax amount calculated",
+      "displayName": "Tax",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "ShippingCost",
       "category": "Pricing and Charges",
-      "reason": "Shipping fees charged"
+      "reason": "Shipping fees charged",
+      "displayName": "Shipping Cost",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "TotalAmount",
       "category": "Pricing and Charges",
-      "reason": "Final order total"
+      "reason": "Final order total",
+      "displayName": "Total Amount",
+      "extendedType": null,
+      "codeType": null
     },
     {
       "fieldName": "__mj_CreatedAt",
       "category": "System Metadata",
-      "reason": "Technical audit field"
+      "reason": "Technical audit field",
+      "displayName": "Created At",
+      "extendedType": null,
+      "codeType": null
     }
   ],
   "categoryIcons": {

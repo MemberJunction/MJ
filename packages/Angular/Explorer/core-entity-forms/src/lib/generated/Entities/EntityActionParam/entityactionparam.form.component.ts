@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Entity Action Params') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entityactionparam-form',
-    templateUrl: './entityactionparam.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './entityactionparam.form.component.html'
 })
 export class EntityActionParamFormComponent extends BaseFormComponent {
     public record!: EntityActionParamEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        identifierRelationships: true,
-        parameterDefinition: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifierRelationships', sectionName: 'Identifier & Relationships', isExpanded: true },
+            { sectionKey: 'parameterDefinition', sectionName: 'Parameter Definition', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

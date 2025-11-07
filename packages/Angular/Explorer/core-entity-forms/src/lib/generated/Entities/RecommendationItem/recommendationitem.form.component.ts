@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Recommendation Items') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-recommendationitem-form',
-    templateUrl: './recommendationitem.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './recommendationitem.form.component.html'
 })
 export class RecommendationItemFormComponent extends BaseFormComponent {
     public record!: RecommendationItemEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        technicalIdentifiers: true,
-        recommendationData: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'technicalIdentifiers', sectionName: 'Technical Identifiers', isExpanded: true },
+            { sectionKey: 'recommendationData', sectionName: 'Recommendation Data', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

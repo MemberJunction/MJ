@@ -1,45 +1,32 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Identification Section -->
-        <div class="form-card collapsible-card" data-section-name="identification" data-field-names="">
-            <div class="collapsible-header" (click)="toggleSection('identification')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-key"></i>
-                    <h3><span class="section-name">Identification</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.identification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identification">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Identification Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="identification"
+        sectionName="Identification"
+        icon="fa fa-key"
+        [form]="this"
+        [formContext]="formContext">
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Mapping Configuration Section -->
-        <div class="form-card collapsible-card" data-section-name="mapping configuration" data-field-names="entitycommunicationmessagetypeid entity communication message type id fieldname field name priority">
-            <div class="collapsible-header" (click)="toggleSection('mappingConfiguration')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cogs"></i>
-                    <h3><span class="section-name">Mapping Configuration</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.mappingConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mappingConfiguration">
-                <div class="form-body">
+    <!-- Mapping Configuration Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="mappingConfiguration"
+        sectionName="Mapping Configuration"
+        icon="fa fa-cogs"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="EntityCommunicationMessageTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -49,6 +36,7 @@
             FieldName="FieldName"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -56,31 +44,43 @@
             FieldName="Priority"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="EntityCommunicationMessageType"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -88,12 +88,9 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

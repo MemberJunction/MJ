@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'User Favorites') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-userfavorite-form',
-    templateUrl: './userfavorite.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './userfavorite.form.component.html'
 })
 export class UserFavoriteFormComponent extends BaseFormComponent {
     public record!: UserFavoriteEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        favoriteIdentification: true,
-        entityMetadata: false,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'favoriteIdentification', sectionName: 'Favorite Identification', isExpanded: true },
+            { sectionKey: 'entityMetadata', sectionName: 'Entity Metadata', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

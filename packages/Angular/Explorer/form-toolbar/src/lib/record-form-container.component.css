@@ -1,6 +1,6 @@
 .k-pane {
   background-color: #F5F6FA;
-} 
+}
 
 
 a {
@@ -24,7 +24,7 @@ a {
 button {
   margin-right: 5px;
 }
- 
+
 .record-form h2 {
   margin-bottom: 10px;
 }
@@ -45,18 +45,18 @@ button {
 
 
 /* .record-form .record-form-row:nth-child(odd) {
-  background-color: #f2f2f2; 
+  background-color: #f2f2f2;
 } */
 
-/* 
+/*
 .record-form .record-form-row:nth-child(even) {
-  background-color: #ffffff;  
+  background-color: #ffffff;
 } */
 
 .record-form .record-form-row > :first-child {
   font-weight: bold;
   padding-right: 10px;
-} 
+}
 
 .record-form .record-form-row > span {
   white-space: pre-line;
@@ -64,7 +64,7 @@ button {
   overflow: auto;
 }
 
- 
+
 
 @media (min-width: 768px) {
   .record-form-row {
@@ -80,31 +80,43 @@ button {
 
 /* Collapsible Panel Styles */
 .form-panels-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  padding: 20px;
   background-color: #F5F6FA;
 }
 
-/* All field sections take full width */
-.form-panels-container > .form-card {
-  width: 100%;
-}
-
-/* Related entity grid container - responsive layout */
-.form-panels-container .related-entity-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  width: 100%;
-}
-
-/* Responsive multi-column layout for related entities on wider screens */
-@media (min-width: 1400px) {
-  .form-panels-container .related-entity-grid {
-    grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+/* Responsive horizontal stacking for ALL panels (field sections and related entities) */
+@media (min-width: 1200px) {
+  .form-panels-container {
+    grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
   }
+}
+
+/* Even more aggressive stacking on ultra-wide screens */
+@media (min-width: 1800px) {
+  .form-panels-container {
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  }
+}
+
+/* Related entity grid container - treated as regular panels now */
+.form-panels-container .related-entity-grid {
+  display: contents; /* Makes children participate in parent grid */
+}
+
+/* Visual separator before related entities */
+.related-entities-divider {
+  grid-column: 1 / -1;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #d1d5db 20%, #d1d5db 80%, transparent);
+  margin: 12px 0;
+  position: relative;
+}
+
+.related-entities-divider::before {
+  content: '';
 }
 
 .form-card {
