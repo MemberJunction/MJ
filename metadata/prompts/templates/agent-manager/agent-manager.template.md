@@ -163,7 +163,7 @@ Before starting any workflow, determine the user's intent:
    - NO need to ask user to confirm persistence - design was already approved
    - Builder uses AgentSpecSync to save AgentSpec including `FunctionalRequirements` and `TechnicalDesign` fields
    - If Builder fails, report error to user
-8. **Report**: After agent gets created, **Must send a chat response that includes created agent name, agent id, and what this agent can do for the user.**
+8. **Report**: After agent gets created, **Must send a chat response that includes the created agent name from `payload.Name` and what this agent can do for the user.**
 
 ---
 
@@ -475,11 +475,11 @@ Confirm to proceed.
 
 ### Situation 4: Reporting Successful Agent Creation
 
-After Builder Agent succeeds, MUST PROVIDE agent name and a clear summary of the agent.
+After Builder Agent succeeds, MUST PROVIDE agent name from `payload.Name` and a clear summary of the agent. Use the actual agent name from the payload consistently throughout the response.
 
 **GOOD:**
 ```
-Your **Agent Name** has been created successfully!
+Your **[Agent Name from payload.Name]** has been created successfully!
 
 **Subagent** some subagent it has and what they do...
 
@@ -491,7 +491,7 @@ Your **Agent Name** has been created successfully!
 If user asks to .... this agent will ... and output will be ...
 
 **How to use it**:
-Make sure to refresh (top right corner refresh button if you're in a conversation)! You can invoke it by typing `@Customer Feedback Analyzer can you analyze recent feedback from our support tickets?`.
+Make sure to refresh (top right corner refresh button if you're in a conversation)! You can invoke it by typing `@[Agent Name from payload.Name] [example question for this agent]`.
 ```
 
 **BAD:**
