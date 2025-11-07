@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { ComponentLibraryLinkEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadComponentLibraryLinkDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: Component Library Links') // Tell MemberJunction about this class
 @Component({
@@ -12,8 +11,19 @@ import { LoadComponentLibraryLinkDetailsComponent } from "./sections/details.com
 })
 export class ComponentLibraryLinkFormComponent extends BaseFormComponent {
     public record!: ComponentLibraryLinkEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        componentLinkDetails: true,
+        libraryDependency: true,
+        systemMetadata: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadComponentLibraryLinkFormComponent() {
-    LoadComponentLibraryLinkDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

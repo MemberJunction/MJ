@@ -1,60 +1,298 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Company Integration Runs" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Company Integration Run API Logs" [Visible]="record.IsSaved"> 
-                        Company Integration Run API Logs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs','CompanyIntegrationRunID')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Run API Logs')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Run API Logs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 7 expanded
+            </span>
+        </div>
+        <div class="form-panels-container">
+<!-- Run Overview Section -->
+        <div class="form-card collapsible-card" data-section-name="run overview" data-field-names="companyintegrationid companyintegration id runbyuserid runbyuser id integration company runbyuser run by user">
+            <div class="collapsible-header" (click)="toggleSection('runOverview')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-briefcase"></i>
+                    <h3><span class="section-name">Run Overview</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.runOverview ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.runOverview">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CompanyIntegrationID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RunByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Integration"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Company"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RunByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
-                    <mj-tab Name="Error Logs" [Visible]="record.IsSaved"> 
-                        Error Logs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Error Logs','CompanyIntegrationRunID')"  
-                            [NewRecordValues]="NewRecordValues('Error Logs')"
-                            [AllowLoad]="IsCurrentTab('Error Logs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+                </div>
+            </div>
+        </div>
 
-                    <mj-tab Name="Company Integration Run Details" [Visible]="record.IsSaved"> 
-                        Company Integration Run Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run Details','CompanyIntegrationRunID')"  
-                            [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
-                            [AllowLoad]="IsCurrentTab('Company Integration Run Details')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
+        <!-- Schedule & Status Section -->
+        <div class="form-card collapsible-card" data-section-name="schedule & status" data-field-names="startedat started at endedat ended at totalrecords total records status">
+            <div class="collapsible-header" (click)="toggleSection('scheduleStatus')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-calendar"></i>
+                    <h3><span class="section-name">Schedule & Status</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.scheduleStatus ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.scheduleStatus">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StartedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EndedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TotalRecords"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Diagnostic Details Section -->
+        <div class="form-card collapsible-card" data-section-name="diagnostic details" data-field-names="comments errorlog error log configdata config data">
+            <div class="collapsible-header" (click)="toggleSection('diagnosticDetails')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Diagnostic Details</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.diagnosticDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.diagnosticDetails">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Comments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ErrorLog"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ConfigData"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+        <div class="related-entity-grid">
+
+        <!-- Company Integration Run API Logs Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="company integration run api logs" data-field-names="company integration run api logs" data-section-key="companyIntegrationRunAPILogs">
+            <div class="collapsible-header" (click)="toggleSection('companyIntegrationRunAPILogs')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-file-alt"></i>
+                    <h3>
+                        <span class="section-name">Company Integration Run API Logs</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['companyIntegrationRunAPILogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['companyIntegrationRunAPILogs'] === 0">
+                            {{sectionRowCounts['companyIntegrationRunAPILogs']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.companyIntegrationRunAPILogs ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.companyIntegrationRunAPILogs" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs','CompanyIntegrationRunID')"
+                        [NewRecordValues]="NewRecordValues('Company Integration Run API Logs')"
+                        [AllowLoad]="IsCurrentSection('companyIntegrationRunAPILogs')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['companyIntegrationRunAPILogs'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Company Integration Run Details Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="company integration run details" data-field-names="company integration run details" data-section-key="companyIntegrationRunDetails">
+            <div class="collapsible-header" (click)="toggleSection('companyIntegrationRunDetails')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sync"></i>
+                    <h3>
+                        <span class="section-name">Company Integration Run Details</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['companyIntegrationRunDetails'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['companyIntegrationRunDetails'] === 0">
+                            {{sectionRowCounts['companyIntegrationRunDetails']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.companyIntegrationRunDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.companyIntegrationRunDetails" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run Details','CompanyIntegrationRunID')"
+                        [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
+                        [AllowLoad]="IsCurrentSection('companyIntegrationRunDetails')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['companyIntegrationRunDetails'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Logs Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="error logs" data-field-names="error logs" data-section-key="errorLogs">
+            <div class="collapsible-header" (click)="toggleSection('errorLogs')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-bug"></i>
+                    <h3>
+                        <span class="section-name">Error Logs</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['errorLogs'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['errorLogs'] === 0">
+                            {{sectionRowCounts['errorLogs']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.errorLogs ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.errorLogs" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Error Logs','CompanyIntegrationRunID')"
+                        [NewRecordValues]="NewRecordValues('Error Logs')"
+                        [AllowLoad]="IsCurrentSection('errorLogs')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['errorLogs'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
     </form>
 </div>
         

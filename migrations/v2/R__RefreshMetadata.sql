@@ -7,6 +7,9 @@ EXEC [${flyway:defaultSchema}].spRecompileAllViews
 /* SQL text to update existing entities from schema */
 EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
 
+/* SQL text to sync schema info from database schemas */
+EXEC [${flyway:defaultSchema}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='sys,staging'
+
 /* SQL text to delete unneeded entity fields */
 EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
 

@@ -170,8 +170,8 @@ const advancedGenerationFeatureSchema = z.object({
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
-  AIVendor: z.enum(['openai', 'anthropic', 'mistral', 'groq']).default('openai'),
-  AIModel: z.string().default('gpt-4o'),
+  // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
+  // in the AI Prompts table via the MJ: AI Prompt Models relationship.
   features: advancedGenerationFeatureSchema.array().default([
     {
       name: 'EntityNames',

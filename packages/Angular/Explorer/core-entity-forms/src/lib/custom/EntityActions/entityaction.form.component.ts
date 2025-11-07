@@ -3,7 +3,6 @@ import { EntityActionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EntityActionFormComponent } from '../../generated/Entities/EntityAction/entityaction.form.component';
-import { LoadEntityActionDetailsComponent } from '../../generated/Entities/EntityAction/sections/details.component';
 
 @RegisterClass(BaseFormComponent, 'Entity Actions') // Tell MemberJunction about this class
 @Component({
@@ -16,5 +15,4 @@ export class EntityActionExtendedFormComponent extends EntityActionFormComponent
 }
 
 export function LoadEntityActionExtendedFormComponent() {
-    LoadEntityActionDetailsComponent();
 }
