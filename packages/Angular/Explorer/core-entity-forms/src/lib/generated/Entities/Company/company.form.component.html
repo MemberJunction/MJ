@@ -9,14 +9,14 @@
         sectionName="Core Company Info"
         icon="fa fa-building"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -24,7 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -35,14 +35,14 @@
         sectionName="Branding & Digital Presence"
         icon="fa fa-globe"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Website"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
@@ -51,7 +51,7 @@
             FieldName="LogoURL"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
@@ -60,7 +60,7 @@
             FieldName="Domain"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -71,14 +71,14 @@
         sectionName="System Metadata"
         icon="fa fa-cog"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -86,7 +86,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -101,7 +101,7 @@
         icon="fa fa-plug"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('companyIntegrations')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -122,7 +122,7 @@
         icon="fa-solid fa-users"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('employees')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -143,7 +143,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('workflows')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -164,7 +164,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentNotes')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -185,7 +185,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentExamples')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid

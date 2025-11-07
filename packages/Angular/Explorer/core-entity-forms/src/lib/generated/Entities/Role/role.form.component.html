@@ -9,14 +9,14 @@
         sectionName="Core Role Details"
         icon="fa fa-shield-alt"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -24,7 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -32,7 +32,7 @@
             FieldName="DirectoryID"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -40,7 +40,7 @@
             FieldName="SQLName"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -51,14 +51,14 @@
         sectionName="System Metadata"
         icon="fa fa-cog"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -66,7 +66,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -81,7 +81,7 @@
         icon="fa fa-user-shield"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('authorizationRoles')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -102,7 +102,7 @@
         icon="fa fa-user-tag"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('employeeRoles')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -123,7 +123,7 @@
         icon="fa fa-shield-alt"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -144,7 +144,7 @@
         icon="fa fa-shield-alt"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queryPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -165,7 +165,7 @@
         icon="fa fa-user-shield"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userRoles')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -186,7 +186,7 @@
         icon="fa fa-lock"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('resourcePermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -207,7 +207,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid

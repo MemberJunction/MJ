@@ -5,7 +5,7 @@
 -->
 @if (record.IsSaved || !IsFieldReadOnly) {
     <!-- We only render a field if the record is either saved, or the field is editable. Meaning, for NEW records, we only show editable fields -->
-    <div class="record-form-row" *ngIf="!EditMode || IsFieldReadOnly">
+    <div class="record-form-row" *ngIf="(!EditMode || IsFieldReadOnly) && !shouldHideField">
         <label *ngIf="ShowLabel" [innerHTML]="HighlightedDisplayName"></label>
         @switch (LinkType) {
             @case ('None') {

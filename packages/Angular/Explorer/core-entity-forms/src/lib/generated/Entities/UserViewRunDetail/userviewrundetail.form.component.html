@@ -9,14 +9,14 @@
         sectionName="Run Details"
         icon="fa fa-list"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="UserViewRunID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -26,7 +26,7 @@
             FieldName="RecordID"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -34,7 +34,7 @@
             FieldName="UserViewID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -42,7 +42,7 @@
             FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -53,14 +53,14 @@
         sectionName="System Metadata"
         icon="fa fa-cog"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -68,7 +68,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

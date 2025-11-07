@@ -9,14 +9,14 @@
         sectionName="Agent Identity & Presentation"
         icon="fa fa-id-card"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -24,7 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -32,7 +32,7 @@
             FieldName="LogoURL"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -40,7 +40,7 @@
             FieldName="TypeID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -50,7 +50,7 @@
             FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -58,7 +58,7 @@
             FieldName="DriverClass"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -66,7 +66,7 @@
             FieldName="IconClass"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -74,7 +74,7 @@
             FieldName="ModelSelectionMode"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -82,7 +82,7 @@
             FieldName="DefaultArtifactTypeID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -92,7 +92,7 @@
             FieldName="OwnerUserID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -102,7 +102,7 @@
             FieldName="ArtifactCreationMode"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -110,7 +110,7 @@
             FieldName="FunctionalRequirements"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -118,7 +118,7 @@
             FieldName="TechnicalDesign"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -126,7 +126,7 @@
             FieldName="IsRestricted"
             Type="checkbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -134,7 +134,7 @@
             FieldName="Type"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -142,7 +142,7 @@
             FieldName="DefaultArtifactType"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -150,7 +150,7 @@
             FieldName="OwnerUser"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -161,14 +161,14 @@
         sectionName="Hierarchy & Invocation"
         icon="fa fa-sitemap"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -178,7 +178,7 @@
             FieldName="ExposeAsAction"
             Type="checkbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -186,7 +186,7 @@
             FieldName="ExecutionOrder"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -194,7 +194,7 @@
             FieldName="ExecutionMode"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -202,7 +202,7 @@
             FieldName="InvocationMode"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -210,7 +210,7 @@
             FieldName="Parent"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -218,7 +218,7 @@
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -229,14 +229,14 @@
         sectionName="Context Compression"
         icon="fa fa-compress"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="EnableContextCompression"
             Type="checkbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -244,7 +244,7 @@
             FieldName="ContextCompressionMessageThreshold"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -252,7 +252,7 @@
             FieldName="ContextCompressionPromptID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -262,7 +262,7 @@
             FieldName="ContextCompressionMessageRetentionCount"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -270,7 +270,7 @@
             FieldName="ContextCompressionPrompt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -281,14 +281,14 @@
         sectionName="Payload & Data Flow"
         icon="fa fa-exchange-alt"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="PayloadDownstreamPaths"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -296,7 +296,7 @@
             FieldName="PayloadUpstreamPaths"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -304,7 +304,7 @@
             FieldName="PayloadSelfReadPaths"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -312,7 +312,7 @@
             FieldName="PayloadSelfWritePaths"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -320,7 +320,7 @@
             FieldName="PayloadScope"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -328,7 +328,7 @@
             FieldName="FinalPayloadValidation"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -336,7 +336,7 @@
             FieldName="FinalPayloadValidationMode"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -344,7 +344,7 @@
             FieldName="FinalPayloadValidationMaxRetries"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -352,7 +352,7 @@
             FieldName="StartingPayloadValidation"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -360,7 +360,7 @@
             FieldName="StartingPayloadValidationMode"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -368,7 +368,7 @@
             FieldName="InjectNotes"
             Type="checkbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -376,7 +376,7 @@
             FieldName="MaxNotesToInject"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -384,7 +384,7 @@
             FieldName="NoteInjectionStrategy"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -392,7 +392,7 @@
             FieldName="InjectExamples"
             Type="checkbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -400,7 +400,7 @@
             FieldName="MaxExamplesToInject"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -408,7 +408,7 @@
             FieldName="ExampleInjectionStrategy"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -419,14 +419,14 @@
         sectionName="Runtime Limits & Execution Settings"
         icon="fa fa-tachometer-alt"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="MaxCostPerRun"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -434,7 +434,7 @@
             FieldName="MaxTokensPerRun"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -442,7 +442,7 @@
             FieldName="MaxIterationsPerRun"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -450,7 +450,7 @@
             FieldName="MaxTimePerRun"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -458,7 +458,7 @@
             FieldName="MinExecutionsPerRun"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -466,7 +466,7 @@
             FieldName="MaxExecutionsPerRun"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -474,7 +474,7 @@
             FieldName="DefaultPromptEffortLevel"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -482,7 +482,7 @@
             FieldName="ChatHandlingOption"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -490,7 +490,7 @@
             FieldName="MessageMode"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -498,7 +498,7 @@
             FieldName="MaxMessages"
             Type="numerictextbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -509,14 +509,14 @@
         sectionName="System Metadata"
         icon="fa fa-cog"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -524,7 +524,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -539,7 +539,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentActions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -560,7 +560,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentLearningCycles')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -581,7 +581,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentModels')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -602,7 +602,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentRequests')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -623,7 +623,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -644,7 +644,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentDataSources')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -665,7 +665,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -686,7 +686,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentRelationships')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -707,7 +707,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentSteps')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -728,7 +728,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentNotes')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -749,7 +749,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentExamples')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -770,7 +770,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentPrompts')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -791,7 +791,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentRelationships')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -812,7 +812,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -833,7 +833,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentSteps')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -854,7 +854,7 @@
         icon="fa fa-tasks"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTasks')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -875,7 +875,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIResultCache')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -896,7 +896,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIPromptRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -917,7 +917,7 @@
         icon="fa fa-comments"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('conversationDetails')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -938,7 +938,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgents')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid

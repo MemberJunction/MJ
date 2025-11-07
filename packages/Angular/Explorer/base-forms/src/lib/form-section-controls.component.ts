@@ -8,12 +8,25 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
     selector: 'mj-form-section-controls[toolbar-additional-controls]',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <button kendoButton (click)="expandAll.emit()" title="Expand all sections">
+        <button kendoButton
+                (click)="expandAll.emit()"
+                [disabled]="allExpanded"
+                title="Expand all sections">
             <span class="fa-solid fa-angle-double-down"></span>
         </button>
-        <button kendoButton (click)="collapseAll.emit()" title="Collapse all sections">
+        <button kendoButton
+                (click)="collapseAll.emit()"
+                [disabled]="allCollapsed"
+                title="Collapse all sections">
             <span class="fa-solid fa-angle-double-up"></span>
         </button>
+        <label class="show-empty-fields-toggle">
+            <input
+                type="checkbox"
+                [(ngModel)]="showEmptyFields"
+                (ngModelChange)="showEmptyFieldsChange.emit($event)">
+            <span>Show Empty Fields</span>
+        </label>
         <div style="position: relative;">
             <input
                 type="text"
@@ -110,17 +123,59 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
             padding: 4px 8px;
             min-width: unset;
         }
+
+        .show-empty-fields-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: 500;
+            color: #374151;
+            user-select: none;
+        }
+
+        .show-empty-fields-toggle:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+        }
+
+        .show-empty-fields-toggle input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .show-empty-fields-toggle span {
+            white-space: nowrap;
+        }
     `]
 })
 export class FormSectionControlsComponent {
     @Input() visibleCount: number = 0;
     @Input() totalCount: number = 0;
     @Input() searchFilter: string = '';
+    @Input() expandedCount: number = 0;
+    @Input() showEmptyFields: boolean = false;
     @Output() expandAll = new EventEmitter<void>();
     @Output() collapseAll = new EventEmitter<void>();
     @Output() filterChange = new EventEmitter<string>();
+    @Output() showEmptyFieldsChange = new EventEmitter<boolean>();
 
     searchTerm = '';
+
+    get allExpanded(): boolean {
+        return this.totalCount > 0 && this.expandedCount === this.totalCount;
+    }
+
+    get allCollapsed(): boolean {
+        return this.totalCount > 0 && this.expandedCount === 0;
+    }
 
     clearFilter(): void {
         this.searchTerm = '';

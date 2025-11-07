@@ -9,14 +9,14 @@
         sectionName="Report Details"
         icon="fa fa-file-alt"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -24,7 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -32,7 +32,7 @@
             FieldName="CategoryID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -42,7 +42,7 @@
             FieldName="SharingScope"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -50,7 +50,7 @@
             FieldName="Thumbnail"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -58,7 +58,7 @@
             FieldName="EnvironmentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -68,7 +68,7 @@
             FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -76,7 +76,7 @@
             FieldName="Environment"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -87,14 +87,14 @@
         sectionName="Data Context & Relationships"
         icon="fa fa-sitemap"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -104,7 +104,7 @@
             FieldName="ConversationID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -114,7 +114,7 @@
             FieldName="ConversationDetailID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -124,7 +124,7 @@
             FieldName="DataContextID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -134,7 +134,7 @@
             FieldName="OutputWorkflowID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -144,7 +144,7 @@
             FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -152,7 +152,7 @@
             FieldName="Conversation"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -160,7 +160,7 @@
             FieldName="DataContext"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -168,7 +168,7 @@
             FieldName="OutputWorkflow"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -179,14 +179,14 @@
         sectionName="Output & Scheduling"
         icon="fa fa-calendar"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Configuration"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -194,7 +194,7 @@
             FieldName="OutputTriggerTypeID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -204,7 +204,7 @@
             FieldName="OutputFormatTypeID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -214,7 +214,7 @@
             FieldName="OutputDeliveryTypeID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -224,7 +224,7 @@
             FieldName="OutputFrequency"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -232,7 +232,7 @@
             FieldName="OutputTargetEmail"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -240,7 +240,7 @@
             FieldName="OutputTriggerType"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -248,7 +248,7 @@
             FieldName="OutputFormatType"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -256,7 +256,7 @@
             FieldName="OutputDeliveryType"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -267,14 +267,14 @@
         sectionName="Details"
         icon="fa fa-align-left"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="false"
             FieldName="ConversationDetail"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -285,14 +285,14 @@
         sectionName="System Metadata"
         icon="fa fa-cog"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -300,7 +300,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -315,7 +315,7 @@
         icon="fa fa-camera"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reportSnapshots')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -336,7 +336,7 @@
         icon="fa fa-file-alt"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJReportVersions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -357,7 +357,7 @@
         icon="fa fa-chart-line"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJReportUserStates')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid

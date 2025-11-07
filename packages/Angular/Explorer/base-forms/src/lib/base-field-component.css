@@ -21,6 +21,14 @@
     align-self: start; /* Align the label to the start (top) */
 }
 
+/* Prevent horizontal overflow of field values */
+.record-form-row > :nth-child(2) {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    min-width: 0;
+}
+
 /*
   Eliminate the default margin and padding for the markdown elements
  */

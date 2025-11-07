@@ -597,7 +597,7 @@ export function Load${entity.ClassName}FormComponent() {
         sectionName="${section.Name}"
         icon="${icon}"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
 ${indentedFormHTML}
     </mj-collapsible-panel>`
 
@@ -704,7 +704,7 @@ ${indentedFormHTML}
             FieldName="${field.CodeName}"
             Type="${editControl}"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"${linkType ? `\n            LinkType="${linkType}"` : ''}${linkComponentType ? linkComponentType : ''}
+            [formContext]="formContext"${linkType ? `\n            LinkType="${linkType}"` : ''}${linkComponentType ? linkComponentType : ''}
         ></mj-form-field>
 `
           }
@@ -818,7 +818,7 @@ ${indentedFormHTML}
         icon="${iconClass}"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('${sectionKey}')">
         <div *ngIf="record.IsSaved">
 ${componentCodeWithIndent}

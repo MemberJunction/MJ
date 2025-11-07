@@ -21,10 +21,13 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
                         toolbar-additional-controls
                         [visibleCount]="formComponent.getVisibleSectionCount()"
                         [totalCount]="formComponent.getTotalSectionCount()"
+                        [expandedCount]="formComponent.getExpandedCount()"
                         [searchFilter]="formComponent.searchFilter"
+                        [showEmptyFields]="formComponent.showEmptyFields"
                         (expandAll)="formComponent.expandAllSections()"
                         (collapseAll)="formComponent.collapseAllSections()"
-                        (filterChange)="formComponent.onFilterChange($event)">
+                        (filterChange)="formComponent.onFilterChange($event)"
+                        (showEmptyFieldsChange)="formComponent.showEmptyFields = $event">
                     </mj-form-section-controls>
                 </mj-form-toolbar>
 
@@ -33,6 +36,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
                         <ng-content select="[slot='before-panels']"></ng-content>
                     </div>
                     <ng-content select="[slot='field-panels']"></ng-content>
+                    <div class="related-entities-divider"></div>
                     <div class="related-entity-grid">
                         <ng-content select="[slot='after-panels']"></ng-content>
                     </div>

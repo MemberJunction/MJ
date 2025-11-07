@@ -9,14 +9,14 @@
         sectionName="User Identity"
         icon="fa fa-id-card"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -24,7 +24,7 @@
             FieldName="FirstName"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -32,7 +32,7 @@
             FieldName="LastName"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -40,7 +40,7 @@
             FieldName="Title"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -48,7 +48,7 @@
             FieldName="Email"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Email"
         ></mj-form-field>
         <mj-form-field 
@@ -57,7 +57,7 @@
             FieldName="FirstLast"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -68,14 +68,14 @@
         sectionName="Account Settings"
         icon="fa fa-cog"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Type"
             Type="dropdownlist"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -83,7 +83,7 @@
             FieldName="IsActive"
             Type="checkbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -91,7 +91,7 @@
             FieldName="UserImageURL"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -99,7 +99,7 @@
             FieldName="UserImageIconClass"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -110,14 +110,14 @@
         sectionName="Entity Links"
         icon="fa fa-link"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="LinkedRecordType"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -125,7 +125,7 @@
             FieldName="LinkedEntityID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -135,7 +135,7 @@
             FieldName="LinkedEntityRecordID"
             Type="textarea"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -143,7 +143,7 @@
             FieldName="EmployeeID"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -156,14 +156,14 @@
         sectionName="Employee Details"
         icon="fa fa-user-tie"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="EmployeeFirstLast"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -171,7 +171,7 @@
             FieldName="EmployeeEmail"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -179,7 +179,7 @@
             FieldName="EmployeeTitle"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -187,7 +187,7 @@
             FieldName="EmployeeSupervisor"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -195,7 +195,7 @@
             FieldName="EmployeeSupervisorEmail"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -206,14 +206,14 @@
         sectionName="System Metadata"
         icon="fa fa-database"
         [form]="this"
-        [searchFilter]="searchFilter">
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -221,7 +221,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [sectionFilter]="searchFilter"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -236,7 +236,7 @@
         icon="fa fa-history"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('actionExecutionLogs')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -257,7 +257,7 @@
         icon="fa-solid fa-bolt"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('actions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -278,7 +278,7 @@
         icon="fa-solid fa-fingerprint"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('auditLogs')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -299,7 +299,7 @@
         icon="fa fa-comment"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('communicationRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -320,7 +320,7 @@
         icon="fa fa-briefcase"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('companyIntegrationRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -341,7 +341,7 @@
         icon="fa-regular fa-comments"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('conversations')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -362,7 +362,7 @@
         icon="fa fa-tachometer-alt"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('dashboardCategories')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -383,7 +383,7 @@
         icon="fa-solid fa-table-columns"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('dashboards')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -404,7 +404,7 @@
         icon="fa fa-database"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('dataContexts')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -425,7 +425,7 @@
         icon="fa fa-search"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('duplicateRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -446,7 +446,7 @@
         icon="fa fa-list-ul"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('lists')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -467,7 +467,7 @@
         icon="fa fa-folder"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queryCategories')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -488,7 +488,7 @@
         icon="fa fa-rocket"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recommendationRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -509,7 +509,7 @@
         icon="fa fa-sync"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recordChangeReplayRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -530,7 +530,7 @@
         icon="fa fa-history"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recordChanges')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -551,7 +551,7 @@
         icon="fa fa-clone"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recordMergeLogs')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -572,7 +572,7 @@
         icon="fa fa-folder-open"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reportCategories')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -593,7 +593,7 @@
         icon="fa fa-camera"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reportSnapshots')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -614,7 +614,7 @@
         icon="fa-solid fa-chart-line"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reports')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -635,7 +635,7 @@
         icon="fa fa-tags"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('templateCategories')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -656,7 +656,7 @@
         icon="fa-regular fa-rectangle-list"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('templates')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -677,7 +677,7 @@
         icon="fa fa-th"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userApplications')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -698,7 +698,7 @@
         icon="fa fa-star"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userFavorites')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -719,7 +719,7 @@
         icon="fa fa-bell"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userNotifications')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -740,7 +740,7 @@
         icon="fa fa-history"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userRecordLogs')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -761,7 +761,7 @@
         icon="fa fa-user-shield"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('roles')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -782,7 +782,7 @@
         icon="fa fa-folder-open"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userViewCategories')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -803,7 +803,7 @@
         icon="fa fa-eye"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userViewRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -824,7 +824,7 @@
         icon="fa-solid fa-table-cells"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userViews')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -845,7 +845,7 @@
         icon="fa fa-folder"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('workspaces')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -866,7 +866,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentNotes')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -887,7 +887,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentRequests')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -908,7 +908,7 @@
         icon="fa fa-list"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('listCategories')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -929,7 +929,7 @@
         icon="fa fa-key"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifactPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -950,7 +950,7 @@
         icon="fa fa-eye"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifactUses')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -971,7 +971,7 @@
         icon="fa fa-history"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifactVersions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -992,7 +992,7 @@
         icon="fa fa-comment"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJConversationDetailRatings')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1013,7 +1013,7 @@
         icon="fa fa-tachometer-alt"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJDashboardUserPreferences')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1034,7 +1034,7 @@
         icon="fa fa-tachometer-alt"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJDashboardUserStates')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1055,7 +1055,7 @@
         icon="fa fa-link"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJPublicLinks')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1076,7 +1076,7 @@
         icon="fa fa-chart-line"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJReportUserStates')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1097,7 +1097,7 @@
         icon="fa fa-tasks"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJScheduledJobRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1118,7 +1118,7 @@
         icon="fa fa-calendar"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJScheduledJobs')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1139,7 +1139,7 @@
         icon="fa fa-link"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('resourceLinks')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1160,7 +1160,7 @@
         icon="fa fa-calendar"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('scheduledActions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1181,7 +1181,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentRequests')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1202,7 +1202,7 @@
         icon="fa fa-comments"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('conversationDetails')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1223,7 +1223,7 @@
         icon="fa fa-lock"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAccessControlRules')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1244,7 +1244,7 @@
         icon="fa fa-key"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifactPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1265,7 +1265,7 @@
         icon="fa fa-file"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifacts')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1286,7 +1286,7 @@
         icon="fa fa-folder"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJCollectionPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1307,7 +1307,7 @@
         icon="fa fa-calendar"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJScheduledJobs')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1328,7 +1328,7 @@
         icon="fa fa-lock"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('resourcePermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1349,7 +1349,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1370,7 +1370,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentRuns')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1391,7 +1391,7 @@
         icon="fa fa-folder"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJCollectionPermissions')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1412,7 +1412,7 @@
         icon="fa fa-folder-open"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJCollections')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1433,7 +1433,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentExamples')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1454,7 +1454,7 @@
         icon="fa fa-tasks"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTasks')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
@@ -1475,7 +1475,7 @@
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
-        [searchFilter]="searchFilter"
+        [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgents')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid

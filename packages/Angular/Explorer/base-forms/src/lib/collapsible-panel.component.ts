@@ -1,5 +1,8 @@
-import { Component, Input, OnChanges, SimpleChanges, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList, HostBinding } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList, HostBinding, Output, EventEmitter } from '@angular/core';
 import { MJFormField } from './base-field-component';
+import { BaseFormContext } from './base-form-context';
+
+export type PanelWidthMode = 'normal' | 'full-width';
 
 /**
  * Reusable collapsible panel component for form sections
@@ -9,6 +12,7 @@ import { MJFormField } from './base-field-component';
  * - Yellow highlighting of matched section names
  * - Visibility management based on section name or field name matches
  * - Passes sectionFilter down to child mj-form-field components for their own label highlighting
+ * - Panel width modes: normal (default), full-width (spans entire row)
  */
 @Component({
     selector: 'mj-collapsible-panel',
@@ -18,8 +22,8 @@ import { MJFormField } from './base-field-component';
             [class.related-entity]="variant === 'related-entity'"
             [attr.data-section-name]="sectionName"
             [attr.data-field-names]="fieldNames">
-            <div class="collapsible-header" (click)="toggle()" role="button" tabindex="0">
-                <div class="collapsible-title">
+            <div class="collapsible-header" role="button" tabindex="0">
+                <div class="collapsible-title" (click)="toggle()">
                     <i [class]="icon"></i>
                     <h3>
                         <span class="section-name" [innerHTML]="displayName"></span>
@@ -31,7 +35,18 @@ import { MJFormField } from './base-field-component';
                         }
                     </h3>
                 </div>
-                <div class="collapse-icon">
+                <div class="panel-width-controls">
+                    <button
+                        class="width-control-btn"
+                        [class.active]="widthMode === 'full-width'"
+                        (click)="toggleFullWidth($event)"
+                        title="Stretch panel to full width"
+                        aria-label="Stretch panel to full width"
+                        type="button">
+                        <i class="fa-solid fa-left-right"></i>
+                    </button>
+                </div>
+                <div class="collapse-icon" (click)="toggle()">
                     <i [class]="expanded ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
@@ -51,11 +66,21 @@ import { MJFormField } from './base-field-component';
             display: none;
         }
 
+        :host(.panel-full-width) {
+            grid-column: 1 / -1 !important;
+        }
+
         .form-card {
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        :host(.panel-full-width) .form-card {
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.15);
+            border: 2px solid #667eea;
         }
 
         .collapsible-card {
@@ -66,10 +91,10 @@ import { MJFormField } from './base-field-component';
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 12px;
             padding: 20px 24px;
             background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
             border-bottom: 2px solid #e5e7eb;
-            cursor: pointer;
             user-select: none;
             transition: all 0.3s ease;
         }
@@ -84,6 +109,7 @@ import { MJFormField } from './base-field-component';
             align-items: center;
             gap: 12px;
             flex: 1;
+            cursor: pointer;
         }
 
         .collapsible-title i {
@@ -98,9 +124,47 @@ import { MJFormField } from './base-field-component';
             color: #1f2937;
         }
 
+        .panel-width-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .width-control-btn {
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid #d1d5db;
+            background: white;
+            color: #6b7280;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .width-control-btn:hover {
+            background: #f3f4f6;
+            color: #374151;
+            border-color: #9ca3af;
+        }
+
+        .width-control-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .width-control-btn i {
+            font-size: 12px;
+        }
+
         .collapsible-header .collapse-icon {
             color: #6b7280;
             transition: transform 0.3s ease;
+            cursor: pointer;
+            padding: 4px;
         }
 
         .collapsible-body {
@@ -118,6 +182,8 @@ import { MJFormField } from './base-field-component';
 
         .form-body {
             padding: 24px;
+            overflow: auto;
+            max-height: 600px;
         }
 
         /* Related Entity Sections - Visual Distinction */
@@ -179,9 +245,12 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
     @Input() sectionName: string = '';
     @Input() icon: string = 'fa fa-folder';
     @Input() form: any; // Reference to the form component for method calls
-    @Input() searchFilter: string = '';
+    @Input() formContext?: BaseFormContext; // Contains all form-level state
     @Input() variant: 'default' | 'related-entity' = 'default';
     @Input() badgeCount: number | undefined;
+    @Input() entityName: string = ''; // For localStorage key generation
+
+    @Output() widthModeChange = new EventEmitter<PanelWidthMode>();
 
     @ContentChildren(MJFormField, { descendants: true }) fieldComponents!: QueryList<MJFormField>;
 
@@ -190,6 +259,12 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
         return !this.isVisible;
     }
 
+    @HostBinding('class.panel-full-width')
+    get isFullWidth(): boolean {
+        return this.widthMode === 'full-width';
+    }
+
+
     get expanded(): boolean {
         return this.form ? this.form.IsSectionExpanded(this.sectionKey) : true;
     }
@@ -197,6 +272,7 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
     displayName: string = '';
     fieldNames: string = '';
     isVisible: boolean = true;
+    widthMode: PanelWidthMode = 'normal';
 
     constructor(private cdr: ChangeDetectorRef) {}
 
@@ -206,6 +282,9 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
         this.fieldComponents.changes.subscribe(() => {
             this.updateFieldNames();
         });
+
+        // Load saved width mode from localStorage
+        this.loadWidthMode();
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -213,14 +292,14 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
             this.displayName = this.sectionName;
         }
 
-        if (changes['searchFilter'] || changes['sectionName']) {
+        if (changes['sectionName'] || changes['formContext']) {
             this.updateVisibilityAndHighlighting();
         }
 
-        // Update sectionFilter on all child field components when it changes
-        if (changes['searchFilter'] && this.fieldComponents) {
+        // Update context on all child field components when it changes
+        if (changes['formContext'] && this.fieldComponents) {
             this.fieldComponents.forEach(field => {
-                field.sectionFilter = this.searchFilter;
+                field.formContext = this.formContext;
             });
         }
     }
@@ -229,6 +308,53 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
         if (this.form) {
             this.form.SetSectionExpanded(this.sectionKey, !this.expanded);
             this.cdr.markForCheck();
+        }
+    }
+
+    toggleFullWidth(event: Event): void {
+        event.stopPropagation();
+        const newMode = this.widthMode === 'full-width' ? 'normal' : 'full-width';
+
+        // Auto-expand panel when switching to full-width mode
+        if (newMode === 'full-width' && !this.expanded && this.form) {
+            this.form.SetSectionExpanded(this.sectionKey, true);
+        }
+
+        this.setWidthMode(newMode);
+    }
+
+    setWidthMode(mode: PanelWidthMode): void {
+        this.widthMode = mode;
+        this.saveWidthMode();
+        this.widthModeChange.emit(mode);
+        this.cdr.markForCheck();
+    }
+
+    private getStorageKey(): string {
+        // Generate unique key based on entity name and section key
+        const entity = this.entityName || 'unknown';
+        return `mj_panel_width_${entity}_${this.sectionKey}`;
+    }
+
+    private saveWidthMode(): void {
+        try {
+            const key = this.getStorageKey();
+            localStorage.setItem(key, this.widthMode);
+        } catch (e) {
+            console.warn('Failed to save panel width mode to localStorage:', e);
+        }
+    }
+
+    private loadWidthMode(): void {
+        try {
+            const key = this.getStorageKey();
+            const saved = localStorage.getItem(key);
+            if (saved && (saved === 'normal' || saved === 'full-width')) {
+                this.widthMode = saved as PanelWidthMode;
+                this.cdr.markForCheck();
+            }
+        } catch (e) {
+            console.warn('Failed to load panel width mode from localStorage:', e);
         }
     }
 
@@ -247,7 +373,7 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
     }
 
     private updateVisibilityAndHighlighting(): void {
-        const searchTerm = this.searchFilter.toLowerCase().trim();
+        const searchTerm = (this.formContext?.sectionFilter || '').toLowerCase().trim();
 
         if (!searchTerm) {
             // No filter - show everything, clear highlights

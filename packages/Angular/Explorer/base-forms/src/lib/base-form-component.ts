@@ -10,6 +10,7 @@ import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
          RunViewResult} from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormSectionInfo } from './base-form-section-info';
+import { BaseFormContext } from './base-form-context';
 import { CollapsiblePanelComponent } from './collapsible-panel.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -97,7 +98,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
     // Set up debounced filter subscription
     this.filterSubscription = this.filterSubject
-      .pipe(debounceTime(250))
+      .pipe(debounceTime(100))
       .subscribe(searchTerm => {
         this.searchFilter = searchTerm;
       });
@@ -642,6 +643,24 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public searchFilter: string = '';
 
   /**
+   * Controls whether empty fields should be shown in read-only mode.
+   * When false (default), empty fields are hidden to reduce visual clutter.
+   */
+  public showEmptyFields: boolean = false;
+
+  /**
+   * Returns the current form context containing all form-level state.
+   * This is a computed property that creates a fresh context object on each access,
+   * ensuring child components always have the latest values.
+   */
+  public get formContext(): BaseFormContext {
+    return {
+      sectionFilter: this.searchFilter,
+      showEmptyFields: this.showEmptyFields
+    };
+  }
+
+  /**
    * Subject for debouncing filter changes.
    */
   private filterSubject = new Subject<string>();
@@ -780,6 +799,47 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    */
   public onFilterChange(searchTerm: string): void {
     this.filterSubject.next(searchTerm);
+  }
+
+  /**
+   * Gets the entity name for the current record (used for localStorage keys).
+   * @returns Entity name or empty string
+   */
+  public getEntityName(): string {
+    return this.record?.EntityInfo?.Name || '';
+  }
+
+  /**
+   * Resets all panel width modes to normal for the current entity.
+   * Clears localStorage for all panels associated with this entity.
+   */
+  public resetAllPanelWidths(): void {
+    const entityName = this.getEntityName();
+    if (!entityName) return;
+
+    try {
+      // Find all localStorage keys for this entity's panels
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`mj_panel_width_${entityName}_`)) {
+          keysToRemove.push(key);
+        }
+      }
+
+      // Remove all found keys
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // Trigger re-render if we have collapsible panels
+      if (this.collapsiblePanels) {
+        this.collapsiblePanels.forEach(panel => {
+          panel.widthMode = 'normal';
+          panel['cdr'].markForCheck();
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to reset panel widths:', e);
+    }
   }
 
   // #endregion

@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, Renderer2, ChangeDetectorRef } from '@angular/core';
 import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
+import { BaseFormContext } from './base-form-context';
 import { MarkdownComponent } from 'ngx-markdown';
 import { languages } from '@codemirror/language-data';
 
@@ -49,9 +50,15 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   @Input() ShowLabel: boolean = true;
 
   /**
-   * Optional search filter from the section controls. When provided, the field label will highlight matching text.
+   * Form context containing all form-level state (filter, showEmptyFields, etc.)
    */
-  @Input() sectionFilter: string = '';
+  @Input() formContext?: BaseFormContext;
+
+  /**
+   * When true (default), the field will be hidden when it has no value and is in read-only mode.
+   * This helps reduce visual clutter by hiding empty fields.
+   */
+  @Input() hideWhenEmptyInReadOnlyMode: boolean = true;
 
   languages = languages;
 
@@ -74,15 +81,16 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   }
 
   /**
-   * Returns the display name with search highlighting applied if sectionFilter is set
+   * Returns the display name with search highlighting applied if formContext.sectionFilter is set
    */
   public get HighlightedDisplayName(): string {
     const displayName = this.DisplayName;
-    if (!this.sectionFilter || !this.sectionFilter.trim()) {
+    const filter = this.formContext?.sectionFilter;
+    if (!filter || !filter.trim()) {
       return displayName;
     }
 
-    const searchTerm = this.sectionFilter.toLowerCase().trim();
+    const searchTerm = filter.toLowerCase().trim();
     if (!displayName.toLowerCase().includes(searchTerm)) {
       return displayName;
     }
@@ -160,7 +168,26 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
     else throw new Error(`Field ${this.FieldName} not found in record ${this.record.EntityInfo.Name}`);
   }
 
-  @ViewChild('markdown', { static: false }) markdown: MarkdownComponent | undefined;
+  /**
+   * Returns true if the field should be hidden (empty value in read-only mode with hideWhenEmptyInReadOnlyMode enabled)
+   */
+  public get shouldHideField(): boolean {
+    // If form-level "Show Empty Fields" is enabled, never hide
+    if (this.formContext?.showEmptyFields) {
+      return false;
+    }
+
+    // Don't hide if the feature is disabled or we're in edit mode
+    if (!this.hideWhenEmptyInReadOnlyMode || this.EditMode) {
+      return false;
+    }
+
+    // Check if the field has a value
+    const value = this.record.Get(this.FieldName);
+    return value === null || value === undefined || value === '';
+  }
+
+  @ViewChild('markdown', { static: false}) markdown: MarkdownComponent | undefined;
 
   constructor(
     private renderer: Renderer2,
