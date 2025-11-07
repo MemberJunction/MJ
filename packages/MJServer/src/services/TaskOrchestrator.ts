@@ -51,7 +51,8 @@ export class TaskOrchestrator {
         private pubSub?: PubSubEngine,
         private sessionId?: string,
         private userPayload?: UserPayload,
-        private createNotifications: boolean = false
+        private createNotifications: boolean = false,
+        private conversationDetailId?: string
     ) {}
 
     /**
@@ -219,7 +220,8 @@ export class TaskOrchestrator {
                     taskName,
                     message,
                     percentComplete,
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    conversationDetailId: this.conversationDetailId
                 }
             }),
             sessionId: this.userPayload.sessionId
@@ -249,7 +251,8 @@ export class TaskOrchestrator {
                     taskName,
                     agentStep,
                     agentMessage,
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    conversationDetailId: this.conversationDetailId
                 }
             }),
             sessionId: this.userPayload.sessionId

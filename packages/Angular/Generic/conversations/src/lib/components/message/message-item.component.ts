@@ -108,16 +108,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      LogStatusEx({message: `🎯 Message ${this.message.ID} status changed to Complete, stopping timer`, verboseOnly: true});
-
       // Stop the elapsed time interval
       if (this._elapsedTimeInterval !== null) {
         clearInterval(this._elapsedTimeInterval);
         this._elapsedTimeInterval = null;
       }
 
-      // Force change detection to update the pill color
-      this.cdRef.markForCheck();
+      // Force immediate synchronous change detection for dynamically created components
+      // markForCheck() only schedules a check which may not run for dynamic components
+      // detectChanges() forces immediate view update so UI shows timer stopped right away
+      this.cdRef.detectChanges();
     }
 
     // Update previous status for next check
@@ -530,6 +530,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * - Failed messages: Time before failure
    */
   public get timePillText(): string | null {
+    return this.calculateTimePillText();
+  }
+
+  private calculateTimePillText(): string | null {
     if (this.isUserMessage) {
       return null;
     }
