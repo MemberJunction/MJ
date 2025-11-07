@@ -20,6 +20,7 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIAgentRelationshipEntity,
          AIAgentPermissionEntity,
          AIAgentDataSourceEntity,
+         AIAgentConfigurationEntity,
          AIAgentExampleEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
  
@@ -53,6 +54,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentSteps: AIAgentStepEntity[] = [];
     private _agentStepPaths: AIAgentStepPathEntity[] = [];
     private _agentPermissions: AIAgentPermissionEntity[] = [];
+    private _agentConfigurations: AIAgentConfigurationEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -167,6 +169,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentDataSources',
                 EntityName: 'MJ: AI Agent Data Sources'
+            },
+            {
+                PropertyName: '_agentConfigurations',
+                EntityName: 'MJ: AI Agent Configurations'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -341,6 +347,53 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentPrompts;
     }
 
+    /**
+     * Cached array of AI Agent Configurations loaded from the database.
+     * These define semantic presets for agents (e.g., "Fast", "High Quality").
+     */
+    public get AgentConfigurations(): AIAgentConfigurationEntity[] {
+        return this._agentConfigurations;
+    }
+
+    /**
+     * Gets all configuration presets for a specific agent
+     * @param agentId The agent ID
+     * @param activeOnly If true, only returns Active status presets (default: true)
+     * @returns Array of configuration presets sorted by Priority
+     */
+    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): AIAgentConfigurationEntity[] {
+        let presets = this._agentConfigurations.filter(ac => ac.AgentID === agentId);
+
+        if (activeOnly) {
+            presets = presets.filter(ac => ac.Status === 'Active');
+        }
+
+        return presets.sort((a, b) => a.Priority - b.Priority);
+    }
+
+    /**
+     * Gets the default configuration preset for an agent
+     * @param agentId The agent ID
+     * @returns The default preset, or undefined if none exists
+     */
+    public GetDefaultAgentConfigurationPreset(agentId: string): AIAgentConfigurationEntity | undefined {
+        const presets = this.GetAgentConfigurationPresets(agentId, true);
+        return presets.find(ac => ac.IsDefault);
+    }
+
+    /**
+     * Gets a specific configuration preset by agent ID and preset name
+     * @param agentId The agent ID
+     * @param presetName The preset name (e.g., "Fast", "HighQuality")
+     * @returns The configuration preset, or undefined if not found
+     */
+    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): AIAgentConfigurationEntity | undefined {
+        return this._agentConfigurations.find(
+            ac => ac.AgentID === agentId &&
+                  ac.Name === presetName &&
+                  ac.Status === 'Active'
+        );
+    }
 
     public get AgentNoteTypes(): AIAgentNoteTypeEntity[] {
         return this._agentNoteTypes;

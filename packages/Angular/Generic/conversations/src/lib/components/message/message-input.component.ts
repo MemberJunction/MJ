@@ -447,6 +447,15 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     isFirstMessage: boolean
   ): Promise<void> {
     console.log('🎯 Direct @mention detected, bypassing Sage');
+
+    // Extract mention chip data to get configuration preset if any
+    const chipData = this.inputBox?.getMentionChipsData() || [];
+    const agentChip = chipData.find(chip => chip.id === agentMention.id && chip.type === 'agent');
+    if (agentChip?.presetId) {
+      agentMention.configurationId = agentChip.presetId;
+      console.log(`🎯 Using configuration preset: ${agentChip.presetName} (${agentChip.presetId})`);
+    }
+
     await this.executeRouteWithNaming(
       () => this.invokeAgentDirectly(messageDetail, agentMention, this.conversationId),
       messageDetail.Message,
@@ -1673,7 +1682,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         previousPayload, // Pass previous payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
-        artifactInfo?.versionId
+        artifactInfo?.versionId,
+        agentMention.configurationId // Pass configuration preset ID
       );
 
       // Remove from active tasks

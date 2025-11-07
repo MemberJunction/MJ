@@ -119,4 +119,11 @@ export class MessageInputBoxComponent {
       editor.focus();
     }
   }
+
+  /**
+   * Get mention chip data including configuration presets
+   */
+  getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
+    return this.mentionEditor?.getMentionChipsData() || [];
+  }
 }

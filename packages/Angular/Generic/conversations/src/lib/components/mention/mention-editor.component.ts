@@ -13,6 +13,8 @@ import {
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { UserInfo } from '@memberjunction/core';
+import { AIEngine } from '@memberjunction/aiengine';
+import { AIAgentConfigurationEntity } from '@memberjunction/core-entities';
 
 /**
  * ContentEditable-based mention editor with visual chips/pills
@@ -337,6 +339,30 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     chip.setAttribute('data-mention-type', suggestion.type);
     chip.setAttribute('data-mention-name', suggestion.name);
 
+    // For agents, get configuration presets (AIEngine.Config() already called during app init)
+    let presets: AIAgentConfigurationEntity[] = [];
+    if (suggestion.type === 'agent') {
+      console.log(`[MentionEditor] Loading presets for agent: ${suggestion.name} (${suggestion.id})`);
+      presets = AIEngine.Instance.GetAgentConfigurationPresets(suggestion.id, true);
+      console.log(`[MentionEditor] Found ${presets.length} active presets:`, presets.map(p => ({
+        Name: p.Name,
+        DisplayName: p.DisplayName,
+        IsDefault: p.IsDefault,
+        Priority: p.Priority,
+        AIConfigurationID: p.AIConfigurationID
+      })));
+
+      // Store default preset
+      const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
+      if (defaultPreset) {
+        console.log(`[MentionEditor] Using default preset: ${defaultPreset.DisplayName} (${defaultPreset.Name})`);
+        chip.setAttribute('data-preset-id', defaultPreset.AIConfigurationID || '');
+        chip.setAttribute('data-preset-name', defaultPreset.Name || '');
+      } else {
+        console.log(`[MentionEditor] No default preset found for agent`);
+      }
+    }
+
     // Apply inline styles directly
     const isUser = suggestion.type === 'user';
     chip.style.cssText = `
@@ -396,9 +422,181 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const text = document.createTextNode(suggestion.displayName);
     chip.appendChild(text);
 
+    // Add dropdown if 2+ presets for agents
+    if (suggestion.type === 'agent' && presets.length >= 2) {
+      console.log(`[MentionEditor] Adding configuration dropdown with ${presets.length} presets`);
+      this.addConfigurationDropdown(chip, presets);
+    } else if (suggestion.type === 'agent') {
+      console.log(`[MentionEditor] Skipping dropdown - only ${presets.length} preset(s) available`);
+    }
+
     console.log('[MentionEditor] Created chip:', chip.outerHTML);
 
     return chip;
+  }
+
+  /**
+   * Add configuration preset dropdown to agent chip
+   */
+  private addConfigurationDropdown(chip: HTMLSpanElement, presets: AIAgentConfigurationEntity[]): void {
+    // Add vertical divider
+    const divider = document.createElement('span');
+    divider.style.cssText = `
+      width: 1px;
+      height: 16px;
+      background: rgba(255, 255, 255, 0.3);
+      margin: 0 6px 0 8px;
+    `;
+    chip.appendChild(divider);
+
+    // Add dropdown chevron button
+    const chevron = document.createElement('i');
+    chevron.className = 'fa-solid fa-chevron-down';
+    chevron.style.cssText = `
+      font-size: 10px;
+      opacity: 0.9;
+      cursor: pointer;
+      padding: 2px;
+    `;
+    chip.appendChild(chevron);
+
+    // Create dropdown menu (initially hidden)
+    const dropdown = document.createElement('div');
+    dropdown.className = 'preset-dropdown';
+    dropdown.style.cssText = `
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      min-width: 200px;
+      max-width: 300px;
+      z-index: 1000;
+      overflow: hidden;
+    `;
+
+    // Add preset options to dropdown
+    presets.forEach(preset => {
+      const option = document.createElement('div');
+      option.className = 'preset-option';
+      option.style.cssText = `
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 0.2s;
+      `;
+
+      // Check if this is the selected preset
+      const currentPresetId = chip.getAttribute('data-preset-id');
+      const isSelected = preset.AIConfigurationID === currentPresetId;
+
+      // Add checkmark for selected option
+      const checkmark = document.createElement('i');
+      checkmark.className = 'fa-solid fa-check';
+      checkmark.style.cssText = `
+        font-size: 12px;
+        color: #667eea;
+        opacity: ${isSelected ? '1' : '0'};
+        width: 14px;
+      `;
+      option.appendChild(checkmark);
+
+      // Add preset text content
+      const textContainer = document.createElement('div');
+      textContainer.style.cssText = 'flex: 1;';
+
+      const displayName = document.createElement('div');
+      displayName.textContent = preset.DisplayName || preset.Name;
+      displayName.style.cssText = `
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+      `;
+      textContainer.appendChild(displayName);
+
+      if (preset.Description) {
+        const description = document.createElement('div');
+        description.textContent = preset.Description;
+        description.style.cssText = `
+          font-size: 11px;
+          color: #666;
+          margin-top: 2px;
+        `;
+        textContainer.appendChild(description);
+      }
+
+      option.appendChild(textContainer);
+
+      // Hover effects
+      option.addEventListener('mouseenter', () => {
+        option.style.background = '#f5f5f5';
+      });
+      option.addEventListener('mouseleave', () => {
+        option.style.background = 'white';
+      });
+
+      // Click handler to select preset
+      option.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        // Update chip data attributes
+        chip.setAttribute('data-preset-id', preset.AIConfigurationID || '');
+        chip.setAttribute('data-preset-name', preset.Name || '');
+
+        // Update checkmarks
+        dropdown.querySelectorAll('.preset-option').forEach((opt, idx) => {
+          const check = opt.querySelector('i.fa-check') as HTMLElement;
+          if (check) {
+            check.style.opacity = idx === presets.indexOf(preset) ? '1' : '0';
+          }
+        });
+
+        // Close dropdown
+        dropdown.style.display = 'none';
+      });
+
+      dropdown.appendChild(option);
+    });
+
+    // Add dropdown to chip (make chip position: relative)
+    chip.style.position = 'relative';
+    chip.appendChild(dropdown);
+
+    // Toggle dropdown on chevron click
+    chevron.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = dropdown.style.display === 'block';
+      dropdown.style.display = isVisible ? 'none' : 'block';
+    });
+
+    // Close dropdown when clicking outside
+    const closeDropdown = (e: MouseEvent) => {
+      if (!chip.contains(e.target as Node)) {
+        dropdown.style.display = 'none';
+      }
+    };
+    document.addEventListener('click', closeDropdown);
+
+    // Cleanup listener when chip is removed
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.removedNodes.forEach((node) => {
+          if (node === chip) {
+            document.removeEventListener('click', closeDropdown);
+            observer.disconnect();
+          }
+        });
+      });
+    });
+    if (chip.parentNode) {
+      observer.observe(chip.parentNode, { childList: true });
+    }
   }
 
   /**
@@ -561,5 +759,36 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       this.editorRef.nativeElement.textContent = '';
       this.onInput();
     }
+  }
+
+  /**
+   * Extract mention chips with their configuration data
+   * Returns array of objects containing mention info and preset configuration
+   */
+  public getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
+    const editor = this.editorRef?.nativeElement;
+    if (!editor) return [];
+
+    const chips: Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> = [];
+    const mentionElements = editor.querySelectorAll('.mention-chip');
+
+    mentionElements.forEach(chip => {
+      const element = chip as HTMLElement;
+      const id = element.getAttribute('data-mention-id') || '';
+      const type = element.getAttribute('data-mention-type') || '';
+      const name = element.getAttribute('data-mention-name') || '';
+      const presetId = element.getAttribute('data-preset-id') || undefined;
+      const presetName = element.getAttribute('data-preset-name') || undefined;
+
+      chips.push({
+        id,
+        type,
+        name,
+        ...(presetId ? { presetId } : {}),
+        ...(presetName ? { presetName } : {})
+      });
+    });
+
+    return chips;
   }
 }
