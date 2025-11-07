@@ -99,6 +99,26 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createRetryStep(validationResult.message);
             }
 
+            // Check for Chat nextStep BEFORE checking taskComplete
+            // This allows agents to ask for user clarification even when taskComplete=true
+            if (response.nextStep?.type === 'Chat') {
+                if (!response.message) {
+                    return this.createRetryStep('Chat type specified but no user message provided');
+                }
+                LogStatusEx({
+                    message: '💬 Loop Agent: Requesting user interaction. Message: ' + response.message,
+                    verboseOnly: true
+                });
+                return this.createNextStep('Chat', {
+                    message: response.message,
+                    terminate: true, // Chat always terminates to return to user
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    suggestedResponses: response.suggestedResponses,
+                    reasoning: response.reasoning,
+                    confidence: response.confidence
+                });
+            }
+
             // Check if task is complete
             if (response.taskComplete) {
                 LogStatusEx({
@@ -154,17 +174,6 @@ export class LoopAgentType extends BaseAgentType {
                             name: action.name,
                             params: action.params
                         }))
-                    }
-                    break;
-                case 'Chat':
-                    if (!response.message) {
-                        retVal.step = 'Retry';
-                        retVal.errorMessage = 'Chat type specified but no user message provided';
-                    }
-                    else {
-                        retVal.step = 'Chat';
-                        retVal.message = response.message;
-                        retVal.terminate = true; // when chat request, this agent needs to return back to the caller/user
                     }
                     break;
                 case 'ForEach':

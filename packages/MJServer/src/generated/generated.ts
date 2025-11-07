@@ -25279,6 +25279,9 @@ export class MJSchemaInfo_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    Description?: string;
+        
 }
 
 //****************************************************************************
@@ -25300,6 +25303,9 @@ export class CreateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
 }
     
 
@@ -25322,6 +25328,9 @@ export class UpdateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     Comments?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

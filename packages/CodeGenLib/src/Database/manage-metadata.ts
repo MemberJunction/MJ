@@ -137,6 +137,14 @@ export class ManageMetadataBase {
          bSuccess = false;
       }
 
+      start = new Date();
+      logStatus('   Syncing schema info from database...');
+      if (! await this.updateSchemaInfoFromDatabase(pool, excludeSchemas)) {
+         logError('   Error syncing schema info');
+         bSuccess = false;
+      }
+      logStatus(`    > Synced schema info in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+
       return bSuccess;
    }
 
@@ -1256,6 +1264,32 @@ NumberedRows AS (
          return false;
       }
    }
+
+   /**
+    * Syncs SchemaInfo records from database schemas, capturing extended properties as descriptions.
+    * Creates new SchemaInfo records for schemas that don't exist yet and updates descriptions
+    * from schema extended properties for existing records.
+    * @param pool - SQL connection pool
+    * @param excludeSchemas - Array of schema names to exclude from processing
+    * @returns Promise<boolean> - true if successful, false otherwise
+    */
+   protected async updateSchemaInfoFromDatabase(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const sSQL = `EXEC [${mj_core_schema()}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
+         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
+
+         if (result && result.length > 0) {
+            logStatus(`   > Updated/created ${result.length} SchemaInfo records`);
+         }
+
+         return true;
+      }
+      catch (e) {
+         logError(e as string);
+         return false;
+      }
+   }
+
    protected async deleteUnneededEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
