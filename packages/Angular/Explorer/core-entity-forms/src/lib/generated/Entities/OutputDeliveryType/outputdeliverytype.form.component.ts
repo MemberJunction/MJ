@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { OutputDeliveryTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadOutputDeliveryTypeDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Output Delivery Types') // Tell MemberJunction about this class
@@ -13,8 +12,22 @@ import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 })
 export class OutputDeliveryTypeFormComponent extends BaseFormComponent {
     public record!: OutputDeliveryTypeEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        deliveryTypeDetails: true,
+        systemMetadata: false,
+        reports: false
+    };
+
+    // Row counts for related entity sections (populated after grids load)
+    public sectionRowCounts: { [key: string]: number } = {};
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadOutputDeliveryTypeFormComponent() {
-    LoadOutputDeliveryTypeDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }
