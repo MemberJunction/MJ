@@ -114,7 +114,8 @@ export class ManageMetadataBase {
       logStatus(`    > Recompiled base views in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
       start = new Date();
       logStatus('   Managing entity fields...');
-      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser)) {
+      // note that we skip Advanced Generation here because we do it again later when the manageSQLScriptsAndExecution occurs in SQLCodeGen class
+      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser, true)) {
          logError('   Error managing entity fields');
          bSuccess = false;
       }
@@ -509,7 +510,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo): Promise<boolean> {
+   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
@@ -574,12 +575,14 @@ export class ManageMetadataBase {
       }
 
       // Advanced Generation - Smart field identification and form layout
-      const step7StartTime: Date = new Date();
-      if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
-         logError('Error applying advanced generation features');
-         // Don't fail the entire process - advanced generation is optional
+      if (!skipAdvancedGeneration) {
+         const step7StartTime: Date = new Date();
+         if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
+            logError('Error applying advanced generation features');
+            // Don't fail the entire process - advanced generation is optional
+         }
+         logStatus(`      Applied advanced generation features in ${(new Date().getTime() - step7StartTime.getTime()) / 1000} seconds`);
       }
-      logStatus(`      Applied advanced generation features in ${(new Date().getTime() - step7StartTime.getTime()) / 1000} seconds`);
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 

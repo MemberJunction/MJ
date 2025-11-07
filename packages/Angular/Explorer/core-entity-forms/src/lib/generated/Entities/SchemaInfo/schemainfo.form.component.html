@@ -2,63 +2,20 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
-            </span>
-        </div>
         <div class="form-panels-container">
-<!-- Identifier Section -->
-        <div class="form-card collapsible-card" data-section-name="identifier" data-field-names="">
-            <div class="collapsible-header" (click)="toggleSection('identifier')" role="button" tabindex="0">
+<!-- Identifier Range Section -->
+        <div class="form-card collapsible-card" data-section-name="identifier range" data-field-names="entityidmin entity idmin entityidmax entity idmax">
+            <div class="collapsible-header" (click)="toggleSection('identifierRange')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-key"></i>
-                    <h3><span class="section-name">Identifier</span></h3>
+                    <h3><span class="section-name">Identifier Range</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.identifier ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.identifierRange ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identifier">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identifierRange">
                 <div class="form-body">
-
-                </div>
-            </div>
-        </div>
-
-        <!-- Schema Definition Section -->
-        <div class="form-card collapsible-card" data-section-name="schema definition" data-field-names="schemaname schema name entityidmin entity idmin entityidmax entity idmax">
-            <div class="collapsible-header" (click)="toggleSection('schemaDefinition')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3><span class="section-name">Schema Definition</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.schemaDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.schemaDefinition">
-                <div class="form-body">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SchemaName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -78,23 +35,37 @@
             </div>
         </div>
 
-        <!-- Audit & Notes Section -->
-        <div class="form-card collapsible-card" data-section-name="audit & notes" data-field-names="comments">
-            <div class="collapsible-header" (click)="toggleSection('auditNotes')" role="button" tabindex="0">
+        <!-- Schema Information Section -->
+        <div class="form-card collapsible-card" data-section-name="schema information" data-field-names="schemaname schema name comments description">
+            <div class="collapsible-header" (click)="toggleSection('schemaInformation')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-clipboard"></i>
-                    <h3><span class="section-name">Audit & Notes</span></h3>
+                    <i class="fa fa-file-alt"></i>
+                    <h3><span class="section-name">Schema Information</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.auditNotes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.schemaInformation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.auditNotes">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.schemaInformation">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
+            FieldName="SchemaName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Comments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
