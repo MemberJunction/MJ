@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { QueryFieldEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadQueryFieldDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Query Fields') // Tell MemberJunction about this class
 @Component({
@@ -12,8 +11,19 @@ import { LoadQueryFieldDetailsComponent } from "./sections/details.component"
 })
 export class QueryFieldFormComponent extends BaseFormComponent {
     public record!: QueryFieldEntity;
-} 
+
+    // Collapsible section state
+    public sectionsExpanded = {
+        fieldDefinitionPresentation: true,
+        dataTypeSourceMapping: true,
+        systemMetadata: false
+    };
+
+    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
+        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    }
+}
 
 export function LoadQueryFieldFormComponent() {
-    LoadQueryFieldDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

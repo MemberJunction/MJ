@@ -1,0 +1,57 @@
+{
+  "eval_id": "event-attendance-quarterly",
+  "category": "trend",
+  "difficulty": "medium",
+  "tags": ["events", "attendance", "trend", "quarterly"],
+
+  "business_context": "Event managers need to understand attendance patterns across quarters to optimize event scheduling, budget allocation, and venue planning.",
+
+  "prompt": "Show event attendance trends by quarter",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "quarters_shown",
+        "expected_range": [12, 20],
+        "description": "Should show quarterly data for multiple years (3-5 years of quarters)"
+      },
+      {
+        "metric": "total_attended",
+        "expected_range": [800, 1200],
+        "sql_validation": "SELECT COUNT(*) FROM events.EventRegistration WHERE Status = 'Attended'",
+        "description": "Total attendance across all events"
+      }
+    ],
+    "visualization": {
+      "type": "column_chart",
+      "alternatives": ["line_chart", "area_chart"],
+      "should_not_be": ["pie_chart", "table", "scatter_plot"],
+      "reasoning": "Quarterly comparison is well-suited to column chart showing discrete time periods"
+    },
+    "required_features": ["quarter_labels", "attendance_count", "time_progression"],
+    "optional_features": ["trend_line", "seasonal_patterns", "year_over_year_comparison"],
+    "interactivity": [
+      {
+        "action": "Click on a quarter",
+        "expected_result": "Show individual events in that quarter with attendance details"
+      },
+      {
+        "action": "Toggle between quarters and months",
+        "expected_result": "Switch time granularity for more/less detail"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Event attendance by quarter\nSELECT \n  YEAR(e.StartDate) as Year,\n  DATEPART(QUARTER, e.StartDate) as Quarter,\n  'Q' + CAST(DATEPART(QUARTER, e.StartDate) AS VARCHAR) + ' ' + CAST(YEAR(e.StartDate) AS VARCHAR) as QuarterLabel,\n  COUNT(DISTINCT er.ID) as Attendees\nFROM events.Event e\nJOIN events.EventRegistration er ON e.ID = er.EventID\nWHERE er.Status = 'Attended'\nGROUP BY YEAR(e.StartDate), DATEPART(QUARTER, e.StartDate)\nORDER BY YEAR(e.StartDate), DATEPART(QUARTER, e.StartDate);",
+
+  "human_eval_guidance": "Verify quarters are properly labeled (Q1 2024, Q2 2024, etc.). Check that only 'Attended' status registrations are counted. Look for seasonal patterns in the data.",
+
+  "common_pitfalls": "Including all registrations regardless of attendance status; incorrect quarter calculation; not ordering chronologically; missing quarters with no events."
+}

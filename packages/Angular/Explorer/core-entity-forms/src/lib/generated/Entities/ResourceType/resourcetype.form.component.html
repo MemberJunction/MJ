@@ -1,73 +1,302 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Resource Types" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Workspace Items" [Visible]="record.IsSaved"> 
-                        Workspace Items
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Workspace Items')"
-                            [AllowLoad]="IsCurrentTab('Workspace Items')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 8 expanded
+            </span>
+        </div>
+        <div class="form-panels-container">
+<!-- Technical Details Section -->
+        <div class="form-card collapsible-card" data-section-name="technical details" data-field-names="">
+            <div class="collapsible-header" (click)="toggleSection('technicalDetails')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">Technical Details</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.technicalDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.technicalDetails">
+                <div class="form-body">
 
-                    <mj-tab Name="User Notifications" [Visible]="record.IsSaved"> 
-                        User Notifications
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('User Notifications')"
-                            [AllowLoad]="IsCurrentTab('User Notifications')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+                </div>
+            </div>
+        </div>
 
-                    <mj-tab Name="Resource Links" [Visible]="record.IsSaved"> 
-                        Resource Links
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Resource Links')"
-                            [AllowLoad]="IsCurrentTab('Resource Links')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <!-- Resource Type Definition Section -->
+        <div class="form-card collapsible-card" data-section-name="resource type definition" data-field-names="name displayname display name description icon">
+            <div class="collapsible-header" (click)="toggleSection('resourceTypeDefinition')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-tag"></i>
+                    <h3><span class="section-name">Resource Type Definition</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.resourceTypeDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resourceTypeDefinition">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
-                    <mj-tab Name="Resource Permissions" [Visible]="record.IsSaved"> 
-                        Resource Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Resource Permissions')"
-                            [AllowLoad]="IsCurrentTab('Resource Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
+                </div>
+            </div>
+        </div>
+
+        <!-- Entity Associations Section -->
+        <div class="form-card collapsible-card" data-section-name="entity associations" data-field-names="entityid entity id categoryentityid category entity id entity categoryentity category entity">
+            <div class="collapsible-header" (click)="toggleSection('entityAssociations')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-link"></i>
+                    <h3><span class="section-name">Entity Associations</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.entityAssociations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityAssociations">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Dropdown"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CategoryEntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Dropdown"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CategoryEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+        <div class="related-entity-grid">
+
+        <!-- Workspace Items Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="workspace items" data-field-names="workspace items" data-section-key="workspaceItems">
+            <div class="collapsible-header" (click)="toggleSection('workspaceItems')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-th"></i>
+                    <h3>
+                        <span class="section-name">Workspace Items</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['workspaceItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['workspaceItems'] === 0">
+                            {{sectionRowCounts['workspaceItems']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.workspaceItems ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.workspaceItems" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"
+                        [NewRecordValues]="NewRecordValues('Workspace Items')"
+                        [AllowLoad]="IsCurrentSection('workspaceItems')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['workspaceItems'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Notifications Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="user notifications" data-field-names="user notifications" data-section-key="userNotifications">
+            <div class="collapsible-header" (click)="toggleSection('userNotifications')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-bell"></i>
+                    <h3>
+                        <span class="section-name">User Notifications</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['userNotifications'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['userNotifications'] === 0">
+                            {{sectionRowCounts['userNotifications']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.userNotifications ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.userNotifications" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"
+                        [NewRecordValues]="NewRecordValues('User Notifications')"
+                        [AllowLoad]="IsCurrentSection('userNotifications')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['userNotifications'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resource Links Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="resource links" data-field-names="resource links" data-section-key="resourceLinks">
+            <div class="collapsible-header" (click)="toggleSection('resourceLinks')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-link"></i>
+                    <h3>
+                        <span class="section-name">Resource Links</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['resourceLinks'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['resourceLinks'] === 0">
+                            {{sectionRowCounts['resourceLinks']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.resourceLinks ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resourceLinks" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"
+                        [NewRecordValues]="NewRecordValues('Resource Links')"
+                        [AllowLoad]="IsCurrentSection('resourceLinks')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['resourceLinks'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resource Permissions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="resource permissions" data-field-names="resource permissions" data-section-key="resourcePermissions">
+            <div class="collapsible-header" (click)="toggleSection('resourcePermissions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-lock"></i>
+                    <h3>
+                        <span class="section-name">Resource Permissions</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['resourcePermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['resourcePermissions'] === 0">
+                            {{sectionRowCounts['resourcePermissions']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.resourcePermissions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resourcePermissions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"
+                        [NewRecordValues]="NewRecordValues('Resource Permissions')"
+                        [AllowLoad]="IsCurrentSection('resourcePermissions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['resourcePermissions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
     </form>
 </div>
         

@@ -1,0 +1,5 @@
+---
+"@memberjunction/global": minor
+---
+
+migration

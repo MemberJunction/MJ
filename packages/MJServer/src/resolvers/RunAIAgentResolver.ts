@@ -308,6 +308,7 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private async executeAIAgent(
         p: DatabaseProviderBase,
+        dataSource: any,
         agentId: string,
         userPayload: UserPayload,
         messagesJson: string,
@@ -372,6 +373,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 configurationId: configurationId,
                 data: parsedData,
                 conversationDetailId: conversationDetailId,
+                context: {
+                    dataSource: dataSource
+                }
             });
 
             // Update agent run ref once available
@@ -498,7 +502,7 @@ export class RunAIAgentResolver extends ResolverBase {
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
         @Arg('agentId') agentId: string,
-        @Ctx() { userPayload, providers }: AppContext,
+        @Ctx() { userPayload, providers, dataSource }: AppContext,
         @Arg('messages') messagesJson: string,
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
@@ -517,6 +521,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
             p,
+            dataSource,
             agentId,
             userPayload,
             messagesJson,
@@ -544,7 +549,7 @@ export class RunAIAgentResolver extends ResolverBase {
     @Query(() => AIAgentRunResult)
     async RunAIAgentSystemUser(
         @Arg('agentId') agentId: string,
-        @Ctx() { userPayload, providers }: AppContext,
+        @Ctx() { userPayload, providers, dataSource }: AppContext,
         @Arg('messages') messagesJson: string,
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
@@ -563,6 +568,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
             p,
+            dataSource,
             agentId,
             userPayload,
             messagesJson,

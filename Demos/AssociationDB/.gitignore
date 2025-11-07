@@ -1,0 +1,5 @@
+# Generated files directory
+tmp/
+
+# Environment file with credentials
+.env

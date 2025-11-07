@@ -6515,6 +6515,24 @@ export const EntityFieldSchema = z.object({
     *   * Deprecated
     *   * Disabled
         * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`),
+    AutoUpdateIsNameField: z.boolean().describe(`
+        * * Field Name: AutoUpdateIsNameField
+        * * Display Name: Auto Update Is Name Field
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field`),
+    AutoUpdateDefaultInView: z.boolean().describe(`
+        * * Field Name: AutoUpdateDefaultInView
+        * * Display Name: Auto Update Default In View
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field`),
+    AutoUpdateCategory: z.boolean().describe(`
+        * * Field Name: AutoUpdateCategory
+        * * Display Name: Auto Update Category
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -6928,6 +6946,17 @@ export const EntityRelationshipSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
+    AdditionalFieldsToInclude: z.string().nullable().describe(`
+        * * Field Name: AdditionalFieldsToInclude
+        * * Display Name: Additional Fields To Include
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])`),
+    AutoUpdateAdditionalFieldsToInclude: z.boolean().describe(`
+        * * Field Name: AutoUpdateAdditionalFieldsToInclude
+        * * Display Name: Auto Update Additional Fields To Include
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -14918,6 +14947,10 @@ export const SchemaInfoSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
 });
 
 export type SchemaInfoEntityType = z.infer<typeof SchemaInfoSchema>;
@@ -33374,6 +33407,48 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: AutoUpdateIsNameField
+    * * Display Name: Auto Update Is Name Field
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field
+    */
+    get AutoUpdateIsNameField(): boolean {
+        return this.Get('AutoUpdateIsNameField');
+    }
+    set AutoUpdateIsNameField(value: boolean) {
+        this.Set('AutoUpdateIsNameField', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateDefaultInView
+    * * Display Name: Auto Update Default In View
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field
+    */
+    get AutoUpdateDefaultInView(): boolean {
+        return this.Get('AutoUpdateDefaultInView');
+    }
+    set AutoUpdateDefaultInView(value: boolean) {
+        this.Set('AutoUpdateDefaultInView', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateCategory
+    * * Display Name: Auto Update Category
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field
+    */
+    get AutoUpdateCategory(): boolean {
+        return this.Get('AutoUpdateCategory');
+    }
+    set AutoUpdateCategory(value: boolean) {
+        this.Set('AutoUpdateCategory', value);
+    }
+
+    /**
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -34392,6 +34467,33 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     }
     set AutoUpdateFromSchema(value: boolean) {
         this.Set('AutoUpdateFromSchema', value);
+    }
+
+    /**
+    * * Field Name: AdditionalFieldsToInclude
+    * * Display Name: Additional Fields To Include
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])
+    */
+    get AdditionalFieldsToInclude(): string | null {
+        return this.Get('AdditionalFieldsToInclude');
+    }
+    set AdditionalFieldsToInclude(value: string | null) {
+        this.Set('AdditionalFieldsToInclude', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateAdditionalFieldsToInclude
+    * * Display Name: Auto Update Additional Fields To Include
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field
+    */
+    get AutoUpdateAdditionalFieldsToInclude(): boolean {
+        return this.Get('AutoUpdateAdditionalFieldsToInclude');
+    }
+    set AutoUpdateAdditionalFieldsToInclude(value: boolean) {
+        this.Set('AutoUpdateAdditionalFieldsToInclude', value);
     }
 
     /**
@@ -55560,6 +55662,18 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
     }
 }
 

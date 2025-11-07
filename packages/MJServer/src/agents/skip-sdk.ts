@@ -669,11 +669,7 @@ export class SkipSDK {
 
                 relatedEntities: e.RelatedEntities.map((r) => {
                     return this.packSingleSkipEntityRelationship(r);
-                }),
-
-                rowsPacked: e.RowsToPackWithSchema,
-                rowsSampleMethod: e.RowsToPackSampleMethod,
-                rows: await this.packEntityRows(e, dataSource)
+                })
             };
             return ret;
         }
@@ -752,63 +748,6 @@ export class SkipSDK {
         catch (e) {
             LogError(`[SkipSDK] packSingleSkipEntityField error: ${e}`);
             return null;
-        }
-    }
-
-    /**
-     * Packs entity rows (sample data)
-     * Copied from AskSkipResolver.PackEntityRows
-     */
-    private async packEntityRows(e: EntityInfo, dataSource: mssql.ConnectionPool): Promise<any[]> {
-        try {
-            if (e.RowsToPackWithSchema === 'None')
-                return [];
-
-            // only include columns that have a scopes including either All and/or AI or have Null for ScopeDefault
-            const fields = e.Fields.filter((f) => {
-                const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
-                return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
-            }).map(f => `[${f.Name}]`).join(',');
-
-            // now run the query based on the row packing method
-            let sql: string = '';
-            switch (e.RowsToPackWithSchema) {
-                case 'All':
-                    sql = `SELECT ${fields} FROM ${e.SchemaName}.${e.BaseView}`;
-                    break;
-                case 'Sample':
-                    switch (e.RowsToPackSampleMethod) {
-                        case 'random':
-                            sql = `SELECT TOP ${e.RowsToPackSampleCount} ${fields} FROM [${e.SchemaName}].[${e.BaseView}] ORDER BY newid()`;
-                            break;
-                        case 'top n':
-                            const orderBy = e.RowsToPackSampleOrder ? ` ORDER BY [${e.RowsToPackSampleOrder}]` : '';
-                            sql = `SELECT TOP ${e.RowsToPackSampleCount} ${fields} FROM [${e.SchemaName}].[${e.BaseView}]${orderBy}`;
-                            break;
-                        case 'bottom n':
-                            const firstPrimaryKey = e.FirstPrimaryKey.Name;
-                            const innerOrderBy = e.RowsToPackSampleOrder ? `[${e.RowsToPackSampleOrder}]` : `[${firstPrimaryKey}] DESC`;
-                            sql = `SELECT * FROM (
-                                        SELECT TOP ${e.RowsToPackSampleCount} ${fields}
-                                        FROM [${e.SchemaName}].[${e.BaseView}]
-                                        ORDER BY ${innerOrderBy}
-                                    ) sub
-                                    ORDER BY [${firstPrimaryKey}] ASC;`;
-                            break;
-                    }
-            }
-            const request = new mssql.Request(dataSource);
-            const result = await request.query(sql);
-            if (!result || !result.recordset) {
-                return [];
-            }
-            else {
-                return result.recordset;
-            }
-        }
-        catch (e) {
-            LogError(`[SkipSDK] packEntityRows error: ${e}`);
-            return [];
         }
     }
 

@@ -1,0 +1,52 @@
+{
+  "eval_id": "upcoming-events-list",
+  "category": "simple_aggregation",
+  "difficulty": "easy",
+  "tags": ["events", "future", "list", "calendar"],
+
+  "business_context": "Members and staff need quick access to upcoming events for planning attendance, marketing promotion, and logistics coordination.",
+
+  "prompt": "What events do we have coming up?",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "upcoming_event_count",
+        "expected_range": [8, 15],
+        "sql_validation": "SELECT COUNT(*) FROM events.Event WHERE StartDate > GETDATE()",
+        "description": "Count of events with start dates in the future"
+      }
+    ],
+    "visualization": {
+      "type": "table",
+      "alternatives": ["card_list", "calendar_view", "timeline"],
+      "should_not_be": ["pie_chart", "bar_chart", "single_metric"],
+      "reasoning": "List of events with details is best shown in table, cards, or calendar format"
+    },
+    "required_features": ["event_name", "start_date", "location"],
+    "optional_features": ["event_type", "registration_count", "capacity", "registration_link"],
+    "interactivity": [
+      {
+        "action": "Click on an event",
+        "expected_result": "Show full event details with sessions and registration information"
+      },
+      {
+        "action": "Sort by date",
+        "expected_result": "Reorder events chronologically"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- List upcoming events\nSELECT \n  e.Name,\n  e.EventType,\n  e.StartDate,\n  e.EndDate,\n  e.Location,\n  e.MaxAttendees,\n  COUNT(er.ID) as CurrentRegistrations\nFROM events.Event e\nLEFT JOIN events.EventRegistration er ON e.ID = er.EventID\nWHERE e.StartDate > GETDATE()\nGROUP BY e.Name, e.EventType, e.StartDate, e.EndDate, e.Location, e.MaxAttendees\nORDER BY e.StartDate ASC;",
+
+  "human_eval_guidance": "Verify only future events are shown. Check that dates are properly formatted and sorted chronologically. Confirm key event details are visible.",
+
+  "common_pitfalls": "Including past events; not sorting by date; missing important event details; using inappropriate visualization (like a pie chart) for event listings."
+}

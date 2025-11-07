@@ -1,0 +1,57 @@
+{
+  "eval_id": "fortune500-ceos-list",
+  "category": "simple_aggregation",
+  "difficulty": "easy",
+  "tags": ["membership", "executives", "fortune500", "list"],
+
+  "business_context": "For marketing materials and value proposition, the association wants to showcase the caliber of its membership by highlighting Fortune 500 executives who are members.",
+
+  "prompt": "Show me all the Fortune 500 CEOs who are members",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "fortune500_ceo_count",
+        "expected_range": [8, 12],
+        "sql_validation": "SELECT COUNT(*) FROM membership.Member m JOIN membership.Organization o ON m.OrganizationID = o.ID WHERE m.Title LIKE '%Chief Executive Officer%' AND o.TickerSymbol IS NOT NULL",
+        "description": "Count of CEOs from public companies (those with ticker symbols)"
+      },
+      {
+        "metric": "includes_real_ceos",
+        "expected_value": true,
+        "description": "List should include recognizable names like Satya Nadella, Jensen Huang, Marc Benioff"
+      }
+    ],
+    "visualization": {
+      "type": "table",
+      "alternatives": ["card_list", "data_grid"],
+      "should_not_be": ["pie_chart", "bar_chart", "line_chart"],
+      "reasoning": "List of people with details is best shown in a table or card layout"
+    },
+    "required_features": ["name", "title", "company_name"],
+    "optional_features": ["company_logo", "linkedin_link", "market_cap", "ticker_symbol"],
+    "interactivity": [
+      {
+        "action": "Click on a member name",
+        "expected_result": "Show full member profile with engagement history"
+      },
+      {
+        "action": "Click on a company name",
+        "expected_result": "Show company details and all members from that company"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- List Fortune 500 CEOs\nSELECT \n  m.FirstName + ' ' + m.LastName as Name,\n  m.Title,\n  o.Name as Company,\n  o.TickerSymbol,\n  o.MarketCapitalization\nFROM membership.Member m\nJOIN membership.Organization o ON m.OrganizationID = o.ID\nWHERE m.Title LIKE '%Chief Executive Officer%'\n  AND o.TickerSymbol IS NOT NULL\nORDER BY o.MarketCapitalization DESC;",
+
+  "human_eval_guidance": "Verify the list includes real recognizable CEOs (Satya Nadella, Jensen Huang, etc.). Check that company information is displayed. Confirm the count is around 10 members.",
+
+  "common_pitfalls": "Including all executives instead of just CEOs; missing the link between members and their organizations; not filtering for public companies; displaying raw data without proper formatting."
+}

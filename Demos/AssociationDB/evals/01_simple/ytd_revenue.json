@@ -1,0 +1,48 @@
+{
+  "eval_id": "ytd-revenue-total",
+  "category": "simple_aggregation",
+  "difficulty": "easy",
+  "tags": ["finance", "revenue", "ytd", "kpi"],
+
+  "business_context": "Finance and executive leadership need quick access to year-to-date revenue for budget tracking, board reports, and financial planning.",
+
+  "prompt": "What's our total revenue this year?",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "ytd_revenue",
+        "expected_range": [800000, 1200000],
+        "sql_validation": "SELECT SUM(inv.Total) FROM finance.Invoice inv WHERE inv.Status IN ('Paid', 'Partial') AND inv.InvoiceDate >= DATEADD(YEAR, DATEDIFF(YEAR, 0, GETDATE()), 0)",
+        "description": "Sum of paid/partial invoices from current calendar year"
+      }
+    ],
+    "visualization": {
+      "type": "kpi_card",
+      "alternatives": ["currency_display", "stat_card"],
+      "should_not_be": ["table", "pie_chart", "line_chart"],
+      "reasoning": "Single financial metric should be displayed prominently as currency"
+    },
+    "required_features": ["formatted_currency", "dollar_amount"],
+    "optional_features": ["vs_last_year", "percentage_of_goal", "trend_indicator", "sparkline"],
+    "interactivity": [
+      {
+        "action": "Click on the amount",
+        "expected_result": "Show revenue breakdown by source (memberships, events, courses)"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Calculate year-to-date revenue\nSELECT SUM(inv.Total) as YTDRevenue\nFROM finance.Invoice inv\nWHERE inv.Status IN ('Paid', 'Partial')\n  AND inv.InvoiceDate >= DATEADD(YEAR, DATEDIFF(YEAR, 0, GETDATE()), 0);",
+
+  "human_eval_guidance": "Verify the amount is properly formatted as currency ($XXX,XXX.XX). Check that only paid and partial invoices are included. Verify date filtering is working for current year only.",
+
+  "common_pitfalls": "Including unpaid invoices; using incorrect date filtering; not formatting as currency; including invoices from previous years; double-counting partial payments."
+}

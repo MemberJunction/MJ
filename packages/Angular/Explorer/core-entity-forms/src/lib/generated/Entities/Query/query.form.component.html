@@ -1,86 +1,436 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Queries" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Query Fields" [Visible]="record.IsSaved"> 
-                        Query Fields
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Query Fields','QueryID')"  
-                            [NewRecordValues]="NewRecordValues('Query Fields')"
-                            [AllowLoad]="IsCurrentTab('Query Fields')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <div class="form-section-controls">
+            <div class="control-group">
+                <button (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-expand-alt"></i>Expand All
+                </button>
+                <button (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-compress-alt"></i>Collapse All
+                </button>
+            </div>
+            <input type="text"
+                   class="section-search"
+                   placeholder="Search sections..."
+                   (input)="filterSections($event)"
+                   #sectionSearch>
+            <span class="section-count">
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 10 expanded
+            </span>
+        </div>
+        <div class="form-panels-container">
+<!-- Query Definition Section -->
+        <div class="form-card collapsible-card" data-section-name="query definition" data-field-names="name categoryid category id userquestion user question description sql technicaldescription technical description originalsql original sql usestemplate uses template category">
+            <div class="collapsible-header" (click)="toggleSection('queryDefinition')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-file-code"></i>
+                    <h3><span class="section-name">Query Definition</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.queryDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryDefinition">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CategoryID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UserQuestion"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SQL"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TechnicalDescription"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OriginalSQL"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UsesTemplate"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
-                    <mj-tab Name="Query Permissions" [Visible]="record.IsSaved"> 
-                        Query Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"  
-                            [NewRecordValues]="NewRecordValues('Query Permissions')"
-                            [AllowLoad]="IsCurrentTab('Query Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+                </div>
+            </div>
+        </div>
 
-                    <mj-tab Name="Data Context Items" [Visible]="record.IsSaved"> 
-                        Data Context Items
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','QueryID')"  
-                            [NewRecordValues]="NewRecordValues('Data Context Items')"
-                            [AllowLoad]="IsCurrentTab('Data Context Items')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+        <!-- Performance & Quality Section -->
+        <div class="form-card collapsible-card" data-section-name="performance & quality" data-field-names="feedback status qualityrank quality rank executioncostrank execution cost rank">
+            <div class="collapsible-header" (click)="toggleSection('performanceQuality')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-chart-line"></i>
+                    <h3><span class="section-name">Performance & Quality</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.performanceQuality ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.performanceQuality">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Feedback"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="QualityRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExecutionCostRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
-                    <mj-tab Name="MJ: Query Parameters" [Visible]="record.IsSaved"> 
-                        MJ: Query Parameters
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Parameters','QueryID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Query Parameters')"
-                            [AllowLoad]="IsCurrentTab('MJ: Query Parameters')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+                </div>
+            </div>
+        </div>
 
-                    <mj-tab Name="Query Entities" [Visible]="record.IsSaved"> 
-                        Query Entities
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Query Entities','QueryID')"  
-                            [NewRecordValues]="NewRecordValues('Query Entities')"
-                            [AllowLoad]="IsCurrentTab('Query Entities')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
+        <!-- Caching & Execution Settings Section -->
+        <div class="form-card collapsible-card" data-section-name="caching & execution settings" data-field-names="auditqueryruns audit query runs cacheenabled cache enabled cachettlminutes cache ttl minutes cachemaxsize cache max size">
+            <div class="collapsible-header" (click)="toggleSection('cachingExecutionSettings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-sliders-h"></i>
+                    <h3><span class="section-name">Caching & Execution Settings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.cachingExecutionSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.cachingExecutionSettings">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AuditQueryRuns"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheEnabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheTTLMinutes"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheMaxSize"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- AI & Embeddings Section -->
+        <div class="form-card collapsible-card" data-section-name="ai & embeddings" data-field-names="embeddingvector embedding vector embeddingmodelid embedding model id embeddingmodel embedding model">
+            <div class="collapsible-header" (click)="toggleSection('aIEmbeddings')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-brain"></i>
+                    <h3><span class="section-name">AI & Embeddings</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.aIEmbeddings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIEmbeddings">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EmbeddingVector"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EmbeddingModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EmbeddingModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- System Metadata Section -->
+        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
+            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-cog"></i>
+                    <h3><span class="section-name">System Metadata</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+        <div class="related-entity-grid">
+
+        <!-- Data Context Items Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="data context items" data-field-names="data context items" data-section-key="dataContextItems">
+            <div class="collapsible-header" (click)="toggleSection('dataContextItems')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-database"></i>
+                    <h3>
+                        <span class="section-name">Data Context Items</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['dataContextItems'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['dataContextItems'] === 0">
+                            {{sectionRowCounts['dataContextItems']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.dataContextItems ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.dataContextItems" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','QueryID')"
+                        [NewRecordValues]="NewRecordValues('Data Context Items')"
+                        [AllowLoad]="IsCurrentSection('dataContextItems')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['dataContextItems'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Fields Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="query fields" data-field-names="query fields" data-section-key="queryFields">
+            <div class="collapsible-header" (click)="toggleSection('queryFields')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-table"></i>
+                    <h3>
+                        <span class="section-name">Query Fields</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['queryFields'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['queryFields'] === 0">
+                            {{sectionRowCounts['queryFields']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.queryFields ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryFields" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Fields','QueryID')"
+                        [NewRecordValues]="NewRecordValues('Query Fields')"
+                        [AllowLoad]="IsCurrentSection('queryFields')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['queryFields'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Permissions Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="query permissions" data-field-names="query permissions" data-section-key="queryPermissions">
+            <div class="collapsible-header" (click)="toggleSection('queryPermissions')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-shield-alt"></i>
+                    <h3>
+                        <span class="section-name">Query Permissions</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['queryPermissions'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['queryPermissions'] === 0">
+                            {{sectionRowCounts['queryPermissions']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.queryPermissions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryPermissions" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"
+                        [NewRecordValues]="NewRecordValues('Query Permissions')"
+                        [AllowLoad]="IsCurrentSection('queryPermissions')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['queryPermissions'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJ: Query Parameters Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="mj: query parameters" data-field-names="mj: query parameters" data-section-key="mJQueryParameters">
+            <div class="collapsible-header" (click)="toggleSection('mJQueryParameters')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-code"></i>
+                    <h3>
+                        <span class="section-name">MJ: Query Parameters</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['mJQueryParameters'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['mJQueryParameters'] === 0">
+                            {{sectionRowCounts['mJQueryParameters']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.mJQueryParameters ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJQueryParameters" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Parameters','QueryID')"
+                        [NewRecordValues]="NewRecordValues('MJ: Query Parameters')"
+                        [AllowLoad]="IsCurrentSection('mJQueryParameters')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['mJQueryParameters'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Entities Section -->
+        <div class="form-card collapsible-card related-entity" data-section-name="query entities" data-field-names="query entities" data-section-key="queryEntities">
+            <div class="collapsible-header" (click)="toggleSection('queryEntities')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-search"></i>
+                    <h3>
+                        <span class="section-name">Query Entities</span>
+                        <span class="row-count-badge"
+                              *ngIf="sectionRowCounts?.['queryEntities'] !== undefined"
+                              [class.zero-rows]="sectionRowCounts['queryEntities'] === 0">
+                            {{sectionRowCounts['queryEntities']}}
+                        </span>
+                    </h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.queryEntities ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryEntities" *ngIf="record.IsSaved">
+                <div class="form-body">
+                    <mj-user-view-grid
+                        [Params]="BuildRelationshipViewParamsByEntityName('Query Entities','QueryID')"
+                        [NewRecordValues]="NewRecordValues('Query Entities')"
+                        [AllowLoad]="IsCurrentSection('queryEntities')"
+                        [EditMode]="GridEditMode()"
+                        (dataLoaded)="sectionRowCounts['queryEntities'] = $event.totalRowCount"
+                        >
+                    </mj-user-view-grid>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
     </form>
 </div>
         
