@@ -1,244 +1,355 @@
-# Database Auto-Documentation Generator
+# DBAutoDoc - AI-Powered Database Documentation Generator
 
-AI-powered documentation generator for SQL Server databases. Analyzes your database structure, uses AI to generate comprehensive table and column descriptions, and saves them as SQL Server extended properties.
-
-## 🚀 **Standalone Tool - No MemberJunction Runtime Required**
-
-This tool works with **ANY** SQL Server database. You don't need MemberJunction installed or running.
+Automatically generate comprehensive documentation for SQL Server databases using AI. DBAutoDoc analyzes your database structure, uses Large Language Models to understand the purpose of tables and columns, and saves descriptions as SQL Server extended properties.
 
 ## Features
 
-- **🤖 AI-Powered**: Uses LLMs (OpenAI, Anthropic, etc.) to generate intelligent descriptions
-- **🔄 Human-in-Loop**: Interactive mode to provide context and approve AI-generated descriptions
-- **💾 State Management**: JSON state file tracks progress, user input, and AI generations across runs
-- **🎯 Incremental**: Only processes new or changed tables on subsequent runs
-- **🔍 Smart Analysis**:
-  - Dependency graph analysis (documents root tables first)
-  - Pattern detection (lookup tables, bridge tables, audit tables)
-  - Data profiling (sample data, statistics, pattern recognition)
-  - Constraint analysis (PKs, FKs, CHECK, UNIQUE)
-- **📊 Multiple Outputs**:
-  - SQL scripts with `sp_addextendedproperty` statements
-  - Markdown documentation
-  - Updated state file for next run
+- **🤖 AI-Powered Analysis** - Uses OpenAI, Anthropic, or Groq to generate intelligent descriptions
+- **🔄 Iterative Refinement** - Multi-pass analysis with backpropagation for accuracy
+- **📊 Topological Processing** - Analyzes tables in dependency order for better context
+- **📈 Data-Driven** - Leverages cardinality, statistics, and sample data for insights
+- **🎯 Convergence Detection** - Automatically knows when analysis is complete
+- **💾 State Tracking** - Full audit trail of all iterations and reasoning
+- **🔌 Standalone** - Works with ANY SQL Server database, no MemberJunction required
+- **📝 Multiple Outputs** - SQL scripts, Markdown docs, and analysis reports
 
 ## Installation
 
+### Global Installation (Recommended for DBAs)
+
 ```bash
-# Install globally (for standalone use)
 npm install -g @memberjunction/db-auto-doc
+```
 
-# Or use with npx
-npx @memberjunction/db-auto-doc
+### Within MemberJunction Project
 
-# Or use via MJ CLI (if you have MemberJunction installed)
-mj dbdoc --help
+```bash
+npm install @memberjunction/db-auto-doc
 ```
 
 ## Quick Start
 
-### Standalone CLI
+### 1. Initialize
 
 ```bash
-# 1. Initialize project
 db-auto-doc init
-
-# 2. Edit .env and add your AI API key
-# AI_API_KEY=sk-your-key-here
-
-# 3. Analyze database
-db-auto-doc analyze
-
-# 4. Review results
-db-auto-doc review
-
-# 5. Export documentation
-db-auto-doc export --format=all
 ```
 
-### Via MJ CLI (MemberJunction Users)
+This interactive wizard will:
+- Configure database connection
+- Set up AI provider (OpenAI, Anthropic, or Groq)
+- Optionally add seed context for better analysis
+- Create `config.json`
+
+### 2. Analyze
 
 ```bash
-# Same commands, different prefix
-mj dbdoc init
-mj dbdoc analyze --schemas=dbo
-mj dbdoc review --unapproved-only
-mj dbdoc export --approved-only --execute
+db-auto-doc analyze
 ```
 
-### Programmatic Usage
+This will:
+- Introspect your database structure
+- Analyze data (cardinality, statistics, patterns)
+- Build dependency graph
+- Run iterative AI analysis with backpropagation
+- Perform sanity checks
+- Save state to `db-doc-state.json`
 
-```typescript
-import {
-  DatabaseConnection,
-  StateManager,
-  DatabaseAnalyzer,
-  SimpleAIClient,
-} from '@memberjunction/db-auto-doc';
+### 3. Export
 
-// Initialize
-const connection = DatabaseConnection.fromEnv();
-const stateManager = new StateManager();
-const aiClient = new SimpleAIClient();
-const analyzer = new DatabaseAnalyzer(connection, stateManager, aiClient);
-
-// Analyze
-await analyzer.analyze({ schemas: ['dbo'] });
-
-// Export
-import { SQLGenerator, MarkdownGenerator } from '@memberjunction/db-auto-doc';
-const state = stateManager.getState();
-const sqlGen = new SQLGenerator();
-const sql = sqlGen.generate(state);
+```bash
+db-auto-doc export --sql --markdown
 ```
 
-## CLI Commands
+This generates:
+- **SQL Script**: `sp_addextendedproperty` statements
+- **Markdown Documentation**: Human-readable docs
 
-### `db-auto-doc init`
-Initialize new documentation project
-- Prompts for database connection
-- Creates `.env` file
-- Creates `db-doc-state.json`
-- Optionally asks seed questions
+Optionally apply directly to database:
 
-### `db-auto-doc analyze`
-Analyze database and generate documentation
-- `--interactive` - Ask questions during analysis
-- `--incremental` - Only process new/changed tables
-- `--schemas <schemas>` - Comma-separated schema list
-- `--batch` - Non-interactive mode
+```bash
+db-auto-doc export --sql --apply
+```
 
-### `db-auto-doc review`
-Review and approve AI-generated documentation
-- `--schema <schema>` - Review specific schema
-- `--unapproved-only` - Only show unapproved items
+### 4. Check Status
 
-### `db-auto-doc export`
-Generate output files
-- `--format <format>` - sql|markdown|all (default: all)
-- `--output <path>` - Output directory
-- `--execute` - Execute SQL script (apply to database)
-- `--approved-only` - Only export approved items
+```bash
+db-auto-doc status
+```
 
-### `db-auto-doc reset`
-Reset state file
-- `--all` - Reset entire state file
+Shows:
+- Analysis progress
+- Convergence status
+- Low-confidence tables
+- Token usage and cost
+
+## How It Works
+
+### Topological Analysis
+
+DBAutoDoc processes tables in dependency order:
+
+```
+Level 0: Users, Products, Categories (no dependencies)
+  ↓
+Level 1: Orders (depends on Users), ProductCategories (Products + Categories)
+  ↓
+Level 2: OrderItems (depends on Orders + Products)
+  ↓
+Level 3: Shipments (depends on OrderItems)
+```
+
+Processing in this order allows child tables to benefit from parent table context.
+
+### Backpropagation
+
+After analyzing child tables, DBAutoDoc can detect insights about parent tables and trigger re-analysis:
+
+```
+Level 0: "Persons" → Initially thinks: "General contact information"
+  ↓
+Level 1: "Students" table reveals Persons.Type has values: Student, Teacher, Staff
+  ↓
+BACKPROPAGATE to Level 0: "Persons" → Revise to: "School personnel with role-based typing"
+```
+
+### Convergence
+
+Analysis stops when:
+1. **No changes** in last N iterations
+2. **All tables** meet confidence threshold
+3. **Max iterations** reached
+
+### Data Analysis
+
+For each column, DBAutoDoc collects:
+- **Cardinality**: Distinct value counts
+- **Statistics**: Min, max, average, standard deviation
+- **Patterns**: Common prefixes, format detection
+- **Value Distribution**: Actual enum values if low cardinality
+- **Sample Data**: Stratified sampling across value ranges
+
+This rich context enables AI to make accurate inferences.
 
 ## Configuration
 
-Create a `.env` file:
+Example `config.json`:
 
-```env
-# Database Connection
-DB_SERVER=localhost
-DB_DATABASE=YourDatabase
-DB_USER=sa
-DB_PASSWORD=YourPassword
-DB_ENCRYPT=true
-DB_TRUST_SERVER_CERTIFICATE=true
+```json
+{
+  "version": "1.0.0",
+  "database": {
+    "server": "localhost",
+    "database": "MyDatabase",
+    "user": "sa",
+    "password": "YourPassword",
+    "encrypt": true,
+    "trustServerCertificate": false
+  },
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-4-turbo-preview",
+    "apiKey": "sk-...",
+    "temperature": 0.1,
+    "maxTokens": 4000
+  },
+  "analysis": {
+    "cardinalityThreshold": 20,
+    "sampleSize": 10,
+    "includeStatistics": true,
+    "convergence": {
+      "maxIterations": 10,
+      "stabilityWindow": 2,
+      "confidenceThreshold": 0.85
+    },
+    "backpropagation": {
+      "enabled": true,
+      "maxDepth": 3
+    },
+    "sanityChecks": {
+      "schemaLevel": true,
+      "crossSchema": true
+    }
+  },
+  "output": {
+    "stateFile": "./db-doc-state.json",
+    "sqlFile": "./output/add-descriptions.sql",
+    "markdownFile": "./output/database-documentation.md"
+  },
+  "schemas": {
+    "exclude": ["sys", "INFORMATION_SCHEMA"]
+  },
+  "tables": {
+    "exclude": ["sysdiagrams", "__MigrationHistory"]
+  }
+}
+```
 
-# AI Configuration
-AI_PROVIDER=openai
-AI_MODEL=gpt-4
-AI_API_KEY=sk-your-api-key-here
+## Supported AI Providers
+
+### OpenAI
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4-turbo-preview",
+  "apiKey": "sk-..."
+}
+```
+
+### Anthropic
+```json
+{
+  "provider": "anthropic",
+  "model": "claude-3-opus-20240229",
+  "apiKey": "sk-ant-..."
+}
+```
+
+### Groq
+```json
+{
+  "provider": "groq",
+  "model": "mixtral-8x7b-32768",
+  "apiKey": "gsk_..."
+}
 ```
 
 ## State File
 
-The `db-doc-state.json` file tracks everything:
+The `db-doc-state.json` file tracks:
+- All schemas, tables, and columns
+- **Description iterations** with reasoning and confidence
+- **Analysis runs** with metrics (tokens, cost, duration)
+- **Processing logs** for debugging
+
+### Iteration Tracking
+
+Each description has an iteration history:
 
 ```json
 {
-  "version": "1.0",
-  "database": {
-    "server": "localhost",
-    "database": "MyDatabase"
-  },
-  "seedContext": {
-    "overallPurpose": "E-commerce platform",
-    "businessDomains": ["Sales", "Inventory"]
-  },
-  "schemas": {
-    "dbo": {
-      "tables": {
-        "Customers": {
-          "userNotes": "Merged from Stripe and internal CRM",
-          "userApproved": true,
-          "aiGenerated": {
-            "description": "Primary customer records...",
-            "confidence": 0.85
-          },
-          "finalDescription": "...",
-          "columns": { }
-        }
-      }
+  "descriptionIterations": [
+    {
+      "description": "Initial hypothesis...",
+      "reasoning": "Based on column names...",
+      "generatedAt": "2024-01-15T10:00:00Z",
+      "modelUsed": "gpt-4",
+      "confidence": 0.75,
+      "triggeredBy": "initial"
+    },
+    {
+      "description": "Revised hypothesis...",
+      "reasoning": "Child table analysis revealed...",
+      "generatedAt": "2024-01-15T10:05:00Z",
+      "modelUsed": "gpt-4",
+      "confidence": 0.92,
+      "triggeredBy": "backpropagation",
+      "changedFrom": "Initial hypothesis..."
     }
-  },
-  "runHistory": [ ]
+  ]
 }
 ```
 
-## Example Workflow
+## Programmatic Usage
 
-```bash
-# First run
-db-auto-doc init
-db-auto-doc analyze --interactive
-db-auto-doc review
-db-auto-doc export --format=all
+DBAutoDoc can be used programmatically:
 
-# Add context and refine
-# Edit db-doc-state.json to add notes
-db-auto-doc analyze --incremental
-db-auto-doc review --unapproved-only
+```typescript
+import {
+  ConfigLoader,
+  DatabaseConnection,
+  Introspector,
+  TopologicalSorter,
+  StateManager,
+  PromptEngine,
+  AnalysisEngine,
+  SQLGenerator,
+  MarkdownGenerator
+} from '@memberjunction/db-auto-doc';
 
-# Ready for production
-db-auto-doc export --approved-only --execute
+// Load config
+const config = await ConfigLoader.load('./config.json');
+
+// Connect to database
+const db = new DatabaseConnection(config.database);
+await db.connect();
+
+// Introspect
+const introspector = new Introspector(db);
+const schemas = await introspector.getSchemas(config.schemas, config.tables);
+
+// Initialize analysis
+const promptEngine = new PromptEngine(config.ai, './prompts');
+await promptEngine.initialize();
+
+const stateManager = new StateManager(config.output.stateFile);
+const state = stateManager.createInitialState(config.database.database, config.database.server);
+state.schemas = schemas;
+
+// Run analysis
+const analysisEngine = new AnalysisEngine(config, promptEngine, stateManager, iterationTracker);
+// ... custom analysis workflow
+
+// Generate outputs
+const sqlGen = new SQLGenerator();
+const sql = sqlGen.generate(state);
+
+const mdGen = new MarkdownGenerator();
+const markdown = mdGen.generate(state);
 ```
 
-## How It Works
+## Cost Estimation
 
-1. **Introspection**: Queries SQL Server system catalogs
-2. **Profiling**: Samples data and analyzes patterns
-3. **AI Generation**: Sends context to LLM for descriptions
-4. **Human Review**: User approves/refines results
-5. **Output**: Generates SQL scripts and markdown docs
-6. **Application**: Optionally executes SQL to add extended properties
+Typical costs (will vary by database size and complexity):
+
+| Database Size | Tables | Iterations | Tokens | Cost (GPT-4) |
+|---------------|--------|------------|--------|--------------|
+| Small | 10-20 | 2-3 | ~50K | $0.50 |
+| Medium | 50-100 | 3-5 | ~200K | $2.00 |
+| Large | 200+ | 5-8 | ~500K | $5.00 |
+
+Groq is significantly cheaper but may have quality trade-offs.
+
+## Best Practices
+
+1. **Start with seed context** - Helps AI understand database purpose
+2. **Review low-confidence items** - Focus manual effort where AI is uncertain
+3. **Use backpropagation** - Improves accuracy significantly
+4. **Filter exports** - Use `--confidence-threshold` to only apply high-confidence descriptions
+5. **Iterate** - Run analysis multiple times if first pass isn't satisfactory
+
+## Troubleshooting
+
+### "Connection failed"
+- Check server, database, user, password in config
+- Verify SQL Server is running and accessible
+- Check firewall rules
+
+### "Analysis not converging"
+- Increase `maxIterations` in config
+- Lower `confidenceThreshold`
+- Add more seed context
+- Check warnings in state file
+
+### "High token usage"
+- Reduce `maxTokens` in config
+- Filter schemas/tables to focus on subset
+- Use cheaper model (e.g., Groq)
 
 ## Architecture
 
-Built following the **AI CLI pattern** (similar to `@memberjunction/ai-cli`):
-- **oclif-based commands** in `src/commands/` (init, analyze, review, export, reset)
-- **Standalone package** with zero MJ runtime dependencies
-- **MJCLI integration** via thin delegation commands in `packages/MJCLI/src/commands/dbdoc/`
-- **Reusable services** exported for programmatic use
-- **State file architecture** enables incremental refinement across runs
+See [DESIGN.md](./DESIGN.md) for comprehensive architecture documentation.
 
-## Future Enhancements
+## Contributing
 
-Possible future additions (not needed for current functionality):
-- Support for more AI providers (Groq, Cerebras, local models)
-- PostgreSQL/MySQL versions
-- Web UI for review
-- Dependency graph visualization
-- CI/CD integration examples
-- Schema diff detection for automatic re-documentation
-
-## Requirements
-
-- Node.js 18+
-- SQL Server database access
-- OpenAI or Anthropic API key
+DBAutoDoc is part of the MemberJunction project. Contributions welcome!
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT
 
-## Support
+## Links
 
-- GitHub Issues: https://github.com/MemberJunction/MJ/issues
-- Documentation: https://docs.memberjunction.org
-
-## Credits
-
-Built by the MemberJunction team for the SQL Server community.
+- **GitHub**: https://github.com/MemberJunction/MJ
+- **Documentation**: https://docs.memberjunction.org
+- **Support**: https://github.com/MemberJunction/MJ/issues

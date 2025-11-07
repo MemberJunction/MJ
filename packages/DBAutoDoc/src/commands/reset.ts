@@ -1,39 +1,54 @@
+/**
+ * Reset command - Clear state and start fresh
+ */
+
 import { Command, Flags } from '@oclif/core';
-import { confirm } from '@inquirer/prompts';
+import * as inquirer from 'inquirer';
 import chalk from 'chalk';
-import { StateManager } from '../state/state-manager';
+import { ConfigLoader } from '../utils/config-loader.js';
+import { StateManager } from '../state/StateManager.js';
 
 export default class Reset extends Command {
-  static description = 'Reset state file';
+  static description = 'Reset state and start fresh analysis';
 
-  static examples = [
-    '<%= config.bin %> <%= command.id %> --all',
-  ];
+  static examples = ['$ db-auto-doc reset'];
 
   static flags = {
-    all: Flags.boolean({
-      description: 'Reset entire state file',
-      default: false,
-    }),
+    force: Flags.boolean({ char: 'f', description: 'Skip confirmation prompt' })
   };
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Reset);
 
-    if (flags.all) {
-      const confirmed = await confirm({
-        message: chalk.yellow('Reset entire state file? This cannot be undone.'),
-        default: false,
-      });
+    try {
+      const config = await ConfigLoader.load('./config.json');
+      const stateManager = new StateManager(config.output.stateFile);
 
-      if (confirmed) {
-        const stateManager = new StateManager();
-        await stateManager.reset(
-          process.env.DB_SERVER || 'localhost',
-          process.env.DB_DATABASE || 'master'
-        );
-        this.log(chalk.green('✅ State file reset'));
+      // Confirm deletion unless --force
+      if (!flags.force) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirm',
+            message: chalk.yellow('This will delete all analysis state. Continue?'),
+            default: false
+          }
+        ]);
+
+        if (!answer.confirm) {
+          this.log('Reset cancelled');
+          return;
+        }
       }
+
+      // Delete state file
+      await stateManager.delete();
+
+      this.log(chalk.green('✓ State reset complete!'));
+      this.log('Run: db-auto-doc analyze');
+
+    } catch (error) {
+      this.error((error as Error).message);
     }
   }
 }

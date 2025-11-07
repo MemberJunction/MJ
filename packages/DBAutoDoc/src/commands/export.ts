@@ -1,101 +1,113 @@
+/**
+ * Export command - Generate SQL and Markdown documentation
+ */
+
 import { Command, Flags } from '@oclif/core';
-import { confirm } from '@inquirer/prompts';
-import ora from 'ora';
-import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { StateManager } from '../state/state-manager';
-import { SQLGenerator } from '../generators/sql-generator';
-import { MarkdownGenerator } from '../generators/markdown-generator';
-import { DatabaseConnection } from '../database/connection';
+import chalk from 'chalk';
+import ora from 'ora';
+import { ConfigLoader } from '../utils/config-loader.js';
+import { StateManager } from '../state/StateManager.js';
+import { SQLGenerator } from '../generators/SQLGenerator.js';
+import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
+import { ReportGenerator } from '../generators/ReportGenerator.js';
+import { DatabaseConnection } from '../database/DatabaseConnection.js';
 
 export default class Export extends Command {
-  static description = 'Generate output files (SQL scripts, markdown documentation)';
+  static description = 'Export documentation as SQL and/or Markdown';
 
   static examples = [
-    '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --format sql',
-    '<%= config.bin %> <%= command.id %> --format markdown --output ./docs',
-    '<%= config.bin %> <%= command.id %> --execute --approved-only',
+    '$ db-auto-doc export --sql',
+    '$ db-auto-doc export --markdown',
+    '$ db-auto-doc export --sql --markdown --apply'
   ];
 
   static flags = {
-    format: Flags.string({
-      description: 'Output format',
-      options: ['sql', 'markdown', 'all'],
-      default: 'all',
-    }),
-    output: Flags.string({
-      description: 'Output directory',
-      default: './docs',
-    }),
-    'approved-only': Flags.boolean({
-      description: 'Only export approved items',
-      default: false,
-    }),
-    execute: Flags.boolean({
-      description: 'Execute SQL script (apply to database)',
-      default: false,
-    }),
+    sql: Flags.boolean({ description: 'Generate SQL script' }),
+    markdown: Flags.boolean({ description: 'Generate Markdown documentation' }),
+    report: Flags.boolean({ description: 'Generate analysis report' }),
+    apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
+    'approved-only': Flags.boolean({ description: 'Only export approved items', default: false }),
+    'confidence-threshold': Flags.number({ description: 'Minimum confidence threshold', default: 0 })
   };
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Export);
-
-    this.log(chalk.blue.bold('\n📤 Exporting Documentation\n'));
+    const spinner = ora();
 
     try {
-      const stateManager = new StateManager();
+      // Load configuration and state
+      spinner.start('Loading configuration and state');
+      const config = await ConfigLoader.load('./config.json');
+      const stateManager = new StateManager(config.output.stateFile);
       const state = await stateManager.load();
 
-      const outputDir = flags.output;
+      if (!state) {
+        throw new Error('No state file found. Run "db-auto-doc analyze" first.');
+      }
+
+      spinner.succeed('State loaded');
+
+      // Ensure output directory exists
+      const outputDir = path.dirname(config.output.sqlFile);
       await fs.mkdir(outputDir, { recursive: true });
 
-      if (flags.format === 'sql' || flags.format === 'all') {
+      // Generate SQL
+      if (flags.sql) {
+        spinner.start('Generating SQL script');
         const sqlGen = new SQLGenerator();
         const sql = sqlGen.generate(state, {
           approvedOnly: flags['approved-only'],
+          confidenceThreshold: flags['confidence-threshold']
         });
 
-        const sqlPath = path.join(outputDir, 'extended-properties.sql');
-        await fs.writeFile(sqlPath, sql);
-        this.log(chalk.green(`✓ Generated SQL: ${sqlPath}`));
+        await fs.writeFile(config.output.sqlFile, sql, 'utf-8');
+        spinner.succeed(`SQL script saved to ${config.output.sqlFile}`);
 
-        if (flags.execute) {
-          const confirmed = await confirm({
-            message: chalk.yellow('Execute SQL script? This will modify your database.'),
-            default: false,
-          });
+        // Apply to database if requested
+        if (flags.apply) {
+          spinner.start('Applying SQL to database');
+          const db = new DatabaseConnection(config.database);
+          await db.connect();
 
-          if (confirmed) {
-            const connection = DatabaseConnection.fromEnv();
-            const spinner = ora('Executing SQL...').start();
+          const result = await db.query(sql);
+          await db.close();
 
-            try {
-              await connection.query(sql);
-              spinner.succeed('SQL executed successfully');
-            } catch (error) {
-              spinner.fail('SQL execution failed');
-              throw error;
-            }
-
-            await connection.close();
+          if (result.success) {
+            spinner.succeed('SQL applied successfully');
+          } else {
+            spinner.fail(`SQL application failed: ${result.errorMessage}`);
           }
         }
       }
 
-      if (flags.format === 'markdown' || flags.format === 'all') {
+      // Generate Markdown
+      if (flags.markdown) {
+        spinner.start('Generating Markdown documentation');
         const mdGen = new MarkdownGenerator();
         const markdown = mdGen.generate(state);
 
-        const mdPath = path.join(outputDir, 'database-documentation.md');
-        await fs.writeFile(mdPath, markdown);
-        this.log(chalk.green(`✓ Generated Markdown: ${mdPath}`));
+        await fs.writeFile(config.output.markdownFile, markdown, 'utf-8');
+        spinner.succeed(`Markdown documentation saved to ${config.output.markdownFile}`);
       }
 
-      this.log(chalk.green('\n✅ Export complete!'));
-    } catch (error: any) {
-      this.error(error.message);
+      // Generate Report
+      if (flags.report) {
+        spinner.start('Generating analysis report');
+        const reportGen = new ReportGenerator(stateManager);
+        const report = reportGen.generate(state);
+
+        const reportPath = path.join(outputDir, 'analysis-report.md');
+        await fs.writeFile(reportPath, report, 'utf-8');
+        spinner.succeed(`Analysis report saved to ${reportPath}`);
+      }
+
+      this.log(chalk.green('\n✓ Export complete!'));
+
+    } catch (error) {
+      spinner.fail('Export failed');
+      this.error((error as Error).message);
     }
   }
 }

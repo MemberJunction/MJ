@@ -1,23 +1,25 @@
 /**
- * @memberjunction/db-auto-doc - SQL Server Database Auto-Documentation
- *
- * AI-powered documentation generator for SQL Server databases.
- * Works standalone - no MemberJunction runtime required.
- *
- * Use via CLI:
- *   db-auto-doc init
- *   db-auto-doc analyze --interactive
- *   db-auto-doc review
- *   db-auto-doc export --format=sql
- *
- * Or programmatically:
+ * DBAutoDoc - AI-powered SQL Server database documentation generator
+ * Main exports for programmatic use
  */
 
-export * from './types/state-file';
-export * from './database/connection';
-export * from './database/introspection';
-export * from './state/state-manager';
-export * from './ai/simple-ai-client';
-export * from './analyzers/analyzer';
-export * from './generators/sql-generator';
-export * from './generators/markdown-generator';
+// Core types
+export * from './types/index.js';
+
+// Database layer
+export * from './database/index.js';
+
+// Prompts
+export * from './prompts/index.js';
+
+// State management
+export * from './state/index.js';
+
+// Analysis engine
+export * from './core/index.js';
+
+// Generators
+export * from './generators/index.js';
+
+// Utilities
+export * from './utils/index.js';
