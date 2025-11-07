@@ -10,6 +10,16 @@ CREATE SCHEMA Events;
 GO
 
 -- =============================================
+-- Events Schema - Event & Conference Management
+-- =============================================
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Event and Conference Management Schema - Comprehensive event management system for conferences, seminars, and abstract submission workflows. Manages complete event lifecycle including conference planning, call for proposals (CFP), abstract submissions, speaker management, automated evaluation workflows, and multi-reviewer coordination. Features include hierarchical event structures (multi-day conferences), session format management, submission deadline tracking, automated scoring with configurable rubrics, review committee workflows, external form integration (Typeform), document management (Box), and notification systems. Supports complex academic and professional conference scenarios with speaker bios, co-presenter relationships, conflict of interest tracking, and detailed evaluation criteria.',
+    @level0type = N'SCHEMA',
+    @level0name = N'Events';
+GO
+
+-- =============================================
 -- Event Table
 -- =============================================
 CREATE TABLE Events.Event (
