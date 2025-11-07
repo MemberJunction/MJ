@@ -20,7 +20,6 @@ export class AIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'performanceCostMetrics', sectionName: 'Performance & Cost Metrics', isExpanded: false },
             { sectionKey: 'modelParametersSettings', sectionName: 'Model Parameters & Settings', isExpanded: false },
             { sectionKey: 'validationRetryDetails', sectionName: 'Validation & Retry Details', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
             { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false }

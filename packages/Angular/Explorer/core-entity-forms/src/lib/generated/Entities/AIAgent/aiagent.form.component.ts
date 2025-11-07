@@ -31,6 +31,7 @@ export class AIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRelationships', sectionName: 'MJ: AI Agent Relationships', isExpanded: false },
             { sectionKey: 'mJAIAgentSteps', sectionName: 'MJ: AI Agent Steps', isExpanded: false },
             { sectionKey: 'aIAgentNotes', sectionName: 'AIAgent Notes', isExpanded: false },
+            { sectionKey: 'mJAIAgentConfigurations', sectionName: 'MJ: AI Agent Configurations', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'MJ: AI Agent Prompts', isExpanded: false },
             { sectionKey: 'mJAIAgentRelationships1', sectionName: 'MJ: AI Agent Relationships', isExpanded: false },

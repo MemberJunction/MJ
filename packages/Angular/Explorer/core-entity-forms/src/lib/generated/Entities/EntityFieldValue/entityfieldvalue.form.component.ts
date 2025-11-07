@@ -14,9 +14,8 @@ export class EntityFieldValueFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'technicalMetadata', sectionName: 'Technical Metadata', isExpanded: false },
-            { sectionKey: 'lookupContext', sectionName: 'Lookup Context', isExpanded: true },
-            { sectionKey: 'valueSpecification', sectionName: 'Value Specification', isExpanded: false },
+            { sectionKey: 'entityAssociation', sectionName: 'Entity Association', isExpanded: true },
+            { sectionKey: 'lookupDefinition', sectionName: 'Lookup Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
