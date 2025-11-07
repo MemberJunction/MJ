@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Queue Definition Section -->
-        <div class="form-card collapsible-card" data-section-name="queue definition" data-field-names="name description queuetypeid queue type id queuetype queue type">
-            <div class="collapsible-header" (click)="toggleSection('queueDefinition')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-list-alt"></i>
-                    <h3><span class="section-name">Queue Definition</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.queueDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queueDefinition">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Queue Definition Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="queueDefinition"
+        sectionName="Queue Definition"
+        icon="fa fa-list-alt"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -47,6 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -54,6 +32,7 @@
             FieldName="QueueTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -63,31 +42,25 @@
             FieldName="QueueType"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Operational Status Section -->
-        <div class="form-card collapsible-card" data-section-name="operational status" data-field-names="isactive is active lastheartbeat last heartbeat">
-            <div class="collapsible-header" (click)="toggleSection('operationalStatus')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tachometer-alt"></i>
-                    <h3><span class="section-name">Operational Status</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.operationalStatus ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.operationalStatus">
-                <div class="form-body">
+    <!-- Operational Status Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="operationalStatus"
+        sectionName="Operational Status"
+        icon="fa fa-tachometer-alt"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="IsActive"
             Type="checkbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -95,31 +68,25 @@
             FieldName="LastHeartbeat"
             Type="datepicker"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Process Environment Section -->
-        <div class="form-card collapsible-card" data-section-name="process environment" data-field-names="processpid process pid processplatform process platform processversion process version processcwd process cwd processipaddress process ipaddress processmacaddress process mac address processosname process osname processosversion process osversion processhostname process host name processuserid process user id processusername process user name">
-            <div class="collapsible-header" (click)="toggleSection('processEnvironment')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-server"></i>
-                    <h3><span class="section-name">Process Environment</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.processEnvironment ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.processEnvironment">
-                <div class="form-body">
+    <!-- Process Environment Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="processEnvironment"
+        sectionName="Process Environment"
+        icon="fa fa-server"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="ProcessPID"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -127,6 +94,7 @@
             FieldName="ProcessPlatform"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -134,6 +102,7 @@
             FieldName="ProcessVersion"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -141,6 +110,7 @@
             FieldName="ProcessCwd"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -148,6 +118,7 @@
             FieldName="ProcessIPAddress"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -155,6 +126,7 @@
             FieldName="ProcessMacAddress"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -162,6 +134,7 @@
             FieldName="ProcessOSName"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -169,6 +142,7 @@
             FieldName="ProcessOSVersion"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -176,6 +150,7 @@
             FieldName="ProcessHostName"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -183,6 +158,7 @@
             FieldName="ProcessUserID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -190,31 +166,25 @@
             FieldName="ProcessUserName"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -222,46 +192,33 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Queue Tasks Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="queue tasks" data-field-names="queue tasks" data-section-key="queueTasks">
-            <div class="collapsible-header" (click)="toggleSection('queueTasks')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tasks"></i>
-                    <h3>
-                        <span class="section-name">Queue Tasks</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['queueTasks'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['queueTasks'] === 0">
-                            {{sectionRowCounts['queueTasks']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.queueTasks ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queueTasks" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Queue Tasks','QueueID')"
-                        [NewRecordValues]="NewRecordValues('Queue Tasks')"
-                        [AllowLoad]="IsCurrentSection('queueTasks')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['queueTasks'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Queue Tasks Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="queueTasks"
+        sectionName="Queue Tasks"
+        icon="fa fa-tasks"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('queueTasks')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Queue Tasks','QueueID')"
+                [NewRecordValues]="NewRecordValues('Queue Tasks')"
+                [AllowLoad]="IsSectionExpanded('queueTasks')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queueTasks', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

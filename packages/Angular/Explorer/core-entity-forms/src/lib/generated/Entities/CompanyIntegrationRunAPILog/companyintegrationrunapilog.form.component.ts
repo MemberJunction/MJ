@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Company Integration Run API Logs') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-companyintegrationrunapilog-form',
-    templateUrl: './companyintegrationrunapilog.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './companyintegrationrunapilog.form.component.html'
 })
 export class CompanyIntegrationRunAPILogFormComponent extends BaseFormComponent {
     public record!: CompanyIntegrationRunAPILogEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        executionTimingStatus: true,
-        aPICallDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'executionTimingStatus', sectionName: 'Execution Timing & Status', isExpanded: true },
+            { sectionKey: 'aPICallDetails', sectionName: 'API Call Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

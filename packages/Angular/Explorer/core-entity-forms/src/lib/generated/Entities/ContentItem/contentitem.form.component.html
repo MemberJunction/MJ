@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Content Details Section -->
-        <div class="form-card collapsible-card" data-section-name="content details" data-field-names="name description contenttypeid content type id checksum text contenttype content type">
-            <div class="collapsible-header" (click)="toggleSection('contentDetails')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-file-code"></i>
-                    <h3><span class="section-name">Content Details</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.contentDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentDetails">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Content Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="contentDetails"
+        sectionName="Content Details"
+        icon="fa fa-file-code"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -47,6 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -54,6 +32,7 @@
             FieldName="ContentTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -63,6 +42,7 @@
             FieldName="Checksum"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -70,6 +50,7 @@
             FieldName="Text"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -77,31 +58,25 @@
             FieldName="ContentType"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Source Information Section -->
-        <div class="form-card collapsible-card" data-section-name="source information" data-field-names="contentsourceid content source id contentsourcetypeid content source type id contentfiletypeid content file type id url contentsource content source contentsourcetype content source type contentfiletype content file type">
-            <div class="collapsible-header" (click)="toggleSection('sourceInformation')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3><span class="section-name">Source Information</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.sourceInformation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.sourceInformation">
-                <div class="form-body">
+    <!-- Source Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="sourceInformation"
+        sectionName="Source Information"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="ContentSourceID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -111,6 +86,7 @@
             FieldName="ContentSourceTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -120,6 +96,7 @@
             FieldName="ContentFileTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -129,6 +106,7 @@
             FieldName="URL"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -136,6 +114,7 @@
             FieldName="ContentSource"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -143,6 +122,7 @@
             FieldName="ContentSourceType"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -150,31 +130,25 @@
             FieldName="ContentFileType"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -182,78 +156,54 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Content Item Attributes Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="content item attributes" data-field-names="content item attributes" data-section-key="contentItemAttributes">
-            <div class="collapsible-header" (click)="toggleSection('contentItemAttributes')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tag"></i>
-                    <h3>
-                        <span class="section-name">Content Item Attributes</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['contentItemAttributes'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['contentItemAttributes'] === 0">
-                            {{sectionRowCounts['contentItemAttributes']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.contentItemAttributes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentItemAttributes" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Content Item Attributes','ContentItemID')"
-                        [NewRecordValues]="NewRecordValues('Content Item Attributes')"
-                        [AllowLoad]="IsCurrentSection('contentItemAttributes')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['contentItemAttributes'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Content Item Attributes Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="contentItemAttributes"
+        sectionName="Content Item Attributes"
+        icon="fa fa-tag"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('contentItemAttributes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Content Item Attributes','ContentItemID')"
+                [NewRecordValues]="NewRecordValues('Content Item Attributes')"
+                [AllowLoad]="IsSectionExpanded('contentItemAttributes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('contentItemAttributes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- Content Item Tags Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="content item tags" data-field-names="content item tags" data-section-key="contentItemTags">
-            <div class="collapsible-header" (click)="toggleSection('contentItemTags')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tag"></i>
-                    <h3>
-                        <span class="section-name">Content Item Tags</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['contentItemTags'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['contentItemTags'] === 0">
-                            {{sectionRowCounts['contentItemTags']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.contentItemTags ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentItemTags" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Content Item Tags','ItemID')"
-                        [NewRecordValues]="NewRecordValues('Content Item Tags')"
-                        [AllowLoad]="IsCurrentSection('contentItemTags')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['contentItemTags'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Content Item Tags Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="contentItemTags"
+        sectionName="Content Item Tags"
+        icon="fa fa-tag"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('contentItemTags')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Content Item Tags','ItemID')"
+                [NewRecordValues]="NewRecordValues('Content Item Tags')"
+                [AllowLoad]="IsSectionExpanded('contentItemTags')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('contentItemTags', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

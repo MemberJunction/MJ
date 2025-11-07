@@ -6,20 +6,17 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'User View Run Details') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-userviewrundetail-form',
-    templateUrl: './userviewrundetail.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './userviewrundetail.form.component.html'
 })
 export class UserViewRunDetailFormComponent extends BaseFormComponent {
     public record!: UserViewRunDetailEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        runDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'runDetails', sectionName: 'Run Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

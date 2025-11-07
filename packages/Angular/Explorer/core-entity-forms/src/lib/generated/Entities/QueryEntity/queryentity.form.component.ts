@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Query Entities') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-queryentity-form',
-    templateUrl: './queryentity.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './queryentity.form.component.html'
 })
 export class QueryEntityFormComponent extends BaseFormComponent {
     public record!: QueryEntityEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        identifiers: true,
-        queryMapping: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifiers', sectionName: 'Identifiers', isExpanded: true },
+            { sectionKey: 'queryMapping', sectionName: 'Query Mapping', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

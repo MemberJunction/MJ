@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Schema Info') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-schemainfo-form',
-    templateUrl: './schemainfo.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './schemainfo.form.component.html'
 })
 export class SchemaInfoFormComponent extends BaseFormComponent {
     public record!: SchemaInfoEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        identifierRange: true,
-        schemaInformation: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifierRange', sectionName: 'Identifier Range', isExpanded: true },
+            { sectionKey: 'schemaInformation', sectionName: 'Schema Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

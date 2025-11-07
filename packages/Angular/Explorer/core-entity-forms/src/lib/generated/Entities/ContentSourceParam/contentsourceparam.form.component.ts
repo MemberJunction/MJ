@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Content Source Params') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contentsourceparam-form',
-    templateUrl: './contentsourceparam.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './contentsourceparam.form.component.html'
 })
 export class ContentSourceParamFormComponent extends BaseFormComponent {
     public record!: ContentSourceParamEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        identifierKeys: true,
-        parameterSettings: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifierKeys', sectionName: 'Identifier Keys', isExpanded: true },
+            { sectionKey: 'parameterSettings', sectionName: 'Parameter Settings', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

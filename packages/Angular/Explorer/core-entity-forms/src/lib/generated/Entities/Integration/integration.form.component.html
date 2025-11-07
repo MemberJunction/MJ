@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Integration Overview Section -->
-        <div class="form-card collapsible-card" data-section-name="integration overview" data-field-names="name description navigationbaseurl navigation base url">
-            <div class="collapsible-header" (click)="toggleSection('integrationOverview')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-plug"></i>
-                    <h3><span class="section-name">Integration Overview</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.integrationOverview ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.integrationOverview">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Integration Overview Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="integrationOverview"
+        sectionName="Integration Overview"
+        icon="fa fa-plug"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -47,6 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -54,32 +32,26 @@
             FieldName="NavigationBaseURL"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="URL"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Technical Settings Section -->
-        <div class="form-card collapsible-card" data-section-name="technical settings" data-field-names="classname class name importpath import path batchmaxrequestcount batch max request count batchrequestwaittime batch request wait time">
-            <div class="collapsible-header" (click)="toggleSection('technicalSettings')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">Technical Settings</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.technicalSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.technicalSettings">
-                <div class="form-body">
+    <!-- Technical Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="technicalSettings"
+        sectionName="Technical Settings"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="ClassName"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -87,6 +59,7 @@
             FieldName="ImportPath"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -94,6 +67,7 @@
             FieldName="BatchMaxRequestCount"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -101,31 +75,25 @@
             FieldName="BatchRequestWaitTime"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -133,110 +101,75 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Company Integrations Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="company integrations" data-field-names="company integrations" data-section-key="companyIntegrations">
-            <div class="collapsible-header" (click)="toggleSection('companyIntegrations')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-plug"></i>
-                    <h3>
-                        <span class="section-name">Company Integrations</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['companyIntegrations'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['companyIntegrations'] === 0">
-                            {{sectionRowCounts['companyIntegrations']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.companyIntegrations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.companyIntegrations" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Company Integrations','IntegrationName')"
-                        [NewRecordValues]="NewRecordValues('Company Integrations')"
-                        [AllowLoad]="IsCurrentSection('companyIntegrations')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['companyIntegrations'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Company Integrations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="companyIntegrations"
+        sectionName="Company Integrations"
+        icon="fa fa-plug"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('companyIntegrations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Company Integrations','IntegrationName')"
+                [NewRecordValues]="NewRecordValues('Company Integrations')"
+                [AllowLoad]="IsSectionExpanded('companyIntegrations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('companyIntegrations', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- URL Formats Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="url formats" data-field-names="integration url formats" data-section-key="uRLFormats">
-            <div class="collapsible-header" (click)="toggleSection('uRLFormats')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3>
-                        <span class="section-name">URL Formats</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['uRLFormats'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['uRLFormats'] === 0">
-                            {{sectionRowCounts['uRLFormats']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.uRLFormats ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.uRLFormats" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Integration URL Formats','IntegrationID')"
-                        [NewRecordValues]="NewRecordValues('Integration URL Formats')"
-                        [AllowLoad]="IsCurrentSection('uRLFormats')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['uRLFormats'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- URL Formats Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="uRLFormats"
+        sectionName="URL Formats"
+        icon="fa fa-link"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('uRLFormats')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Integration URL Formats','IntegrationID')"
+                [NewRecordValues]="NewRecordValues('Integration URL Formats')"
+                [AllowLoad]="IsSectionExpanded('uRLFormats')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('uRLFormats', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- Record Changes Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="record changes" data-field-names="record changes" data-section-key="recordChanges">
-            <div class="collapsible-header" (click)="toggleSection('recordChanges')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-history"></i>
-                    <h3>
-                        <span class="section-name">Record Changes</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['recordChanges'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['recordChanges'] === 0">
-                            {{sectionRowCounts['recordChanges']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.recordChanges ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recordChanges" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Record Changes','IntegrationID')"
-                        [NewRecordValues]="NewRecordValues('Record Changes')"
-                        [AllowLoad]="IsCurrentSection('recordChanges')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['recordChanges'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Record Changes Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="recordChanges"
+        sectionName="Record Changes"
+        icon="fa fa-history"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('recordChanges')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Record Changes','IntegrationID')"
+                [NewRecordValues]="NewRecordValues('Record Changes')"
+                [AllowLoad]="IsSectionExpanded('recordChanges')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('recordChanges', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

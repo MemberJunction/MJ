@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Content Type Attributes') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contenttypeattribute-form',
-    templateUrl: './contenttypeattribute.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './contenttypeattribute.form.component.html'
 })
 export class ContentTypeAttributeFormComponent extends BaseFormComponent {
     public record!: ContentTypeAttributeEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        attributeMetadata: false,
-        extractionPrompt: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'attributeMetadata', sectionName: 'Attribute Metadata', isExpanded: false },
+            { sectionKey: 'extractionPrompt', sectionName: 'Extraction Prompt', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

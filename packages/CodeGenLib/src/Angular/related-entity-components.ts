@@ -105,7 +105,7 @@ export class GenerationInput {
 
     /**
      * The unique camelCase key for the section in collapsible section-based forms.
-     * Used for deferred loading using the IsCurrentSection() method from BaseFormComponent.
+     * Used for deferred loading using the IsSectionExpanded() method from BaseFormComponent.
      * Allows components to optimize rendering by only loading data when the section is expanded.
      */
     SectionKey: string;

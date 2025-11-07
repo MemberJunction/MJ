@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Application Settings') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-applicationsetting-form',
-    templateUrl: './applicationsetting.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './applicationsetting.form.component.html'
 })
 export class ApplicationSettingFormComponent extends BaseFormComponent {
     public record!: ApplicationSettingEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        applicationLinkage: true,
-        settingDefinition: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'applicationLinkage', sectionName: 'Application Linkage', isExpanded: true },
+            { sectionKey: 'settingDefinition', sectionName: 'Setting Definition', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

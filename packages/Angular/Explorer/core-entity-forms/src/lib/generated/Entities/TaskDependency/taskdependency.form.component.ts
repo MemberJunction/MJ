@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: Task Dependencies') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-taskdependency-form',
-    templateUrl: './taskdependency.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './taskdependency.form.component.html'
 })
 export class TaskDependencyFormComponent extends BaseFormComponent {
     public record!: TaskDependencyEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        taskReference: true,
-        dependencyLink: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'taskReference', sectionName: 'Task Reference', isExpanded: true },
+            { sectionKey: 'dependencyLink', sectionName: 'Dependency Link', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

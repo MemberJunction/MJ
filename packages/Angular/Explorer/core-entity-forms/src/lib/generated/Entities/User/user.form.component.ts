@@ -2,146 +2,85 @@ import { Component } from '@angular/core';
 import { UserEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Users') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-user-form',
-    templateUrl: './user.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './user.form.component.html'
 })
 export class UserFormComponent extends BaseFormComponent {
     public record!: UserEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        userIdentity: true,
-        accountSettings: true,
-        entityLinks: false,
-        employeeDetails: false,
-        systemMetadata: false,
-        actionExecutionLogs: false,
-        actions: false,
-        auditLogs: false,
-        communicationRuns: false,
-        companyIntegrationRuns: false,
-        conversations: false,
-        dashboardCategories: false,
-        dashboards: false,
-        dataContexts: false,
-        duplicateRuns: false,
-        lists: false,
-        queryCategories: false,
-        recommendationRuns: false,
-        recordChangeReplayRuns: false,
-        recordChanges: false,
-        recordMergeLogs: false,
-        reportCategories: false,
-        reportSnapshots: false,
-        reports: false,
-        templateCategories: false,
-        templates: false,
-        userApplications: false,
-        userFavorites: false,
-        userNotifications: false,
-        userRecordLogs: false,
-        roles: false,
-        userViewCategories: false,
-        userViewRuns: false,
-        userViews: false,
-        workspaces: false,
-        aIAgentNotes: false,
-        aIAgentRequests: false,
-        listCategories: false,
-        mJArtifactPermissions: false,
-        mJArtifactUses: false,
-        mJArtifactVersions: false,
-        mJConversationDetailRatings: false,
-        mJDashboardUserPreferences: false,
-        mJDashboardUserStates: false,
-        mJPublicLinks: false,
-        mJReportUserStates: false,
-        mJScheduledJobRuns: false,
-        mJScheduledJobs: false,
-        resourceLinks: false,
-        scheduledActions: false,
-        aIAgentRequests1: false,
-        conversationDetails: false,
-        mJAccessControlRules: false,
-        mJArtifactPermissions1: false,
-        mJArtifacts: false,
-        mJCollectionPermissions: false,
-        mJScheduledJobs1: false,
-        resourcePermissions: false,
-        mJAIAgentPermissions: false,
-        mJAIAgentRuns: false,
-        mJCollectionPermissions1: false,
-        mJCollections: false,
-        mJAIAgentExamples: false,
-        mJTasks: false,
-        aIAgents: false
-    };
-
-    // Row counts for related entity sections (populated after grids load)
-    public sectionRowCounts: { [key: string]: number } = {};
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
-    }
-
-    public expandAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = true;
-        });
-    }
-
-    public collapseAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = false;
-        });
-    }
-
-    public getExpandedCount(): number {
-        return Object.values(this.sectionsExpanded).filter(v => v === true).length;
-    }
-
-    public filterSections(event: Event): void {
-        const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
-        const panels = document.querySelectorAll('.form-card.collapsible-card');
-
-        panels.forEach((panel: Element) => {
-            const sectionName = panel.getAttribute('data-section-name') || '';
-            const fieldNames = panel.getAttribute('data-field-names') || '';
-
-            // Show section if search term matches section name OR any field name
-            const matches = sectionName.includes(searchTerm) || fieldNames.includes(searchTerm);
-
-            if (matches) {
-                panel.classList.remove('search-hidden');
-
-                // Add highlighting to matched text in section name
-                if (searchTerm && sectionName.includes(searchTerm)) {
-                    const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                    if (h3) {
-                        const originalText = h3.textContent || '';
-                        const regex = new RegExp(`(${searchTerm})`, 'gi');
-                        h3.innerHTML = originalText.replace(regex, '<span class="search-highlight">$1</span>');
-                    }
-                }
-            } else {
-                panel.classList.add('search-hidden');
-            }
-        });
-
-        // Clear highlighting when search is empty
-        if (!searchTerm) {
-            panels.forEach((panel: Element) => {
-                const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                if (h3) {
-                    h3.innerHTML = h3.textContent || '';
-                }
-            });
-        }
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'userIdentity', sectionName: 'User Identity', isExpanded: true },
+            { sectionKey: 'accountSettings', sectionName: 'Account Settings', isExpanded: true },
+            { sectionKey: 'entityLinks', sectionName: 'Entity Links', isExpanded: false },
+            { sectionKey: 'employeeDetails', sectionName: 'Employee Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'actionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false },
+            { sectionKey: 'actions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'auditLogs', sectionName: 'Audit Logs', isExpanded: false },
+            { sectionKey: 'communicationRuns', sectionName: 'Communication Runs', isExpanded: false },
+            { sectionKey: 'companyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false },
+            { sectionKey: 'conversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'dashboardCategories', sectionName: 'Dashboard Categories', isExpanded: false },
+            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'dataContexts', sectionName: 'Data Contexts', isExpanded: false },
+            { sectionKey: 'duplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
+            { sectionKey: 'lists', sectionName: 'Lists', isExpanded: false },
+            { sectionKey: 'queryCategories', sectionName: 'Query Categories', isExpanded: false },
+            { sectionKey: 'recommendationRuns', sectionName: 'Recommendation Runs', isExpanded: false },
+            { sectionKey: 'recordChangeReplayRuns', sectionName: 'Record Change Replay Runs', isExpanded: false },
+            { sectionKey: 'recordChanges', sectionName: 'Record Changes', isExpanded: false },
+            { sectionKey: 'recordMergeLogs', sectionName: 'Record Merge Logs', isExpanded: false },
+            { sectionKey: 'reportCategories', sectionName: 'Report Categories', isExpanded: false },
+            { sectionKey: 'reportSnapshots', sectionName: 'Report Snapshots', isExpanded: false },
+            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
+            { sectionKey: 'templateCategories', sectionName: 'Template Categories', isExpanded: false },
+            { sectionKey: 'templates', sectionName: 'Templates', isExpanded: false },
+            { sectionKey: 'userApplications', sectionName: 'User Applications', isExpanded: false },
+            { sectionKey: 'userFavorites', sectionName: 'User Favorites', isExpanded: false },
+            { sectionKey: 'userNotifications', sectionName: 'User Notifications', isExpanded: false },
+            { sectionKey: 'userRecordLogs', sectionName: 'User Record Logs', isExpanded: false },
+            { sectionKey: 'roles', sectionName: 'Roles', isExpanded: false },
+            { sectionKey: 'userViewCategories', sectionName: 'User View Categories', isExpanded: false },
+            { sectionKey: 'userViewRuns', sectionName: 'User View Runs', isExpanded: false },
+            { sectionKey: 'userViews', sectionName: 'User Views', isExpanded: false },
+            { sectionKey: 'workspaces', sectionName: 'Workspaces', isExpanded: false },
+            { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'aIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false },
+            { sectionKey: 'listCategories', sectionName: 'List Categories', isExpanded: false },
+            { sectionKey: 'mJArtifactPermissions', sectionName: 'MJ: Artifact Permissions', isExpanded: false },
+            { sectionKey: 'mJArtifactUses', sectionName: 'MJ: Artifact Uses', isExpanded: false },
+            { sectionKey: 'mJArtifactVersions', sectionName: 'MJ: Artifact Versions', isExpanded: false },
+            { sectionKey: 'mJConversationDetailRatings', sectionName: 'MJ: Conversation Detail Ratings', isExpanded: false },
+            { sectionKey: 'mJDashboardUserPreferences', sectionName: 'MJ: Dashboard User Preferences', isExpanded: false },
+            { sectionKey: 'mJDashboardUserStates', sectionName: 'MJ: Dashboard User States', isExpanded: false },
+            { sectionKey: 'mJPublicLinks', sectionName: 'MJ: Public Links', isExpanded: false },
+            { sectionKey: 'mJReportUserStates', sectionName: 'MJ: Report User States', isExpanded: false },
+            { sectionKey: 'mJScheduledJobRuns', sectionName: 'MJ: Scheduled Job Runs', isExpanded: false },
+            { sectionKey: 'mJScheduledJobs', sectionName: 'MJ: Scheduled Jobs', isExpanded: false },
+            { sectionKey: 'resourceLinks', sectionName: 'Resource Links', isExpanded: false },
+            { sectionKey: 'scheduledActions', sectionName: 'Scheduled Actions', isExpanded: false },
+            { sectionKey: 'aIAgentRequests1', sectionName: 'AI Agent Requests', isExpanded: false },
+            { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false },
+            { sectionKey: 'mJAccessControlRules', sectionName: 'MJ: Access Control Rules', isExpanded: false },
+            { sectionKey: 'mJArtifactPermissions1', sectionName: 'MJ: Artifact Permissions', isExpanded: false },
+            { sectionKey: 'mJArtifacts', sectionName: 'MJ: Artifacts', isExpanded: false },
+            { sectionKey: 'mJCollectionPermissions', sectionName: 'MJ: Collection Permissions', isExpanded: false },
+            { sectionKey: 'mJScheduledJobs1', sectionName: 'MJ: Scheduled Jobs', isExpanded: false },
+            { sectionKey: 'resourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
+            { sectionKey: 'mJAIAgentPermissions', sectionName: 'MJ: AI Agent Permissions', isExpanded: false },
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
+            { sectionKey: 'mJCollectionPermissions1', sectionName: 'MJ: Collection Permissions', isExpanded: false },
+            { sectionKey: 'mJCollections', sectionName: 'MJ: Collections', isExpanded: false },
+            { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'MJ: Tasks', isExpanded: false },
+            { sectionKey: 'aIAgents', sectionName: 'AI Agents', isExpanded: false }
+        ]);
     }
 }
 

@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Query Permissions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-querypermission-form',
-    templateUrl: './querypermission.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './querypermission.form.component.html'
 })
 export class QueryPermissionFormComponent extends BaseFormComponent {
     public record!: QueryPermissionEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        permissionRecord: true,
-        descriptiveLabels: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'permissionRecord', sectionName: 'Permission Record', isExpanded: true },
+            { sectionKey: 'descriptiveLabels', sectionName: 'Descriptive Labels', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

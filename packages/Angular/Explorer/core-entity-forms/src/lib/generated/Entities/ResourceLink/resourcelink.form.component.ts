@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Resource Links') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-resourcelink-form',
-    templateUrl: './resourcelink.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './resourcelink.form.component.html'
 })
 export class ResourceLinkFormComponent extends BaseFormComponent {
     public record!: ResourceLinkEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        linkDetails: true,
-        associations: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'linkDetails', sectionName: 'Link Details', isExpanded: true },
+            { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Run Identification Section -->
-        <div class="form-card collapsible-card" data-section-name="run identification" data-field-names="recommendationproviderid recommendation provider id runbyuserid run by user id">
-            <div class="collapsible-header" (click)="toggleSection('runIdentification')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-id-badge"></i>
-                    <h3><span class="section-name">Run Identification</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.runIdentification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.runIdentification">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Run Identification Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="runIdentification"
+        sectionName="Run Identification"
+        icon="fa fa-id-badge"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="RecommendationProviderID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -49,33 +26,27 @@
             FieldName="RunByUserID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Run Schedule & Status Section -->
-        <div class="form-card collapsible-card" data-section-name="run schedule & status" data-field-names="startdate start date enddate end date status">
-            <div class="collapsible-header" (click)="toggleSection('runScheduleStatus')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-calendar-alt"></i>
-                    <h3><span class="section-name">Run Schedule & Status</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.runScheduleStatus ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.runScheduleStatus">
-                <div class="form-body">
+    <!-- Run Schedule & Status Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="runScheduleStatus"
+        sectionName="Run Schedule & Status"
+        icon="fa fa-calendar-alt"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="StartDate"
             Type="datepicker"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -83,6 +54,7 @@
             FieldName="EndDate"
             Type="datepicker"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -90,31 +62,25 @@
             FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Run Description Section -->
-        <div class="form-card collapsible-card" data-section-name="run description" data-field-names="description recommendationprovider recommendation provider runbyuser run by user">
-            <div class="collapsible-header" (click)="toggleSection('runDescription')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-align-left"></i>
-                    <h3><span class="section-name">Run Description</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.runDescription ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.runDescription">
-                <div class="form-body">
+    <!-- Run Description Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="runDescription"
+        sectionName="Run Description"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -122,6 +88,7 @@
             FieldName="RecommendationProvider"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -129,31 +96,25 @@
             FieldName="RunByUser"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -161,46 +122,33 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Recommendations Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="recommendations" data-field-names="recommendations" data-section-key="recommendations">
-            <div class="collapsible-header" (click)="toggleSection('recommendations')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa-solid fa-circle-nodes"></i>
-                    <h3>
-                        <span class="section-name">Recommendations</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['recommendations'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['recommendations'] === 0">
-                            {{sectionRowCounts['recommendations']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.recommendations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recommendations" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Recommendations','RecommendationRunID')"
-                        [NewRecordValues]="NewRecordValues('Recommendations')"
-                        [AllowLoad]="IsCurrentSection('recommendations')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['recommendations'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Recommendations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="recommendations"
+        sectionName="Recommendations"
+        icon="fa-solid fa-circle-nodes"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('recommendations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Recommendations','RecommendationRunID')"
+                [NewRecordValues]="NewRecordValues('Recommendations')"
+                [AllowLoad]="IsSectionExpanded('recommendations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('recommendations', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

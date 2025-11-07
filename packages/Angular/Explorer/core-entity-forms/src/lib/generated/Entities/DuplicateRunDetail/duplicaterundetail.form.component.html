@@ -1,45 +1,22 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Run Identification Section -->
-        <div class="form-card collapsible-card" data-section-name="run identification" data-field-names="duplicaterunid duplicate run id recordid record id">
-            <div class="collapsible-header" (click)="toggleSection('runIdentification')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-key"></i>
-                    <h3><span class="section-name">Run Identification</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.runIdentification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.runIdentification">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Run Identification Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="runIdentification"
+        sectionName="Run Identification"
+        icon="fa fa-key"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="DuplicateRunID"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -49,31 +26,25 @@
             FieldName="RecordID"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Processing Outcomes Section -->
-        <div class="form-card collapsible-card" data-section-name="processing outcomes" data-field-names="matchstatus match status skippedreason skipped reason matcherrormessage match error message mergestatus merge status mergeerrormessage merge error message">
-            <div class="collapsible-header" (click)="toggleSection('processingOutcomes')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-flag"></i>
-                    <h3><span class="section-name">Processing Outcomes</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.processingOutcomes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.processingOutcomes">
-                <div class="form-body">
+    <!-- Processing Outcomes Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="processingOutcomes"
+        sectionName="Processing Outcomes"
+        icon="fa fa-flag"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="MatchStatus"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -81,6 +52,7 @@
             FieldName="SkippedReason"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -88,6 +60,7 @@
             FieldName="MatchErrorMessage"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -95,6 +68,7 @@
             FieldName="MergeStatus"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -102,31 +76,43 @@
             FieldName="MergeErrorMessage"
             Type="textarea"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="DuplicateRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -134,46 +120,33 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Duplicate Run Detail Matches Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="duplicate run detail matches" data-field-names="duplicate run detail matches" data-section-key="duplicateRunDetailMatches">
-            <div class="collapsible-header" (click)="toggleSection('duplicateRunDetailMatches')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-clone"></i>
-                    <h3>
-                        <span class="section-name">Duplicate Run Detail Matches</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['duplicateRunDetailMatches'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['duplicateRunDetailMatches'] === 0">
-                            {{sectionRowCounts['duplicateRunDetailMatches']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.duplicateRunDetailMatches ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.duplicateRunDetailMatches" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','DuplicateRunDetailID')"
-                        [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
-                        [AllowLoad]="IsCurrentSection('duplicateRunDetailMatches')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['duplicateRunDetailMatches'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Duplicate Run Detail Matches Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="duplicateRunDetailMatches"
+        sectionName="Duplicate Run Detail Matches"
+        icon="fa fa-clone"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('duplicateRunDetailMatches')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','DuplicateRunDetailID')"
+                [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
+                [AllowLoad]="IsSectionExpanded('duplicateRunDetailMatches')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         
