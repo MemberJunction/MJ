@@ -4,7 +4,8 @@ function DataGrid({
   columns, // Array of column definitions: [{field: 'Name', header: 'Product Name', render: fn, width: '200px', sortable: true}]
   sorting = true,
   paging = true,
-  pageSize = 10,
+  pageSize = 20,
+  showPageSizeChanger = true,
   filtering = true,  // Changed default to true
   highlightFilterMatches = true,
   filterFields,
@@ -34,11 +35,17 @@ function DataGrid({
   const [debouncedFilter, setDebouncedFilter] = React.useState('');
   const [selectedRowKeys, setSelectedRowKeys] = React.useState([]);
   const [currentPage, setCurrentPage] = React.useState(1);
+  const [currentPageSize, setCurrentPageSize] = React.useState(pageSize);
   const [sortConfig, setSortConfig] = React.useState(null);
   const [entityInfo, setEntityInfo] = React.useState(null);
   const [expandedCells, setExpandedCells] = React.useState({}); // Track which cells are expanded
 
-  
+
+  // Update current page size when pageSize prop changes
+  React.useEffect(() => {
+    setCurrentPageSize(pageSize);
+  }, [pageSize]);
+
   // Load entity metadata if we have an entity name
   React.useEffect(() => {
     if (entityName && utilities?.md?.Entities) {
@@ -615,18 +622,35 @@ function DataGrid({
   // Pagination configuration
   const pagination = paging ? {
     current: currentPage,
-    pageSize: pageSize,
+    pageSize: currentPageSize,
     total: filteredData.length,
-    showSizeChanger: false,
+    showSizeChanger: showPageSizeChanger,
+    pageSizeOptions: ['5', '10', '20', '50', '100'],
     showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
-    onChange: (page) => {
+    onChange: (page, newPageSize) => {
       setCurrentPage(page);
+      if (newPageSize !== currentPageSize) {
+        setCurrentPageSize(newPageSize);
+      }
       if (onPageChanged) {
-        const startIdx = (page - 1) * pageSize;
-        const endIdx = Math.min(startIdx + pageSize, filteredData.length);
-        onPageChanged({ 
+        const startIdx = (page - 1) * (newPageSize || currentPageSize);
+        const endIdx = Math.min(startIdx + (newPageSize || currentPageSize), filteredData.length);
+        onPageChanged({
           pageNumber: page - 1,
+          pageSize: newPageSize || currentPageSize,
           visibleRows: filteredData.slice(startIdx, endIdx)
+        });
+      }
+    },
+    onShowSizeChange: (current, size) => {
+      setCurrentPageSize(size);
+      setCurrentPage(1); // Reset to first page when changing page size
+      if (onPageChanged) {
+        const endIdx = Math.min(size, filteredData.length);
+        onPageChanged({
+          pageNumber: 0,
+          pageSize: size,
+          visibleRows: filteredData.slice(0, endIdx)
         });
       }
     }
