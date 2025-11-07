@@ -2249,9 +2249,31 @@ NumberedRows AS (
                category = 'System Metadata';
             }
 
+            // Build SET clause with all available metadata
+            const setClauses: string[] = [
+               `Category = '${category.replace(/'/g, "''")}'`,
+               `GeneratedFormSection = 'Category'`
+            ];
+
+            // Add DisplayName if provided and field allows auto-update
+            if (fieldCategory.displayName && field.AutoUpdateDisplayName) {
+               setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
+            }
+
+            // Add ExtendedType if provided
+            if (fieldCategory.extendedType !== undefined) {
+               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${fieldCategory.extendedType.replace(/'/g, "''")}'`;
+               setClauses.push(`ExtendedType = ${extendedType}`);
+            }
+
+            // Add CodeType if provided
+            if (fieldCategory.codeType !== undefined) {
+               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${fieldCategory.codeType.replace(/'/g, "''")}'`;
+               setClauses.push(`CodeType = ${codeType}`);
+            }
+
             const updateSQL = `UPDATE [${mj_core_schema()}].EntityField
-   SET Category = '${category.replace(/'/g, "''")}',
-       GeneratedFormSection = 'Category'
+   SET ${setClauses.join(',\n       ')}
    WHERE ID = '${field.ID}'
    AND AutoUpdateCategory = 1`;
 

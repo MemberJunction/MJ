@@ -21,12 +21,13 @@
     align-self: start; /* Align the label to the start (top) */
 }
 
-/* Prevent horizontal overflow of field values */
+/* Enable wrapping and vertical scrolling for field values */
 .record-form-row > :nth-child(2) {
     overflow-wrap: break-word;
     word-wrap: break-word;
     word-break: break-word;
     min-width: 0;
+    max-width: 100%;
 }
 
 /*
