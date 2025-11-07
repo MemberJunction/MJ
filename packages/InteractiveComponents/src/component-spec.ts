@@ -92,6 +92,16 @@ export class ComponentSpec {
      * Technical explanation of the component in markdown.
      */
     technicalDesign: string;
+
+    /**
+     * Optional array of diagrams that use Mermaid syntax to illustrate component design. 
+     * When provided each entry in the array specifies a title, optional description and the mermaid content itself.
+     * Examples of diagrams include:
+     * - Flowcharts of the process the component implements
+     * - Entity-relationship diagrams of the data model the component uses
+     * - Sequence diagrams illustrating interactions between the components various parts
+     */
+    diagrams?: Array<{ title: string; description?: string, content: string; }>;
     
     /**
      * Properties the component accepts, if any 
