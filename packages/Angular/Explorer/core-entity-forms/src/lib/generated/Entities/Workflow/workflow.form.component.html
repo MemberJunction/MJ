@@ -16,6 +16,7 @@
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -23,6 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -30,6 +32,7 @@
             FieldName="WorkflowEngineID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -39,6 +42,7 @@
             FieldName="ExternalSystemRecordID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -56,6 +60,7 @@
             FieldName="AutoRunEnabled"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -63,6 +68,7 @@
             FieldName="AutoRunIntervalUnits"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -70,6 +76,7 @@
             FieldName="AutoRunInterval"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -77,6 +84,7 @@
             FieldName="AutoRunIntervalMinutes"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -94,6 +102,7 @@
             FieldName="SubclassName"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -101,6 +110,7 @@
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -108,6 +118,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>

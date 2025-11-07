@@ -16,6 +16,7 @@
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -23,6 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -30,6 +32,7 @@
             FieldName="NavigationBaseURL"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="URL"
         ></mj-form-field>
 
@@ -48,6 +51,7 @@
             FieldName="ClassName"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -55,6 +59,7 @@
             FieldName="ImportPath"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -62,6 +67,7 @@
             FieldName="BatchMaxRequestCount"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -69,6 +75,7 @@
             FieldName="BatchRequestWaitTime"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -86,6 +93,7 @@
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -93,6 +101,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>

@@ -48,6 +48,11 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
    */
   @Input() ShowLabel: boolean = true;
 
+  /**
+   * Optional search filter from the section controls. When provided, the field label will highlight matching text.
+   */
+  @Input() sectionFilter: string = '';
+
   languages = languages;
 
   private _displayName: string | null = null;
@@ -66,6 +71,30 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   // use the custom value
   public set DisplayName(newValue: string) {
     this._displayName = newValue;
+  }
+
+  /**
+   * Returns the display name with search highlighting applied if sectionFilter is set
+   */
+  public get HighlightedDisplayName(): string {
+    const displayName = this.DisplayName;
+    if (!this.sectionFilter || !this.sectionFilter.trim()) {
+      return displayName;
+    }
+
+    const searchTerm = this.sectionFilter.toLowerCase().trim();
+    if (!displayName.toLowerCase().includes(searchTerm)) {
+      return displayName;
+    }
+
+    // Escape special regex characters
+    const escapedTerm = this.escapeRegex(searchTerm);
+    const regex = new RegExp(escapedTerm, 'gi');
+    return displayName.replace(regex, '<mark class="search-highlight">$&</mark>');
+  }
+
+  private escapeRegex(term: string): string {
+    return term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   public get ExtendedType(): string {

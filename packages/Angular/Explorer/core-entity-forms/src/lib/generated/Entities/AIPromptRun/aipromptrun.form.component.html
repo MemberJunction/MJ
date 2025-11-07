@@ -16,6 +16,7 @@
             FieldName="PromptID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -25,6 +26,7 @@
             FieldName="ModelID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -34,6 +36,7 @@
             FieldName="VendorID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -43,6 +46,7 @@
             FieldName="AgentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -52,6 +56,7 @@
             FieldName="ConfigurationID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -61,6 +66,7 @@
             FieldName="RunAt"
             Type="datepicker"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -68,6 +74,7 @@
             FieldName="CompletedAt"
             Type="datepicker"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -75,6 +82,7 @@
             FieldName="ExecutionTimeMS"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -82,6 +90,7 @@
             FieldName="Success"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -89,6 +98,7 @@
             FieldName="ErrorMessage"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -96,6 +106,7 @@
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -105,6 +116,7 @@
             FieldName="RunType"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -112,6 +124,7 @@
             FieldName="ExecutionOrder"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -119,6 +132,7 @@
             FieldName="AgentRunID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -128,6 +142,7 @@
             FieldName="RerunFromPromptRunID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -137,6 +152,7 @@
             FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -144,6 +160,7 @@
             FieldName="Cancelled"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -151,6 +168,7 @@
             FieldName="CancellationReason"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -158,6 +176,7 @@
             FieldName="CacheHit"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -165,6 +184,7 @@
             FieldName="CacheKey"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -172,6 +192,7 @@
             FieldName="WasSelectedResult"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -179,6 +200,7 @@
             FieldName="StreamingEnabled"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -186,6 +208,7 @@
             FieldName="FirstTokenTime"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -193,6 +216,7 @@
             FieldName="ErrorDetails"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -200,6 +224,7 @@
             FieldName="ChildPromptID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -209,6 +234,7 @@
             FieldName="RunName"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -216,6 +242,7 @@
             FieldName="Comments"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -223,6 +250,7 @@
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -230,6 +258,7 @@
             FieldName="RootRerunFromPromptRunID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -247,6 +276,7 @@
             FieldName="Messages"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -254,6 +284,7 @@
             FieldName="Result"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -261,6 +292,7 @@
             FieldName="StopSequences"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -268,6 +300,7 @@
             FieldName="ResponseFormat"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -275,6 +308,7 @@
             FieldName="JudgeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -284,6 +318,7 @@
             FieldName="JudgeScore"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -291,6 +326,7 @@
             FieldName="ModelSpecificResponseDetails"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -298,6 +334,7 @@
             FieldName="Prompt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -305,6 +342,7 @@
             FieldName="Model"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -312,6 +350,7 @@
             FieldName="Vendor"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -319,6 +358,7 @@
             FieldName="Agent"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -326,6 +366,7 @@
             FieldName="Configuration"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -333,6 +374,7 @@
             FieldName="OriginalModel"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -340,6 +382,7 @@
             FieldName="Judge"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -347,6 +390,7 @@
             FieldName="ChildPrompt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -364,6 +408,7 @@
             FieldName="TokensUsed"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -371,6 +416,7 @@
             FieldName="TokensPrompt"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -378,6 +424,7 @@
             FieldName="TokensCompletion"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -385,6 +432,7 @@
             FieldName="TotalCost"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -392,6 +440,7 @@
             FieldName="Cost"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -399,6 +448,7 @@
             FieldName="CostCurrency"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -406,6 +456,7 @@
             FieldName="TokensUsedRollup"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -413,6 +464,7 @@
             FieldName="TokensPromptRollup"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -420,6 +472,7 @@
             FieldName="TokensCompletionRollup"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -427,6 +480,7 @@
             FieldName="DescendantCost"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -434,6 +488,7 @@
             FieldName="FailoverAttempts"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -441,6 +496,7 @@
             FieldName="FailoverErrors"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -448,6 +504,7 @@
             FieldName="FailoverDurations"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -455,6 +512,7 @@
             FieldName="OriginalModelID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -464,6 +522,7 @@
             FieldName="OriginalRequestStartTime"
             Type="datepicker"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -471,6 +530,7 @@
             FieldName="TotalFailoverDuration"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -478,6 +538,7 @@
             FieldName="QueueTime"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -485,6 +546,7 @@
             FieldName="PromptTime"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -492,6 +554,7 @@
             FieldName="CompletionTime"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -509,6 +572,7 @@
             FieldName="Temperature"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -516,6 +580,7 @@
             FieldName="TopP"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -523,6 +588,7 @@
             FieldName="TopK"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -530,6 +596,7 @@
             FieldName="MinP"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -537,6 +604,7 @@
             FieldName="FrequencyPenalty"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -544,6 +612,7 @@
             FieldName="PresencePenalty"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -551,6 +620,7 @@
             FieldName="Seed"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -558,6 +628,7 @@
             FieldName="LogProbs"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -565,6 +636,7 @@
             FieldName="TopLogProbs"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -572,6 +644,7 @@
             FieldName="ModelSelection"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -579,6 +652,7 @@
             FieldName="ModelPowerRank"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -586,6 +660,7 @@
             FieldName="SelectionStrategy"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -593,6 +668,7 @@
             FieldName="EffortLevel"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -610,6 +686,7 @@
             FieldName="ValidationAttemptCount"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -617,6 +694,7 @@
             FieldName="SuccessfulValidationCount"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -624,6 +702,7 @@
             FieldName="FinalValidationPassed"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -631,6 +710,7 @@
             FieldName="ValidationBehavior"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -638,6 +718,7 @@
             FieldName="RetryStrategy"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -645,6 +726,7 @@
             FieldName="MaxRetriesConfigured"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -652,6 +734,7 @@
             FieldName="FinalValidationError"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -659,6 +742,7 @@
             FieldName="ValidationErrorCount"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -666,6 +750,7 @@
             FieldName="CommonValidationError"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -673,6 +758,7 @@
             FieldName="FirstAttemptAt"
             Type="datepicker"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -680,6 +766,7 @@
             FieldName="LastAttemptAt"
             Type="datepicker"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -687,6 +774,7 @@
             FieldName="TotalRetryDurationMS"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -694,6 +782,7 @@
             FieldName="ValidationAttempts"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -701,6 +790,7 @@
             FieldName="ValidationSummary"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -718,6 +808,7 @@
             FieldName="Parent"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -725,6 +816,7 @@
             FieldName="AgentRun"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -732,6 +824,7 @@
             FieldName="RerunFromPromptRun"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -749,6 +842,7 @@
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -756,6 +850,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>

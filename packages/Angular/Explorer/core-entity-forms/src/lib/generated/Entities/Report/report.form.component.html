@@ -16,6 +16,7 @@
             FieldName="Name"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -23,6 +24,7 @@
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -30,6 +32,7 @@
             FieldName="CategoryID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -39,6 +42,7 @@
             FieldName="SharingScope"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -46,6 +50,7 @@
             FieldName="Thumbnail"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -53,6 +58,7 @@
             FieldName="EnvironmentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -62,6 +68,7 @@
             FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -69,6 +76,7 @@
             FieldName="Environment"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -86,6 +94,7 @@
             FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -95,6 +104,7 @@
             FieldName="ConversationID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -104,6 +114,7 @@
             FieldName="ConversationDetailID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -113,6 +124,7 @@
             FieldName="DataContextID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -122,6 +134,7 @@
             FieldName="OutputWorkflowID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -131,6 +144,7 @@
             FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -138,6 +152,7 @@
             FieldName="Conversation"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -145,6 +160,7 @@
             FieldName="DataContext"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -152,6 +168,7 @@
             FieldName="OutputWorkflow"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -169,6 +186,7 @@
             FieldName="Configuration"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -176,6 +194,7 @@
             FieldName="OutputTriggerTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -185,6 +204,7 @@
             FieldName="OutputFormatTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -194,6 +214,7 @@
             FieldName="OutputDeliveryTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -203,6 +224,7 @@
             FieldName="OutputFrequency"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -210,6 +232,7 @@
             FieldName="OutputTargetEmail"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -217,6 +240,7 @@
             FieldName="OutputTriggerType"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -224,6 +248,7 @@
             FieldName="OutputFormatType"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -231,6 +256,7 @@
             FieldName="OutputDeliveryType"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -248,6 +274,7 @@
             FieldName="ConversationDetail"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -265,6 +292,7 @@
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -272,6 +300,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>

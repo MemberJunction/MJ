@@ -18,6 +18,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
             <form *ngIf="record" class="record-form" #formElement="ngForm">
                 <mj-form-toolbar [form]="formComponent">
                     <mj-form-section-controls
+                        toolbar-additional-controls
                         [expandedCount]="formComponent.getExpandedCount()"
                         [visibleCount]="formComponent.getVisibleSectionCount()"
                         (expandAll)="formComponent.expandAllSections()"

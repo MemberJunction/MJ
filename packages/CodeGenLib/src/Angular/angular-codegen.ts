@@ -703,7 +703,8 @@ ${indentedFormHTML}
             [ShowLabel]="${ section.Fields.length > 1 ? 'true' : 'false'}"
             FieldName="${field.CodeName}"
             Type="${editControl}"
-            [EditMode]="EditMode"${linkType ? `\n            LinkType="${linkType}"` : ''}${linkComponentType ? linkComponentType : ''}
+            [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"${linkType ? `\n            LinkType="${linkType}"` : ''}${linkComponentType ? linkComponentType : ''}
         ></mj-form-field>
 `
           }

@@ -16,6 +16,7 @@
             FieldName="ConversationID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -25,6 +26,7 @@
             FieldName="ExternalID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -32,6 +34,7 @@
             FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -41,6 +44,7 @@
             FieldName="ArtifactID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -50,6 +54,7 @@
             FieldName="ArtifactVersionID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -59,6 +64,7 @@
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -68,6 +74,7 @@
             FieldName="AgentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -77,6 +84,7 @@
             FieldName="Conversation"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -84,6 +92,7 @@
             FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -91,6 +100,7 @@
             FieldName="Artifact"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -98,6 +108,7 @@
             FieldName="Agent"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -105,6 +116,7 @@
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -122,6 +134,7 @@
             FieldName="Role"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -129,6 +142,7 @@
             FieldName="Message"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -136,6 +150,7 @@
             FieldName="HiddenToUser"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -143,6 +158,7 @@
             FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -150,6 +166,7 @@
             FieldName="SuggestedResponses"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -167,6 +184,7 @@
             FieldName="UserRating"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -174,6 +192,7 @@
             FieldName="UserFeedback"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -181,6 +200,7 @@
             FieldName="ReflectionInsights"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -188,6 +208,7 @@
             FieldName="IsPinned"
             Type="checkbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -205,6 +226,7 @@
             FieldName="ArtifactVersion"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -212,6 +234,7 @@
             FieldName="Parent"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -229,6 +252,7 @@
             FieldName="Error"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -236,6 +260,7 @@
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -243,6 +268,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -250,6 +276,7 @@
             FieldName="SummaryOfEarlierConversation"
             Type="textarea"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -257,6 +284,7 @@
             FieldName="CompletionTime"
             Type="numerictextbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>

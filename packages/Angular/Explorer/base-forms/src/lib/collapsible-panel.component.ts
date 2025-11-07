@@ -1,14 +1,14 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ElementRef, ChangeDetectionStrategy, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList } from '@angular/core';
 import { MJFormField } from './base-field-component';
 
 /**
  * Reusable collapsible panel component for form sections
  * Handles:
  * - Expand/collapse state
- * - Search filtering with word-boundary matching
- * - Yellow highlighting of matched section names and field labels
- * - Visibility management
- * - Field name extraction for filtering
+ * - Search filtering with case-insensitive matching
+ * - Yellow highlighting of matched section names
+ * - Visibility management based on section name or field name matches
+ * - Passes sectionFilter down to child mj-form-field components for their own label highlighting
  */
 @Component({
     selector: 'mj-collapsible-panel',
@@ -189,12 +189,8 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
     displayName: string = '';
     fieldNames: string = '';
     isVisible: boolean = true;
-    private originalSectionName: string = '';
 
-    constructor(
-        private elementRef: ElementRef,
-        private cdr: ChangeDetectorRef
-    ) {}
+    constructor(private cdr: ChangeDetectorRef) {}
 
     ngAfterContentInit(): void {
         // Extract field names from projected field components
@@ -206,12 +202,18 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['sectionName']) {
-            this.originalSectionName = this.sectionName;
             this.displayName = this.sectionName;
         }
 
         if (changes['searchFilter'] || changes['sectionName']) {
             this.updateVisibilityAndHighlighting();
+        }
+
+        // Update sectionFilter on all child field components when it changes
+        if (changes['searchFilter'] && this.fieldComponents) {
+            this.fieldComponents.forEach(field => {
+                field.sectionFilter = this.searchFilter;
+            });
         }
     }
 
@@ -242,94 +244,29 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
         if (!searchTerm) {
             // No filter - show everything, clear highlights
             this.isVisible = true;
-            this.displayName = this.originalSectionName;
-            this.clearFieldHighlights();
+            this.displayName = this.sectionName;
             this.cdr.markForCheck();
             return;
         }
 
-        // Check if this section matches the filter
+        // Check if this section matches the filter (section name or any field name)
         const sectionMatches = this.sectionName.toLowerCase().includes(searchTerm);
         const fieldsMatch = this.fieldNames.includes(searchTerm);
         this.isVisible = sectionMatches || fieldsMatch;
 
-        if (this.isVisible) {
-            // Escape special regex characters
-            const escapedTerm = this.escapeRegex(searchTerm);
-            const wordBoundaryRegex = new RegExp('\\b' + escapedTerm + '\\b', 'gi');
-
+        if (this.isVisible && sectionMatches) {
             // Highlight section name if it matches
-            if (this.sectionName.toLowerCase().match(wordBoundaryRegex)) {
-                this.displayName = this.originalSectionName.replace(
-                    wordBoundaryRegex,
-                    '<mark class="search-highlight">$&</mark>'
-                );
-            } else {
-                this.displayName = this.originalSectionName;
-            }
-
-            // Highlight field labels if they match
-            if (fieldsMatch) {
-                this.highlightFieldLabels(wordBoundaryRegex);
-            } else {
-                this.clearFieldHighlights();
-            }
+            const escapedTerm = this.escapeRegex(searchTerm);
+            const regex = new RegExp(escapedTerm, 'gi');
+            this.displayName = this.sectionName.replace(regex, '<mark class="search-highlight">$&</mark>');
+        } else {
+            this.displayName = this.sectionName;
         }
 
         this.cdr.markForCheck();
     }
 
-    private highlightFieldLabels(regex: RegExp): void {
-        // Use setTimeout to ensure DOM is ready
-        setTimeout(() => {
-            const panel = this.elementRef.nativeElement.querySelector('.form-card');
-            if (panel) {
-                const labels = panel.querySelectorAll('mj-form-field label');
-                labels.forEach((label: Element) => {
-                    const span = label.querySelector('span');
-                    if (span) {
-                        const labelText = span.textContent || '';
-                        if (labelText.toLowerCase().match(regex)) {
-                            span.innerHTML = labelText.replace(regex, '<mark class="search-highlight">$&</mark>');
-                        }
-                    }
-                });
-            }
-        }, 0);
-    }
-
-    private clearFieldHighlights(): void {
-        setTimeout(() => {
-            const panel = this.elementRef.nativeElement.querySelector('.form-card');
-            if (panel) {
-                const labels = panel.querySelectorAll('mj-form-field label span');
-                labels.forEach((span: Element) => {
-                    const htmlSpan = span as HTMLElement;
-                    if (htmlSpan.innerHTML !== htmlSpan.textContent) {
-                        htmlSpan.innerHTML = htmlSpan.textContent || '';
-                    }
-                });
-            }
-        }, 0);
-    }
-
     private escapeRegex(term: string): string {
-        // Escape special regex characters
-        let escaped = term;
-        escaped = escaped.replace(/\\/g, '\\\\');
-        escaped = escaped.replace(/\./g, '\\.');
-        escaped = escaped.replace(/\*/g, '\\*');
-        escaped = escaped.replace(/\+/g, '\\+');
-        escaped = escaped.replace(/\?/g, '\\?');
-        escaped = escaped.replace(/\^/g, '\\^');
-        escaped = escaped.replace(/\$/g, '\\$');
-        escaped = escaped.replace(/\{/g, '\\{');
-        escaped = escaped.replace(/\}/g, '\\}');
-        escaped = escaped.replace(/\(/g, '\\(');
-        escaped = escaped.replace(/\)/g, '\\)');
-        escaped = escaped.replace(/\|/g, '\\|');
-        escaped = escaped.replace(/\[/g, '\\[');
-        escaped = escaped.replace(/\]/g, '\\]');
-        return escaped;
+        return term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 }

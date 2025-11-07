@@ -16,6 +16,7 @@
             FieldName="EmployeeID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -25,6 +26,7 @@
             FieldName="SkillID"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
@@ -34,6 +36,7 @@
             FieldName="Skill"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -51,6 +54,7 @@
             FieldName="Employee"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -68,6 +72,7 @@
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -75,6 +80,7 @@
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
+            [sectionFilter]="searchFilter"
         ></mj-form-field>
 
     </mj-collapsible-panel>

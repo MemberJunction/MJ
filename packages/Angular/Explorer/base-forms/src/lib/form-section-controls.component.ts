@@ -5,36 +5,34 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
  * Designed to be projected into form toolbars via ng-content with [toolbar-additional-controls] selector
  */
 @Component({
-    selector: 'mj-form-section-controls',
+    selector: 'mj-form-section-controls[toolbar-additional-controls]',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <div toolbar-additional-controls>
-            <button kendoButton (click)="expandAll.emit()" title="Expand all sections">
-                <span class="fa-solid fa-chevron-down"></span>
-            </button>
-            <button kendoButton (click)="collapseAll.emit()" title="Collapse all sections">
-                <span class="fa-solid fa-chevron-up"></span>
-            </button>
-            <div style="position: relative;">
-                <input
-                    type="text"
-                    class="section-search"
-                    placeholder="Filter sections..."
-                    [(ngModel)]="searchTerm"
-                    (ngModelChange)="filterChange.emit($event)"
-                    #searchInput>
-                @if (searchTerm) {
-                    <button
-                        kendoButton
-                        class="clear-search-btn"
-                        (click)="clearFilter()"
-                        title="Clear filter">
-                        <span class="fa-solid fa-xmark"></span>
-                    </button>
-                }
-            </div>
-            <span class="section-count">{{expandedCount}}/{{visibleCount}}</span>
+        <button kendoButton (click)="expandAll.emit()" title="Expand all sections">
+            <span class="fa-solid fa-angle-double-down"></span>
+        </button>
+        <button kendoButton (click)="collapseAll.emit()" title="Collapse all sections">
+            <span class="fa-solid fa-angle-double-up"></span>
+        </button>
+        <div style="position: relative;">
+            <input
+                type="text"
+                class="section-search"
+                placeholder="Filter sections..."
+                [(ngModel)]="searchTerm"
+                (ngModelChange)="filterChange.emit($event)"
+                #searchInput>
+            @if (searchTerm) {
+                <button
+                    kendoButton
+                    class="clear-search-btn"
+                    (click)="clearFilter()"
+                    title="Clear filter">
+                    <span class="fa-solid fa-xmark"></span>
+                </button>
+            }
         </div>
+        <span class="section-count">{{expandedCount}}/{{visibleCount}}</span>
     `,
     styles: [`
         /* Note: positioning (display, gap, align-items, margin-left) is handled by parent toolbar CSS */

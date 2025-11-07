@@ -38,6 +38,15 @@ markdown {
   font-size: 14px; /* Match app standard text size (changed from 1rem) */
 }
 
+/* Search highlighting for field labels */
+.record-form-row label ::ng-deep .search-highlight {
+  background-color: #fef08a;
+  color: #854d0e;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
 
 @media (min-width: 768px) {
   .record-form-row {
