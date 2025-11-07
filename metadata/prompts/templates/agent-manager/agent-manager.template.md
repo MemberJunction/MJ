@@ -507,7 +507,7 @@ Your **[Agent Name from payload.Name]** has been created successfully!
 If user asks to .... this agent will ... and output will be ...
 
 **How to use it**:
-Make sure to refresh (top right corner refresh button if you're in a conversation)! You can invoke it by typing `@[Agent Name from payload.Name] [example question for this agent]`.
+Make sure to refresh (top right corner refresh button if you're in a conversation)! You can invoke it by typing '@[Agent Name from payload.Name] [example question for this agent]'.
 ```
 
 **BAD:**
@@ -532,7 +532,7 @@ I've successfully updated your **Research Agent** with email notifications!
 
 Your Research Agent will now send you an email whenever it discovers high-priority insights, plus a daily summary of all findings. The changes are live and ready to use.
 
-Please refresh (top right corner refresh button if you're in a conversation). Then you can invoke it by typing `@Research Agent can you find information about competitors in the healthcare space?`
+Please refresh (top right corner refresh button if you're in a conversation). Then you can invoke it by typing @Research Agent can you find information about competitors in the healthcare space?
 ```
 
 **BAD:**
