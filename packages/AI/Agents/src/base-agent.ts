@@ -4623,9 +4623,11 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
-            return { 
-                ...subAgentResult, 
-                step: subAgentResult.success ? 'Success' : 'Failed', 
+            return {
+                ...subAgentResult,
+                step: subAgentResult.success ? 'Success' : 'Failed',
+                // Capture error message from sub-agent run for proper error propagation
+                errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload
@@ -4943,6 +4945,8 @@ The context is now within limits. Please retry your request with the recovered c
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
+                // Capture error message from sub-agent run for proper error propagation
+                errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload
@@ -6315,10 +6319,13 @@ The context is now within limits. Please retry your request with the recovered c
         if (this._agentRun) {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
-            if (!this._agentRun.Success && finalStep.message) {
-                // grab the message from the finalStep.message if it exists and append to any existing
-                // error messagge thjat might already be there
-                this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + finalStep.message;
+            if (!this._agentRun.Success) {
+                // Capture error message from either errorMessage or message field
+                const errorText = finalStep.errorMessage || finalStep.message;
+                if (errorText) {
+                    // Append to any existing error message
+                    this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + errorText;
+                }
             }
             if (!this._agentRun.Success) {
                 // set status to Failed
