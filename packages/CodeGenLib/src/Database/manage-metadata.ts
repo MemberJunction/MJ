@@ -3,7 +3,7 @@ import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Confi
 import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult } from "../Misc/advanced_generation";
 import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -76,7 +76,7 @@ export class ManageMetadataBase {
       let bSuccess = true;
       let start = new Date();
       logStatus('   Creating new entities...');
-      if (! await this.createNewEntities(pool)) {
+      if (! await this.createNewEntities(pool, currentUser)) {
          logError('   Error creating new entities');
          bSuccess = false;
       }
@@ -114,7 +114,8 @@ export class ManageMetadataBase {
       logStatus(`    > Recompiled base views in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
       start = new Date();
       logStatus('   Managing entity fields...');
-      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser)) {
+      // note that we skip Advanced Generation here because we do it again later when the manageSQLScriptsAndExecution occurs in SQLCodeGen class
+      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser, true)) {
          logError('   Error managing entity fields');
          bSuccess = false;
       }
@@ -128,7 +129,7 @@ export class ManageMetadataBase {
       logStatus(`    > Managed entity relationships in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
 
       if (ManageMetadataBase.newEntityList.length > 0) {
-         await this.generateNewEntityDescriptions(pool, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
+         await this.generateNewEntityDescriptions(pool, md, currentUser); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
 
       const veResult = await this.manageVirtualEntities(pool)
@@ -136,6 +137,14 @@ export class ManageMetadataBase {
          logError('   Error managing virtual entities');
          bSuccess = false;
       }
+
+      start = new Date();
+      logStatus('   Syncing schema info from database...');
+      if (! await this.updateSchemaInfoFromDatabase(pool, excludeSchemas)) {
+         logError('   Error syncing schema info');
+         bSuccess = false;
+      }
+      logStatus(`    > Synced schema info in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
 
       return bSuccess;
    }
@@ -501,7 +510,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo): Promise<boolean> {
+   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
@@ -563,6 +572,16 @@ export class ManageMetadataBase {
             bSuccess = false;
          }
          logStatus(`      Managed entity field values in ${(new Date().getTime() - step6StartTime.getTime()) / 1000} seconds`);
+      }
+
+      // Advanced Generation - Smart field identification and form layout
+      if (!skipAdvancedGeneration) {
+         const step7StartTime: Date = new Date();
+         if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
+            logError('Error applying advanced generation features');
+            // Don't fail the entire process - advanced generation is optional
+         }
+         logStatus(`      Applied advanced generation features in ${(new Date().getTime() - step7StartTime.getTime()) / 1000} seconds`);
       }
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
@@ -782,58 +801,33 @@ export class ManageMetadataBase {
     * to be invoked, the EntityDescriptions feature must be enabled in the Advanced Generation configuration.
     * @param pool
     * @param md
+    * @param currentUser
     */
-   protected async generateNewEntityDescriptions(pool: sql.ConnectionPool, md: Metadata) {
+   protected async generateNewEntityDescriptions(pool: sql.ConnectionPool, md: Metadata, currentUser: UserInfo) {
       // for the list of new entities, go through and attempt to generate new entity descriptions
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityDescriptions')) {
          // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
-         const llm = ag.LLM;
-         const prompt = ag.getPrompt('EntityDescriptions');
-         const systemPrompt = prompt.systemPrompt;
-         const userMessage = prompt.userMessage + '\n\n';
-         // now loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
             const dataResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
-      const data = dataResult.recordset;
+            const data = dataResult.recordset;
             const fieldsResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID='${data[0].ID}'`);
-      const fields = fieldsResult.recordset;
-            const entityUserMessage = userMessage + `Entity Name: ${e},
-                                                     Base Table: ${data[0].BaseTable},
-                                                     Schema: ${data[0].SchemaName}.
-                                                     Fields:
-                                                     ${fields.map((f: { Name: any; Type: any; }) => `   ${f.Name}: ${f.Type}`).join('\n')}`;
-            const result = await llm.ChatCompletion({
-               model: ag.AIModel,
-               messages: [
-                  {
-                     role: 'system',
-                     content: systemPrompt
-                  },
-                  {
-                     role: 'user',
-                     content: entityUserMessage
-                  }
-               ]
-            })
-            if (result?.success) {
-               const resultText = result?.data.choices[0].message.content;
-               try {
-                  const structuredResult: EntityDescriptionResult = JSON.parse(resultText);
-                  if (structuredResult?.entityDescription && structuredResult.entityDescription.length > 0) {
-                     const sSQL = `UPDATE [${mj_core_schema()}].Entity SET Description = '${structuredResult.entityDescription}' WHERE Name = '${e}'`;
-                     await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
-                  }
-                  else {
-                     console.warn('   >>> Advanced Generation Error: LLM returned a blank entity description, skipping entity description for entity ' + e);
-                  }
-               }
-               catch (e) {
-                  console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e + '. Result from LLM: ' + resultText, e);
-               }
+            const fields = fieldsResult.recordset;
+
+            // Use new API to generate entity description
+            const result = await ag.generateEntityDescription(
+               e,
+               data[0].BaseTable,
+               fields.map((f: any) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
+               currentUser
+            );
+
+            if (result?.entityDescription && result.entityDescription.length > 0) {
+               const sSQL = `UPDATE [${mj_core_schema()}].Entity SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
+               await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
-               console.warn('   >>> Advanced Generation Error: LLM call failed, skipping entity description for entity ' + e);
+               console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e);
             }
          }
       }
@@ -1027,10 +1021,14 @@ NumberedRows AS (
     * @returns
     */
    protected getPendingEntityFieldINSERTSQL(newEntityFieldUUID: string, n: any): string {
-      const bDefaultInView: boolean = (n.FieldName?.trim().toLowerCase() === 'id' ||
-                                       n.FieldName?.trim().toLowerCase() === 'name' ||
-                                       n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView ||
-                                       n.IsNameField ? true : false);
+      // DefaultInView logic: Include name fields and early sequence fields, but EXCLUDE primary keys and foreign keys
+      // Primary keys (ID) and foreign keys are UUIDs that aren't useful for end users
+      const isPrimaryKey = n.FieldName?.trim().toLowerCase() === 'id';
+      const isForeignKey = n.RelatedEntityID && n.RelatedEntityID.length > 0; // Foreign keys have RelatedEntityID set
+      const isNameField = n.FieldName?.trim().toLowerCase() === 'name' || n.IsNameField;
+      const isEarlySequence = n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView;
+
+      const bDefaultInView: boolean = (isNameField || isEarlySequence) && !isPrimaryKey && !isForeignKey;
       const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
       let fieldDisplayName: string = '';
       switch (n.FieldName.trim().toLowerCase()) {
@@ -1256,6 +1254,32 @@ NumberedRows AS (
          return false;
       }
    }
+
+   /**
+    * Syncs SchemaInfo records from database schemas, capturing extended properties as descriptions.
+    * Creates new SchemaInfo records for schemas that don't exist yet and updates descriptions
+    * from schema extended properties for existing records.
+    * @param pool - SQL connection pool
+    * @param excludeSchemas - Array of schema names to exclude from processing
+    * @returns Promise<boolean> - true if successful, false otherwise
+    */
+   protected async updateSchemaInfoFromDatabase(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const sSQL = `EXEC [${mj_core_schema()}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
+         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
+
+         if (result && result.length > 0) {
+            logStatus(`   > Updated/created ${result.length} SchemaInfo records`);
+         }
+
+         return true;
+      }
+      catch (e) {
+         logError(e as string);
+         return false;
+      }
+   }
+
    protected async deleteUnneededEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
@@ -1423,69 +1447,28 @@ NumberedRows AS (
 
       try {
          if (generateNewCode && configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
-            // feature is enabled, so let's call the LLM to generate a function for us
+            // feature is enabled, so let's call the AI to generate a function for us
             const ag = new AdvancedGeneration();
-            const llm = ag.LLM;
-            if (!llm) {
-               // we weren't able to get an LLM instance, so log an error and return
-               logError('   >>> Error generating validator function from check constraint. Unable to get an LLM instance.');
-               return returnResult;
-            }
-            await AIEngine.Instance.Config(false, currentUser); // make sure metadata loaded
-            const model = AIEngine.Instance.Models.find(m => {
-                const modelMatch = m.APINameOrName.trim().toLowerCase() === ag.AIModel.trim().toLowerCase();
-                if (!modelMatch) return false;
-
-                // Check if model has a vendor matching the specified vendor
-                const hasVendor = AIEngine.Instance.ModelVendors.some(mv =>
-                    mv.ModelID === m.ID &&
-                    mv.Vendor.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase() &&
-                    mv.Status === 'Active'
-                );
-                return hasVendor;
-            });
-            if (!model)
-               throw new Error(`   >>> Error generating validator function from check constraint. Unable to find AI Model with name ${ag.AIModel} and vendor ${ag.AIVendor}.`);
-
-            const prompt = ag.getPrompt('CheckConstraintParser');
             const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}${item.AllowsNull ? ' (nullable)' : ' (not null)'}`).join('\n');
-            const existingMethodNameBlock = generatedValidationFunctionName ? `Existing Method Name: ${generatedValidationFunctionName}\n Please reuse this SAME method name for the new generation` : '';
-            const markedUpSysPrompt = ag.fillTemplate(prompt.systemPrompt, {
-               ENTITY_FIELD_LIST: entityFieldListInfo,
-               EXISTING_METHOD_NAME: existingMethodNameBlock
-            }); // prompt.systemPrompt.replace(/{{ENTITY_FIELD_LIST}}/g, entityFieldListInfo);
-            const result = await llm.ChatCompletion({
-               messages: [
-                  {
-                     role: 'system',
-                     content: markedUpSysPrompt
-                  },
-                  {
-                     role: 'user',
-                     content: `${constraintDefinition}`
-                  }
-               ],
-               model: ag.AIModel,
-               responseFormat: 'JSON'
-            });
-            if (result && result.success) {
-               const jsonResult = result.data.choices[0].message.content;
-               const structuredResult = <any>SafeJSONParse(jsonResult);
-               if (structuredResult?.Description && structuredResult?.Code && structuredResult?.MethodName) {
-                  returnResult.functionText = structuredResult.Code;
-                  returnResult.functionName = structuredResult.MethodName;
-                  returnResult.functionDescription = structuredResult.Description;
-                  returnResult.aiModelID = model.ID;
 
-                  returnResult.wasGenerated = true; // we just generated this code
-                  returnResult.success = true;
-               }
-               else {
-                  logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM returned invalid result.`);
-               }
+            // Use new API to parse check constraint
+            const result = await ag.parseCheckConstraint(
+               constraintDefinition,
+               entityFieldListInfo,
+               generatedValidationFunctionName,
+               currentUser
+            );
+
+            if (result?.Description && result?.Code && result?.MethodName) {
+               returnResult.functionText = result.Code;
+               returnResult.functionName = result.MethodName;
+               returnResult.functionDescription = result.Description;
+               returnResult.aiModelID = result.ModelID;
+               returnResult.wasGenerated = true; // we just generated this code
+               returnResult.success = true;
             }
             else {
-               logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM call failed.`);
+               logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM returned invalid result.`);
             }
          }
       }
@@ -1645,7 +1628,7 @@ NumberedRows AS (
       return sWhere;
    }
 
-   protected async createNewEntities(pool: sql.ConnectionPool): Promise<boolean> {
+   protected async createNewEntities(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
       try   {
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwSQLTablesAndEntities WHERE EntityID IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
          const newEntitiesResult = await pool.request().query(sSQL);
@@ -1659,7 +1642,7 @@ NumberedRows AS (
                // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
                   // process each of the new entities
-                  await this.createNewEntity(pool, newEntities[i], md);
+                  await this.createNewEntity(pool, newEntities[i], md, currentUser);
                }
                await transaction.commit();
             } catch (e) {
@@ -1705,10 +1688,10 @@ NumberedRows AS (
       }
    }
 
-   protected async createNewEntityName(newEntity: any): Promise<string> {
+   protected async createNewEntityName(newEntity: any, currentUser: UserInfo): Promise<string> {
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityNames')) {
-         return this.newEntityNameWithAdvancedGeneration(ag, newEntity);
+         return this.newEntityNameWithAdvancedGeneration(ag, newEntity, currentUser);
       }
       else {
          return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
@@ -1738,44 +1721,13 @@ NumberedRows AS (
       return null; // nothing to do here, the DisplayName can be null as it will just end up being the entity name
    }
 
-   protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any): Promise<string> {
-      // get the LLM for this entity
-      const chat = ag.LLM;
-      const prompt = ag.getPrompt('EntityNames')
-      const systemPrompt = ag.fillTemplate(prompt.systemPrompt, newEntity);
-      const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
-      const result = await chat.ChatCompletion({
-         model: ag.AIModel,
-         messages: [
-            {
-               role: 'system',
-               content: systemPrompt
-            },
-            {
-               role: 'user',
-               content: userMessage
-            }
-         ]
-      })
-      if (result?.success) {
-         const resultText = result?.data.choices[0].message.content;
-         try {
-            const structuredResult: EntityNameResult = JSON.parse(resultText);
-            if (structuredResult?.entityName) {
-               return this.markupEntityName(newEntity.SchemaName, structuredResult.entityName);
-            }
-            else {
-               console.warn('   >>> Advanced Generation Error: LLM returned a blank entity name, falling back to simple generated entity name');
-               return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
-            }
-         }
-         catch (e) {
-            console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name. Result from LLM: ' + resultText, e);
-            return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
-         }
+   protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any, currentUser: UserInfo): Promise<string> {
+      const result = await ag.generateEntityName(newEntity.TableName, currentUser);
+      if (result?.entityName) {
+         return this.markupEntityName(newEntity.SchemaName, result.entityName);
       }
       else {
-         console.warn('   >>> Advanced Generation Error: LLM call failed, falling back to simple generated entity name.');
+         console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name');
          return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
    }
@@ -1819,12 +1771,12 @@ NumberedRows AS (
       return uuidv4();
    }
 
-   protected async createNewEntity(pool: sql.ConnectionPool, newEntity: any, md: Metadata) {
+   protected async createNewEntity(pool: sql.ConnectionPool, newEntity: any, md: Metadata, currentUser: UserInfo) {
       try {
          const {shouldCreate, validationMessage} = await this.shouldCreateNewEntity(pool, newEntity);
          if (shouldCreate) {
             // process a single new entity
-            let newEntityName: string = await this.createNewEntityName(newEntity);
+            let newEntityName: string = await this.createNewEntityName(newEntity, currentUser);
             const newEntityDisplayName = this.createNewEntityDisplayName(newEntity, newEntityName);
 
             let suffix = '';
@@ -2022,6 +1974,377 @@ NumberedRows AS (
    }
 
 
+
+   /**
+    * Apply Advanced Generation features - Smart Field Identification and Form Layout Generation
+    */
+   protected async applyAdvancedGeneration(pool: sql.ConnectionPool, excludeSchemas: string[], currentUser: UserInfo): Promise<boolean> {
+      try {
+         const ag = new AdvancedGeneration();
+         if (!ag.enabled) {
+            return true;
+         }
+
+         // Get list of entities to process
+         // If forceRegeneration.enabled is true, process ALL entities
+         // Otherwise, only process new or modified entities
+         let entitiesToProcess: string[] = [];
+         let whereClause = '';
+
+         if (configInfo.forceRegeneration?.enabled) {
+            // Force regeneration mode - process all entities (or filtered by entityWhereClause)
+            logStatus(`      Force regeneration enabled - processing all entities...`);
+
+            whereClause = 'e.VirtualEntity = 0';
+            if (configInfo.forceRegeneration.entityWhereClause && configInfo.forceRegeneration.entityWhereClause.trim().length > 0) {
+               whereClause += ` AND (${configInfo.forceRegeneration.entityWhereClause})`;
+               logStatus(`         Filtered by: ${configInfo.forceRegeneration.entityWhereClause}`);
+            }
+            whereClause += ` AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         } else {
+            // Normal mode - only process new or modified entities
+            // Deduplicate in case an entity appears in both lists
+            entitiesToProcess = [
+               ...new Set([
+                  ...ManageMetadataBase.newEntityList,
+                  ...ManageMetadataBase.modifiedEntityList
+               ])
+            ];
+
+            if (entitiesToProcess.length === 0) {
+               return true;
+            }
+
+            logStatus(`      Advanced Generation enabled, processing ${entitiesToProcess.length} entities...`);
+            whereClause = `e.VirtualEntity = 0 AND e.Name IN (${entitiesToProcess.map(name => `'${name}'`).join(',')}) AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         }
+
+         // Get entity details for entities that need processing
+         const entitiesSQL = `
+            SELECT
+               e.ID,
+               e.Name,
+               e.Description,
+               e.SchemaName,
+               e.BaseTable
+            FROM
+               [${mj_core_schema()}].vwEntities e
+            WHERE
+               ${whereClause}
+            ORDER BY
+               e.Name
+         `;
+
+         const entitiesResult = await pool.request().query(entitiesSQL);
+         const entities = entitiesResult.recordset;
+
+         if (entities.length === 0) {
+            return true;
+         }
+
+         // Get ALL fields for ALL entities in a single query
+         const entityIds = entities.map((e: any) => `'${e.ID}'`).join(',');
+         const fieldsSQL = `
+            SELECT
+               ef.EntityID,
+               ef.ID,
+               ef.Name,
+               ef.Type,
+               ef.AllowsNull,
+               ef.IsPrimaryKey,
+               ef.IsUnique,
+               ef.Description,
+               ef.AutoUpdateIsNameField,
+               ef.AutoUpdateDefaultInView,
+               ef.AutoUpdateCategory
+            FROM
+               [${mj_core_schema()}].vwEntityFields ef
+            WHERE
+               ef.EntityID IN (${entityIds})
+            ORDER BY
+               ef.EntityID,
+               ef.Sequence
+         `;
+
+         const fieldsResult = await pool.request().query(fieldsSQL);
+         const allFields = fieldsResult.recordset;
+
+         // Process entities in batches with parallelization
+         return await this.processEntitiesBatched(pool, entities, allFields, ag, currentUser);
+      } catch (error) {
+         logError(`Advanced Generation failed: ${error}`);
+         return false;
+      }
+   }
+
+   /**
+    * Process entities in batches with parallel execution
+    * @param pool Database connection pool
+    * @param entities Entities to process
+    * @param allFields All fields for all entities (will be filtered per entity)
+    * @param ag AdvancedGeneration instance
+    * @param currentUser User context
+    * @param batchSize Number of entities to process in parallel (default 5)
+    */
+   protected async processEntitiesBatched(
+      pool: sql.ConnectionPool,
+      entities: any[],
+      allFields: any[],
+      ag: AdvancedGeneration,
+      currentUser: UserInfo,
+      batchSize: number = 5
+   ): Promise<boolean> {
+      let processedCount = 0;
+      let errorCount = 0;
+
+      // Process in batches
+      for (let i = 0; i < entities.length; i += batchSize) {
+         const batch = entities.slice(i, i + batchSize);
+
+         // Process batch in parallel
+         const batchResults = await Promise.allSettled(
+            batch.map(entity => this.processEntityAdvancedGeneration(pool, entity, allFields, ag, currentUser))
+         );
+
+         // Tally results
+         for (const result of batchResults) {
+            if (result.status === 'fulfilled') {
+               processedCount++;
+            } else {
+               errorCount++;
+               logError(`         Error processing entity: ${result.reason}`);
+            }
+         }
+
+         logStatus(`      Progress: ${processedCount}/${entities.length} entities processed`);
+      }
+
+      logStatus(`      Advanced Generation complete: ${processedCount} entities processed, ${errorCount} errors`);
+      return errorCount === 0;
+   }
+
+   /**
+    * Process advanced generation for a single entity
+    * @param pool Database connection pool
+    * @param entity Entity to process
+    * @param allFields All fields for all entities (will be filtered for this entity)
+    * @param ag AdvancedGeneration instance
+    * @param currentUser User context
+    */
+   protected async processEntityAdvancedGeneration(
+      pool: sql.ConnectionPool,
+      entity: any,
+      allFields: any[],
+      ag: AdvancedGeneration,
+      currentUser: UserInfo
+   ): Promise<void> {
+      // Filter fields for this entity (client-side filtering)
+      const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
+
+      // Smart Field Identification
+      // Only run if at least one field allows auto-update
+      if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView)) {
+         const fieldAnalysis = await ag.identifyFields({
+            Name: entity.Name,
+            Description: entity.Description,
+            Fields: fields
+         }, currentUser);
+
+         if (fieldAnalysis) {
+            await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+         }
+      }
+
+      // Form Layout Generation
+      // Only run if at least one field allows auto-update
+      if (fields.some((f: any) => f.AutoUpdateCategory)) {
+         const layoutAnalysis = await ag.generateFormLayout({
+            Name: entity.Name,
+            Description: entity.Description,
+            Fields: fields
+         }, currentUser);
+
+         if (layoutAnalysis) {
+            await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis);
+            logStatus(`         Applied form layout for ${entity.Name}`);
+         }
+      }
+   }
+
+   /**
+    * Apply smart field identification results to entity fields
+    */
+   protected async applySmartFieldIdentification(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      fields: any[],
+      result: SmartFieldIdentificationResult
+   ): Promise<void> {
+      const sqlStatements: string[] = [];
+
+      // Find the name field (exactly one)
+      const nameField = fields.find(f => f.Name === result.nameField);
+
+      if (nameField && nameField.AutoUpdateIsNameField && nameField.ID) {
+         sqlStatements.push(`
+            UPDATE [${mj_core_schema()}].EntityField
+            SET IsNameField = 1
+            WHERE ID = '${nameField.ID}'
+            AND AutoUpdateIsNameField = 1
+         `);
+      } else if (!nameField) {
+         logError(`Smart field identification returned invalid nameField: '${result.nameField}' not found in entity fields`);
+      }
+
+      // Find all default in view fields (one or more)
+      const defaultInViewFields = fields.filter(f =>
+         result.defaultInView.includes(f.Name) && f.AutoUpdateDefaultInView && f.ID
+      );
+
+      // Warn about any fields that weren't found
+      const missingFields = result.defaultInView.filter(name =>
+         !fields.some(f => f.Name === name)
+      );
+      if (missingFields.length > 0) {
+         logError(`Smart field identification returned invalid defaultInView fields: ${missingFields.join(', ')} not found in entity`);
+      }
+
+      // Build update statements for all default in view fields
+      for (const field of defaultInViewFields) {
+         sqlStatements.push(`
+            UPDATE [${mj_core_schema()}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '${field.ID}'
+            AND AutoUpdateDefaultInView = 1
+         `);
+      }
+
+      // Execute all updates in one batch
+      if (sqlStatements.length > 0) {
+         const combinedSQL = sqlStatements.join('\n');
+         await this.LogSQLAndExecute(pool, combinedSQL, `Set field properties for entity`, false);
+      }
+   }
+
+   /**
+    * Apply form layout generation results to set category on entity fields
+    */
+   protected async applyFormLayout(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      fields: any[],
+      result: FormLayoutResult
+   ): Promise<void> {
+      // Collect all SQL statements for batch execution
+      const sqlStatements: string[] = [];
+
+      // Assign category to each field
+      for (const fieldCategory of result.fieldCategories) {
+         const field = fields.find(f => f.Name === fieldCategory.fieldName);
+
+         if (field && field.AutoUpdateCategory && field.ID) {
+            // Override category to "System Metadata" for __mj_ fields (system audit fields)
+            let category = fieldCategory.category;
+            if (field.Name.startsWith('__mj_')) {
+               category = 'System Metadata';
+            }
+
+            // Build SET clause with all available metadata
+            const setClauses: string[] = [
+               `Category = '${category.replace(/'/g, "''")}'`,
+               `GeneratedFormSection = 'Category'`
+            ];
+
+            // Add DisplayName if provided and field allows auto-update
+            if (fieldCategory.displayName && field.AutoUpdateDisplayName) {
+               setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
+            }
+
+            // Add ExtendedType if provided
+            if (fieldCategory.extendedType !== undefined) {
+               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${fieldCategory.extendedType.replace(/'/g, "''")}'`;
+               setClauses.push(`ExtendedType = ${extendedType}`);
+            }
+
+            // Add CodeType if provided
+            if (fieldCategory.codeType !== undefined) {
+               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${fieldCategory.codeType.replace(/'/g, "''")}'`;
+               setClauses.push(`CodeType = ${codeType}`);
+            }
+
+            const updateSQL = `UPDATE [${mj_core_schema()}].EntityField
+   SET ${setClauses.join(',\n       ')}
+   WHERE ID = '${field.ID}'
+   AND AutoUpdateCategory = 1`;
+
+            sqlStatements.push(updateSQL);
+         } else if (!field) {
+            logError(`Form layout generation returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
+         }
+      }
+
+      // Execute all field updates in one batch
+      if (sqlStatements.length > 0) {
+         const combinedSQL = sqlStatements.join('\n');
+         await this.LogSQLAndExecute(pool, combinedSQL, `Set categories for ${sqlStatements.length} fields`, false);
+      }
+
+      // Store entity icon if provided and entity doesn't already have one
+      if (result.entityIcon && result.entityIcon.trim().length > 0) {
+         // Check if entity already has an icon
+         const checkEntitySQL = `
+            SELECT Icon FROM [${mj_core_schema()}].Entity
+            WHERE ID = '${entityId}'
+         `;
+         const entityCheck = await pool.request().query(checkEntitySQL);
+
+         if (entityCheck.recordset.length > 0) {
+            const currentIcon = entityCheck.recordset[0].Icon;
+            // Only update if entity doesn't have an icon set
+            if (!currentIcon || currentIcon.trim().length === 0) {
+               const escapedIcon = result.entityIcon.replace(/'/g, "''");
+               const updateEntitySQL = `
+                  UPDATE [${mj_core_schema()}].Entity
+                  SET Icon = '${escapedIcon}',
+                      __mj_UpdatedAt = GETUTCDATE()
+                  WHERE ID = '${entityId}'
+               `;
+               await this.LogSQLAndExecute(pool, updateEntitySQL, `Set entity icon to ${result.entityIcon}`, false);
+               logStatus(`  ✓ Set entity icon: ${result.entityIcon}`);
+            }
+         }
+      }
+
+      // Store category icons in EntitySetting if provided
+      if (result.categoryIcons && Object.keys(result.categoryIcons).length > 0) {
+         const iconsJSON = JSON.stringify(result.categoryIcons).replace(/'/g, "''");
+
+         // First check if setting already exists
+         const checkSQL = `
+            SELECT ID FROM [${mj_core_schema()}].EntitySetting
+            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+         `;
+         const existing = await pool.request().query(checkSQL);
+
+         if (existing.recordset.length > 0) {
+            // Update existing setting
+            const updateSQL = `
+               UPDATE [${mj_core_schema()}].EntitySetting
+               SET Value = '${iconsJSON}',
+                   __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+            `;
+            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity`, false);
+         } else {
+            // Insert new setting
+            const insertSQL = `
+               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES (NEWID(), '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
+            `;
+            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity`, false);
+         }
+      }
+   }
 
    /**
     * Executes the given SQL query using the given ConnectionPool object.

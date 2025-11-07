@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { AIModelVendorEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIModelVendorDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Vendors') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aimodelvendor-form',
-    templateUrl: './aimodelvendor.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aimodelvendor.form.component.html'
 })
 export class AIModelVendorFormComponent extends BaseFormComponent {
     public record!: AIModelVendorEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'modelVendorLinkage', sectionName: 'Model-Vendor Linkage', isExpanded: true },
+            { sectionKey: 'implementationConfiguration', sectionName: 'Implementation Configuration', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadAIModelVendorFormComponent() {
-    LoadAIModelVendorDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

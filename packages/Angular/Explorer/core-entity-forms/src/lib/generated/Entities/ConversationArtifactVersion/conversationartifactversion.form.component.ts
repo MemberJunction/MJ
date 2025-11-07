@@ -2,19 +2,27 @@ import { Component } from '@angular/core';
 import { ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadConversationArtifactVersionDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: Conversation Artifact Versions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-conversationartifactversion-form',
-    templateUrl: './conversationartifactversion.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './conversationartifactversion.form.component.html'
 })
 export class ConversationArtifactVersionFormComponent extends BaseFormComponent {
     public record!: ConversationArtifactVersionEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'artifactIdentification', sectionName: 'Artifact Identification', isExpanded: true },
+            { sectionKey: 'versionContent', sectionName: 'Version Content', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadConversationArtifactVersionFormComponent() {
-    LoadConversationArtifactVersionDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadActionAuthorizationDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Action Authorizations') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-actionauthorization-form',
-    templateUrl: './actionauthorization.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './actionauthorization.form.component.html'
 })
 export class ActionAuthorizationFormComponent extends BaseFormComponent {
     public record!: ActionAuthorizationEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'authorizationMapping', sectionName: 'Authorization Mapping', isExpanded: true },
+            { sectionKey: 'actionAuthorizationDetails', sectionName: 'Action & Authorization Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadActionAuthorizationFormComponent() {
-    LoadActionAuthorizationDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

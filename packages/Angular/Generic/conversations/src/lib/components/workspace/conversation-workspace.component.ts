@@ -17,6 +17,7 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
+import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
@@ -149,12 +150,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     private artifactPermissionService: ArtifactPermissionService,
     private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
+    private streamingService: ConversationStreamingService,
     private cdr: ChangeDetectorRef
   ) {
     super();
   }
 
   async ngOnInit() {
+    // Initialize global streaming service FIRST
+    // This establishes the single PubSub connection for all conversations
+    this.streamingService.initialize();
+    console.log('✅ Global streaming service initialized');
+
     // Check initial mobile state
     this.checkMobileView();
 

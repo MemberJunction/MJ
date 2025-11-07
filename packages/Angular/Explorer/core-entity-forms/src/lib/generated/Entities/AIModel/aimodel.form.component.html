@@ -1,242 +1,552 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="AI Models" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="AI Actions" [Visible]="record.IsSaved"> 
-                        AI Actions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Actions','DefaultModelID')"  
-                            [NewRecordValues]="NewRecordValues('AI Actions')"
-                            [AllowLoad]="IsCurrentTab('AI Actions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Model Overview Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="modelOverview"
+        sectionName="Model Overview"
+        icon="fa fa-info-circle"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModelTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelSelectionInsights"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModelType"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Vendor"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="AI Model Actions" [Visible]="record.IsSaved"> 
-                        AI Model Actions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions','AIModelID')"  
-                            [NewRecordValues]="NewRecordValues('AI Model Actions')"
-                            [AllowLoad]="IsCurrentTab('AI Model Actions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Vector Indexes" [Visible]="record.IsSaved"> 
-                        Vector Indexes
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes','EmbeddingModelID')"  
-                            [NewRecordValues]="NewRecordValues('Vector Indexes')"
-                            [AllowLoad]="IsCurrentTab('Vector Indexes')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Performance Metrics Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="performanceMetrics"
+        sectionName="Performance Metrics"
+        icon="fa fa-tachometer-alt"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PowerRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SpeedRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CostRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="Entity Documents" [Visible]="record.IsSaved"> 
-                        Entity Documents
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','AIModelID')"  
-                            [NewRecordValues]="NewRecordValues('Entity Documents')"
-                            [AllowLoad]="IsCurrentTab('Entity Documents')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Entity AI Actions" [Visible]="record.IsSaved"> 
-                        Entity AI Actions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions','AIModelID')"  
-                            [NewRecordValues]="NewRecordValues('Entity AI Actions')"
-                            [AllowLoad]="IsCurrentTab('Entity AI Actions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Technical Specifications Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="technicalSpecifications"
+        sectionName="Technical Specifications"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverImportPath"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="APIName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="InputTokenLimit"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportedResponseFormats"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsEffortLevel"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="Content Types" [Visible]="record.IsSaved"> 
-                        Content Types
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Content Types','AIModelID')"  
-                            [NewRecordValues]="NewRecordValues('Content Types')"
-                            [AllowLoad]="IsCurrentTab('Content Types')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="AI Result Cache" [Visible]="record.IsSaved"> 
-                        AI Result Cache
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIModelID')"  
-                            [NewRecordValues]="NewRecordValues('AI Result Cache')"
-                            [AllowLoad]="IsCurrentTab('AI Result Cache')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="AI Agent Notes" [Visible]="record.IsSaved"> 
-                        AI Agent Notes
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','EmbeddingModelID')"  
-                            [NewRecordValues]="NewRecordValues('AI Agent Notes')"
-                            [AllowLoad]="IsCurrentTab('AI Agent Notes')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-                    <mj-tab Name="MJ: AI Agent Examples" [Visible]="record.IsSaved"> 
-                        MJ: AI Agent Examples
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','EmbeddingModelID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Examples')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- AI Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIActions"
+        sectionName="AI Actions"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIActions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Actions','DefaultModelID')"
+                [NewRecordValues]="NewRecordValues('AI Actions')"
+                [AllowLoad]="IsSectionExpanded('aIActions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIActions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="AIAgent Models" [Visible]="record.IsSaved"> 
-                        AIAgent Models
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Models','ModelID')"  
-                            [NewRecordValues]="NewRecordValues('AI Agent Models')"
-                            [AllowLoad]="IsCurrentTab('AIAgent Models')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- AI Model Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIModelActions"
+        sectionName="AI Model Actions"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIModelActions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions','AIModelID')"
+                [NewRecordValues]="NewRecordValues('AI Model Actions')"
+                [AllowLoad]="IsSectionExpanded('aIModelActions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIModelActions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: AI Model Vendors" [Visible]="record.IsSaved"> 
-                        MJ: AI Model Vendors
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Vendors','ModelID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Model Vendors')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Entity Documents Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="entityDocuments"
+        sectionName="Entity Documents"
+        icon="fa fa-file-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('entityDocuments')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','AIModelID')"
+                [NewRecordValues]="NewRecordValues('Entity Documents')"
+                [AllowLoad]="IsSectionExpanded('entityDocuments')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('entityDocuments', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Generated Codes" [Visible]="record.IsSaved"> 
-                        Generated Codes
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Generated Codes','GeneratedByModelID')"  
-                            [NewRecordValues]="NewRecordValues('Generated Codes')"
-                            [AllowLoad]="IsCurrentTab('Generated Codes')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Vector Indexes Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="vectorIndexes"
+        sectionName="Vector Indexes"
+        icon="fa fa-database"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('vectorIndexes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('Vector Indexes')"
+                [AllowLoad]="IsSectionExpanded('vectorIndexes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('vectorIndexes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: AI Model Costs" [Visible]="record.IsSaved"> 
-                        MJ: AI Model Costs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Costs','ModelID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Model Costs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- AI Agent Notes Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIAgentNotes"
+        sectionName="AI Agent Notes"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIAgentNotes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('AI Agent Notes')"
+                [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: AI Prompt Models" [Visible]="record.IsSaved"> 
-                        MJ: AI Prompt Models
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Models','ModelID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Prompt Models')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Prompt Models')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- AI Result Cache Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIResultCache"
+        sectionName="AI Result Cache"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIResultCache')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIModelID')"
+                [NewRecordValues]="NewRecordValues('AI Result Cache')"
+                [AllowLoad]="IsSectionExpanded('aIResultCache')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIResultCache', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: AI Prompt Runs" [Visible]="record.IsSaved"> 
-                        MJ: AI Prompt Runs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ModelID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Content Types Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="contentTypes"
+        sectionName="Content Types"
+        icon="fa fa-folder"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('contentTypes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Content Types','AIModelID')"
+                [NewRecordValues]="NewRecordValues('Content Types')"
+                [AllowLoad]="IsSectionExpanded('contentTypes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('contentTypes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: AI Agent Runs" [Visible]="record.IsSaved"> 
-                        MJ: AI Agent Runs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','OverrideModelID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Runs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Entity AI Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="entityAIActions"
+        sectionName="Entity AI Actions"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('entityAIActions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions','AIModelID')"
+                [NewRecordValues]="NewRecordValues('Entity AI Actions')"
+                [AllowLoad]="IsSectionExpanded('entityAIActions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('entityAIActions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Queries" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-clipboard-question tab-header-icon"></span>Queries
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Queries','EmbeddingModelID')"  
-                            [NewRecordValues]="NewRecordValues('Queries')"
-                            [AllowLoad]="IsCurrentTab('Queries')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
-    </form>
-</div>
+    <!-- MJ: AI Agent Examples Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentExamples"
+        sectionName="MJ: AI Agent Examples"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentExamples')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- AIAgent Models Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIAgentModels"
+        sectionName="AIAgent Models"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIAgentModels')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Models','ModelID')"
+                [NewRecordValues]="NewRecordValues('AI Agent Models')"
+                [AllowLoad]="IsSectionExpanded('aIAgentModels')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIAgentModels', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Model Vendors Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIModelVendors"
+        sectionName="MJ: AI Model Vendors"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIModelVendors')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Vendors','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors')"
+                [AllowLoad]="IsSectionExpanded('mJAIModelVendors')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIModelVendors', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Generated Codes Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="generatedCodes"
+        sectionName="Generated Codes"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('generatedCodes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Generated Codes','GeneratedByModelID')"
+                [NewRecordValues]="NewRecordValues('Generated Codes')"
+                [AllowLoad]="IsSectionExpanded('generatedCodes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('generatedCodes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Model Costs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIModelCosts"
+        sectionName="MJ: AI Model Costs"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIModelCosts')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Costs','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
+                [AllowLoad]="IsSectionExpanded('mJAIModelCosts')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIModelCosts', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Prompt Models Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIPromptModels"
+        sectionName="MJ: AI Prompt Models"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIPromptModels')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Models','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Models')"
+                [AllowLoad]="IsSectionExpanded('mJAIPromptModels')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIPromptModels', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Prompt Runs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIPromptRuns"
+        sectionName="MJ: AI Prompt Runs"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIPromptRuns')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
+                [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Agent Runs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentRuns"
+        sectionName="MJ: AI Agent Runs"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentRuns')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','OverrideModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Queries Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="queries"
+        sectionName="Queries"
+        icon="fa-solid fa-clipboard-question"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('queries')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Queries','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('Queries')"
+                [AllowLoad]="IsSectionExpanded('queries')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queries', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

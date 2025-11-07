@@ -291,7 +291,8 @@ function SingleRecordView({
       border: '1px solid #ffe58f'
     } : {};
     
-    if (layout === 'list') {
+    if (layout === 'list' 
+        || layout === 'card') {
       return (
         <div 
           key={fieldName}

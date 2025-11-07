@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { TaskDependencyEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadTaskDependencyDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: Task Dependencies') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-taskdependency-form',
-    templateUrl: './taskdependency.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './taskdependency.form.component.html'
 })
 export class TaskDependencyFormComponent extends BaseFormComponent {
     public record!: TaskDependencyEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'taskReference', sectionName: 'Task Reference', isExpanded: true },
+            { sectionKey: 'dependencyLink', sectionName: 'Dependency Link', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadTaskDependencyFormComponent() {
-    LoadTaskDependencyDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

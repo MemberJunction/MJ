@@ -1,0 +1,60 @@
+{
+  "eval_id": "chapter-engagement-drilldown",
+  "category": "drill_down",
+  "difficulty": "hard",
+  "tags": ["chapters", "engagement", "interactive", "drill-down"],
+
+  "business_context": "Chapter leaders need interactive tools to monitor chapter health, identify active vs. inactive members, and plan targeted engagement activities for each chapter.",
+
+  "prompt": "Show chapter engagement with ability to see individual members",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "chapters_shown",
+        "expected_value": 15,
+        "description": "Should show all chapters with engagement metrics"
+      },
+      {
+        "metric": "drill_down_works",
+        "expected_value": true,
+        "description": "Should be able to drill into any chapter to see member list"
+      }
+    ],
+    "visualization": {
+      "type": "interactive_table",
+      "alternatives": ["master_detail", "expandable_rows"],
+      "should_not_be": ["static_chart", "single_metric", "pie_chart"],
+      "reasoning": "Hierarchical data with drill-down requires interactive table or master-detail view"
+    },
+    "required_features": ["chapter_list", "engagement_metrics", "drill_down_interaction"],
+    "optional_features": ["sort_by_metric", "filter_by_type", "export_data"],
+    "interactivity": [
+      {
+        "action": "Click on chapter row",
+        "expected_result": "Expand to show all members in that chapter with their engagement metrics"
+      },
+      {
+        "action": "Click on member name",
+        "expected_result": "Show full member profile and detailed engagement history"
+      },
+      {
+        "action": "Sort by engagement score",
+        "expected_result": "Reorder chapters by most to least engaged"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Chapter engagement with drill-down capability\n-- Level 1: Chapter summary\nSELECT \n  c.Name as ChapterName,\n  c.ChapterType,\n  COUNT(DISTINCT cm.MemberID) as TotalMembers,\n  AVG(\n    (SELECT COUNT(*) FROM events.EventRegistration er WHERE er.MemberID = cm.MemberID AND er.Status = 'Attended') +\n    (SELECT COUNT(*) FROM learning.Enrollment e WHERE e.MemberID = cm.MemberID AND e.Status = 'Completed')\n  ) as AvgEngagementScore\nFROM chapters.Chapter c\nLEFT JOIN chapters.ChapterMembership cm ON c.ID = cm.ChapterID\nGROUP BY c.ID, c.Name, c.ChapterType\nORDER BY AvgEngagementScore DESC;\n\n-- Level 2: Members within chapter (drill-down)\nSELECT \n  m.FirstName + ' ' + m.LastName as MemberName,\n  COUNT(DISTINCT er.ID) as EventsAttended,\n  COUNT(DISTINCT enr.ID) as CoursesCompleted,\n  cm.JoinDate as ChapterJoinDate\nFROM chapters.ChapterMembership cm\nJOIN membership.Member m ON cm.MemberID = m.ID\nLEFT JOIN events.EventRegistration er ON m.ID = er.MemberID AND er.Status = 'Attended'\nLEFT JOIN learning.Enrollment enr ON m.ID = enr.MemberID AND enr.Status = 'Completed'\nWHERE cm.ChapterID = @SelectedChapterID\nGROUP BY m.FirstName, m.LastName, cm.JoinDate\nORDER BY EventsAttended + CoursesCompleted DESC;",
+
+  "human_eval_guidance": "Test the drill-down interaction - click on multiple chapters and verify member lists appear correctly. Check that engagement metrics are accurate at both chapter and member levels.",
+
+  "common_pitfalls": "Drill-down not working or not intuitive; slow performance when expanding; missing member details; incorrect engagement calculations; not maintaining context when drilling down."
+}

@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.116.0
+
+### Patch Changes
+
+- f294854: Add date parameters to returned Email messages (CreatedAt, LastModifiedAt, ReceivedAt, SentAt) - implemented for MS Graph.
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+- Updated dependencies [f294854]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/communication-types@2.116.0
+  - @memberjunction/aiengine@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/sqlserver-dataprovider@2.116.0
+  - @memberjunction/ai@2.116.0
+
 ## 2.115.0
 
 ### Patch Changes

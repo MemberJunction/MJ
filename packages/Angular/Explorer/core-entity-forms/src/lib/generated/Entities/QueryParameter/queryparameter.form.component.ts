@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { QueryParameterEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadQueryParameterDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: Query Parameters') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-queryparameter-form',
-    templateUrl: './queryparameter.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './queryparameter.form.component.html'
 })
 export class QueryParameterFormComponent extends BaseFormComponent {
     public record!: QueryParameterEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'parameterCore', sectionName: 'Parameter Core', isExpanded: true },
+            { sectionKey: 'parameterGuidanceValidation', sectionName: 'Parameter Guidance & Validation', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadQueryParameterFormComponent() {
-    LoadQueryParameterDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

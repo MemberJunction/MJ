@@ -298,11 +298,13 @@ export class SkipProxyAgent extends BaseAgent {
             // Skip has completed analysis and returned results
             const completeResponse = apiResponse as SkipAPIAnalysisCompleteResponse;
             const componentSpec = completeResponse.componentOptions[0].option;
+            // Filter on system message and get the last one
+            const skipMessage = completeResponse.messages.filter(msg => msg.role === 'system').pop();
             return {
                 terminate: true,
                 step: 'Success',
-                message: completeResponse.title || 'Analysis complete',
-                newPayload: componentSpec  
+                message: skipMessage?.content || completeResponse.title || 'Analysis complete',
+                newPayload: componentSpec
             };
         }
 

@@ -1,0 +1,48 @@
+{
+  "eval_id": "total-courses-count",
+  "category": "simple_aggregation",
+  "difficulty": "easy",
+  "tags": ["learning", "courses", "count", "kpi"],
+
+  "business_context": "The learning department needs to track the size of their course catalog for annual reports, marketing materials, and strategic planning.",
+
+  "prompt": "How many courses do we offer?",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "total_course_count",
+        "expected_value": 60,
+        "sql_validation": "SELECT COUNT(*) FROM learning.Course",
+        "description": "Total number of courses in the catalog"
+      }
+    ],
+    "visualization": {
+      "type": "kpi_card",
+      "alternatives": ["single_metric", "stat_card"],
+      "should_not_be": ["table", "bar_chart", "line_chart"],
+      "reasoning": "Simple count is best displayed as a prominent single metric"
+    },
+    "required_features": ["show_count"],
+    "optional_features": ["breakdown_by_category", "active_vs_inactive", "enrollment_stats"],
+    "interactivity": [
+      {
+        "action": "Click on the count",
+        "expected_result": "Show full course catalog with details"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Count total courses\nSELECT COUNT(*) as TotalCourses\nFROM learning.Course;",
+
+  "human_eval_guidance": "Verify the count is exactly 60. Check that the visualization is clean and prominent. If interactive, verify clicking shows the course list.",
+
+  "common_pitfalls": "Confusing courses with course enrollments; including deleted or archived courses if they exist; using an overly complex visualization for a simple count."
+}

@@ -2,19 +2,28 @@ import { Component } from '@angular/core';
 import { QueueEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadQueueDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Queues') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-queue-form',
-    templateUrl: './queue.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './queue.form.component.html'
 })
 export class QueueFormComponent extends BaseFormComponent {
     public record!: QueueEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'queueDefinition', sectionName: 'Queue Definition', isExpanded: true },
+            { sectionKey: 'operationalStatus', sectionName: 'Operational Status', isExpanded: true },
+            { sectionKey: 'processEnvironment', sectionName: 'Process Environment', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'queueTasks', sectionName: 'Queue Tasks', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadQueueFormComponent() {
-    LoadQueueDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

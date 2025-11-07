@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { ContentSourceParamEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadContentSourceParamDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Content Source Params') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contentsourceparam-form',
-    templateUrl: './contentsourceparam.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './contentsourceparam.form.component.html'
 })
 export class ContentSourceParamFormComponent extends BaseFormComponent {
     public record!: ContentSourceParamEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifierKeys', sectionName: 'Identifier Keys', isExpanded: true },
+            { sectionKey: 'parameterSettings', sectionName: 'Parameter Settings', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadContentSourceParamFormComponent() {
-    LoadContentSourceParamDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

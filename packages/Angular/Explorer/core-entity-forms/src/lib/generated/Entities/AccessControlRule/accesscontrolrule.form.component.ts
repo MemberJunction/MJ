@@ -2,18 +2,26 @@ import { Component } from '@angular/core';
 import { AccessControlRuleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAccessControlRuleDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: Access Control Rules') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-accesscontrolrule-form',
-    templateUrl: './accesscontrolrule.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './accesscontrolrule.form.component.html'
 })
 export class AccessControlRuleFormComponent extends BaseFormComponent {
     public record!: AccessControlRuleEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'accessTarget', sectionName: 'Access Target', isExpanded: true },
+            { sectionKey: 'granteePermissions', sectionName: 'Grantee & Permissions', isExpanded: true },
+            { sectionKey: 'validityAdministration', sectionName: 'Validity & Administration', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadAccessControlRuleFormComponent() {
-    LoadAccessControlRuleDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

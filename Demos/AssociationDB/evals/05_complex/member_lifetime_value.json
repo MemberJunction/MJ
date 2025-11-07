@@ -1,0 +1,60 @@
+{
+  "eval_id": "member-lifetime-value-segmented",
+  "category": "complex",
+  "difficulty": "very_hard",
+  "tags": ["finance", "membership", "ltv", "segmentation", "advanced"],
+
+  "business_context": "Executive leadership needs sophisticated financial analysis showing member lifetime value segmented by cohort to understand long-term value, optimize acquisition spending, and identify high-value member segments.",
+
+  "prompt": "Calculate member lifetime value segmented by join year",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "cohorts_shown",
+        "expected_range": [5, 5],
+        "description": "Should show 5 cohorts (5 years of join dates)"
+      },
+      {
+        "metric": "ltv_metrics",
+        "expected_value": true,
+        "description": "Should calculate total revenue, average revenue per member, and retention for each cohort"
+      }
+    ],
+    "visualization": {
+      "type": "dashboard",
+      "alternatives": ["multi_chart_view", "cohort_analysis_table"],
+      "should_not_be": ["single_chart", "simple_table", "pie_chart"],
+      "reasoning": "Complex LTV analysis requires multiple coordinated visualizations (cohort table, trend chart, retention curve)"
+    },
+    "required_features": ["cohort_grouping", "ltv_calculation", "member_count_per_cohort", "total_revenue_per_cohort"],
+    "optional_features": ["retention_curve", "avg_annual_value", "projected_ltv", "comparison_chart"],
+    "interactivity": [
+      {
+        "action": "Click on cohort",
+        "expected_result": "Show detailed breakdown of all members in that cohort with individual spending"
+      },
+      {
+        "action": "Toggle between absolute and per-member values",
+        "expected_result": "Switch between total cohort revenue and average per member"
+      },
+      {
+        "action": "Filter by membership type",
+        "expected_result": "Recalculate LTV for selected membership types only"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Member Lifetime Value by Cohort\nWITH MemberCohorts AS (\n  SELECT \n    m.ID as MemberID,\n    m.FirstName + ' ' + m.LastName as MemberName,\n    YEAR(m.JoinDate) as CohortYear,\n    m.JoinDate\n  FROM membership.Member m\n),\nMemberRevenue AS (\n  SELECT \n    mc.MemberID,\n    mc.MemberName,\n    mc.CohortYear,\n    mc.JoinDate,\n    COALESCE(SUM(inv.Total), 0) as TotalRevenue,\n    COUNT(DISTINCT inv.ID) as TransactionCount,\n    DATEDIFF(YEAR, mc.JoinDate, GETDATE()) as YearsAsMember\n  FROM MemberCohorts mc\n  LEFT JOIN finance.Invoice inv ON mc.MemberID = inv.MemberID AND inv.Status IN ('Paid', 'Partial')\n  GROUP BY mc.MemberID, mc.MemberName, mc.CohortYear, mc.JoinDate\n)\nSELECT \n  CohortYear,\n  COUNT(DISTINCT MemberID) as CohortSize,\n  SUM(TotalRevenue) as TotalCohortRevenue,\n  AVG(TotalRevenue) as AvgLifetimeValue,\n  AVG(TotalRevenue / NULLIF(YearsAsMember, 0)) as AvgAnnualValue,\n  AVG(TransactionCount) as AvgTransactionsPerMember,\n  -- Retention calculation (members still active)\n  SUM(CASE WHEN EXISTS(\n    SELECT 1 FROM membership.Membership ms \n    WHERE ms.MemberID = MemberRevenue.MemberID \n      AND ms.Status = 'Active' \n      AND ms.EndDate >= GETDATE()\n  ) THEN 1 ELSE 0 END) * 1.0 / COUNT(DISTINCT MemberID) as RetentionRate\nFROM MemberRevenue\nGROUP BY CohortYear\nORDER BY CohortYear;",
+
+  "human_eval_guidance": "Verify LTV calculations include all revenue sources (memberships, events, courses). Check that cohorts are properly segmented by join year. Confirm retention rates make sense (older cohorts have lower retention). Look for the dashboard to show multiple visualizations working together.",
+
+  "common_pitfalls": "Not including all revenue sources in LTV; incorrect cohort assignment; not handling members with no spending; missing retention calculations; overly complex visualization that's hard to understand; slow performance with complex calculations."
+}
