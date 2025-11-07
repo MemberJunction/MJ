@@ -14,7 +14,7 @@
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatus, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -972,9 +972,10 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
-        // we only want to do special processing for retry or success steps, other ones can use default logic in Base Agent
-        if (step.step !== 'Retry' && step.step !== 'Success') {
-            // Not a retry or success step, use default processing
+        // we only want to do special processing for retry, success, or failed steps
+        // Failed steps need to be evaluated for conditional failure paths
+        if (step.step !== 'Retry' && step.step !== 'Success' && step.step !== 'Failed') {
+            // Not a retry, success, or failed step - use default processing
             return null;
         }
 
@@ -1017,9 +1018,28 @@ export class FlowAgentType extends BaseAgentType {
 
         // Find valid paths from current step using updated payload
         const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
-        
+
         if (paths.length === 0) {
-            // No valid paths - flow is complete
+            // No valid paths found
+            // If the previous step failed, propagate the failure with its error message
+            if (step.step === 'Failed') {
+                LogStatusEx({
+                    message: `⚠️ Flow Agent: Step failed with no recovery path. Error: ${step.errorMessage || 'No error message'}`,
+                    verboseOnly: false
+                });
+                return this.createNextStep('Failed', {
+                    errorMessage: step.errorMessage || 'Flow step failed with no recovery path',
+                    newPayload: currentPayload,
+                    previousPayload: currentPayload,
+                    terminate: true
+                });
+            }
+
+            // Otherwise, flow completed successfully
+            LogStatusEx({
+                message: '✅ Flow Agent: Flow completed successfully - no more paths to follow',
+                verboseOnly: true
+            });
             return this.createSuccessStep({
                 message: 'Flow completed - no more paths to follow',
                 newPayload: currentPayload,
@@ -1029,30 +1049,44 @@ export class FlowAgentType extends BaseAgentType {
         
         // Get the destination step for the highest priority path
         const nextStep = await this.getStepById(paths[0].DestinationStepID);
-        
+
         if (!nextStep) {
             return this.createNextStep('Failed', {
                 errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
             });
         }
-        
+
+        // Log when we're navigating to a recovery path after a failure
+        if (step.step === 'Failed') {
+            LogStatusEx({
+                message: `🔄 Flow Agent: Failure detected, navigating to recovery path: '${nextStep.Name}'`,
+                verboseOnly: false
+            });
+        }
+
         // Check if the step is active
         if (nextStep.Status !== 'Active') {
             // Try alternate paths
             for (let i = 1; i < paths.length; i++) {
                 const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                 if (alternateStep && alternateStep.Status === 'Active') {
+                    if (step.step === 'Failed') {
+                        LogStatusEx({
+                            message: `🔄 Flow Agent: Using alternate recovery path: '${alternateStep.Name}'`,
+                            verboseOnly: false
+                        });
+                    }
                     return await this.createStepForFlowNode(params, alternateStep, currentPayload, flowState);
                 }
             }
-            
+
             return this.createNextStep('Failed', {
                 errorMessage: `No active steps found. Step '${nextStep.Name}' has status: ${nextStep.Status}`,
                 newPayload: currentPayload,
                 previousPayload: currentPayload
             });
         }
-        
+
         // Create the next step based on the flow node
         return await this.createStepForFlowNode(params, nextStep, currentPayload, flowState);
     }
