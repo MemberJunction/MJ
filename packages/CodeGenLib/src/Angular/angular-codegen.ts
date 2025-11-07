@@ -467,6 +467,9 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             ? `\n\n    // Row counts for related entity sections (populated after grids load)\n    public sectionRowCounts: { [key: string]: number } = {};`
             : '';
 
+        // searchFilter property is always needed for CollapsiblePanelComponent binding
+        const searchFilterProperty = totalSections > 0 ? `\n\n    searchFilter = '';` : '';
+
         const sectionUtilityMethods = totalSections >= 4 ? `\n
     public expandAllSections(): void {
         Object.keys(this.sectionsExpanded).forEach(key => {
@@ -481,126 +484,23 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
     }
 
     public getExpandedCount(): number {
-        // Count only visible (non-hidden) expanded sections
-        const panels = document.querySelectorAll('.form-card.collapsible-card:not(.search-hidden)');
-        let count = 0;
-        panels.forEach((panel: Element) => {
-            const sectionName = panel.getAttribute('data-section-name') || '';
-            const key = this.getSectionKey(sectionName);
-            if (key && this.sectionsExpanded[key as keyof typeof this.sectionsExpanded]) {
-                count++;
-            }
-        });
-        return count;
+        return Object.keys(this.sectionsExpanded).filter(key =>
+            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded]
+        ).length;
     }
 
     public getVisibleSectionCount(): number {
-        return document.querySelectorAll('.form-card.collapsible-card:not(.search-hidden)').length;
+        return Object.keys(this.sectionsExpanded).length;
     }
 
-    private getSectionKey(sectionName: string): string {
-        // Convert section name to camelCase key (matches sectionsExpanded keys)
-        return sectionName.replace(/\s+(.)/g, (_, c) => c.toUpperCase()).replace(/\s/g, '').replace(/^(.)/, (c) => c.toLowerCase());
-    }
-
-    public clearSectionFilter(): void {
-        const input = document.querySelector('.section-search') as HTMLInputElement;
-        if (input) {
-            input.value = '';
-            const event = new Event('input', { bubbles: true });
-            input.dispatchEvent(event);
-        }
-    }
-
-    public filterSections(event: Event): void {
-        const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
-        const panels = document.querySelectorAll('.form-card.collapsible-card');
-
-        panels.forEach((panel: Element) => {
-            const sectionName = panel.getAttribute('data-section-name') || '';
-            const fieldNames = panel.getAttribute('data-field-names') || '';
-
-            // Show section if search term matches section name OR any field name
-            const matches = sectionName.includes(searchTerm) || fieldNames.includes(searchTerm);
-
-            if (matches) {
-                panel.classList.remove('search-hidden');
-
-                // Clear any existing highlights first
-                const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                if (h3) {
-                    h3.innerHTML = h3.textContent || '';
-                }
-                const labels = panel.querySelectorAll('mj-form-field label');
-                labels.forEach((label: Element) => {
-                    const span = label.querySelector('span');
-                    if (span) {
-                        span.innerHTML = span.textContent || '';
-                    }
-                });
-
-                if (searchTerm) {
-                    // Escape regex special characters to prevent errors
-                    let escapedTerm = searchTerm;
-                    escapedTerm = escapedTerm.replace(/\\\\/g, '\\\\\\\\');
-                    escapedTerm = escapedTerm.replace(/\\./g, '\\\\.');
-                    escapedTerm = escapedTerm.replace(/\\*/g, '\\\\*');
-                    escapedTerm = escapedTerm.replace(/\\+/g, '\\\\+');
-                    escapedTerm = escapedTerm.replace(/\\?/g, '\\\\?');
-                    escapedTerm = escapedTerm.replace(/\\^/g, '\\\\^');
-                    escapedTerm = escapedTerm.replace(/\\$/g, '\\\\$');
-                    escapedTerm = escapedTerm.replace(/\\{/g, '\\\\{');
-                    escapedTerm = escapedTerm.replace(/\\}/g, '\\\\}');
-                    escapedTerm = escapedTerm.replace(/\\(/g, '\\\\(');
-                    escapedTerm = escapedTerm.replace(/\\)/g, '\\\\)');
-                    escapedTerm = escapedTerm.replace(/\\|/g, '\\\\|');
-                    const wordBoundaryRegex = new RegExp('\\\\b' + escapedTerm + '\\\\b', 'gi');
-
-                    // Highlight section name if it matches
-                    if (sectionName.match(wordBoundaryRegex)) {
-                        if (h3) {
-                            const originalText = h3.textContent || '';
-                            h3.innerHTML = originalText.replace(wordBoundaryRegex, '<mark class="search-highlight">$1</mark>');
-                        }
-                    }
-
-                    // Highlight field labels if they match
-                    if (fieldNames.match(wordBoundaryRegex)) {
-                        labels.forEach((label: Element) => {
-                            const span = label.querySelector('span');
-                            if (span) {
-                                const labelText = span.textContent || '';
-                                if (labelText.toLowerCase().match(wordBoundaryRegex)) {
-                                    span.innerHTML = labelText.replace(wordBoundaryRegex, '<mark class="search-highlight">$1</mark>');
-                                }
-                            }
-                        });
-                    }
-                }
-            } else {
-                panel.classList.add('search-hidden');
-            }
-        });
-
-        // Clear all highlighting when search is empty
-        if (!searchTerm) {
-            panels.forEach((panel: Element) => {
-                const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                if (h3) {
-                    h3.innerHTML = h3.textContent || '';
-                }
-                const labels = panel.querySelectorAll('mj-form-field label span');
-                labels.forEach((span: Element) => {
-                    span.innerHTML = span.textContent || '';
-                });
-            });
-        }
+    public onFilterChange(searchTerm: string): void {
+        this.searchFilter = searchTerm;
     }` : '';
 
         return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, FormSectionControlsComponent, CollapsiblePanelComponent } from '@memberjunction/ng-base-forms';
 ${generationImports.length > 0 ? generationImports + '\n' : ''}
 @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
 @Component({
@@ -609,7 +509,7 @@ ${generationImports.length > 0 ? generationImports + '\n' : ''}
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ${entity.ClassName}FormComponent extends BaseFormComponent {
-    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}${sectionsExpandedObject}${sectionRowCountsProperty}${toggleSectionMethod}${sectionUtilityMethods}
+    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}${sectionsExpandedObject}${sectionRowCountsProperty}${searchFilterProperty}${toggleSectionMethod}${sectionUtilityMethods}
 }
 
 export function Load${entity.ClassName}FormComponent() {
@@ -739,22 +639,13 @@ export function Load${entity.ClassName}FormComponent() {
                   }).join(' ') : '';
 
                   section.TabCode = `${sectionIndex > 0 ? '\n        ' : ''}<!-- ${section.Name} Section -->
-        <div class="form-card collapsible-card" data-section-name="${section.Name.toLowerCase()}" data-field-names="${fieldSearchTerms}">
-            <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="${icon}"></i>
-                    <h3><span class="section-name">${section.Name}</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.${sectionKey} ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.${sectionKey}">
-                <div class="form-body">
+        <mj-collapsible-panel
+            sectionName="${section.Name}"
+            icon="${icon}"
+            [(expanded)]="sectionsExpanded.${sectionKey}"
+            [searchFilter]="searchFilter">
 ${formHTML}
-                </div>
-            </div>
-        </div>`
+        </mj-collapsible-panel>`
 
                   sectionIndex++;
               }
@@ -1224,34 +1115,13 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
           if (totalSections < 4) return '';
 
           return `
-            <div toolbar-additional-controls #additionalControls>
-                <button kendoButton (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-angles-down"></i>
-                    <span class="button-text">Expand All</span>
-                </button>
-                <button kendoButton (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-angles-up"></i>
-                    <span class="button-text">Collapse All</span>
-                </button>
-                <div style="position: relative; display: inline-block;">
-                    <input kendoTextBox
-                           type="text"
-                           class="section-search"
-                           placeholder="Search sections..."
-                           (input)="filterSections($event)"
-                           #sectionSearch>
-                    <button kendoButton
-                            class="clear-search-btn"
-                            (click)="clearSectionFilter()"
-                            title="Clear search"
-                            *ngIf="sectionSearch.value">
-                        <i class="fa fa-times"></i>
-                    </button>
-                </div>
-                <span class="section-count">
-                    {{getExpandedCount()}} of {{getVisibleSectionCount()}} expanded
-                </span>
-            </div>`;
+            <mj-form-section-controls
+                [expandedCount]="getExpandedCount()"
+                [visibleCount]="getVisibleSectionCount()"
+                (expandAll)="expandAllSections()"
+                (collapseAll)="collapseAllSections()"
+                (filterChange)="onFilterChange($event)">
+            </mj-form-section-controls>`;
       }
 
       /**
