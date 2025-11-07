@@ -12,6 +12,10 @@
                 @if (ExtendedType === 'Code') {
                     <mj-code-editor [value]="record.Get(FieldName)" [readonly]="true" [languages]="languages" [language]="'JavaScript'"></mj-code-editor>
                 }
+                @else if (Type === 'checkbox') {
+                    <!-- Render checkboxes as disabled checkbox controls in read mode -->
+                    <input type="checkbox" [checked]="Value" kendoCheckBox disabled />
+                }
                 @else if (FieldInfo.Length === -1) {
                     <!-- this is a varchar(max) type of field -->
                     <markdown #markdown [data]="record.Get(FieldName)"></markdown>

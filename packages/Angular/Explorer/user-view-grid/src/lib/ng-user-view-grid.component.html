@@ -31,73 +31,84 @@
             <ng-template kendoGridToolbarTemplate>
             @if(!anyModeEnabled){
                 @if(EntityInfo && ShowCreateNewRecordButton && UserCanCreateNewRecord) {
-                    <button kendoButton (click)="doCreateNewRecord()" >
-                        <span class="fa-regular fa-plus"></span>
-                        New {{entityRecord?.EntityInfo?.Name}}
-                    </button>                                        
+                    <button kendoButton (click)="doCreateNewRecord()">
+                        <span class="fa-solid fa-plus"></span>
+                        <span class="button-text">New</span>
+                    </button>
                 }
 
-                <button kendoButton (click)="doExcelExport()" >
-                    <span class="fa-regular fa-file-excel"></span>
-                    Export to Excel
+                <button kendoButton (click)="doExcelExport()">
+                    <span class="fa-solid fa-file-excel"></span>
+                    <span class="button-text">Export to Excel</span>
                 </button>
-                <button (click)="enableCheckbox(false, 'duplicate')" kendoButton class="k-button-solid-base list-button">
-                    Search For Duplicates
+                <button (click)="enableCheckbox(false, 'duplicate')" kendoButton>
+                    <span class="fa-solid fa-magnifying-glass-plus"></span>
+                    <span class="button-text">Search For Duplicates</span>
                 </button>
-                <button (click)="enableCheckbox(false, 'addToList')" kendoButton class="k-button-solid-base list-button">
-                    Add To List
+                <button (click)="enableCheckbox(false, 'addToList')" kendoButton>
+                    <span class="fa-solid fa-list-check"></span>
+                    <span class="button-text">Add To List</span>
                 </button>
-                <button (click)="enableMergeOrCompare(false, 'merge')" kendoButton class="k-button-solid-base list-button">
-                    Merge
+                <button (click)="enableMergeOrCompare(false, 'merge')" kendoButton>
+                    <span class="fa-solid fa-code-merge"></span>
+                    <span class="button-text">Merge</span>
                 </button>
-                <button (click)="enableMergeOrCompare(false, 'compare')" kendoButton class="k-button-solid-base list-button">
-                    Compare
+                <button (click)="enableMergeOrCompare(false, 'compare')" kendoButton>
+                    <span class="fa-solid fa-code-compare"></span>
+                    <span class="button-text">Compare</span>
                 </button>
 
                 @if (ShowCommunicationButton && EntitySupportsCommunication) {
-                    <button (click)="doCommunication()" kendoButton class="k-button-solid-base list-button">
-                        <span class="fa-regular fa-envelope"></span>
-                    </button>    
+                    <button (click)="doCommunication()" kendoButton>
+                        <span class="fa-solid fa-envelope"></span>
+                        <span class="button-text">Send Message</span>
+                    </button>
                 }
 
                 @if (ShowEntityActionButtons && EntityActions && EntityActions.length > 0) {
                     @for (action of EntityActions; track action) {
-                        <button (click)="doEntityAction(action)" kendoButton class="k-button-solid-base list-button">
-                            {{action.Action}}
+                        <button (click)="doEntityAction(action)" kendoButton>
+                            <span class="fa-solid fa-bolt"></span>
+                            <span class="button-text">{{action.Action}}</span>
                         </button>
                     }
                 }
 
                 @if(showRefreshButton){
-                    <button kendoButton class="list-button" (click)="RefreshFromSavedParams()">
+                    <button kendoButton (click)="RefreshFromSavedParams()">
                         <span class="fa-solid fa-arrows-rotate"></span>
-                        Refresh
+                        <span class="button-text">Refresh</span>
                     </button>
                 }
             }
             @if(duplicateMode){
-                <button (click)="enableCheckbox(false, 'duplicate')" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
-                    Search For Duplicates
+                <button (click)="enableCheckbox(false, 'duplicate')" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton>
+                    <span class="fa-solid fa-magnifying-glass-plus"></span>
+                    <span class="button-text">Search For Duplicates</span>
                 </button>
             }
             @if(addToListMode){
-                <button (click)="enableCheckbox(false, 'addToList')" [disabled]="addToListMode && recordsToCompare.length === 0" kendoButton class="k-button-solid-base list-button">
-                    Add To List
+                <button (click)="enableCheckbox(false, 'addToList')" [disabled]="addToListMode && recordsToCompare.length === 0" kendoButton>
+                    <span class="fa-solid fa-list-check"></span>
+                    <span class="button-text">Add To List</span>
                 </button>
             }
             @if(compareMode){
-                <button (click)="enableMergeOrCompare(false, 'compare')" [disabled]="compareMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
-                    Compare
+                <button (click)="enableMergeOrCompare(false, 'compare')" [disabled]="compareMode && recordsToCompare.length < 2" kendoButton>
+                    <span class="fa-solid fa-code-compare"></span>
+                    <span class="button-text">Compare</span>
                 </button>
             }
             @if(mergeMode){
-                <button (click)="enableMergeOrCompare(false, 'merge')" [disabled]="mergeMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
-                    Merge
+                <button (click)="enableMergeOrCompare(false, 'merge')" [disabled]="mergeMode && recordsToCompare.length < 2" kendoButton>
+                    <span class="fa-solid fa-code-merge"></span>
+                    <span class="button-text">Merge</span>
                 </button>
             }
             @if(anyModeEnabled){
-                <button (click)="enableCheckbox(true, '')" kendoButton class="k-button-solid-base list-button">
-                    Cancel
+                <button (click)="enableCheckbox(true, '')" kendoButton>
+                    <span class="fa-solid fa-xmark"></span>
+                    <span class="button-text">Cancel</span>
                 </button>
             }
         </ng-template>

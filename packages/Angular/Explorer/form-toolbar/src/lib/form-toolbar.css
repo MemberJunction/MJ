@@ -4,7 +4,7 @@
     margin-bottom: 0;
     background: #f9fafb;
     display: flex;
-    gap: 8px;
+    gap: 7px;
     align-items: center;
 }
 
@@ -42,6 +42,106 @@
 .toolbar-container .button-text {
     margin-left: 0;
     font-size: 14px;
+}
+
+/* Toolbar separator for additional controls */
+.toolbar-separator {
+    width: 1px;
+    height: 24px;
+    background: #d1d5db;
+    margin: 0 8px;
+}
+
+/* Additional controls container */
+::ng-deep .toolbar-container [toolbar-additional-controls] {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    margin-left: auto;
+}
+
+/* Additional controls buttons should match main toolbar buttons */
+::ng-deep .toolbar-container [toolbar-additional-controls] button {
+    padding: 8px 14px;
+    font-size: 14px;
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #374151;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+::ng-deep .toolbar-container [toolbar-additional-controls] button:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+::ng-deep .toolbar-container [toolbar-additional-controls] button:active {
+    transform: translateY(0);
+}
+
+/* Search input styling - reduced border radius */
+::ng-deep .toolbar-container [toolbar-additional-controls] input.section-search {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    min-width: 180px;
+    transition: all 0.2s;
+}
+
+::ng-deep .toolbar-container [toolbar-additional-controls] input.section-search:focus {
+    outline: none;
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.2);
+}
+
+/* Section count styling - pill design */
+::ng-deep .toolbar-container [toolbar-additional-controls] .section-count {
+    font-size: 12px;
+    color: #4b5563;
+    font-weight: 600;
+    padding: 6px 14px;
+    background: #e5e7eb;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Clear search button styling */
+::ng-deep .toolbar-container [toolbar-additional-controls] .clear-search-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 4px 8px !important;
+    min-width: auto !important;
+    background: transparent !important;
+    border: none !important;
+    color: #9ca3af !important;
+    font-size: 14px;
+}
+
+::ng-deep .toolbar-container [toolbar-additional-controls] .clear-search-btn:hover {
+    color: #6b7280 !important;
+    background: transparent !important;
+    transform: translateY(-50%);
+    box-shadow: none !important;
+}
+
+/* Yellow highlight for search matches */
+::ng-deep mark.search-highlight {
+    background: #fef08a;
+    color: #854d0e;
+    font-weight: 600;
 } 
 
 .toolbar-container.disabled {

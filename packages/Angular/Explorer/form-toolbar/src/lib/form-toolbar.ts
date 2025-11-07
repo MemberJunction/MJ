@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, ContentChild, ElementRef } from '@angular/core';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { BaseEntity, CompositeKey, LogError, Metadata, RecordDependency, RunView } from '@memberjunction/core';
@@ -15,6 +15,11 @@ import { ListDetailEntity, ListEntity } from '@memberjunction/core-entities';
 export class FormToolbarComponent implements OnInit {
     @Input() ShowSkipChatButton: boolean = true;
     @Input() form!: BaseFormComponent;
+    @ContentChild('additionalControls', { read: ElementRef }) additionalControls?: ElementRef;
+
+    public get hasAdditionalControls(): boolean {
+        return !!this.additionalControls;
+    }
 
 
     /**

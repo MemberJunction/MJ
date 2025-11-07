@@ -481,7 +481,35 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
     }
 
     public getExpandedCount(): number {
-        return Object.values(this.sectionsExpanded).filter(v => v === true).length;
+        // Count only visible (non-hidden) expanded sections
+        const panels = document.querySelectorAll('.form-card.collapsible-card:not(.search-hidden)');
+        let count = 0;
+        panels.forEach((panel: Element) => {
+            const sectionName = panel.getAttribute('data-section-name') || '';
+            const key = this.getSectionKey(sectionName);
+            if (key && this.sectionsExpanded[key as keyof typeof this.sectionsExpanded]) {
+                count++;
+            }
+        });
+        return count;
+    }
+
+    public getVisibleSectionCount(): number {
+        return document.querySelectorAll('.form-card.collapsible-card:not(.search-hidden)').length;
+    }
+
+    private getSectionKey(sectionName: string): string {
+        // Convert section name to camelCase key (matches sectionsExpanded keys)
+        return sectionName.replace(/\s+(.)/g, (_, c) => c.toUpperCase()).replace(/\s/g, '').replace(/^(.)/, (c) => c.toLowerCase());
+    }
+
+    public clearSectionFilter(): void {
+        const input = document.querySelector('.section-search') as HTMLInputElement;
+        if (input) {
+            input.value = '';
+            const event = new Event('input', { bubbles: true });
+            input.dispatchEvent(event);
+        }
     }
 
     public filterSections(event: Event): void {
@@ -498,13 +526,55 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             if (matches) {
                 panel.classList.remove('search-hidden');
 
-                // Add highlighting to matched text in section name
-                if (searchTerm && sectionName.includes(searchTerm)) {
-                    const h3 = panel.querySelector('.collapsible-title h3 .section-name');
-                    if (h3) {
-                        const originalText = h3.textContent || '';
-                        const regex = new RegExp(\`(\${searchTerm})\`, 'gi');
-                        h3.innerHTML = originalText.replace(regex, '<span class="search-highlight">$1</span>');
+                // Clear any existing highlights first
+                const h3 = panel.querySelector('.collapsible-title h3 .section-name');
+                if (h3) {
+                    h3.innerHTML = h3.textContent || '';
+                }
+                const labels = panel.querySelectorAll('mj-form-field label');
+                labels.forEach((label: Element) => {
+                    const span = label.querySelector('span');
+                    if (span) {
+                        span.innerHTML = span.textContent || '';
+                    }
+                });
+
+                if (searchTerm) {
+                    // Escape regex special characters to prevent errors
+                    let escapedTerm = searchTerm;
+                    escapedTerm = escapedTerm.replace(/\\\\/g, '\\\\\\\\');
+                    escapedTerm = escapedTerm.replace(/\\./g, '\\\\.');
+                    escapedTerm = escapedTerm.replace(/\\*/g, '\\\\*');
+                    escapedTerm = escapedTerm.replace(/\\+/g, '\\\\+');
+                    escapedTerm = escapedTerm.replace(/\\?/g, '\\\\?');
+                    escapedTerm = escapedTerm.replace(/\\^/g, '\\\\^');
+                    escapedTerm = escapedTerm.replace(/\\$/g, '\\\\$');
+                    escapedTerm = escapedTerm.replace(/\\{/g, '\\\\{');
+                    escapedTerm = escapedTerm.replace(/\\}/g, '\\\\}');
+                    escapedTerm = escapedTerm.replace(/\\(/g, '\\\\(');
+                    escapedTerm = escapedTerm.replace(/\\)/g, '\\\\)');
+                    escapedTerm = escapedTerm.replace(/\\|/g, '\\\\|');
+                    const wordBoundaryRegex = new RegExp('\\\\b' + escapedTerm + '\\\\b', 'gi');
+
+                    // Highlight section name if it matches
+                    if (sectionName.match(wordBoundaryRegex)) {
+                        if (h3) {
+                            const originalText = h3.textContent || '';
+                            h3.innerHTML = originalText.replace(wordBoundaryRegex, '<mark class="search-highlight">$1</mark>');
+                        }
+                    }
+
+                    // Highlight field labels if they match
+                    if (fieldNames.match(wordBoundaryRegex)) {
+                        labels.forEach((label: Element) => {
+                            const span = label.querySelector('span');
+                            if (span) {
+                                const labelText = span.textContent || '';
+                                if (labelText.toLowerCase().match(wordBoundaryRegex)) {
+                                    span.innerHTML = labelText.replace(wordBoundaryRegex, '<mark class="search-highlight">$1</mark>');
+                                }
+                            }
+                        });
                     }
                 }
             } else {
@@ -512,13 +582,17 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             }
         });
 
-        // Clear highlighting when search is empty
+        // Clear all highlighting when search is empty
         if (!searchTerm) {
             panels.forEach((panel: Element) => {
                 const h3 = panel.querySelector('.collapsible-title h3 .section-name');
                 if (h3) {
                     h3.innerHTML = h3.textContent || '';
                 }
+                const labels = panel.querySelectorAll('mj-form-field label span');
+                labels.forEach((span: Element) => {
+                    span.innerHTML = span.textContent || '';
+                });
             });
         }
     }` : '';
@@ -1118,9 +1192,10 @@ ${componentCodeWithIndent}
        * @returns Generated HTML with splitter layout
        */
       protected generateSingleEntityHTMLWithSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+          const sectionControlsHTML = this.generateSectionControlsHTML(additionalSections, relatedEntitySections);
           const htmlCode: string =  `<div class="record-form-container">
     <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+        <mj-form-toolbar [form]="this">${sectionControlsHTML}</mj-form-toolbar>
         <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
             <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
 ${this.innerTopAreaHTML(topArea)}
@@ -1135,6 +1210,50 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
           return htmlCode;
       }
       
+      /**
+       * Generates section controls HTML for toolbar projection (4+ sections only)
+       * @param additionalSections Array of field-based form sections
+       * @param relatedEntitySections Array of related entity sections
+       * @returns HTML string for toolbar section controls, or empty string
+       */
+      protected generateSectionControlsHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+          const sectionsToRender = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top);
+          const totalSections = sectionsToRender.length + relatedEntitySections.length;
+
+          // Only show section controls if there are 4+ sections
+          if (totalSections < 4) return '';
+
+          return `
+            <div toolbar-additional-controls #additionalControls>
+                <button kendoButton (click)="expandAllSections()" title="Expand all sections">
+                    <i class="fa fa-angles-down"></i>
+                    <span class="button-text">Expand All</span>
+                </button>
+                <button kendoButton (click)="collapseAllSections()" title="Collapse all sections">
+                    <i class="fa fa-angles-up"></i>
+                    <span class="button-text">Collapse All</span>
+                </button>
+                <div style="position: relative; display: inline-block;">
+                    <input kendoTextBox
+                           type="text"
+                           class="section-search"
+                           placeholder="Search sections..."
+                           (input)="filterSections($event)"
+                           #sectionSearch>
+                    <button kendoButton
+                            class="clear-search-btn"
+                            (click)="clearSectionFilter()"
+                            title="Clear search"
+                            *ngIf="sectionSearch.value">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <span class="section-count">
+                    {{getExpandedCount()}} of {{getVisibleSectionCount()}} expanded
+                </span>
+            </div>`;
+      }
+
       /**
        * Generates the inner HTML for the top area section
        * @param topArea The top area content
@@ -1157,29 +1276,6 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
       protected innerCollapsiblePanelsHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
         // Filter out Top sections as they're handled separately
         const sectionsToRender = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top);
-        const totalSections = sectionsToRender.length + relatedEntitySections.length;
-
-        // Only show section controls if there are 4+ sections
-        const showControls = totalSections >= 4;
-        const controlsHTML = showControls ? `        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of ${totalSections} expanded
-            </span>
-        </div>
-` : '';
 
         // Combine field sections and related entity sections into panels, respecting DisplayLocation
         if (relatedEntitySections.length > 0) {
@@ -1195,12 +1291,12 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
                 : '';
             const fieldPanelsHTML = sectionsToRender.map(s => s.TabCode).join('\n');
 
-            return `${controlsHTML}        <div class="form-panels-container">
+            return `        <div class="form-panels-container">
 ${beforePanelsHTML}${beforePanelsHTML && fieldPanelsHTML ? '\n' : ''}${fieldPanelsHTML}${fieldPanelsHTML && afterPanelsHTML ? '\n' : ''}${afterPanelsHTML}
         </div>`
         } else {
             // No related entities, just show field panels
-            return `${controlsHTML}        <div class="form-panels-container">
+            return `        <div class="form-panels-container">
 ${sectionsToRender.map(s => s.TabCode).join('\n')}
         </div>`
         }
@@ -1234,9 +1330,10 @@ ${sectionsToRender.map(s => s.TabCode).join('\n')}
        * @returns Generated HTML without splitter layout
        */
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+          const sectionControlsHTML = this.generateSectionControlsHTML(additionalSections, relatedEntitySections);
           const htmlCode: string =  `<div class="record-form-container">
     <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+        <mj-form-toolbar [form]="this">${sectionControlsHTML}</mj-form-toolbar>
 ${this.innerTopAreaHTML(topArea)}
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
     </form>

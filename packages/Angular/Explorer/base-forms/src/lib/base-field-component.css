@@ -35,7 +35,7 @@
 }
 
 markdown {
-  font-size: 1rem; /* Adjust this value to match your app's regular text size */
+  font-size: 14px; /* Match app standard text size (changed from 1rem) */
 }
 
 
