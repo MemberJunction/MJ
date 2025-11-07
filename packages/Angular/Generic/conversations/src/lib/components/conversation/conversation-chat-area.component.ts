@@ -715,6 +715,64 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   /**
+   * Reload messages for the active conversation from the database
+   * Called when completion is detected to discover newly delegated agent messages
+   */
+  private async reloadMessagesForActiveConversation(): Promise<void> {
+    const conversationId = this.conversationState.activeConversationId;
+    if (!conversationId) {
+      return;
+    }
+
+    try {
+      LogStatusEx({message: `🔄 Reloading messages for conversation ${conversationId} to discover delegated agents`, verboseOnly: true});
+
+      const md = new Metadata();
+      const rv = new RunView();
+
+      // Track existing message IDs before reload to identify new messages
+      const existingMessageIds = new Set(this.messages.map(m => m.ID));
+
+      const result = await rv.RunView<ConversationDetailEntity>({
+        EntityName: 'Conversation Details',
+        ExtraFilter: `ConversationID='${conversationId}'`,
+        OrderBy: '__mj_CreatedAt ASC',
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (result.Success && result.Results && result.Results.length > 0) {
+        // Update messages with reloaded data
+        this.messages = result.Results;
+
+        // Find newly discovered messages (delegated agents)
+        const newMessages = result.Results.filter(m => !existingMessageIds.has(m.ID));
+
+        // Load agent runs for new messages so completion detector can reload artifacts
+        for (const message of newMessages) {
+          if (message.AgentID && message.ID) {
+            // Query to find agent run for this conversation detail
+            const agentRunResult = await rv.RunView<AIAgentRunEntityExtended>({
+              EntityName: 'MJ: AI Agent Runs',
+              ExtraFilter: `ConversationDetailID='${message.ID}'`,
+              ResultType: 'entity_object'
+            }, this.currentUser);
+
+            if (agentRunResult.Success && agentRunResult.Results && agentRunResult.Results.length > 0) {
+              const agentRun = agentRunResult.Results[0];
+              this.agentRunsByDetailId.set(message.ID, agentRun);
+              LogStatusEx({message: `✅ Loaded agent run for new delegated message ${message.ID} (Agent: ${agentRun.Agent})`, verboseOnly: true});
+            }
+          }
+        }
+
+        LogStatusEx({message: `✅ Reloaded ${result.Results.length} messages (${newMessages.length} new, ${result.Results.filter(m => m.Status === 'In-Progress').length} in-progress)`, verboseOnly: true});
+      }
+    } catch (error) {
+      console.error('Failed to reload messages for active conversation:', error);
+    }
+  }
+
+  /**
    * Detect messages that changed from In-Progress to Complete and reload their agent runs
    * This handles the navigation scenario where onMessageComplete event isn't fired
    */
@@ -737,6 +795,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
               // Reload artifacts for this completed message
               await this.reloadArtifactsForMessage(message.ID);
+
+              // CRITICAL: Reload messages to pick up newly delegated agent messages
+              // When Sage delegates to Marketing Agent, a new message is created
+              // We need to discover and register callbacks for these new messages
+              await this.reloadMessagesForActiveConversation();
+
+              // Update inProgressMessageIds to include new delegated agents
+              // This triggers callback registration via the setter in message-input
+              this.inProgressMessageIds = [...this.messages
+                .filter(m => m.Status === 'In-Progress')
+                .map(m => m.ID)];
 
               // Auto-open artifact panel if this message has artifacts and no artifact is currently shown
               if (this.artifactsByDetailId.has(message.ID) && !this.showArtifactPanel) {
