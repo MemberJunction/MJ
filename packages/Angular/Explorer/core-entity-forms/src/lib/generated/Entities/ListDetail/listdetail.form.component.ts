@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'List Details') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-listdetail-form',
-    templateUrl: './listdetail.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './listdetail.form.component.html'
 })
 export class ListDetailFormComponent extends BaseFormComponent {
     public record!: ListDetailEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        listReference: true,
-        detailAttributes: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'listReference', sectionName: 'List Reference', isExpanded: true },
+            { sectionKey: 'detailAttributes', sectionName: 'Detail Attributes', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

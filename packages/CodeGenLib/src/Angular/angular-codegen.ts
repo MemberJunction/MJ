@@ -123,22 +123,15 @@ export class AngularClientGeneratorBase {
       
                   fs.writeFileSync(path.join(thisEntityPath, `${entity.ClassName.toLowerCase()}.form.component.ts`), tsCode);
                   fs.writeFileSync(path.join(thisEntityPath, `${entity.ClassName.toLowerCase()}.form.component.html`), htmlCode);
-      
-                  if (additionalSections.length > 0) {
-                      const sectionPath = path.join(thisEntityPath, 'sections');
-                      if (!fs.existsSync(sectionPath))
-                          fs.mkdirSync(sectionPath, { recursive: true }); // create the directory if it doesn't exist
 
-                      for (let j:number = 0; j < additionalSections.length; ++j) {
-                          const section = additionalSections[j];
-                          // Only write file if FileName and ComponentCode are populated
-                          if (section.FileName && section.ComponentCode) {
-                              fs.writeFileSync(path.join(sectionPath, section.FileName), section.ComponentCode);
-                          }
-                          sections.push(section); // add the entity's secitons one by one to the master/global list of sections
-                      }
+                  // Sections are now inline in HTML templates, no separate files needed
+                  // Just track them for module generation purposes
+                  if (additionalSections.length > 0) {
+                      additionalSections.forEach(section => {
+                          sections.push(section);
+                      });
                   }
-      
+
                   const componentName: string = `${entity.ClassName}FormComponent`;
                   componentImports.push (`import { ${componentName}, Load${componentName} } from "./Entities/${entity.ClassName}/${entity.ClassName.toLowerCase()}.form.component";`);
                   const currentComponentDistinctRelatedEntityClassNames: {itemClassName: string, moduleClassName: string}[] = [];
@@ -444,72 +437,29 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             }
         });
 
-        // Now generate the sectionsExpanded object using the stored unique keys
-        const sectionsExpandedEntries = allSections.map((s, index) => {
+        // Generate plain objects for section initialization
+        const sectionInitEntries = allSections.map((s, index) => {
             // First 2 sections expanded by default, metadata and related entities collapsed
             const isExpanded = index < 2 && !s.Name.toLowerCase().includes('metadata') && !s.IsRelatedEntity;
-            return `        ${s.UniqueKey}: ${isExpanded}`;
+            return `            { sectionKey: '${s.UniqueKey}', sectionName: '${s.Name}', isExpanded: ${isExpanded} }`;
         });
-        const sectionsExpandedObject = sectionsExpandedEntries.length > 0
-            ? `\n\n    // Collapsible section state\n    public sectionsExpanded = {\n${sectionsExpandedEntries.join(',\n')}\n    };`
+
+        const sectionInitCode = sectionInitEntries.length > 0
+            ? `\n\n    override async ngOnInit() {\n        await super.ngOnInit();\n        this.initSections([\n${sectionInitEntries.join(',\n')}\n        ]);\n    }`
             : '';
-
-        const toggleSectionMethod = sectionsExpandedEntries.length > 0
-            ? `\n\n    public toggleSection(section: keyof typeof this.sectionsExpanded): void {\n        this.sectionsExpanded[section] = !this.sectionsExpanded[section];\n    }`
-            : '';
-
-        // Add expand all/collapse all/filter methods if there are 4+ sections
-        const totalSections = allSections.length;
-
-        // Add sectionRowCounts property for related entities
-        const hasRelatedEntities = relatedEntitySections.length > 0;
-        const sectionRowCountsProperty = hasRelatedEntities
-            ? `\n\n    // Row counts for related entity sections (populated after grids load)\n    public sectionRowCounts: { [key: string]: number } = {};`
-            : '';
-
-        // searchFilter property is always needed for CollapsiblePanelComponent binding
-        const searchFilterProperty = totalSections > 0 ? `\n\n    searchFilter = '';` : '';
-
-        const sectionUtilityMethods = totalSections >= 4 ? `\n
-    public expandAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = true;
-        });
-    }
-
-    public collapseAllSections(): void {
-        Object.keys(this.sectionsExpanded).forEach(key => {
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded] = false;
-        });
-    }
-
-    public getExpandedCount(): number {
-        return Object.keys(this.sectionsExpanded).filter(key =>
-            this.sectionsExpanded[key as keyof typeof this.sectionsExpanded]
-        ).length;
-    }
-
-    public getVisibleSectionCount(): number {
-        return Object.keys(this.sectionsExpanded).length;
-    }
-
-    public onFilterChange(searchTerm: string): void {
-        this.searchFilter = searchTerm;
-    }` : '';
 
         return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent, FormSectionControlsComponent, CollapsiblePanelComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 ${generationImports.length > 0 ? generationImports + '\n' : ''}
 @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-${entity.ClassName.toLowerCase()}-form',
-    templateUrl: './${entity.ClassName.toLowerCase()}.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './${entity.ClassName.toLowerCase()}.form.component.html'
 })
 export class ${entity.ClassName}FormComponent extends BaseFormComponent {
-    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}${sectionsExpandedObject}${sectionRowCountsProperty}${searchFilterProperty}${toggleSectionMethod}${sectionUtilityMethods}
+    public record!: ${entityObjectClass}Entity;${generationInjectedCode.length > 0 ? '\n' + generationInjectedCode : ''}${sectionInitCode}
 }
 
 export function Load${entity.ClassName}FormComponent() {
@@ -638,14 +588,18 @@ export function Load${entity.ClassName}FormComponent() {
                       return terms.join(' ');
                   }).join(' ') : '';
 
-                  section.TabCode = `${sectionIndex > 0 ? '\n        ' : ''}<!-- ${section.Name} Section -->
-        <mj-collapsible-panel
-            sectionName="${section.Name}"
-            icon="${icon}"
-            [(expanded)]="sectionsExpanded.${sectionKey}"
-            [searchFilter]="searchFilter">
-${formHTML}
-        </mj-collapsible-panel>`
+                  // No additional indentation needed - formHTML is already properly indented
+                  const indentedFormHTML = formHTML;
+
+                  section.TabCode = `${sectionIndex > 0 ? '\n' : ''}    <!-- ${section.Name} Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="${sectionKey}"
+        sectionName="${section.Name}"
+        icon="${icon}"
+        [form]="this"
+        [searchFilter]="searchFilter">
+${indentedFormHTML}
+    </mj-collapsible-panel>`
 
                   sectionIndex++;
               }
@@ -845,38 +799,30 @@ ${formHTML}
                 Entity: entity,
                 RelationshipInfo: relatedEntity,
                 TabName: tabName,
-                SectionKey: sectionKey  // Pass section key for IsCurrentSection() calls
+                SectionKey: sectionKey  // Pass section key for IsSectionExpanded() calls
             });
-            // Add proper indentation for collapsible panel body
-            const componentCodeWithIndent = generateResults.TemplateOutput.split('\n').map(l => `                    ${l}`).join('\n')
+            // Add proper indentation for collapsible panel body (12 spaces for div content)
+            const componentCodeWithIndent = generateResults.TemplateOutput.split('\n').map(l => `            ${l}`).join('\n')
 
             // For related entities, use the related entity name as searchable term
             const relatedEntitySearchTerms = relatedEntity.RelatedEntity.toLowerCase();
 
-            const tabCode = `${index > 0 ? '\n        ' : ''}<!-- ${tabName} Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="${tabName.toLowerCase()}" data-field-names="${relatedEntitySearchTerms}" data-section-key="${sectionKey}">
-            <div class="collapsible-header" (click)="toggleSection('${sectionKey}')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="${iconClass}"></i>
-                    <h3>
-                        <span class="section-name">${tabName}</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['${sectionKey}'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['${sectionKey}'] === 0">
-                            {{sectionRowCounts['${sectionKey}']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.${sectionKey} ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.${sectionKey}" *ngIf="record.IsSaved">
-                <div class="form-body">
+            // Determine slot based on DisplayLocation
+            const slot = relatedEntity.DisplayLocation === 'Before Field Tabs' ? 'before-panels' : 'after-panels';
+
+            const tabCode = `${index > 0 ? '\n' : ''}    <!-- ${tabName} Section -->
+    <mj-collapsible-panel slot="${slot}"
+        sectionKey="${sectionKey}"
+        sectionName="${tabName}"
+        icon="${iconClass}"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('${sectionKey}')">
+        <div *ngIf="record.IsSaved">
 ${componentCodeWithIndent}
-                </div>
-            </div>
-        </div>`
+        </div>
+    </mj-collapsible-panel>`
 
             tabs.push({
                 Type: GeneratedFormSectionType.Category,
@@ -1083,47 +1029,20 @@ ${componentCodeWithIndent}
        * @returns Generated HTML with splitter layout
        */
       protected generateSingleEntityHTMLWithSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const sectionControlsHTML = this.generateSectionControlsHTML(additionalSections, relatedEntitySections);
-          const htmlCode: string =  `<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this">${sectionControlsHTML}</mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
-            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
+          const htmlCode: string =  `<mj-record-form-container [record]="record" [formComponent]="this">
+    <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
+        <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
 ${this.innerTopAreaHTML(topArea)}
-            </kendo-splitter-pane>
-            <kendo-splitter-pane>
+        </kendo-splitter-pane>
+        <kendo-splitter-pane>
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
-            </kendo-splitter-pane>
-        </kendo-splitter>
-    </form>
-</div>
+        </kendo-splitter-pane>
+    </kendo-splitter>
+</mj-record-form-container>
         `
           return htmlCode;
       }
       
-      /**
-       * Generates section controls HTML for toolbar projection (4+ sections only)
-       * @param additionalSections Array of field-based form sections
-       * @param relatedEntitySections Array of related entity sections
-       * @returns HTML string for toolbar section controls, or empty string
-       */
-      protected generateSectionControlsHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const sectionsToRender = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top);
-          const totalSections = sectionsToRender.length + relatedEntitySections.length;
-
-          // Only show section controls if there are 4+ sections
-          if (totalSections < 4) return '';
-
-          return `
-            <mj-form-section-controls
-                [expandedCount]="getExpandedCount()"
-                [visibleCount]="getVisibleSectionCount()"
-                (expandAll)="expandAllSections()"
-                (collapseAll)="collapseAllSections()"
-                (filterChange)="onFilterChange($event)">
-            </mj-form-section-controls>`;
-      }
-
       /**
        * Generates the inner HTML for the top area section
        * @param topArea The top area content
@@ -1147,29 +1066,38 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
         // Filter out Top sections as they're handled separately
         const sectionsToRender = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top);
 
-        // Combine field sections and related entity sections into panels, respecting DisplayLocation
-        if (relatedEntitySections.length > 0) {
-            const relatedEntityBeforePanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
-            const relatedEntityAfterPanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
+        // Order: before-panels, field-panels, after-panels
+        // The RecordFormContainer handles the related-entity-grid wrapper via named slots
+        const beforePanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
+        const afterPanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
 
-            // Wrap related entity sections in grid container
-            const beforePanelsHTML = relatedEntityBeforePanels.length > 0
-                ? `        <div class="related-entity-grid">\n${relatedEntityBeforePanels.map(s => s.TabCode).join('\n')}\n        </div>`
-                : '';
-            const afterPanelsHTML = relatedEntityAfterPanels.length > 0
-                ? `        <div class="related-entity-grid">\n${relatedEntityAfterPanels.map(s => s.TabCode).join('\n')}\n        </div>`
-                : '';
-            const fieldPanelsHTML = sectionsToRender.map(s => s.TabCode).join('\n');
+        const parts: string[] = [];
 
-            return `        <div class="form-panels-container">
-${beforePanelsHTML}${beforePanelsHTML && fieldPanelsHTML ? '\n' : ''}${fieldPanelsHTML}${fieldPanelsHTML && afterPanelsHTML ? '\n' : ''}${afterPanelsHTML}
-        </div>`
-        } else {
-            // No related entities, just show field panels
-            return `        <div class="form-panels-container">
-${sectionsToRender.map(s => s.TabCode).join('\n')}
-        </div>`
+        // Add before panels if any
+        if (beforePanels.length > 0) {
+            parts.push('    <!-- ========================================');
+            parts.push('         RELATED ENTITY PANELS - BEFORE');
+            parts.push('         ======================================== -->');
+            parts.push(beforePanels.map(s => s.TabCode).join('\n'));
         }
+
+        // Add field panels with header comment
+        if (sectionsToRender.length > 0) {
+            parts.push('    <!-- ========================================');
+            parts.push('         FIELD PANELS');
+            parts.push('         ======================================== -->');
+            parts.push(sectionsToRender.map(s => s.TabCode).join('\n'));
+        }
+
+        // Add after panels if any
+        if (afterPanels.length > 0) {
+            parts.push('    <!-- ========================================');
+            parts.push('         RELATED ENTITY PANELS - AFTER');
+            parts.push('         ======================================== -->');
+            parts.push(afterPanels.map(s => s.TabCode).join('\n'));
+        }
+
+        return parts.join('\n');
       }
 
       /**
@@ -1200,14 +1128,10 @@ ${sectionsToRender.map(s => s.TabCode).join('\n')}
        * @returns Generated HTML without splitter layout
        */
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const sectionControlsHTML = this.generateSectionControlsHTML(additionalSections, relatedEntitySections);
-          const htmlCode: string =  `<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this">${sectionControlsHTML}</mj-form-toolbar>
+          const htmlCode: string =  `<mj-record-form-container [record]="record" [formComponent]="this">
 ${this.innerTopAreaHTML(topArea)}
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
-    </form>
-</div>
+</mj-record-form-container>
         `
           return htmlCode;
       }

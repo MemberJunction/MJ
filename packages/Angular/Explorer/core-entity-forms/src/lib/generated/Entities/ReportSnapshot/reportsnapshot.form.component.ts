@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Report Snapshots') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-reportsnapshot-form',
-    templateUrl: './reportsnapshot.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './reportsnapshot.form.component.html'
 })
 export class ReportSnapshotFormComponent extends BaseFormComponent {
     public record!: ReportSnapshotEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        snapshotIdentification: true,
-        snapshotDescriptors: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'snapshotIdentification', sectionName: 'Snapshot Identification', isExpanded: true },
+            { sectionKey: 'snapshotDescriptors', sectionName: 'Snapshot Descriptors', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

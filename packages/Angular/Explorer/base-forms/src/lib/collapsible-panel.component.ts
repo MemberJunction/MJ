@@ -12,17 +12,25 @@ import { MJFormField } from './base-field-component';
  */
 @Component({
     selector: 'mj-collapsible-panel',
-    changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <div
             class="form-card collapsible-card"
+            [class.related-entity]="variant === 'related-entity'"
             [class.search-hidden]="!isVisible"
             [attr.data-section-name]="sectionName"
             [attr.data-field-names]="fieldNames">
             <div class="collapsible-header" (click)="toggle()" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i [class]="icon"></i>
-                    <h3><span class="section-name" [innerHTML]="displayName"></span></h3>
+                    <h3>
+                        <span class="section-name" [innerHTML]="displayName"></span>
+                        @if (badgeCount !== undefined) {
+                            <span class="row-count-badge"
+                                  [class.zero-rows]="badgeCount === 0">
+                                {{badgeCount}}
+                            </span>
+                        }
+                    </h3>
                 </div>
                 <div class="collapse-icon">
                     <i [class]="expanded ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
@@ -113,6 +121,46 @@ import { MJFormField } from './base-field-component';
             padding: 24px;
         }
 
+        /* Related Entity Sections - Visual Distinction */
+        .form-card.related-entity {
+            background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
+            border-left: 3px solid #3b82f6;
+        }
+
+        .form-card.related-entity .collapsible-header {
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+        }
+
+        .form-card.related-entity .collapsible-header:hover {
+            background: linear-gradient(135deg, #bfdbfe 0%, #e0f2fe 100%);
+            border-bottom-color: #3b82f6;
+        }
+
+        .form-card.related-entity .collapsible-title i {
+            color: #3b82f6;
+        }
+
+        /* Row count badge for related entity sections */
+        .collapsible-title .row-count-badge {
+            background: #10b981;
+            color: white;
+            padding: 3px 6px 2px 6px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+            vertical-align: middle;
+            position: relative;
+            top: -2px;
+            display: inline-block;
+            line-height: 1;
+        }
+
+        /* Gray badge for zero rows (loaded but empty) */
+        .collapsible-title .row-count-badge.zero-rows {
+            background: #9ca3af;
+        }
+
         /* Search highlighting */
         .collapsible-title h3 ::ng-deep .search-highlight {
             background-color: #fef08a;
@@ -124,13 +172,19 @@ import { MJFormField } from './base-field-component';
     `]
 })
 export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
+    @Input() sectionKey: string = '';
     @Input() sectionName: string = '';
     @Input() icon: string = 'fa fa-folder';
-    @Input() expanded: boolean = true;
+    @Input() form: any; // Reference to the form component for method calls
     @Input() searchFilter: string = '';
-    @Output() expandedChange = new EventEmitter<boolean>();
+    @Input() variant: 'default' | 'related-entity' = 'default';
+    @Input() badgeCount: number | undefined;
 
     @ContentChildren(MJFormField, { descendants: true }) fieldComponents!: QueryList<MJFormField>;
+
+    get expanded(): boolean {
+        return this.form ? this.form.IsSectionExpanded(this.sectionKey) : true;
+    }
 
     displayName: string = '';
     fieldNames: string = '';
@@ -162,8 +216,10 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
     }
 
     toggle(): void {
-        this.expanded = !this.expanded;
-        this.expandedChange.emit(this.expanded);
+        if (this.form) {
+            this.form.SetSectionExpanded(this.sectionKey, !this.expanded);
+            this.cdr.markForCheck();
+        }
     }
 
     private updateFieldNames(): void {

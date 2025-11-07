@@ -1,21 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Identifier Keys Section -->
-        <div class="form-card collapsible-card" data-section-name="identifier keys" data-field-names="contentsourceid content source id contentsourcetypeparamid content source type param id">
-            <div class="collapsible-header" (click)="toggleSection('identifierKeys')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-key"></i>
-                    <h3><span class="section-name">Identifier Keys</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.identifierKeys ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identifierKeys">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Identifier Keys Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="identifierKeys"
+        sectionName="Identifier Keys"
+        icon="fa fa-key"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -33,23 +27,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Parameter Settings Section -->
-        <div class="form-card collapsible-card" data-section-name="parameter settings" data-field-names="value contentsource content source">
-            <div class="collapsible-header" (click)="toggleSection('parameterSettings')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-sliders-h"></i>
-                    <h3><span class="section-name">Parameter Settings</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.parameterSettings ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.parameterSettings">
-                <div class="form-body">
+    <!-- Parameter Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="parameterSettings"
+        sectionName="Parameter Settings"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -65,23 +51,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -97,10 +75,6 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

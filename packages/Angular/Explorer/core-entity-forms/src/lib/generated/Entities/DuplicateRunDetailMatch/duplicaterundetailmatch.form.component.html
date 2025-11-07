@@ -1,21 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Match Results Section -->
-        <div class="form-card collapsible-card" data-section-name="match results" data-field-names="duplicaterundetailid duplicate run detail id matchsource match source matchrecordid match record id matchprobability match probability matchedat matched at">
-            <div class="collapsible-header" (click)="toggleSection('matchResults')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-search"></i>
-                    <h3><span class="section-name">Match Results</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.matchResults ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.matchResults">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Match Results Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="matchResults"
+        sectionName="Match Results"
+        icon="fa fa-search"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -54,23 +48,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Resolution Management Section -->
-        <div class="form-card collapsible-card" data-section-name="resolution management" data-field-names="action approvalstatus approval status recordmergelogid record merge log id mergestatus merge status mergedat merged at">
-            <div class="collapsible-header" (click)="toggleSection('resolutionManagement')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tasks"></i>
-                    <h3><span class="section-name">Resolution Management</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.resolutionManagement ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resolutionManagement">
-                <div class="form-body">
+    <!-- Resolution Management Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="resolutionManagement"
+        sectionName="Resolution Management"
+        icon="fa fa-tasks"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -109,23 +95,39 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [searchFilter]="searchFilter">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DuplicateRunDetail"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordMergeLog"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -141,10 +143,6 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

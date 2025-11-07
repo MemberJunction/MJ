@@ -6,20 +6,17 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Entity Settings') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entitysetting-form',
-    templateUrl: './entitysetting.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './entitysetting.form.component.html'
 })
 export class EntitySettingFormComponent extends BaseFormComponent {
     public record!: EntitySettingEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        entityConfiguration: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'entityConfiguration', sectionName: 'Entity Configuration', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

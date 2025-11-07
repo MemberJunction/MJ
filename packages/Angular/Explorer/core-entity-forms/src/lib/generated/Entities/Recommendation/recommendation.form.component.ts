@@ -2,29 +2,24 @@ import { Component } from '@angular/core';
 import { RecommendationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Recommendations') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-recommendation-form',
-    templateUrl: './recommendation.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './recommendation.form.component.html'
 })
 export class RecommendationFormComponent extends BaseFormComponent {
     public record!: RecommendationEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        recommendationCore: true,
-        systemMetadata: false,
-        recommendationItems: false
-    };
-
-    // Row counts for related entity sections (populated after grids load)
-    public sectionRowCounts: { [key: string]: number } = {};
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'recommendationCore', sectionName: 'Recommendation Core', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'recommendationItems', sectionName: 'Recommendation Items', isExpanded: false }
+        ]);
     }
 }
 

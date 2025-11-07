@@ -1,39 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Category Details Section -->
-        <div class="form-card collapsible-card" data-section-name="category details" data-field-names="name description">
-            <div class="collapsible-header" (click)="toggleSection('categoryDetails')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tag"></i>
-                    <h3><span class="section-name">Category Details</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.categoryDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.categoryDetails">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Category Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="categoryDetails"
+        sectionName="Category Details"
+        icon="fa fa-tag"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -49,23 +25,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Organizational Hierarchy Section -->
-        <div class="form-card collapsible-card" data-section-name="organizational hierarchy" data-field-names="parentid parent id parent rootparentid root parent id">
-            <div class="collapsible-header" (click)="toggleSection('organizationalHierarchy')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-sitemap"></i>
-                    <h3><span class="section-name">Organizational Hierarchy</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.organizationalHierarchy ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.organizationalHierarchy">
-                <div class="form-body">
+    <!-- Organizational Hierarchy Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="organizationalHierarchy"
+        sectionName="Organizational Hierarchy"
+        icon="fa fa-sitemap"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -90,23 +58,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Linked Entities Section -->
-        <div class="form-card collapsible-card" data-section-name="linked entities" data-field-names="entityid entity id userid user id entity user">
-            <div class="collapsible-header" (click)="toggleSection('linkedEntities')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3><span class="section-name">Linked Entities</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.linkedEntities ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.linkedEntities">
-                <div class="form-body">
+    <!-- Linked Entities Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="linkedEntities"
+        sectionName="Linked Entities"
+        icon="fa fa-link"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -140,23 +100,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -172,76 +124,51 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- User View Categories Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="user view categories" data-field-names="user view categories" data-section-key="userViewCategories">
-            <div class="collapsible-header" (click)="toggleSection('userViewCategories')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-folder-open"></i>
-                    <h3>
-                        <span class="section-name">User View Categories</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['userViewCategories'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['userViewCategories'] === 0">
-                            {{sectionRowCounts['userViewCategories']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.userViewCategories ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.userViewCategories" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('User View Categories','ParentID')"
-                        [NewRecordValues]="NewRecordValues('User View Categories')"
-                        [AllowLoad]="IsCurrentSection('userViewCategories')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['userViewCategories'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- User View Categories Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="userViewCategories"
+        sectionName="User View Categories"
+        icon="fa fa-folder-open"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('userViewCategories')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('User View Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('User View Categories')"
+                [AllowLoad]="IsSectionExpanded('userViewCategories')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('userViewCategories', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- User Views Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="user views" data-field-names="user views" data-section-key="userViews">
-            <div class="collapsible-header" (click)="toggleSection('userViews')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa-solid fa-table-cells"></i>
-                    <h3>
-                        <span class="section-name">User Views</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['userViews'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['userViews'] === 0">
-                            {{sectionRowCounts['userViews']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.userViews ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.userViews" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('User Views','CategoryID')"
-                        [NewRecordValues]="NewRecordValues('User Views')"
-                        [AllowLoad]="IsCurrentSection('userViews')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['userViews'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- User Views Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="userViews"
+        sectionName="User Views"
+        icon="fa-solid fa-table-cells"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('userViews')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('User Views','CategoryID')"
+                [NewRecordValues]="NewRecordValues('User Views')"
+                [AllowLoad]="IsSectionExpanded('userViews')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('userViews', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

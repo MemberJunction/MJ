@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Audit Logs') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-auditlog-form',
-    templateUrl: './auditlog.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './auditlog.form.component.html'
 })
 export class AuditLogFormComponent extends BaseFormComponent {
     public record!: AuditLogEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        auditEntry: true,
-        targetEntityReference: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'auditEntry', sectionName: 'Audit Entry', isExpanded: true },
+            { sectionKey: 'targetEntityReference', sectionName: 'Target Entity Reference', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

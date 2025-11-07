@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: Report User States') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-reportuserstate-form',
-    templateUrl: './reportuserstate.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './reportuserstate.form.component.html'
 })
 export class ReportUserStateFormComponent extends BaseFormComponent {
     public record!: ReportUserStateEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        recordKeys: true,
-        interactionDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'recordKeys', sectionName: 'Record Keys', isExpanded: true },
+            { sectionKey: 'interactionDetails', sectionName: 'Interaction Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

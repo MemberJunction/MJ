@@ -6,20 +6,17 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Content Item Tags') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contentitemtag-form',
-    templateUrl: './contentitemtag.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './contentitemtag.form.component.html'
 })
 export class ContentItemTagFormComponent extends BaseFormComponent {
     public record!: ContentItemTagEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        tagAssociation: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'tagAssociation', sectionName: 'Tag Association', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

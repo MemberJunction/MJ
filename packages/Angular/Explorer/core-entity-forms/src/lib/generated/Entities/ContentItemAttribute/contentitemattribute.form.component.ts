@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Content Item Attributes') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contentitemattribute-form',
-    templateUrl: './contentitemattribute.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './contentitemattribute.form.component.html'
 })
 export class ContentItemAttributeFormComponent extends BaseFormComponent {
     public record!: ContentItemAttributeEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        recordMetadata: false,
-        attributeData: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'recordMetadata', sectionName: 'Record Metadata', isExpanded: false },
+            { sectionKey: 'attributeData', sectionName: 'Attribute Data', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

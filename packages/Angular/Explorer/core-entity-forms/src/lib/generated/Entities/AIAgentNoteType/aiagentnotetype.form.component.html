@@ -1,57 +1,25 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Identifier Section -->
-        <div class="form-card collapsible-card" data-section-name="identifier" data-field-names="">
-            <div class="collapsible-header" (click)="toggleSection('identifier')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-key"></i>
-                    <h3><span class="section-name">Identifier</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.identifier ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.identifier">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Identifier Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="identifier"
+        sectionName="Identifier"
+        icon="fa fa-key"
+        [form]="this"
+        [searchFilter]="searchFilter">
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Note Type Definition Section -->
-        <div class="form-card collapsible-card" data-section-name="note type definition" data-field-names="name description priority status">
-            <div class="collapsible-header" (click)="toggleSection('noteTypeDefinition')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-file-alt"></i>
-                    <h3><span class="section-name">Note Type Definition</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.noteTypeDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.noteTypeDefinition">
-                <div class="form-body">
+    <!-- Note Type Definition Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="noteTypeDefinition"
+        sectionName="Note Type Definition"
+        icon="fa fa-file-alt"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -81,23 +49,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -113,44 +73,30 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- AIAgent Notes Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="aiagent notes" data-field-names="ai agent notes" data-section-key="aIAgentNotes">
-            <div class="collapsible-header" (click)="toggleSection('aIAgentNotes')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-robot"></i>
-                    <h3>
-                        <span class="section-name">AIAgent Notes</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['aIAgentNotes'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['aIAgentNotes'] === 0">
-                            {{sectionRowCounts['aIAgentNotes']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.aIAgentNotes ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIAgentNotes" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','AgentNoteTypeID')"
-                        [NewRecordValues]="NewRecordValues('AI Agent Notes')"
-                        [AllowLoad]="IsCurrentSection('aIAgentNotes')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['aIAgentNotes'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- AIAgent Notes Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIAgentNotes"
+        sectionName="AIAgent Notes"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('aIAgentNotes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','AgentNoteTypeID')"
+                [NewRecordValues]="NewRecordValues('AI Agent Notes')"
+                [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

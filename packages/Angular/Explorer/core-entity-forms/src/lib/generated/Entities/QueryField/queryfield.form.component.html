@@ -1,21 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Field Definition & Presentation Section -->
-        <div class="form-card collapsible-card" data-section-name="field definition & presentation" data-field-names="name description sequence detectionmethod detection method autodetectconfidencescore auto detect confidence score query">
-            <div class="collapsible-header" (click)="toggleSection('fieldDefinitionPresentation')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tag"></i>
-                    <h3><span class="section-name">Field Definition & Presentation</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.fieldDefinitionPresentation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.fieldDefinitionPresentation">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Field Definition & Presentation Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="fieldDefinitionPresentation"
+        sectionName="Field Definition & Presentation"
+        icon="fa fa-tag"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -59,23 +53,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Data Type & Source Mapping Section -->
-        <div class="form-card collapsible-card" data-section-name="data type & source mapping" data-field-names="sqlbasetype sqlbase type sqlfulltype sqlfull type sourceentityid source entity id sourcefieldname source field name iscomputed is computed computationdescription computation description issummary is summary summarydescription summary description sourceentity source entity">
-            <div class="collapsible-header" (click)="toggleSection('dataTypeSourceMapping')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3><span class="section-name">Data Type & Source Mapping</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.dataTypeSourceMapping ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.dataTypeSourceMapping">
-                <div class="form-body">
+    <!-- Data Type & Source Mapping Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="dataTypeSourceMapping"
+        sectionName="Data Type & Source Mapping"
+        icon="fa fa-database"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -142,23 +128,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="queryid query id __mj_createdat __mj _created at __mj_updatedat __mj _updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -183,10 +161,6 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

@@ -6,21 +6,19 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'Entity Communication Fields') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entitycommunicationfield-form',
-    templateUrl: './entitycommunicationfield.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './entitycommunicationfield.form.component.html'
 })
 export class EntityCommunicationFieldFormComponent extends BaseFormComponent {
     public record!: EntityCommunicationFieldEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        identification: true,
-        mappingConfiguration: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identification', sectionName: 'Identification', isExpanded: true },
+            { sectionKey: 'mappingConfiguration', sectionName: 'Mapping Configuration', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

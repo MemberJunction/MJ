@@ -1,39 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Model Information Section -->
-        <div class="form-card collapsible-card" data-section-name="model information" data-field-names="name description">
-            <div class="collapsible-header" (click)="toggleSection('modelInformation')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-info-circle"></i>
-                    <h3><span class="section-name">Model Information</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.modelInformation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.modelInformation">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Model Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="modelInformation"
+        sectionName="Model Information"
+        icon="fa fa-info-circle"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -49,23 +25,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -81,76 +49,51 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- AI Models Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai models" data-field-names="ai models" data-section-key="aIModels">
-            <div class="collapsible-header" (click)="toggleSection('aIModels')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-robot"></i>
-                    <h3>
-                        <span class="section-name">AI Models</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['aIModels'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['aIModels'] === 0">
-                            {{sectionRowCounts['aIModels']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.aIModels ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIModels" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Models','AIModelTypeID')"
-                        [NewRecordValues]="NewRecordValues('AI Models')"
-                        [AllowLoad]="IsCurrentSection('aIModels')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['aIModels'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- AI Models Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIModels"
+        sectionName="AI Models"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('aIModels')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Models','AIModelTypeID')"
+                [NewRecordValues]="NewRecordValues('AI Models')"
+                [AllowLoad]="IsSectionExpanded('aIModels')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIModels', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- AI Prompts Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="ai prompts" data-field-names="ai prompts" data-section-key="aIPrompts">
-            <div class="collapsible-header" (click)="toggleSection('aIPrompts')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-robot"></i>
-                    <h3>
-                        <span class="section-name">AI Prompts</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['aIPrompts'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['aIPrompts'] === 0">
-                            {{sectionRowCounts['aIPrompts']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.aIPrompts ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.aIPrompts" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','AIModelTypeID')"
-                        [NewRecordValues]="NewRecordValues('AI Prompts')"
-                        [AllowLoad]="IsCurrentSection('aIPrompts')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['aIPrompts'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- AI Prompts Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIPrompts"
+        sectionName="AI Prompts"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('aIPrompts')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','AIModelTypeID')"
+                [NewRecordValues]="NewRecordValues('AI Prompts')"
+                [AllowLoad]="IsSectionExpanded('aIPrompts')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

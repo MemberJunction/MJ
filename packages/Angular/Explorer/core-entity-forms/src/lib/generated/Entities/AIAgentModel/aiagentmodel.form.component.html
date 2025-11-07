@@ -1,21 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Mapping Identifiers Section -->
-        <div class="form-card collapsible-card" data-section-name="mapping identifiers" data-field-names="agentid agent id modelid model id">
-            <div class="collapsible-header" (click)="toggleSection('mappingIdentifiers')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3><span class="section-name">Mapping Identifiers</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.mappingIdentifiers ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mappingIdentifiers">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Mapping Identifiers Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="mappingIdentifiers"
+        sectionName="Mapping Identifiers"
+        icon="fa fa-link"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -35,23 +29,15 @@
             LinkComponentType="Search"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Agent Model Configuration Section -->
-        <div class="form-card collapsible-card" data-section-name="agent model configuration" data-field-names="active priority agent model">
-            <div class="collapsible-header" (click)="toggleSection('agentModelConfiguration')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-sliders-h"></i>
-                    <h3><span class="section-name">Agent Model Configuration</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.agentModelConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.agentModelConfiguration">
-                <div class="form-body">
+    <!-- Agent Model Configuration Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="agentModelConfiguration"
+        sectionName="Agent Model Configuration"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -81,23 +67,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -113,10 +91,6 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

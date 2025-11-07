@@ -1,21 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Dataset Core Section -->
-        <div class="form-card collapsible-card" data-section-name="dataset core" data-field-names="name description">
-            <div class="collapsible-header" (click)="toggleSection('datasetCore')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3><span class="section-name">Dataset Core</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.datasetCore ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.datasetCore">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Dataset Core Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="datasetCore"
+        sectionName="Dataset Core"
+        icon="fa fa-database"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -31,23 +25,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -63,44 +49,30 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Dataset Items Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="dataset items" data-field-names="dataset items" data-section-key="datasetItems">
-            <div class="collapsible-header" (click)="toggleSection('datasetItems')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3>
-                        <span class="section-name">Dataset Items</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['datasetItems'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['datasetItems'] === 0">
-                            {{sectionRowCounts['datasetItems']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.datasetItems ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.datasetItems" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Dataset Items','DatasetName')"
-                        [NewRecordValues]="NewRecordValues('Dataset Items')"
-                        [AllowLoad]="IsCurrentSection('datasetItems')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['datasetItems'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Dataset Items Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="datasetItems"
+        sectionName="Dataset Items"
+        icon="fa fa-database"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('datasetItems')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Dataset Items','DatasetName')"
+                [NewRecordValues]="NewRecordValues('Dataset Items')"
+                [AllowLoad]="IsSectionExpanded('datasetItems')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('datasetItems', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

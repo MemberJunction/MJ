@@ -2,29 +2,23 @@ import { Component } from '@angular/core';
 import { DatasetEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Datasets') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-dataset-form',
-    templateUrl: './dataset.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './dataset.form.component.html'
 })
 export class DatasetFormComponent extends BaseFormComponent {
     public record!: DatasetEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        datasetCore: true,
-        systemMetadata: false,
-        datasetItems: false
-    };
-
-    // Row counts for related entity sections (populated after grids load)
-    public sectionRowCounts: { [key: string]: number } = {};
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'datasetCore', sectionName: 'Dataset Core', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'datasetItems', sectionName: 'Dataset Items', isExpanded: false }
+        ]);
     }
 }
 

@@ -1,21 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Invocation Type Definition Section -->
-        <div class="form-card collapsible-card" data-section-name="invocation type definition" data-field-names="name description displaysequence display sequence">
-            <div class="collapsible-header" (click)="toggleSection('invocationTypeDefinition')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tag"></i>
-                    <h3><span class="section-name">Invocation Type Definition</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.invocationTypeDefinition ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.invocationTypeDefinition">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Invocation Type Definition Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="invocationTypeDefinition"
+        sectionName="Invocation Type Definition"
+        icon="fa fa-tag"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -38,23 +32,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -70,44 +56,30 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Entity Action Invocations Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity action invocations" data-field-names="entity action invocations" data-section-key="entityActionInvocations">
-            <div class="collapsible-header" (click)="toggleSection('entityActionInvocations')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3>
-                        <span class="section-name">Entity Action Invocations</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['entityActionInvocations'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['entityActionInvocations'] === 0">
-                            {{sectionRowCounts['entityActionInvocations']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.entityActionInvocations ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityActionInvocations" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Invocations','InvocationTypeID')"
-                        [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
-                        [AllowLoad]="IsCurrentSection('entityActionInvocations')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['entityActionInvocations'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Entity Action Invocations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="entityActionInvocations"
+        sectionName="Entity Action Invocations"
+        icon="fa fa-link"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('entityActionInvocations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Invocations','InvocationTypeID')"
+                [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
+                [AllowLoad]="IsSectionExpanded('entityActionInvocations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('entityActionInvocations', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

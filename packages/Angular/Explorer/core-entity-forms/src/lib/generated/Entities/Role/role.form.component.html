@@ -1,39 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 9 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Core Role Details Section -->
-        <div class="form-card collapsible-card" data-section-name="core role details" data-field-names="name description directoryid directory id sqlname">
-            <div class="collapsible-header" (click)="toggleSection('coreRoleDetails')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-shield-alt"></i>
-                    <h3><span class="section-name">Core Role Details</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.coreRoleDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.coreRoleDetails">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Core Role Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="coreRoleDetails"
+        sectionName="Core Role Details"
+        icon="fa fa-shield-alt"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -63,23 +39,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat __mj _created at __mj_updatedat __mj _updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -95,236 +63,156 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Authorization Roles Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="authorization roles" data-field-names="authorization roles" data-section-key="authorizationRoles">
-            <div class="collapsible-header" (click)="toggleSection('authorizationRoles')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-user-shield"></i>
-                    <h3>
-                        <span class="section-name">Authorization Roles</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['authorizationRoles'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['authorizationRoles'] === 0">
-                            {{sectionRowCounts['authorizationRoles']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.authorizationRoles ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.authorizationRoles" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','RoleName')"
-                        [NewRecordValues]="NewRecordValues('Authorization Roles')"
-                        [AllowLoad]="IsCurrentSection('authorizationRoles')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['authorizationRoles'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Authorization Roles Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="authorizationRoles"
+        sectionName="Authorization Roles"
+        icon="fa fa-user-shield"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('authorizationRoles')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','RoleName')"
+                [NewRecordValues]="NewRecordValues('Authorization Roles')"
+                [AllowLoad]="IsSectionExpanded('authorizationRoles')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('authorizationRoles', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- Employee Roles Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="employee roles" data-field-names="employee roles" data-section-key="employeeRoles">
-            <div class="collapsible-header" (click)="toggleSection('employeeRoles')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-user-tag"></i>
-                    <h3>
-                        <span class="section-name">Employee Roles</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['employeeRoles'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['employeeRoles'] === 0">
-                            {{sectionRowCounts['employeeRoles']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.employeeRoles ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.employeeRoles" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','RoleID')"
-                        [NewRecordValues]="NewRecordValues('Employee Roles')"
-                        [AllowLoad]="IsCurrentSection('employeeRoles')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['employeeRoles'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Employee Roles Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="employeeRoles"
+        sectionName="Employee Roles"
+        icon="fa fa-user-tag"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('employeeRoles')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','RoleID')"
+                [NewRecordValues]="NewRecordValues('Employee Roles')"
+                [AllowLoad]="IsSectionExpanded('employeeRoles')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('employeeRoles', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- Entity Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="entity permissions" data-field-names="entity permissions" data-section-key="entityPermissions">
-            <div class="collapsible-header" (click)="toggleSection('entityPermissions')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-shield-alt"></i>
-                    <h3>
-                        <span class="section-name">Entity Permissions</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['entityPermissions'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['entityPermissions'] === 0">
-                            {{sectionRowCounts['entityPermissions']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.entityPermissions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.entityPermissions" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','RoleName')"
-                        [NewRecordValues]="NewRecordValues('Entity Permissions')"
-                        [AllowLoad]="IsCurrentSection('entityPermissions')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['entityPermissions'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Entity Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="entityPermissions"
+        sectionName="Entity Permissions"
+        icon="fa fa-shield-alt"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('entityPermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','RoleName')"
+                [NewRecordValues]="NewRecordValues('Entity Permissions')"
+                [AllowLoad]="IsSectionExpanded('entityPermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('entityPermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- Query Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="query permissions" data-field-names="query permissions" data-section-key="queryPermissions">
-            <div class="collapsible-header" (click)="toggleSection('queryPermissions')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-shield-alt"></i>
-                    <h3>
-                        <span class="section-name">Query Permissions</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['queryPermissions'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['queryPermissions'] === 0">
-                            {{sectionRowCounts['queryPermissions']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.queryPermissions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.queryPermissions" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','RoleName')"
-                        [NewRecordValues]="NewRecordValues('Query Permissions')"
-                        [AllowLoad]="IsCurrentSection('queryPermissions')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['queryPermissions'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Query Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="queryPermissions"
+        sectionName="Query Permissions"
+        icon="fa fa-shield-alt"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('queryPermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','RoleName')"
+                [NewRecordValues]="NewRecordValues('Query Permissions')"
+                [AllowLoad]="IsSectionExpanded('queryPermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- User Roles Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="user roles" data-field-names="user roles" data-section-key="userRoles">
-            <div class="collapsible-header" (click)="toggleSection('userRoles')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-user-shield"></i>
-                    <h3>
-                        <span class="section-name">User Roles</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['userRoles'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['userRoles'] === 0">
-                            {{sectionRowCounts['userRoles']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.userRoles ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.userRoles" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('User Roles','RoleName')"
-                        [NewRecordValues]="NewRecordValues('User Roles')"
-                        [AllowLoad]="IsCurrentSection('userRoles')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['userRoles'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- User Roles Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="userRoles"
+        sectionName="User Roles"
+        icon="fa fa-user-shield"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('userRoles')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('User Roles','RoleName')"
+                [NewRecordValues]="NewRecordValues('User Roles')"
+                [AllowLoad]="IsSectionExpanded('userRoles')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('userRoles', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- Resource Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="resource permissions" data-field-names="resource permissions" data-section-key="resourcePermissions">
-            <div class="collapsible-header" (click)="toggleSection('resourcePermissions')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-lock"></i>
-                    <h3>
-                        <span class="section-name">Resource Permissions</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['resourcePermissions'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['resourcePermissions'] === 0">
-                            {{sectionRowCounts['resourcePermissions']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.resourcePermissions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resourcePermissions" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','RoleID')"
-                        [NewRecordValues]="NewRecordValues('Resource Permissions')"
-                        [AllowLoad]="IsCurrentSection('resourcePermissions')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['resourcePermissions'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Resource Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resourcePermissions"
+        sectionName="Resource Permissions"
+        icon="fa fa-lock"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('resourcePermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','RoleID')"
+                [NewRecordValues]="NewRecordValues('Resource Permissions')"
+                [AllowLoad]="IsSectionExpanded('resourcePermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- MJ: AI Agent Permissions Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="mj: ai agent permissions" data-field-names="mj: ai agent permissions" data-section-key="mJAIAgentPermissions">
-            <div class="collapsible-header" (click)="toggleSection('mJAIAgentPermissions')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-robot"></i>
-                    <h3>
-                        <span class="section-name">MJ: AI Agent Permissions</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['mJAIAgentPermissions'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['mJAIAgentPermissions'] === 0">
-                            {{sectionRowCounts['mJAIAgentPermissions']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.mJAIAgentPermissions ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mJAIAgentPermissions" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','RoleID')"
-                        [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
-                        [AllowLoad]="IsCurrentSection('mJAIAgentPermissions')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['mJAIAgentPermissions'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- MJ: AI Agent Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentPermissions"
+        sectionName="MJ: AI Agent Permissions"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','RoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

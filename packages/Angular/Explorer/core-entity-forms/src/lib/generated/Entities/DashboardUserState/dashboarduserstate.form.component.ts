@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: Dashboard User States') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-dashboarduserstate-form',
-    templateUrl: './dashboarduserstate.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './dashboarduserstate.form.component.html'
 })
 export class DashboardUserStateFormComponent extends BaseFormComponent {
     public record!: DashboardUserStateEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        identifiersKeys: true,
-        dashboardStateDetails: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifiersKeys', sectionName: 'Identifiers & Keys', isExpanded: true },
+            { sectionKey: 'dashboardStateDetails', sectionName: 'Dashboard State Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

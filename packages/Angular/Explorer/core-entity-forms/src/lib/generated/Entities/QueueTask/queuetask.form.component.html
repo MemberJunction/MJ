@@ -1,39 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Task Identity & Queue Section -->
-        <div class="form-card collapsible-card" data-section-name="task identity & queue" data-field-names="queueid queue id queue">
-            <div class="collapsible-header" (click)="toggleSection('taskIdentityQueue')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-tasks"></i>
-                    <h3><span class="section-name">Task Identity & Queue</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.taskIdentityQueue ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.taskIdentityQueue">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Task Identity & Queue Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="taskIdentityQueue"
+        sectionName="Task Identity & Queue"
+        icon="fa fa-tasks"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -51,23 +27,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Execution Status & Timeline Section -->
-        <div class="form-card collapsible-card" data-section-name="execution status & timeline" data-field-names="status startedat started at endedat ended at">
-            <div class="collapsible-header" (click)="toggleSection('executionStatusTimeline')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-clock"></i>
-                    <h3><span class="section-name">Execution Status & Timeline</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.executionStatusTimeline ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.executionStatusTimeline">
-                <div class="form-body">
+    <!-- Execution Status & Timeline Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="executionStatusTimeline"
+        sectionName="Execution Status & Timeline"
+        icon="fa fa-clock"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -90,23 +58,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Payload & Outcome Section -->
-        <div class="form-card collapsible-card" data-section-name="payload & outcome" data-field-names="data options output errormessage error message comments">
-            <div class="collapsible-header" (click)="toggleSection('payloadOutcome')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-file-alt"></i>
-                    <h3><span class="section-name">Payload & Outcome</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.payloadOutcome ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.payloadOutcome">
-                <div class="form-body">
+    <!-- Payload & Outcome Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="payloadOutcome"
+        sectionName="Payload & Outcome"
+        icon="fa fa-file-alt"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -143,23 +103,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -175,10 +127,6 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

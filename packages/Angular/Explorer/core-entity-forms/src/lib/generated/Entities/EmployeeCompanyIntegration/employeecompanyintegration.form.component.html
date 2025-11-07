@@ -1,21 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-panels-container">
-<!-- Integration Mapping Section -->
-        <div class="form-card collapsible-card" data-section-name="integration mapping" data-field-names="employeeid employee id companyintegrationid company integration id companyintegration company integration">
-            <div class="collapsible-header" (click)="toggleSection('integrationMapping')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-link"></i>
-                    <h3><span class="section-name">Integration Mapping</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.integrationMapping ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.integrationMapping">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Integration Mapping Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="integrationMapping"
+        sectionName="Integration Mapping"
+        icon="fa fa-link"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -42,23 +36,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- External Identifier Section -->
-        <div class="form-card collapsible-card" data-section-name="external identifier" data-field-names="externalsystemrecordid external system record isactive is active">
-            <div class="collapsible-header" (click)="toggleSection('externalIdentifier')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-id-badge"></i>
-                    <h3><span class="section-name">External Identifier</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.externalIdentifier ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.externalIdentifier">
-                <div class="form-body">
+    <!-- External Identifier Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="externalIdentifier"
+        sectionName="External Identifier"
+        icon="fa fa-id-badge"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -74,23 +60,32 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [searchFilter]="searchFilter">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="Employee"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -106,10 +101,6 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

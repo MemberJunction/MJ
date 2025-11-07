@@ -1,39 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 6 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Merge Identification Section -->
-        <div class="form-card collapsible-card" data-section-name="merge identification" data-field-names="entityid entity id survivingrecordid surviving record id entity">
-            <div class="collapsible-header" (click)="toggleSection('mergeIdentification')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-id-badge"></i>
-                    <h3><span class="section-name">Merge Identification</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.mergeIdentification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.mergeIdentification">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Merge Identification Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="mergeIdentification"
+        sectionName="Merge Identification"
+        icon="fa fa-id-badge"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -58,23 +34,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- User Actions & Approvals Section -->
-        <div class="form-card collapsible-card" data-section-name="user actions & approvals" data-field-names="initiatedbyuserid initiated by user id approvalstatus approval status approvedbyuserid approved by user id initiatedbyuser initiated by user approvedbyuser approved by user">
-            <div class="collapsible-header" (click)="toggleSection('userActionsApprovals')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-user-check"></i>
-                    <h3><span class="section-name">User Actions & Approvals</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.userActionsApprovals ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.userActionsApprovals">
-                <div class="form-body">
+    <!-- User Actions & Approvals Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="userActionsApprovals"
+        sectionName="User Actions & Approvals"
+        icon="fa fa-user-check"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -115,23 +83,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Execution Details Section -->
-        <div class="form-card collapsible-card" data-section-name="execution details" data-field-names="processingstatus processing status processingstartedat processing started at processingendedat processing ended at processinglog processing log comments">
-            <div class="collapsible-header" (click)="toggleSection('executionDetails')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cogs"></i>
-                    <h3><span class="section-name">Execution Details</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.executionDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.executionDetails">
-                <div class="form-body">
+    <!-- Execution Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="executionDetails"
+        sectionName="Execution Details"
+        icon="fa fa-cogs"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -168,23 +128,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-database"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-database"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -200,76 +152,51 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        <div class="related-entity-grid">
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-        <!-- Duplicate Run Detail Matches Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="duplicate run detail matches" data-field-names="duplicate run detail matches" data-section-key="duplicateRunDetailMatches">
-            <div class="collapsible-header" (click)="toggleSection('duplicateRunDetailMatches')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-clone"></i>
-                    <h3>
-                        <span class="section-name">Duplicate Run Detail Matches</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['duplicateRunDetailMatches'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['duplicateRunDetailMatches'] === 0">
-                            {{sectionRowCounts['duplicateRunDetailMatches']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.duplicateRunDetailMatches ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.duplicateRunDetailMatches" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','RecordMergeLogID')"
-                        [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
-                        [AllowLoad]="IsCurrentSection('duplicateRunDetailMatches')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['duplicateRunDetailMatches'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Duplicate Run Detail Matches Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="duplicateRunDetailMatches"
+        sectionName="Duplicate Run Detail Matches"
+        icon="fa fa-clone"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('duplicateRunDetailMatches')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','RecordMergeLogID')"
+                [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
+                [AllowLoad]="IsSectionExpanded('duplicateRunDetailMatches')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
+    </mj-collapsible-panel>
 
-        <!-- Record Merge Deletion Logs Section -->
-        <div class="form-card collapsible-card related-entity" data-section-name="record merge deletion logs" data-field-names="record merge deletion logs" data-section-key="recordMergeDeletionLogs">
-            <div class="collapsible-header" (click)="toggleSection('recordMergeDeletionLogs')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-history"></i>
-                    <h3>
-                        <span class="section-name">Record Merge Deletion Logs</span>
-                        <span class="row-count-badge"
-                              *ngIf="sectionRowCounts?.['recordMergeDeletionLogs'] !== undefined"
-                              [class.zero-rows]="sectionRowCounts['recordMergeDeletionLogs'] === 0">
-                            {{sectionRowCounts['recordMergeDeletionLogs']}}
-                        </span>
-                    </h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.recordMergeDeletionLogs ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.recordMergeDeletionLogs" *ngIf="record.IsSaved">
-                <div class="form-body">
-                    <mj-user-view-grid
-                        [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs','RecordMergeLogID')"
-                        [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
-                        [AllowLoad]="IsCurrentSection('recordMergeDeletionLogs')"
-                        [EditMode]="GridEditMode()"
-                        (dataLoaded)="sectionRowCounts['recordMergeDeletionLogs'] = $event.totalRowCount"
-                        >
-                    </mj-user-view-grid>
-                </div>
-            </div>
+    <!-- Record Merge Deletion Logs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="recordMergeDeletionLogs"
+        sectionName="Record Merge Deletion Logs"
+        icon="fa fa-history"
+        variant="related-entity"
+        [form]="this"
+        [searchFilter]="searchFilter"
+        [badgeCount]="GetSectionRowCount('recordMergeDeletionLogs')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs','RecordMergeLogID')"
+                [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
+                [AllowLoad]="IsSectionExpanded('recordMergeDeletionLogs')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('recordMergeDeletionLogs', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
         </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

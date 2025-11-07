@@ -2,29 +2,23 @@ import { Component } from '@angular/core';
 import { WorkflowEngineEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Workflow Engines') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-workflowengine-form',
-    templateUrl: './workflowengine.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './workflowengine.form.component.html'
 })
 export class WorkflowEngineFormComponent extends BaseFormComponent {
     public record!: WorkflowEngineEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        engineSpecification: true,
-        systemMetadata: false,
-        workflows: false
-    };
-
-    // Row counts for related entity sections (populated after grids load)
-    public sectionRowCounts: { [key: string]: number } = {};
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'engineSpecification', sectionName: 'Engine Specification', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'workflows', sectionName: 'Workflows', isExpanded: false }
+        ]);
     }
 }
 

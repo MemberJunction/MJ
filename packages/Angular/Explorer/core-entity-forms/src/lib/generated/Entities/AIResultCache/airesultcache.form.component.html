@@ -1,39 +1,15 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form" #form="ngForm">
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-        <div class="form-section-controls">
-            <div class="control-group">
-                <button (click)="expandAllSections()" title="Expand all sections">
-                    <i class="fa fa-expand-alt"></i>Expand All
-                </button>
-                <button (click)="collapseAllSections()" title="Collapse all sections">
-                    <i class="fa fa-compress-alt"></i>Collapse All
-                </button>
-            </div>
-            <input type="text"
-                   class="section-search"
-                   placeholder="Search sections..."
-                   (input)="filterSections($event)"
-                   #sectionSearch>
-            <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
-            </span>
-        </div>
-        <div class="form-panels-container">
-<!-- Prompt Configuration Section -->
-        <div class="form-card collapsible-card" data-section-name="prompt configuration" data-field-names="aipromptid aiprompt id prompttext prompt text configurationid configuration id promptembedding prompt embedding aiprompt configuration">
-            <div class="collapsible-header" (click)="toggleSection('promptConfiguration')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-sliders-h"></i>
-                    <h3><span class="section-name">Prompt Configuration</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.promptConfiguration ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.promptConfiguration">
-                <div class="form-body">
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Prompt Configuration Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="promptConfiguration"
+        sectionName="Prompt Configuration"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -81,23 +57,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Execution Details Section -->
-        <div class="form-card collapsible-card" data-section-name="execution details" data-field-names="aimodelid aimodel id runat run at promptrunid prompt run id aimodel">
-            <div class="collapsible-header" (click)="toggleSection('executionDetails')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-clock"></i>
-                    <h3><span class="section-name">Execution Details</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.executionDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.executionDetails">
-                <div class="form-body">
+    <!-- Execution Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="executionDetails"
+        sectionName="Execution Details"
+        icon="fa fa-clock"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -131,23 +99,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Result Information Section -->
-        <div class="form-card collapsible-card" data-section-name="result information" data-field-names="resulttext result text status expiredon expired on">
-            <div class="collapsible-header" (click)="toggleSection('resultInformation')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-file-alt"></i>
-                    <h3><span class="section-name">Result Information</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.resultInformation ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.resultInformation">
-                <div class="form-body">
+    <!-- Result Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="resultInformation"
+        sectionName="Result Information"
+        icon="fa fa-file-alt"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -170,23 +130,15 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- Stakeholder Links Section -->
-        <div class="form-card collapsible-card" data-section-name="stakeholder links" data-field-names="vendorid vendor id agentid agent id vendor agent">
-            <div class="collapsible-header" (click)="toggleSection('stakeholderLinks')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-user"></i>
-                    <h3><span class="section-name">Stakeholder Links</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.stakeholderLinks ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.stakeholderLinks">
-                <div class="form-body">
+    <!-- Stakeholder Links Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="stakeholderLinks"
+        sectionName="Stakeholder Links"
+        icon="fa fa-user"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -220,23 +172,32 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
+    </mj-collapsible-panel>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [searchFilter]="searchFilter">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="PromptRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [searchFilter]="searchFilter">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -252,10 +213,6 @@
             [EditMode]="EditMode"
         ></mj-form-field>
 
-                </div>
-            </div>
-        </div>
-        </div>
-    </form>
-</div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

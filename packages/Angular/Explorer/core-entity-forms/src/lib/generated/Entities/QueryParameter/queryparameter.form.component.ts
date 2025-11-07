@@ -6,21 +6,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseFormComponent, 'MJ: Query Parameters') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-queryparameter-form',
-    templateUrl: './queryparameter.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './queryparameter.form.component.html'
 })
 export class QueryParameterFormComponent extends BaseFormComponent {
     public record!: QueryParameterEntity;
 
-    // Collapsible section state
-    public sectionsExpanded = {
-        parameterCore: true,
-        parameterGuidanceValidation: true,
-        systemMetadata: false
-    };
-
-    public toggleSection(section: keyof typeof this.sectionsExpanded): void {
-        this.sectionsExpanded[section] = !this.sectionsExpanded[section];
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'parameterCore', sectionName: 'Parameter Core', isExpanded: true },
+            { sectionKey: 'parameterGuidanceValidation', sectionName: 'Parameter Guidance & Validation', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
     }
 }
 

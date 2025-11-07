@@ -37,12 +37,7 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
         </div>
     `,
     styles: [`
-        div[toolbar-additional-controls] {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-left: auto;
-        }
+        /* Note: positioning (display, gap, align-items, margin-left) is handled by parent toolbar CSS */
 
         button {
             padding: 8px 14px;
