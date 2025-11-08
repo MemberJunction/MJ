@@ -6,12 +6,24 @@
 export interface DatabaseDocumentation {
   version: string;
   database: DatabaseInfo;
+  summary: AnalysisSummary;
   seedContext?: SeedContext;
   schemas: SchemaDefinition[];
   analysisRuns: AnalysisRun[];
   createdAt: string;
   lastModified: string;
   totalIterations: number;
+}
+
+export interface AnalysisSummary {
+  totalPromptsRun: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  totalSchemas: number;
+  totalTables: number;
+  totalColumns: number;
+  estimatedCost: number;
 }
 
 export interface DatabaseInfo {
@@ -144,4 +156,13 @@ export interface ProcessingLogEntry {
   promptOutput?: string;
   inputTokens?: number;
   outputTokens?: number;
+  semanticComparison?: {
+    tableMateriallyChanged: boolean;
+    tableChangeReasoning: string;
+    columnChanges: Array<{
+      columnName: string;
+      materiallyChanged: boolean;
+      changeReasoning: string;
+    }>;
+  };
 }

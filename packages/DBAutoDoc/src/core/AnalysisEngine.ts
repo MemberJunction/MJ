@@ -3,9 +3,9 @@
  * Coordinates the entire documentation generation workflow
  */
 
-import { DatabaseDocumentation, AnalysisRun, SchemaDefinition } from '../types/state.js';
+import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition } from '../types/state.js';
 import { TableNode, BackpropagationTrigger, TableAnalysisContext } from '../types/analysis.js';
-import { TableAnalysisPromptResult, SchemaSanityCheckPromptResult, CrossSchemaSanityCheckPromptResult } from '../types/prompts.js';
+import { TableAnalysisPromptResult, SchemaSanityCheckPromptResult, CrossSchemaSanityCheckPromptResult, SemanticComparisonPromptResult } from '../types/prompts.js';
 import { DBAutoDocConfig } from '../types/config.js';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { StateManager } from '../state/StateManager.js';
@@ -134,9 +134,16 @@ export class AnalysisEngine {
       // Track tokens
       this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
 
-      // Check if description changed
+      // Use semantic comparison to check if description materially changed
       const previousDescription = table.description;
-      const descriptionChanged = previousDescription !== result.result.tableDescription;
+      const comparisonResult = await this.compareDescriptions(
+        run,
+        table,
+        result.result,
+        tableNode.schema,
+        tableNode.table
+      );
+      const descriptionChanged = comparisonResult.tableMateriallyChanged;
 
       // Update table description
       this.stateManager.updateTableDescription(
@@ -166,7 +173,7 @@ export class AnalysisEngine {
         // Could store this in table metadata if needed
       }
 
-      // Log result with prompt I/O
+      // Log result with prompt I/O and semantic comparison details
       this.iterationTracker.addLogEntryWithPrompt(
         run,
         {
@@ -176,7 +183,8 @@ export class AnalysisEngine {
           action: 'analyze',
           result: descriptionChanged ? 'changed' : 'unchanged',
           message: `Confidence: ${result.result.confidence.toFixed(2)}`,
-          tokensUsed: result.tokensUsed
+          tokensUsed: result.tokensUsed,
+          semanticComparison: comparisonResult
         },
         result.promptInput,
         result.promptOutput
@@ -258,6 +266,83 @@ export class AnalysisEngine {
       userNotes: table.userNotes,
       seedContext: state.seedContext
     };
+  }
+
+  /**
+   * Compare descriptions using LLM to determine material changes
+   */
+  private async compareDescriptions(
+    run: AnalysisRun,
+    table: TableDefinition,
+    newResult: TableAnalysisPromptResult,
+    schemaName: string,
+    tableName: string
+  ): Promise<SemanticComparisonPromptResult> {
+    // Get previous iteration
+    const previousIteration = table.descriptionIterations.length > 0
+      ? table.descriptionIterations[table.descriptionIterations.length - 1]
+      : null;
+
+    // If no previous iteration, it's definitely changed (new)
+    if (!previousIteration) {
+      return {
+        tableMateriallyChanged: true,
+        tableChangeReasoning: 'Initial description generation',
+        columnChanges: newResult.columnDescriptions.map(col => ({
+          columnName: col.columnName,
+          materiallyChanged: true,
+          changeReasoning: 'Initial description generation'
+        }))
+      };
+    }
+
+    // Build previous column descriptions map
+    const previousColumns = table.columns.map(col => ({
+      columnName: col.name,
+      description: col.description || ''
+    }));
+
+    // Build current column descriptions
+    const currentColumns = newResult.columnDescriptions.map(col => ({
+      columnName: col.columnName,
+      description: col.description
+    }));
+
+    // Call semantic comparison prompt
+    const result = await this.promptEngine.executePrompt<SemanticComparisonPromptResult>(
+      'semantic-comparison',
+      {
+        schemaName,
+        tableName,
+        previousIteration: table.descriptionIterations.length,
+        currentIteration: table.descriptionIterations.length + 1,
+        previousTableDescription: previousIteration.description,
+        previousColumns,
+        currentTableDescription: newResult.tableDescription,
+        currentColumns
+      },
+      {
+        responseFormat: 'JSON'
+      }
+    );
+
+    if (!result.success || !result.result) {
+      // If comparison fails, assume changed to be safe
+      return {
+        tableMateriallyChanged: true,
+        tableChangeReasoning: 'Comparison failed - assuming changed for safety',
+        columnChanges: newResult.columnDescriptions.map(col => ({
+          columnName: col.columnName,
+          materiallyChanged: true,
+          changeReasoning: 'Comparison failed'
+        }))
+      };
+    }
+
+    // Track tokens for comparison
+    this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+
+    return result.result;
   }
 
   /**

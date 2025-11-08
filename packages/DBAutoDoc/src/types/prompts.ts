@@ -59,3 +59,15 @@ export interface ConvergenceCheckPromptResult {
   reasoning: string;
   recommendedActions: string[];
 }
+
+export interface SemanticComparisonPromptResult {
+  tableMateriallyChanged: boolean;
+  tableChangeReasoning: string;
+  columnChanges: ColumnChangeResult[];
+}
+
+export interface ColumnChangeResult {
+  columnName: string;
+  materiallyChanged: boolean;
+  changeReasoning: string;
+}

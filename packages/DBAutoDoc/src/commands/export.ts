@@ -18,18 +18,21 @@ export default class Export extends Command {
   static description = 'Export documentation as SQL and/or Markdown';
 
   static examples = [
+    '$ db-auto-doc export --state-file=./db-doc-state.json',
     '$ db-auto-doc export --sql',
     '$ db-auto-doc export --markdown',
     '$ db-auto-doc export --sql --markdown --apply'
   ];
 
   static flags = {
+    'state-file': Flags.string({ description: 'Path to state JSON file', char: 's' }),
+    'output-dir': Flags.string({ description: 'Output directory for generated files', char: 'o' }),
     sql: Flags.boolean({ description: 'Generate SQL script' }),
     markdown: Flags.boolean({ description: 'Generate Markdown documentation' }),
     report: Flags.boolean({ description: 'Generate analysis report' }),
     apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
     'approved-only': Flags.boolean({ description: 'Only export approved items', default: false }),
-    'confidence-threshold': Flags.number({ description: 'Minimum confidence threshold', default: 0 })
+    'confidence-threshold': Flags.string({ description: 'Minimum confidence threshold', default: '0' })
   };
 
   async run(): Promise<void> {
@@ -37,59 +40,87 @@ export default class Export extends Command {
     const spinner = ora();
 
     try {
-      // Load configuration and state
-      spinner.start('Loading configuration and state');
-      const config = await ConfigLoader.load('./config.json');
-      const stateManager = new StateManager(config.output.stateFile);
+      // Determine state file path
+      let stateFilePath: string;
+      let outputDir: string;
+      let config: any = null;
+
+      if (flags['state-file']) {
+        // Direct state file mode - no config needed
+        stateFilePath = path.resolve(flags['state-file']);
+        outputDir = flags['output-dir']
+          ? path.resolve(flags['output-dir'])
+          : path.dirname(stateFilePath);
+      } else {
+        // Config-based mode (original behavior)
+        spinner.start('Loading configuration');
+        config = await ConfigLoader.load('./config.json');
+        spinner.succeed('Configuration loaded');
+        stateFilePath = config.output.stateFile;
+        outputDir = path.dirname(config.output.sqlFile);
+      }
+
+      // Load state
+      spinner.start('Loading state');
+      const stateManager = new StateManager(stateFilePath);
       const state = await stateManager.load();
 
       if (!state) {
-        throw new Error('No state file found. Run "db-auto-doc analyze" first.');
+        throw new Error(`No state file found at ${stateFilePath}. Run "db-auto-doc analyze" first.`);
       }
 
       spinner.succeed('State loaded');
 
       // Ensure output directory exists
-      const outputDir = path.dirname(config.output.sqlFile);
       await fs.mkdir(outputDir, { recursive: true });
 
+      // Default to SQL + Markdown if no specific format flags provided
+      const generateSQL = flags.sql || (!flags.sql && !flags.markdown && !flags.report);
+      const generateMarkdown = flags.markdown || (!flags.sql && !flags.markdown && !flags.report);
+
       // Generate SQL
-      if (flags.sql) {
+      if (generateSQL) {
         spinner.start('Generating SQL script');
         const sqlGen = new SQLGenerator();
         const sql = sqlGen.generate(state, {
           approvedOnly: flags['approved-only'],
-          confidenceThreshold: flags['confidence-threshold']
+          confidenceThreshold: parseFloat(flags['confidence-threshold'])
         });
 
-        await fs.writeFile(config.output.sqlFile, sql, 'utf-8');
-        spinner.succeed(`SQL script saved to ${config.output.sqlFile}`);
+        const sqlPath = path.join(outputDir, 'extended-props.sql');
+        await fs.writeFile(sqlPath, sql, 'utf-8');
+        spinner.succeed(`SQL script saved to ${sqlPath}`);
 
         // Apply to database if requested
         if (flags.apply) {
-          spinner.start('Applying SQL to database');
-          const db = new DatabaseConnection(config.database);
-          await db.connect();
-
-          const result = await db.query(sql);
-          await db.close();
-
-          if (result.success) {
-            spinner.succeed('SQL applied successfully');
+          if (!config) {
+            this.warn('--apply requires a config file. Skipping database application.');
           } else {
-            spinner.fail(`SQL application failed: ${result.errorMessage}`);
+            spinner.start('Applying SQL to database');
+            const db = new DatabaseConnection(config.database);
+            await db.connect();
+
+            const result = await db.query(sql);
+            await db.close();
+
+            if (result.success) {
+              spinner.succeed('SQL applied successfully');
+            } else {
+              spinner.fail(`SQL application failed: ${result.errorMessage}`);
+            }
           }
         }
       }
 
       // Generate Markdown
-      if (flags.markdown) {
+      if (generateMarkdown) {
         spinner.start('Generating Markdown documentation');
         const mdGen = new MarkdownGenerator();
         const markdown = mdGen.generate(state);
 
-        await fs.writeFile(config.output.markdownFile, markdown, 'utf-8');
-        spinner.succeed(`Markdown documentation saved to ${config.output.markdownFile}`);
+        const mdPath = path.join(outputDir, 'summary.md');
+        await fs.writeFile(mdPath, markdown, 'utf-8');
+        spinner.succeed(`Markdown documentation saved to ${mdPath}`);
       }
 
       // Generate Report

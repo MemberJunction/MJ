@@ -28,7 +28,24 @@ export class StateManager {
       }
 
       const content = await fs.readFile(this.stateFilePath, 'utf-8');
-      return JSON.parse(content) as DatabaseDocumentation;
+      const state = JSON.parse(content) as DatabaseDocumentation;
+
+      // Initialize summary if it doesn't exist (backward compatibility)
+      if (!state.summary) {
+        state.summary = {
+          totalPromptsRun: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          totalTokens: 0,
+          totalSchemas: 0,
+          totalTables: 0,
+          totalColumns: 0,
+          estimatedCost: 0
+        };
+        this.updateSummary(state);
+      }
+
+      return state;
     } catch (error) {
       throw new Error(`Failed to load state file: ${(error as Error).message}`);
     }
@@ -67,6 +84,16 @@ export class StateManager {
         name: databaseName,
         server: serverName,
         analyzedAt: new Date().toISOString()
+      },
+      summary: {
+        totalPromptsRun: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+        totalSchemas: 0,
+        totalTables: 0,
+        totalColumns: 0,
+        estimatedCost: 0
       },
       schemas: [],
       analysisRuns: [],
@@ -284,6 +311,49 @@ export class StateManager {
    */
   private generateRunId(): string {
     return `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Update summary statistics from current state and analysis runs
+   */
+  public updateSummary(state: DatabaseDocumentation): void {
+    // Count schemas, tables, columns
+    let totalTables = 0;
+    let totalColumns = 0;
+    for (const schema of state.schemas) {
+      totalTables += schema.tables.length;
+      for (const table of schema.tables) {
+        totalColumns += table.columns.length;
+      }
+    }
+
+    // Aggregate from all analysis runs
+    let totalPromptsRun = 0;
+    let totalTokens = 0;
+    let estimatedCost = 0;
+
+    for (const run of state.analysisRuns) {
+      // Count prompts from processing log
+      totalPromptsRun += run.processingLog.filter(
+        log => log.tokensUsed && log.tokensUsed > 0
+      ).length;
+
+      // Sum tokens and cost
+      totalTokens += run.totalTokensUsed;
+      estimatedCost += run.estimatedCost;
+    }
+
+    // Update summary
+    state.summary = {
+      totalPromptsRun,
+      totalInputTokens: 0,  // TODO: Will need to track separately when available
+      totalOutputTokens: 0, // TODO: Will need to track separately when available
+      totalTokens,
+      totalSchemas: state.schemas.length,
+      totalTables,
+      totalColumns,
+      estimatedCost
+    };
   }
 
   /**

@@ -38,8 +38,15 @@ export default class Analyze extends Command {
       const config = await ConfigLoader.load('./config.json');
       spinner.succeed('Configuration loaded');
 
-      // Initialize state manager
-      const stateManager = new StateManager(config.output.stateFile);
+      // Create run folder immediately
+      if (!config.output.outputDir) {
+        throw new Error('output.outputDir must be specified in config');
+      }
+      const runFolder = await this.createRunFolder(config.output.outputDir);
+      const stateFilePath = path.join(runFolder, 'state.json');
+
+      // Initialize state manager with run-specific path
+      const stateManager = new StateManager(stateFilePath);
       let state = await stateManager.load();
 
       // Connect to database
@@ -124,7 +131,8 @@ export default class Analyze extends Command {
             spinner.succeed('Backpropagation complete');
           }
 
-          // Save state after each level
+          // Update summary and save state after each level
+          stateManager.updateSummary(state);
           await stateManager.save(state);
         }
 
@@ -158,59 +166,12 @@ export default class Analyze extends Command {
         iterationTracker.completeRun(run, false, 'Max iterations reached');
       }
 
-      // Auto-export with numbered files
-      let runFolder = '';
-      if (config.output.outputDir) {
-        runFolder = await this.exportWithRunNumber(config, state, spinner);
-      }
+      // Final summary update
+      stateManager.updateSummary(state);
+      await stateManager.save(state);
 
-      // Summary
-      this.log(chalk.green('\n✓ Analysis complete!'));
-      this.log(`  Iterations: ${run.iterationsPerformed}`);
-      this.log(`  Tokens used: ${run.totalTokensUsed.toLocaleString()}`);
-      this.log(`  Estimated cost: $${run.estimatedCost.toFixed(2)}`);
-      if (runFolder) {
-        this.log(`  Output folder: ${runFolder}`);
-      }
-
-      // Close database
-      await db.close();
-
-    } catch (error) {
-      spinner.fail('Analysis failed');
-      this.error((error as Error).message);
-    }
-  }
-
-  /**
-   * Export with run-numbered folders
-   */
-  private async exportWithRunNumber(config: any, state: any, spinner: any): Promise<string> {
-    try {
-      const outputDir = config.output.outputDir;
-      await fs.mkdir(outputDir, { recursive: true });
-
-      // Determine next run number by looking for run-N folders
-      const entries = await fs.readdir(outputDir, { withFileTypes: true });
-      const runNumbers = entries
-        .filter(e => e.isDirectory())
-        .map(e => {
-          const match = e.name.match(/^run-(\d+)$/);
-          return match ? parseInt(match[1], 10) : 0;
-        })
-        .filter(n => n > 0);
-
-      const nextRunNumber = runNumbers.length > 0 ? Math.max(...runNumbers) + 1 : 1;
-      const runFolder = path.join(outputDir, `run-${nextRunNumber}`);
-
-      // Create run folder
-      await fs.mkdir(runFolder, { recursive: true });
-
-      // Export files
+      // Export SQL and Markdown
       spinner.start('Exporting documentation files');
-
-      const statePath = path.join(runFolder, 'state.json');
-      await fs.writeFile(statePath, JSON.stringify(state, null, 2), 'utf-8');
 
       const sqlGen = new SQLGenerator();
       const sql = sqlGen.generate(state, {});
@@ -223,14 +184,49 @@ export default class Analyze extends Command {
       await fs.writeFile(mdPath, markdown, 'utf-8');
 
       spinner.succeed('Exported documentation files');
-      this.log(`  - state.json`);
-      this.log(`  - extended-props.sql`);
-      this.log(`  - summary.md`);
 
-      return runFolder;
+      // Summary
+      this.log(chalk.green('\n✓ Analysis complete!'));
+      this.log(`  Iterations: ${run.iterationsPerformed}`);
+      this.log(`  Tokens used: ${run.totalTokensUsed.toLocaleString()}`);
+      this.log(`  Estimated cost: $${run.estimatedCost.toFixed(2)}`);
+      this.log(`  Output folder: ${runFolder}`);
+      this.log(`  Files:`);
+      this.log(`    - state.json`);
+      this.log(`    - extended-props.sql`);
+      this.log(`    - summary.md`);
+
+      // Close database
+      await db.close();
+
     } catch (error) {
-      spinner.warn(`Export failed: ${(error as Error).message}`);
-      return '';
+      spinner.fail('Analysis failed');
+      this.error((error as Error).message);
     }
+  }
+
+  /**
+   * Create run-numbered folder for this analysis run
+   */
+  private async createRunFolder(outputDir: string): Promise<string> {
+    await fs.mkdir(outputDir, { recursive: true });
+
+    // Determine next run number by looking for run-N folders
+    const entries = await fs.readdir(outputDir, { withFileTypes: true });
+    const runNumbers = entries
+      .filter(e => e.isDirectory())
+      .map(e => {
+        const match = e.name.match(/^run-(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => n > 0);
+
+    const nextRunNumber = runNumbers.length > 0 ? Math.max(...runNumbers) + 1 : 1;
+    const runFolder = path.join(outputDir, `run-${nextRunNumber}`);
+
+    // Create run folder
+    await fs.mkdir(runFolder, { recursive: true });
+
+    return runFolder;
   }
 }
