@@ -79,7 +79,14 @@ export class StateManager {
   /**
    * Start a new analysis run
    */
-  public createAnalysisRun(state: DatabaseDocumentation, modelUsed: string): AnalysisRun {
+  public createAnalysisRun(
+    state: DatabaseDocumentation,
+    modelUsed: string,
+    vendor: string,
+    temperature: number,
+    topP?: number,
+    topK?: number
+  ): AnalysisRun {
     const run: AnalysisRun = {
       runId: this.generateRunId(),
       startedAt: new Date().toISOString(),
@@ -89,6 +96,10 @@ export class StateManager {
       backpropagationCount: 0,
       converged: false,
       modelUsed,
+      vendor,
+      temperature,
+      topP,
+      topK,
       totalTokensUsed: 0,
       estimatedCost: 0,
       warnings: [],

@@ -40,6 +40,19 @@ export interface AnalysisConfig {
   convergence: ConvergenceConfig;
   backpropagation: BackpropagationConfig;
   sanityChecks: SanityCheckConfig;
+  guardrails?: GuardrailsConfig;
+}
+
+export interface GuardrailsConfig {
+  maxTokensPerRun?: number;        // Stop after N tokens total (default: unlimited)
+  maxDurationSeconds?: number;      // Stop after N seconds (default: unlimited)
+  maxCostDollars?: number;          // Stop after $N spent (default: unlimited)
+  maxTokensPerPrompt?: number;      // Truncate individual prompts (default: model max)
+  warnThresholds?: {                // Warn at X% of limits (default: 80%)
+    tokenPercentage?: number;       // Warn at % of maxTokensPerRun
+    durationPercentage?: number;    // Warn at % of maxDurationSeconds
+    costPercentage?: number;        // Warn at % of maxCostDollars
+  };
 }
 
 export interface ConvergenceConfig {
@@ -60,6 +73,7 @@ export interface SanityCheckConfig {
 
 export interface OutputConfig {
   stateFile: string;
+  outputDir?: string; // Base output directory for numbered runs
   sqlFile: string;
   markdownFile: string;
 }

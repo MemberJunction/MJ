@@ -16,6 +16,7 @@ import { ConvergenceDetector } from './ConvergenceDetector.js';
 export class AnalysisEngine {
   private backpropagationEngine: BackpropagationEngine;
   private convergenceDetector: ConvergenceDetector;
+  private startTime: number = 0;
 
   constructor(
     private config: DBAutoDocConfig,
@@ -38,6 +39,13 @@ export class AnalysisEngine {
   }
 
   /**
+   * Initialize timing for guardrails
+   */
+  public startAnalysis(): void {
+    this.startTime = Date.now();
+  }
+
+  /**
    * Process a single dependency level
    */
   public async processLevel(
@@ -49,6 +57,17 @@ export class AnalysisEngine {
     const triggers: BackpropagationTrigger[] = [];
 
     for (const tableNode of tables) {
+      // Check guardrails before processing each table
+      const guardrailCheck = this.checkGuardrails(run);
+      if (!guardrailCheck.canContinue) {
+        this.iterationTracker.addWarning(run, `Analysis stopped: ${guardrailCheck.reason}`);
+        break; // Stop processing this level
+      }
+
+      if (guardrailCheck.warning) {
+        this.iterationTracker.addWarning(run, guardrailCheck.warning);
+      }
+
       const result = await this.analyzeTable(state, run, tableNode, level);
 
       if (result.triggers) {
@@ -95,14 +114,19 @@ export class AnalysisEngine {
           `Failed to analyze ${tableNode.schema}.${tableNode.table}: ${result.errorMessage}`
         );
 
-        this.iterationTracker.addLogEntry(run, {
-          level,
-          schema: tableNode.schema,
-          table: tableNode.table,
-          action: 'analyze',
-          result: 'error',
-          message: result.errorMessage
-        });
+        this.iterationTracker.addLogEntryWithPrompt(
+          run,
+          {
+            level,
+            schema: tableNode.schema,
+            table: tableNode.table,
+            action: 'analyze',
+            result: 'error',
+            message: result.errorMessage
+          },
+          result.promptInput,
+          result.promptOutput
+        );
 
         return {};
       }
@@ -142,19 +166,29 @@ export class AnalysisEngine {
         // Could store this in table metadata if needed
       }
 
-      // Log result
-      this.iterationTracker.addLogEntry(run, {
-        level,
-        schema: tableNode.schema,
-        table: tableNode.table,
-        action: 'analyze',
-        result: descriptionChanged ? 'changed' : 'unchanged',
-        message: `Confidence: ${result.result.confidence.toFixed(2)}`,
-        tokensUsed: result.tokensUsed
-      });
+      // Log result with prompt I/O
+      this.iterationTracker.addLogEntryWithPrompt(
+        run,
+        {
+          level,
+          schema: tableNode.schema,
+          table: tableNode.table,
+          action: 'analyze',
+          result: descriptionChanged ? 'changed' : 'unchanged',
+          message: `Confidence: ${result.result.confidence.toFixed(2)}`,
+          tokensUsed: result.tokensUsed
+        },
+        result.promptInput,
+        result.promptOutput
+      );
 
       // Detect potential insights for parent tables
-      const triggers = this.backpropagationEngine.detectParentInsights(table, result.result);
+      const triggers = this.backpropagationEngine.detectParentInsights(
+        table,
+        result.result,
+        tableNode.schema,
+        tableNode.table
+      );
 
       return { triggers };
 
@@ -222,8 +256,7 @@ export class AnalysisEngine {
       sampleData: [], // Could add sample rows here if needed
       parentDescriptions: parentDescriptions as any,
       userNotes: table.userNotes,
-      seedContext: state.seedContext,
-      dependencyLevel: table.dependencyLevel
+      seedContext: state.seedContext
     };
   }
 
@@ -361,5 +394,82 @@ export class AnalysisEngine {
     }
 
     await this.backpropagationEngine.execute(state, run, triggers);
+  }
+
+  /**
+   * Check if guardrails are exceeded
+   */
+  private checkGuardrails(run: AnalysisRun): {
+    canContinue: boolean;
+    warning?: string;
+    reason?: string;
+  } {
+    const guardrails = this.config.analysis.guardrails;
+
+    // If no guardrails configured, always continue
+    if (!guardrails) {
+      return { canContinue: true };
+    }
+
+    const elapsedSeconds = (Date.now() - this.startTime) / 1000;
+    const totalTokens = run.totalTokensUsed || 0;
+    const totalCost = run.estimatedCost || 0;
+
+    // Get warn thresholds (default to 80%)
+    const warnThresholds = guardrails.warnThresholds || {};
+    const tokenWarnPercent = warnThresholds.tokenPercentage || 80;
+    const durationWarnPercent = warnThresholds.durationPercentage || 80;
+    const costWarnPercent = warnThresholds.costPercentage || 80;
+
+    // Check hard limits - STOP
+    if (guardrails.maxTokensPerRun && totalTokens >= guardrails.maxTokensPerRun) {
+      return {
+        canContinue: false,
+        reason: `Token limit exceeded: ${totalTokens.toLocaleString()} / ${guardrails.maxTokensPerRun.toLocaleString()} tokens`
+      };
+    }
+
+    if (guardrails.maxDurationSeconds && elapsedSeconds >= guardrails.maxDurationSeconds) {
+      return {
+        canContinue: false,
+        reason: `Duration limit exceeded: ${Math.round(elapsedSeconds)}s / ${guardrails.maxDurationSeconds}s`
+      };
+    }
+
+    if (guardrails.maxCostDollars && totalCost >= guardrails.maxCostDollars) {
+      return {
+        canContinue: false,
+        reason: `Cost limit exceeded: $${totalCost.toFixed(2)} / $${guardrails.maxCostDollars.toFixed(2)}`
+      };
+    }
+
+    // Check warning thresholds
+    let warning: string | undefined;
+
+    if (guardrails.maxTokensPerRun) {
+      const tokenPercent = (totalTokens / guardrails.maxTokensPerRun) * 100;
+      if (tokenPercent >= tokenWarnPercent && !warning) {
+        warning = `Token usage at ${tokenPercent.toFixed(0)}% (${totalTokens.toLocaleString()} / ${guardrails.maxTokensPerRun.toLocaleString()})`;
+      }
+    }
+
+    if (guardrails.maxDurationSeconds) {
+      const durationPercent = (elapsedSeconds / guardrails.maxDurationSeconds) * 100;
+      if (durationPercent >= durationWarnPercent && !warning) {
+        warning = `Duration at ${durationPercent.toFixed(0)}% (${Math.round(elapsedSeconds)}s / ${guardrails.maxDurationSeconds}s)`;
+      }
+    }
+
+    if (guardrails.maxCostDollars) {
+      const costPercent = (totalCost / guardrails.maxCostDollars) * 100;
+      if (costPercent >= costWarnPercent && !warning) {
+        warning = `Cost at ${costPercent.toFixed(0)}% ($${totalCost.toFixed(2)} / $${guardrails.maxCostDollars.toFixed(2)})`;
+      }
+    }
+
+    return {
+      canContinue: true,
+      warning
+    };
   }
 }

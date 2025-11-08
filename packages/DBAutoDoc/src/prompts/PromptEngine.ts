@@ -4,9 +4,7 @@
 
 import * as nunjucks from 'nunjucks';
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { OpenAILLM } from '@memberjunction/ai-openai';
-import { AnthropicLLM } from '@memberjunction/ai-anthropic';
-import { GroqLLM } from '@memberjunction/ai-groq';
+import { MJGlobal } from '@memberjunction/global';
 import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
@@ -37,26 +35,33 @@ export class PromptEngine {
    * Initialize the prompt loader
    */
   public async initialize(): Promise<void> {
-    const loader = this.nunjucksEnv.loaders[0] as PromptFileLoader;
-    await loader.loadAll();
+    const env = this.nunjucksEnv as { loaders?: PromptFileLoader[] };
+    const loader = env.loaders?.[0];
+    if (loader) {
+      await loader.loadAll();
+    }
   }
 
   /**
    * Create appropriate LLM based on provider configuration
+   * Uses MJ ClassFactory pattern for BaseLLM instantiation
    */
   private createLLM(): BaseLLM {
     const { provider, apiKey } = this.config;
 
-    switch (provider) {
-      case 'openai':
-        return new OpenAILLM(apiKey);
-      case 'anthropic':
-        return new AnthropicLLM(apiKey);
-      case 'groq':
-        return new GroqLLM(apiKey);
-      default:
-        throw new Error(`Unsupported AI provider: ${provider}`);
+    // Use MJ ClassFactory to create BaseLLM instance
+    // Provider maps to class key (e.g., 'OpenAILLM', 'AnthropicLLM', etc.)
+    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+      BaseLLM,
+      provider,
+      apiKey
+    );
+
+    if (!llm) {
+      throw new Error(`Failed to create LLM instance for provider: ${provider}. Check that the provider name matches a registered BaseLLM subclass.`);
     }
+
+    return llm;
   }
 
   /**
@@ -180,7 +185,9 @@ export class PromptEngine {
           return {
             success: false,
             errorMessage: `Failed to parse JSON response: ${(parseError as Error).message}\n\nRaw content:\n${content}`,
-            tokensUsed: usage.totalTokens
+            tokensUsed: usage?.totalTokens || 0,
+            promptInput: renderedPrompt,
+            promptOutput: content
           };
         }
       } else {
@@ -190,8 +197,10 @@ export class PromptEngine {
       return {
         success: true,
         result: parsedResult,
-        tokensUsed: usage.totalTokens,
-        cost: usage.cost
+        tokensUsed: usage?.totalTokens || 0,
+        cost: usage?.cost,
+        promptInput: renderedPrompt,
+        promptOutput: content
       };
 
     } catch (error) {
@@ -255,14 +264,14 @@ export class PromptEngine {
           return {
             success: true,
             result: parsed,
-            tokensUsed: usage.totalTokens,
-            cost: usage.cost
+            tokensUsed: usage?.totalTokens || 0,
+            cost: usage?.cost
           };
         } catch (error) {
           return {
             success: false,
             errorMessage: `JSON parse error: ${(error as Error).message}`,
-            tokensUsed: usage.totalTokens
+            tokensUsed: usage?.totalTokens || 0
           };
         }
       });

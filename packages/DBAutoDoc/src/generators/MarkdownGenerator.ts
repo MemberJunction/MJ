@@ -81,6 +81,14 @@ export class MarkdownGenerator {
         lines.push('');
       }
 
+      // Entity Relationship Diagram
+      lines.push('### Entity Relationship Diagram');
+      lines.push('');
+      lines.push('```mermaid');
+      lines.push(this.generateMermaidERD(schema));
+      lines.push('```');
+      lines.push('');
+
       // Tables
       lines.push('### Tables');
       lines.push('');
@@ -146,6 +154,46 @@ export class MarkdownGenerator {
         }
 
         lines.push('');
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Generate Mermaid ERD diagram for a schema
+   */
+  private generateMermaidERD(schema: any): string {
+    const lines: string[] = [];
+    lines.push('erDiagram');
+
+    // Add entities with their columns
+    for (const table of schema.tables) {
+      lines.push(`    ${table.name} {`);
+
+      for (const column of table.columns) {
+        const type = column.dataType.replace(/\s+/g, '_');
+        const constraints = [];
+        if (column.isPrimaryKey) constraints.push('PK');
+        if (column.isForeignKey) constraints.push('FK');
+        if (!column.isNullable) constraints.push('NOT_NULL');
+
+        const constraintStr = constraints.length > 0 ? ` "${constraints.join(',')}"` : '';
+        lines.push(`        ${type} ${column.name}${constraintStr}`);
+      }
+
+      lines.push('    }');
+    }
+
+    lines.push('');
+
+    // Add relationships
+    for (const table of schema.tables) {
+      if (table.dependsOn && table.dependsOn.length > 0) {
+        for (const dep of table.dependsOn) {
+          // Format: ParentTable ||--o{ ChildTable : "relationship"
+          lines.push(`    ${dep.table} ||--o{ ${table.name} : "has"`);
+        }
       }
     }
 

@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "database": {
+    "server": "${DB_SERVER}",
+    "port": 1433,
+    "database": "${DB_NAME}",
+    "user": "${DB_USER}",
+    "password": "${DB_PASSWORD}",
+    "encrypt": true,
+    "trustServerCertificate": true,
+    "connectionTimeout": 30000
+  },
+  "ai": {
+    "provider": "${AI_PROVIDER}",
+    "model": "${AI_MODEL}",
+    "apiKey": "${AI_API_KEY}",
+    "temperature": 0.1,
+    "maxTokens": 4000
+  },
+  "analysis": {
+    "cardinalityThreshold": 20,
+    "sampleSize": 10,
+    "includeStatistics": true,
+    "includePatternAnalysis": true,
+    "convergence": {
+      "maxIterations": 50,
+      "stabilityWindow": 2,
+      "confidenceThreshold": 0.85
+    },
+    "backpropagation": {
+      "enabled": true,
+      "maxDepth": 3
+    },
+    "sanityChecks": {
+      "schemaLevel": false,
+      "crossSchema": false
+    },
+    "guardrails": {
+      "maxTokensPerRun": 5000000,
+      "maxDurationSeconds": 2700,
+      "warnThresholds": {
+        "tokenPercentage": 80,
+        "durationPercentage": 80
+      }
+    }
+  },
+  "output": {
+    "stateFile": "./db-doc-state.json",
+    "outputDir": "./output",
+    "sqlFile": "./output/add-descriptions.sql",
+    "markdownFile": "./output/database-documentation.md"
+  },
+  "schemas": {
+    "include": ["AssociationDemo"],
+    "exclude": ["sys", "INFORMATION_SCHEMA"]
+  },
+  "tables": {
+    "exclude": ["sysdiagrams", "__MigrationHistory"]
+  }
+}

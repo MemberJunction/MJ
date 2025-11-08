@@ -123,28 +123,30 @@ export class BackpropagationEngine {
 
   /**
    * Detect insights about parent tables from analysis result
+   * Uses LLM-provided insights instead of NLP pattern matching
    */
   public detectParentInsights(
     table: TableDefinition,
-    analysisResult: any
+    analysisResult: any,
+    schema?: string,
+    tableName?: string
   ): BackpropagationTrigger[] {
     const triggers: BackpropagationTrigger[] = [];
 
-    // Check if analysis revealed insights about parent tables
-    // This would need to be extracted from the analysis reasoning
-    // For now, we'll use a simple heuristic based on foreign keys
+    // Current table full name for source
+    const sourceTable = schema && tableName ? `${schema}.${tableName}` : 'unknown';
 
-    if (!table.dependsOn || table.dependsOn.length === 0) {
-      return triggers;
+    // Use LLM-provided parent table insights (much more accurate than NLP)
+    const parentInsights = analysisResult.parentTableInsights || [];
+
+    for (const insight of parentInsights) {
+      triggers.push({
+        sourceTable,
+        targetTable: insight.parentTable,
+        insight: insight.insight,
+        confidence: insight.confidence
+      });
     }
-
-    // Example: If child table analysis mentions parent table characteristics
-    // that weren't known before, trigger backpropagation
-
-    // This is a placeholder - in practice, you might want to:
-    // 1. Parse the reasoning text for mentions of parent tables
-    // 2. Check if the child's description contradicts parent's description
-    // 3. Look for patterns that suggest parent table misclassification
 
     return triggers;
   }

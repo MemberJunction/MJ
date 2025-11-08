@@ -9,11 +9,16 @@ import { DBAutoDocConfig } from '../types/config.js';
 export class ConfigLoader {
   /**
    * Load configuration from file
+   * Supports environment variable expansion using ${ENV_VAR} syntax
    */
   public static async load(configPath: string): Promise<DBAutoDocConfig> {
     try {
       const content = await fs.readFile(configPath, 'utf-8');
-      const config = JSON.parse(content) as DBAutoDocConfig;
+
+      // Expand environment variables in the content
+      const expandedContent = this.expandEnvVars(content);
+
+      const config = JSON.parse(expandedContent) as DBAutoDocConfig;
 
       // Validate required fields
       this.validate(config);
@@ -22,6 +27,20 @@ export class ConfigLoader {
     } catch (error) {
       throw new Error(`Failed to load configuration: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Expand environment variables in string
+   * Supports ${VAR_NAME} syntax
+   */
+  private static expandEnvVars(content: string): string {
+    return content.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+      const value = process.env[varName];
+      if (value === undefined) {
+        throw new Error(`Environment variable ${varName} is not defined`);
+      }
+      return value;
+    });
   }
 
   /**

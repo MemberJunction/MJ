@@ -31,6 +31,25 @@ export class IterationTracker {
   }
 
   /**
+   * Add processing log entry with prompt I/O details
+   */
+  public addLogEntryWithPrompt(
+    run: AnalysisRun,
+    entry: Omit<ProcessingLogEntry, 'timestamp'>,
+    promptInput?: string,
+    promptOutput?: string
+  ): void {
+    const logEntry: ProcessingLogEntry = {
+      ...entry,
+      timestamp: new Date().toISOString(),
+      promptInput,
+      promptOutput
+    };
+
+    run.processingLog.push(logEntry);
+  }
+
+  /**
    * Mark run as complete
    */
   public completeRun(

@@ -80,7 +80,14 @@ Based on the evidence above, generate a JSON response with this exact structure:
       "reasoning": "Brief explanation of the evidence"
     }
   ],
-  "inferredBusinessDomain": "Sales"
+  "inferredBusinessDomain": "Sales",
+  "parentTableInsights": [
+    {
+      "parentTable": "schema.table",
+      "insight": "What this analysis reveals about the parent table that wasn't known before",
+      "confidence": 0.85
+    }
+  ]
 }
 ```
 
@@ -90,6 +97,11 @@ Based on the evidence above, generate a JSON response with this exact structure:
 3. **Confidence**: 0-1 scale. Be conservative. Use < 0.7 if ambiguous.
 4. **Column Descriptions**: Every column should be described. Explain its role and meaning.
 5. **Business Domain**: Infer from table name and purpose (e.g., "Sales", "HR", "Inventory", "Billing", "Security")
+6. **Parent Table Insights**: If analyzing this child table reveals new information about parent tables, include it. Examples:
+   - Discovering enum values in the parent (e.g., "Member table has a 'Type' column with values: Individual, Corporate, Student")
+   - Revealing parent table classification/purpose (e.g., "BoardMember reveals that Member table includes leadership roles, not just general members")
+   - Identifying parent table patterns (e.g., "Multiple child tables suggest Organization serves as a multi-tenant partition key")
+   - **Leave empty array if no new insights about parents**
 
 **Important:**
 - If column has low cardinality (< 20 distinct values), those are likely enum/category values - use them to understand meaning

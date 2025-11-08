@@ -8,6 +8,10 @@ export interface PromptExecutionResult<T> {
   errorMessage?: string;
   tokensUsed: number;
   cost?: number;
+  promptInput?: string;
+  promptOutput?: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export interface TableAnalysisPromptResult {
@@ -16,6 +20,13 @@ export interface TableAnalysisPromptResult {
   confidence: number;
   columnDescriptions: ColumnDescriptionPromptResult[];
   inferredBusinessDomain?: string;
+  parentTableInsights?: ParentTableInsight[];
+}
+
+export interface ParentTableInsight {
+  parentTable: string;  // "schema.table" format
+  insight: string;
+  confidence: number;
 }
 
 export interface ColumnDescriptionPromptResult {

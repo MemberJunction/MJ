@@ -120,6 +120,10 @@ export interface AnalysisRun {
   converged: boolean;
   convergenceReason?: string;
   modelUsed: string;
+  vendor: string;
+  temperature: number;
+  topP?: number;
+  topK?: number;
   totalTokensUsed: number;
   estimatedCost: number;
   warnings: string[];
@@ -136,4 +140,8 @@ export interface ProcessingLogEntry {
   result: 'success' | 'changed' | 'unchanged' | 'error';
   message?: string;
   tokensUsed?: number;
+  promptInput?: string;
+  promptOutput?: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }
