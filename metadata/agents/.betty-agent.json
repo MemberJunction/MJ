@@ -1,0 +1,69 @@
+[
+  {
+    "fields": {
+      "Name": "Betty",
+      "Description": "Dedicated knowledge base assistant agent that provides direct access to Betty Bot. Betty is trained on your organization's knowledge base and can answer questions about company policies, procedures, documentation, and institutional knowledge. This agent provides deterministic, single-step execution by forwarding queries directly to Betty and returning responses with optional reference links.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-book-open-reader",
+      "LogoURL": null,
+      "PayloadDownstreamPaths": null,
+      "PayloadUpstreamPaths": null,
+      "PayloadSelfReadPaths": null,
+      "PayloadSelfWritePaths": null,
+      "PayloadScope": null,
+      "MaxIterationsPerRun": null,
+      "MaxTokensPerRun": null,
+      "MaxTimePerRun": null,
+      "MaxCostPerRun": null,
+      "EnableContextCompression": false,
+      "ModelSelectionMode": "Agent Type"
+    },
+    "relatedEntities": {
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Betty",
+            "Status": "Active",
+            "MinExecutionsPerRun": null,
+            "MaxExecutionsPerRun": null,
+            "ResultExpirationTurns": null,
+            "ResultExpirationMode": "None",
+            "CompactMode": null,
+            "CompactLength": null,
+            "CompactPromptID": null
+          }
+        }
+      ],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Forward to Betty",
+            "Description": "Forwards the full conversation history to Betty Bot for context-aware responses",
+            "StepType": "Action",
+            "StartingStep": true,
+            "ActionID": "@lookup:Actions.Name=Betty",
+            "ActionInputMapping": {
+              "ConversationMessages": "conversation.all"
+            },
+            "ActionOutputMapping": {
+              "BettyResponse": "response",
+              "BettyReferences": "references"
+            },
+            "Status": "Active",
+            "PromptID": null,
+            "SubAgentID": null,
+            "Configuration": null,
+            "LoopBodyType": null,
+            "PositionX": 100,
+            "PositionY": 100
+          }
+        }
+      ]
+    }
+  }
+]

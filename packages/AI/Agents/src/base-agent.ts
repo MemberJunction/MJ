@@ -44,6 +44,7 @@ import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
+import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
 
@@ -4865,7 +4866,8 @@ The context is now within limits. Please retry your request with the recovered c
 
             const contextMessage = this.prepareRelatedSubAgentContextMessage(
                 previousDecision.newPayload as unknown as Record<string, unknown>,
-                contextPaths
+                contextPaths,
+                params
             );
 
             if (contextMessage && (params.verbose === true || IsVerboseLoggingEnabled())) {
@@ -5161,17 +5163,23 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Prepares a context message containing parent payload data for related sub-agent.
-     * Extracts specified paths from parent payload and formats them as a user message
-     * to provide LLM context to the sub-agent.
+     * Extracts specified paths from parent payload or conversation messages and formats
+     * them as a user message to provide LLM context to the sub-agent.
+     *
+     * Supports both payload paths and conversation message paths:
+     * - Payload paths: "fieldName", "nested.field", etc.
+     * - Conversation paths: "conversation.all", "conversation.user.last", "conversation.all.last[5]", etc.
      *
      * @param parentPayload - Parent agent's current payload
      * @param contextPaths - Array of paths to extract, or ["*"] for entire payload
+     * @param params - Execution parameters with conversation messages
      * @returns ChatMessage with formatted context, or null if no paths specified or no data found
      * @private
      */
     private prepareRelatedSubAgentContextMessage(
         parentPayload: Record<string, unknown>,
-        contextPaths: string[]
+        contextPaths: string[],
+        params?: ExecuteAgentParams
     ): ChatMessage | null {
         if (!contextPaths || contextPaths.length === 0) {
             return null;
@@ -5185,11 +5193,20 @@ The context is now within limits. Please retry your request with the recovered c
             };
         }
 
-        // Extract specific paths
+        // Extract specific paths (supports both payload paths and conversation paths)
         const contextData: Record<string, unknown> = {};
 
         for (const path of contextPaths) {
-            const value = this.getValueFromPath(parentPayload, path);
+            let value: unknown;
+
+            // Check if this is a conversation reference
+            if (ConversationMessageResolver.isConversationReference(path) && params?.conversationMessages) {
+                value = ConversationMessageResolver.resolve(path, params.conversationMessages);
+            } else {
+                // Regular payload path
+                value = this.getValueFromPath(parentPayload, path);
+            }
+
             if (value !== undefined) {
                 contextData[path] = value;
             }

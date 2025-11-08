@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Betty",
+      "Description": "Query your organization's knowledge base assistant for information about company policies, procedures, documentation, and institutional knowledge. Betty provides context-aware responses with optional reference links to supporting materials.",
+      "Type": "Custom",
+      "DriverClass": "BettyAction",
+      "CategoryID": "@lookup:Action Categories.Name=AI",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-book-open-reader",
+      "UserPrompt": null,
+      "Code": null,
+      "CodeApprovalStatus": "Approved",
+      "CodeComments": null
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "Name": "UserPrompt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Direct question for Betty. Use this for simple queries. For context-aware conversations, use ConversationMessages instead.",
+            "IsRequired": false,
+            "DefaultValue": null
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConversationMessages",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Full conversation history for context-aware responses. Array of ChatMessage objects with role and content properties. Preferred over UserPrompt for multi-turn conversations.",
+            "IsRequired": false,
+            "DefaultValue": null
+          }
+        },
+        {
+          "fields": {
+            "Name": "BettyResponse",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Betty's text response to the query",
+            "IsRequired": false,
+            "DefaultValue": null
+          }
+        },
+        {
+          "fields": {
+            "Name": "BettyReferences",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Optional array of reference objects with title and link properties, providing supporting documentation for Betty's response",
+            "IsRequired": false,
+            "DefaultValue": null
+          }
+        }
+      ]
+    }
+  }
+]

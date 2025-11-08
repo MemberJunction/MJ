@@ -1,0 +1,251 @@
+/**
+ * Betty Action - Interface to organization's knowledge base assistant
+ *
+ * Provides access to Betty Bot, an AI assistant trained on your organization's
+ * knowledge base including documentation, policies, procedures, and institutional knowledge.
+ * Betty can answer questions, provide guidance, and help users find relevant information
+ * from your company's internal knowledge repository.
+ *
+ * @module @memberjunction/actions
+ */
+
+import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { BaseAction } from "@memberjunction/actions";
+import { RegisterClass } from "@memberjunction/global";
+import { BettyBotLLM } from "@memberjunction/bettybot";
+import { ChatParams, ChatMessageRole, ChatMessage } from "@memberjunction/ai";
+import { ConfigInfo } from "@memberjunction/core";
+
+/**
+ * Betty Action - Queries your organization's knowledge base assistant
+ *
+ * This action provides access to Betty Bot, an AI assistant specifically trained on your
+ * organization's knowledge base. Betty can answer questions about company policies, procedures,
+ * documentation, and other institutional knowledge.
+ *
+ * Key features:
+ * - Answers questions using your organization's knowledge base
+ * - Provides contextual responses with optional reference links
+ * - Supports full conversation history for context-aware interactions
+ * - Returns structured responses with optional supporting documentation
+ *
+ * @example
+ * ```typescript
+ * // Simple question
+ * await runAction({
+ *   ActionName: 'Betty',
+ *   Params: [{
+ *     Name: 'UserPrompt',
+ *     Value: 'What is our vacation policy?'
+ *   }]
+ * });
+ *
+ * // Question with full conversation context
+ * await runAction({
+ *   ActionName: 'Betty',
+ *   Params: [{
+ *     Name: 'ConversationMessages',
+ *     Value: [
+ *       { role: 'user', content: 'What is our vacation policy?' },
+ *       { role: 'assistant', content: 'Our vacation policy...' },
+ *       { role: 'user', content: 'How do I request time off?' }
+ *     ]
+ *   }]
+ * });
+ * ```
+ */
+@RegisterClass(BaseAction, "__Betty")
+export class BettyAction extends BaseAction {
+
+    /**
+     * Executes Betty knowledge base query
+     *
+     * @param params - The action parameters containing:
+     *   - UserPrompt: Direct question for Betty (alternative to ConversationMessages)
+     *   - ConversationMessages: Full conversation history for context-aware responses (preferred)
+     *
+     * @returns Betty's response with optional reference links
+     */
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        try {
+            // Extract parameters
+            const userPromptParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'userprompt');
+            const conversationMessagesParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'conversationmessages');
+
+            // Build conversation messages array
+            let messages: ChatMessage[];
+
+            if (conversationMessagesParam && conversationMessagesParam.Value) {
+                // Use full conversation history if provided
+                if (Array.isArray(conversationMessagesParam.Value)) {
+                    messages = conversationMessagesParam.Value as ChatMessage[];
+                } else {
+                    return {
+                        Success: false,
+                        Message: "ConversationMessages parameter must be an array of ChatMessage objects",
+                        ResultCode: "INVALID_PARAMETERS"
+                    };
+                }
+            } else if (userPromptParam && userPromptParam.Value) {
+                // Fallback to simple user prompt
+                messages = [{
+                    role: ChatMessageRole.user,
+                    content: userPromptParam.Value.toString().trim()
+                }];
+            } else {
+                return {
+                    Success: false,
+                    Message: "Either UserPrompt or ConversationMessages parameter is required",
+                    ResultCode: "MISSING_PARAMETERS"
+                };
+            }
+
+            // Validate we have at least one message
+            if (messages.length === 0) {
+                return {
+                    Success: false,
+                    Message: "ConversationMessages cannot be empty",
+                    ResultCode: "INVALID_PARAMETERS"
+                };
+            }
+
+            // Get Betty API key from configuration
+            const apiKey = ConfigInfo.Instance.GetConfigValue('BettyBot_APIKey');
+            if (!apiKey) {
+                return {
+                    Success: false,
+                    Message: "BettyBot API key not configured. Please set BettyBot_APIKey in configuration.",
+                    ResultCode: "CONFIGURATION_ERROR"
+                };
+            }
+
+            // Create Betty LLM instance
+            const betty = new BettyBotLLM(apiKey);
+
+            // Prepare chat parameters
+            const chatParams: ChatParams = {
+                messages: messages,
+                model: 'betty', // Betty doesn't use model selection, but required by interface
+                temperature: 0.7, // Default temperature
+                max_tokens: 2000 // Reasonable default
+            };
+
+            // Execute chat completion
+            const result = await betty.GetChatCompletion(chatParams);
+
+            // Check for errors
+            if (!result.success || !result.data) {
+                return {
+                    Success: false,
+                    Message: result.errorMessage || "Betty returned an error",
+                    ResultCode: "BETTY_ERROR"
+                };
+            }
+
+            // Extract response
+            const assistantMessage = result.data.choices?.[0]?.message;
+            if (!assistantMessage) {
+                return {
+                    Success: false,
+                    Message: "Betty did not return a response",
+                    ResultCode: "EMPTY_RESPONSE"
+                };
+            }
+
+            const bettyResponse = assistantMessage.content;
+
+            // Extract references if provided (Betty returns references as second choice)
+            let bettyReferences: any[] | undefined;
+            if (result.data.choices.length > 1) {
+                const referencesChoice = result.data.choices[1];
+                if (referencesChoice.message.content) {
+                    // References are formatted as text, parse them
+                    bettyReferences = this.parseReferences(referencesChoice.message.content);
+                }
+            }
+
+            // Add output parameters
+            params.Params.push({
+                Name: 'BettyResponse',
+                Value: bettyResponse,
+                Type: "Output"
+            });
+
+            if (bettyReferences && bettyReferences.length > 0) {
+                params.Params.push({
+                    Name: 'BettyReferences',
+                    Value: bettyReferences,
+                    Type: "Output"
+                });
+            }
+
+            // Return success with formatted message
+            const resultData: any = {
+                response: bettyResponse
+            };
+
+            if (bettyReferences && bettyReferences.length > 0) {
+                resultData.references = bettyReferences;
+            }
+
+            return {
+                Success: true,
+                ResultCode: "SUCCESS",
+                Message: JSON.stringify(resultData, null, 2)
+            };
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            return {
+                Success: false,
+                Message: `Failed to query Betty: ${errorMessage}`,
+                ResultCode: "FAILED"
+            };
+        }
+    }
+
+    /**
+     * Parses Betty's reference text into structured reference objects
+     *
+     * @param referencesText - Formatted reference text from Betty
+     * @returns Array of reference objects
+     * @private
+     */
+    private parseReferences(referencesText: string): any[] {
+        const references: any[] = [];
+
+        // Betty formats references as "Title: URL"
+        // Example: "Company Policy: https://example.com/policy"
+        const lines = referencesText.split('\n');
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || trimmedLine.toLowerCase().includes('here are some')) {
+                continue; // Skip header or empty lines
+            }
+
+            const colonIndex = trimmedLine.lastIndexOf(':');
+            if (colonIndex > 0) {
+                const title = trimmedLine.substring(0, colonIndex).trim();
+                const link = trimmedLine.substring(colonIndex + 1).trim();
+
+                if (title && link) {
+                    references.push({
+                        title: title,
+                        link: link
+                    });
+                }
+            }
+        }
+
+        return references;
+    }
+}
+
+/**
+ * Loader function to ensure the BettyAction class is included in the bundle.
+ */
+export function LoadBettyAction() {
+    // This function ensures the class isn't tree-shaken
+}
