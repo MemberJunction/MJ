@@ -32,11 +32,12 @@
       "maxDepth": 3
     },
     "sanityChecks": {
-      "schemaLevel": false,
-      "crossSchema": false
+      "dependencyLevel": true,
+      "schemaLevel": true,
+      "crossSchema": true
     },
     "guardrails": {
-      "maxTokensPerRun": 2000000,
+      "maxTokensPerRun": 250000,
       "maxDurationSeconds": 2700,
       "warnThresholds": {
         "tokenPercentage": 80,

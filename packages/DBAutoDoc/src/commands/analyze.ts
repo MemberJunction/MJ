@@ -124,6 +124,22 @@ export default class Analyze extends Command {
 
           spinner.succeed(`Level ${levelNum} complete`);
 
+          // Dependency-level sanity check
+          if (config.analysis.sanityChecks.dependencyLevel && levels[levelNum].length > 0) {
+            spinner.start(`Performing dependency-level sanity check (Level ${levelNum})`);
+            const hasMaterialIssues = await analysisEngine.performDependencyLevelSanityCheck(
+              state,
+              run,
+              levelNum,
+              levels[levelNum]
+            );
+            if (hasMaterialIssues) {
+              spinner.warn(`Found issues at Level ${levelNum} - will refine in next iteration`);
+            } else {
+              spinner.succeed(`Dependency-level sanity check passed (Level ${levelNum})`);
+            }
+          }
+
           // Backpropagation
           if (triggers.length > 0 && config.analysis.backpropagation.enabled) {
             spinner.start(`Backpropagating ${triggers.length} insights`);
@@ -149,16 +165,28 @@ export default class Analyze extends Command {
       // Sanity checks
       if (config.analysis.sanityChecks.schemaLevel) {
         spinner.start('Performing schema-level sanity checks');
+        let schemaIssuesFound = false;
         for (const schema of state.schemas) {
-          await analysisEngine.performSchemaSanityCheck(state, run, schema);
+          const hasMaterialIssues = await analysisEngine.performSchemaLevelSanityCheck(state, run, schema);
+          if (hasMaterialIssues) {
+            schemaIssuesFound = true;
+          }
         }
-        spinner.succeed('Schema sanity checks complete');
+        if (schemaIssuesFound) {
+          spinner.warn('Schema-level sanity checks found issues - see warnings');
+        } else {
+          spinner.succeed('Schema-level sanity checks passed');
+        }
       }
 
       if (config.analysis.sanityChecks.crossSchema && state.schemas.length > 1) {
         spinner.start('Performing cross-schema sanity check');
-        await analysisEngine.performCrossSchemaSanityCheck(state, run);
-        spinner.succeed('Cross-schema sanity check complete');
+        const hasMaterialIssues = await analysisEngine.performCrossSchemaSanityCheck(state, run);
+        if (hasMaterialIssues) {
+          spinner.warn('Cross-schema sanity check found issues - see warnings');
+        } else {
+          spinner.succeed('Cross-schema sanity check passed');
+        }
       }
 
       // Complete run

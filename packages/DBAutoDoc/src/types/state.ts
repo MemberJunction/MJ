@@ -117,7 +117,7 @@ export interface DescriptionIteration {
   generatedAt: string;
   modelUsed: string;
   confidence?: number;
-  triggeredBy?: 'initial' | 'backpropagation' | 'refinement' | 'sanity_check';
+  triggeredBy?: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check';
   changedFrom?: string;
 }
 
@@ -129,6 +129,7 @@ export interface AnalysisRun {
   levelsProcessed: number;
   iterationsPerformed: number;
   backpropagationCount: number;
+  sanityCheckCount: number;
   converged: boolean;
   convergenceReason?: string;
   modelUsed: string;
@@ -141,6 +142,7 @@ export interface AnalysisRun {
   warnings: string[];
   errors: string[];
   processingLog: ProcessingLogEntry[];
+  sanityChecks: SanityCheckRecord[];
 }
 
 export interface ProcessingLogEntry {
@@ -148,7 +150,7 @@ export interface ProcessingLogEntry {
   level: number;
   schema: string;
   table: string;
-  action: 'analyze' | 'backpropagate' | 'sanity_check';
+  action: 'analyze' | 'backpropagate' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check';
   result: 'success' | 'changed' | 'unchanged' | 'error';
   message?: string;
   tokensUsed?: number;
@@ -165,4 +167,17 @@ export interface ProcessingLogEntry {
       changeReasoning: string;
     }>;
   };
+}
+
+export interface SanityCheckRecord {
+  timestamp: string;
+  checkType: 'dependency_level' | 'schema_level' | 'cross_schema';
+  scope: string; // e.g., "level 2", "AssociationDemo schema", "all schemas"
+  hasMaterialIssues: boolean;
+  issuesFound: number;
+  tablesAffected: string[];
+  result: 'no_issues' | 'issues_corrected' | 'issues_flagged';
+  tokensUsed: number;
+  promptInput?: string;
+  promptOutput?: string;
 }

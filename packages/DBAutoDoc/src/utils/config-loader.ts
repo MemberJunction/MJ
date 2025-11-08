@@ -96,6 +96,7 @@ export class ConfigLoader {
           maxDepth: 3
         },
         sanityChecks: {
+          dependencyLevel: true,
           schemaLevel: true,
           crossSchema: true
         }

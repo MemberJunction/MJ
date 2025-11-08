@@ -5,7 +5,15 @@
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition } from '../types/state.js';
 import { TableNode, BackpropagationTrigger, TableAnalysisContext } from '../types/analysis.js';
-import { TableAnalysisPromptResult, SchemaSanityCheckPromptResult, CrossSchemaSanityCheckPromptResult, SemanticComparisonPromptResult } from '../types/prompts.js';
+import {
+  TableAnalysisPromptResult,
+  SchemaSanityCheckPromptResult,
+  CrossSchemaSanityCheckPromptResult,
+  SemanticComparisonPromptResult,
+  DependencyLevelSanityCheckResult,
+  SchemaLevelSanityCheckResult,
+  CrossSchemaSanityCheckResult
+} from '../types/prompts.js';
 import { DBAutoDocConfig } from '../types/config.js';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { StateManager } from '../state/StateManager.js';
@@ -346,28 +354,115 @@ export class AnalysisEngine {
   }
 
   /**
-   * Perform schema-level sanity check
+   * Perform dependency-level sanity check
+   * Checks consistency across tables at the same dependency level
    */
-  public async performSchemaSanityCheck(
+  public async performDependencyLevelSanityCheck(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    level: number,
+    tables: TableNode[]
+  ): Promise<boolean> {
+    try {
+      const context = {
+        dependencyLevel: level,
+        tables: tables.map(t => {
+          const tableDef = t.tableDefinition;
+          return {
+            schema: t.schema,
+            table: t.table,
+            description: tableDef?.description || 'No description yet',
+            columns: tableDef?.columns.map(c => ({
+              name: c.name,
+              description: c.description || 'No description yet'
+            })) || [],
+            dependsOn: tableDef?.dependsOn || [],
+            dependents: tableDef?.dependents || []
+          };
+        })
+      };
+
+      const result = await this.promptEngine.executePrompt<DependencyLevelSanityCheckResult>(
+        'dependency-level-sanity-check',
+        context,
+        {
+          responseFormat: 'JSON'
+        }
+      );
+
+      if (result.success && result.result) {
+        // Track this sanity check
+        const sanityCheckRecord = {
+          timestamp: new Date().toISOString(),
+          checkType: 'dependency_level' as const,
+          scope: `level ${level}`,
+          hasMaterialIssues: result.result.hasMaterialIssues,
+          issuesFound: result.result.tableIssues.length,
+          tablesAffected: result.result.tableIssues.map(i => i.tableName),
+          result: result.result.hasMaterialIssues ? 'issues_corrected' as const : 'no_issues' as const,
+          tokensUsed: result.tokensUsed,
+          promptInput: result.promptInput,
+          promptOutput: result.promptOutput
+        };
+
+        run.sanityChecks.push(sanityCheckRecord);
+        run.sanityCheckCount++;
+
+        // Track tokens
+        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+
+        // Log issues
+        if (result.result.hasMaterialIssues) {
+          for (const issue of result.result.tableIssues) {
+            this.iterationTracker.addWarning(
+              run,
+              `[Level ${level}] ${issue.severity.toUpperCase()}: ${issue.tableName} - ${issue.description}`
+            );
+          }
+        }
+
+        return result.result.hasMaterialIssues;
+      }
+
+      return false;
+    } catch (error) {
+      this.iterationTracker.addError(
+        run,
+        `Dependency-level sanity check failed for level ${level}: ${(error as Error).message}`
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Perform schema-level sanity check
+   * Holistic review after entire schema is analyzed
+   */
+  public async performSchemaLevelSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     schema: SchemaDefinition
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const context = {
         schemaName: schema.name,
         tables: schema.tables.map(t => ({
           name: t.name,
           description: t.description || 'No description yet',
+          rowCount: t.rowCount,
+          dependencyLevel: t.dependencyLevel,
           columns: t.columns.map(c => ({
             name: c.name,
+            dataType: c.dataType,
             description: c.description || 'No description yet'
-          }))
+          })),
+          dependsOn: t.dependsOn,
+          dependents: t.dependents
         }))
       };
 
-      const result = await this.promptEngine.executePrompt<SchemaSanityCheckPromptResult>(
-        'schema-sanity-check',
+      const result = await this.promptEngine.executePrompt<SchemaLevelSanityCheckResult>(
+        'schema-level-sanity-check',
         context,
         {
           responseFormat: 'JSON'
@@ -375,56 +470,99 @@ export class AnalysisEngine {
       );
 
       if (result.success && result.result) {
-        // Update schema description
-        if (result.result.schemaDescription) {
-          this.stateManager.updateSchemaDescription(
-            schema,
-            result.result.schemaDescription,
-            'Inferred from table-level analysis',
-            run.modelUsed
-          );
+        // Update schema description if provided
+        if (result.result.schemaLevelIssues.some(i => i.suggestedSchemaDescription)) {
+          const suggested = result.result.schemaLevelIssues.find(i => i.suggestedSchemaDescription);
+          if (suggested?.suggestedSchemaDescription) {
+            this.stateManager.updateSchemaDescription(
+              schema,
+              suggested.suggestedSchemaDescription,
+              'Generated from schema-level sanity check',
+              run.modelUsed
+            );
+          }
         }
 
-        // Log inconsistencies as warnings
-        for (const inconsistency of result.result.inconsistencies || []) {
-          this.iterationTracker.addWarning(run, `Schema ${schema.name}: ${inconsistency}`);
-        }
+        // Track this sanity check
+        const sanityCheckRecord = {
+          timestamp: new Date().toISOString(),
+          checkType: 'schema_level' as const,
+          scope: `${schema.name} schema`,
+          hasMaterialIssues: result.result.hasMaterialIssues,
+          issuesFound: result.result.schemaLevelIssues.length + result.result.tableIssues.length,
+          tablesAffected: [
+            ...result.result.tableIssues.map(i => i.tableName),
+            ...result.result.schemaLevelIssues.flatMap(i => i.affectedTables)
+          ],
+          result: result.result.hasMaterialIssues ? 'issues_corrected' as const : 'no_issues' as const,
+          tokensUsed: result.tokensUsed,
+          promptInput: result.promptInput,
+          promptOutput: result.promptOutput
+        };
+
+        run.sanityChecks.push(sanityCheckRecord);
+        run.sanityCheckCount++;
 
         // Track tokens
         this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+
+        // Log issues
+        if (result.result.hasMaterialIssues) {
+          for (const issue of result.result.schemaLevelIssues) {
+            this.iterationTracker.addWarning(
+              run,
+              `[Schema ${schema.name}] ${issue.severity.toUpperCase()}: ${issue.issueType} - ${issue.description}`
+            );
+          }
+          for (const issue of result.result.tableIssues) {
+            this.iterationTracker.addWarning(
+              run,
+              `[Schema ${schema.name}] ${issue.severity.toUpperCase()}: ${issue.tableName} - ${issue.description}`
+            );
+          }
+        }
+
+        return result.result.hasMaterialIssues;
       }
+
+      return false;
     } catch (error) {
       this.iterationTracker.addError(
         run,
-        `Schema sanity check failed for ${schema.name}: ${(error as Error).message}`
+        `Schema-level sanity check failed for ${schema.name}: ${(error as Error).message}`
       );
+      return false;
     }
   }
 
   /**
    * Perform cross-schema sanity check
+   * Validates consistency across all schemas
    */
   public async performCrossSchemaSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (state.schemas.length <= 1) {
-      return; // No need for cross-schema check
+      return false; // No need for cross-schema check
     }
 
     try {
       const context = {
         schemas: state.schemas.map(s => ({
-          name: s.name,
+          schemaName: s.name,
           description: s.description || 'No description yet',
           tableCount: s.tables.length,
-          inferredPurpose: s.inferredPurpose,
-          businessDomains: s.businessDomains
+          tables: s.tables.map(t => ({
+            name: t.name,
+            description: t.description || 'No description yet',
+            rowCount: t.rowCount
+          }))
         }))
       };
 
-      const result = await this.promptEngine.executePrompt<CrossSchemaSanityCheckPromptResult>(
-        'cross-schema-check',
+      const result = await this.promptEngine.executePrompt<CrossSchemaSanityCheckResult>(
+        'cross-schema-sanity-check',
         context,
         {
           responseFormat: 'JSON'
@@ -432,19 +570,54 @@ export class AnalysisEngine {
       );
 
       if (result.success && result.result) {
-        // Log insights as warnings (informational)
-        for (const insight of result.result.insights || []) {
-          this.iterationTracker.addWarning(run, `Cross-schema insight: ${insight}`);
-        }
+        // Track this sanity check
+        const sanityCheckRecord = {
+          timestamp: new Date().toISOString(),
+          checkType: 'cross_schema' as const,
+          scope: 'all schemas',
+          hasMaterialIssues: result.result.hasMaterialIssues,
+          issuesFound: result.result.crossSchemaIssues.length + result.result.schemaIssues.length,
+          tablesAffected: result.result.crossSchemaIssues.flatMap(i =>
+            i.affectedTables.map(t => `${t.schema}.${t.table}`)
+          ),
+          result: result.result.hasMaterialIssues ? 'issues_corrected' as const : 'no_issues' as const,
+          tokensUsed: result.tokensUsed,
+          promptInput: result.promptInput,
+          promptOutput: result.promptOutput
+        };
+
+        run.sanityChecks.push(sanityCheckRecord);
+        run.sanityCheckCount++;
 
         // Track tokens
         this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+
+        // Log issues
+        if (result.result.hasMaterialIssues) {
+          for (const issue of result.result.crossSchemaIssues) {
+            this.iterationTracker.addWarning(
+              run,
+              `[Cross-Schema] ${issue.severity.toUpperCase()}: ${issue.issueType} - ${issue.description}`
+            );
+          }
+          for (const issue of result.result.schemaIssues) {
+            this.iterationTracker.addWarning(
+              run,
+              `[Schema ${issue.schemaName}] ${issue.issueType} - ${issue.description}`
+            );
+          }
+        }
+
+        return result.result.hasMaterialIssues;
       }
+
+      return false;
     } catch (error) {
       this.iterationTracker.addError(
         run,
         `Cross-schema sanity check failed: ${(error as Error).message}`
       );
+      return false;
     }
   }
 

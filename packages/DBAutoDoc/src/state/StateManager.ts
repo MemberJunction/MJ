@@ -121,6 +121,7 @@ export class StateManager {
       levelsProcessed: 0,
       iterationsPerformed: 0,
       backpropagationCount: 0,
+      sanityCheckCount: 0,
       converged: false,
       modelUsed,
       vendor,
@@ -131,7 +132,8 @@ export class StateManager {
       estimatedCost: 0,
       warnings: [],
       errors: [],
-      processingLog: []
+      processingLog: [],
+      sanityChecks: []
     };
 
     state.analysisRuns.push(run);
@@ -147,7 +149,7 @@ export class StateManager {
     reasoning: string,
     confidence: number,
     modelUsed: string,
-    triggeredBy: 'initial' | 'backpropagation' | 'refinement' | 'sanity_check'
+    triggeredBy: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check'
   ): void {
     const iteration: DescriptionIteration = {
       description,
@@ -197,7 +199,7 @@ export class StateManager {
       reasoning,
       generatedAt: new Date().toISOString(),
       modelUsed,
-      triggeredBy: 'sanity_check'
+      triggeredBy: 'schema_sanity_check'
     };
 
     schema.descriptionIterations.push(iteration);

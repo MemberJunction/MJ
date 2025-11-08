@@ -67,6 +67,7 @@ export interface BackpropagationConfig {
 }
 
 export interface SanityCheckConfig {
+  dependencyLevel: boolean;
   schemaLevel: boolean;
   crossSchema: boolean;
 }
