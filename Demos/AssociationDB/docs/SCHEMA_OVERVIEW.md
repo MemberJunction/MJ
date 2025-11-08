@@ -4,36 +4,36 @@ Complete documentation of all schemas, tables, and relationships in the Associat
 
 ## 🏗️ Architecture
 
-The database uses a **multi-schema architecture** with clear domain separation:
+The database uses a **single consolidated schema (AssociationDemo)** with logical domain separation through table naming conventions and grouping:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     MEMBERSHIP (Core)                        │
-│  Organizations, Members, Membership Types, Memberships       │
+│                  AssociationDemo Schema                      │
+│  All tables organized by business domain prefixes/groups     │
 └──────────────────┬──────────────────────────────────────────┘
-                   │ Referenced by all other domains
+                   │
         ┌──────────┼──────────┬──────────┬──────────┐
         ▼          ▼          ▼          ▼          ▼
-    ┌───────┐  ┌────────┐ ┌────────┐ ┌──────────┐ ┌───────────┐
-    │EVENTS │  │LEARNING│ │FINANCE │ │MARKETING │ │  EMAIL    │
-    └───────┘  └────────┘ └────────┘ └──────────┘ └───────────┘
+    Member/    Event/     Course/    Invoice/  Campaign/
+    Membership EventReg   Enrollment  LineItem  Segment
 
         ┌──────────┬──────────┐
         ▼          ▼
-    ┌──────────┐ ┌───────────┐
-    │CHAPTERS  │ │GOVERNANCE │
-    └──────────┘ └───────────┘
+    Chapter/   Committee/
+    ChapterMem BoardMember
 ```
 
-## 📊 Schemas
+## 📊 Business Domains
 
-### 1. Membership Schema
+All tables reside in the `AssociationDemo` schema but are logically organized into 8 business domains:
+
+### 1. Membership Domain (Core)
 
 **Purpose**: Core member and organization data - foundation for all other domains
 
 #### Tables
 
-##### membership.Organization
+##### AssociationDemo.Organization
 Organizations that members belong to or represent.
 
 | Column | Type | Description |
@@ -51,7 +51,7 @@ Organizations that members belong to or represent.
 
 **Sample Count**: 40 organizations across technology, healthcare, finance, consulting, and international sectors
 
-##### membership.MembershipType
+##### AssociationDemo.MembershipType
 Types of memberships available.
 
 | Column | Type | Description |
@@ -69,7 +69,7 @@ Types of memberships available.
 
 **Sample Count**: 8 types (Individual, Student, Corporate, Lifetime, Retired, Early Career, International, Honorary)
 
-##### membership.Member
+##### AssociationDemo.Member
 Individual members of the association.
 
 | Column | Type | Description |
@@ -90,7 +90,7 @@ Individual members of the association.
 
 **Sample Count**: 500 members with realistic names, titles, and distribution across organizations
 
-##### membership.Membership
+##### AssociationDemo.Membership
 Individual membership records (includes renewal history).
 
 | Column | Type | Description |
@@ -108,13 +108,13 @@ Individual membership records (includes renewal history).
 
 ---
 
-### 2. Events Schema
+### 2. Events Domain
 
 **Purpose**: Conference, webinar, workshop, and meeting management
 
 #### Tables
 
-##### events.Event
+##### AssociationDemo.Event
 Events organized by the association.
 
 | Column | Type | Description |
@@ -142,7 +142,7 @@ Events organized by the association.
 
 **Sample Count**: 35 events (5 annual conferences 2020-2024, virtual summits, workshops, webinars, networking)
 
-##### events.EventSession
+##### AssociationDemo.EventSession
 Individual sessions within multi-track events.
 
 | Column | Type | Description |
@@ -161,7 +161,7 @@ Individual sessions within multi-track events.
 
 **Sample Count**: 85 sessions across major conferences
 
-##### events.EventRegistration
+##### AssociationDemo.EventRegistration
 Member registrations and attendance tracking.
 
 | Column | Type | Description |
@@ -183,13 +183,13 @@ Member registrations and attendance tracking.
 
 ---
 
-### 3. Learning Schema
+### 3. Learning Domain
 
 **Purpose**: Learning management system (LMS) for courses and certifications
 
 #### Tables
 
-##### learning.Course
+##### AssociationDemo.Course
 Educational courses and certification programs.
 
 | Column | Type | Description |
