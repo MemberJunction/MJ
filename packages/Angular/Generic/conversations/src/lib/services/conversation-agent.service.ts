@@ -367,8 +367,10 @@ export class ConversationAgentService {
       let aiConfigurationId: string | undefined = undefined;
       if (agentConfigurationPresetId) {
         // Get the preset from AIEngineBase to extract the AIConfigurationID
-        const preset = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false)
-          .find(p => p.ID === agentConfigurationPresetId);
+        const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
+        // check by preset ID or AIConfigurationID - since sometimes we have the actual
+        // configuration ID. Since both UUID no collisions should ever be possible.
+        const preset = presets.find(p => p.ID === agentConfigurationPresetId || p.AIConfigurationID === agentConfigurationPresetId);
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
