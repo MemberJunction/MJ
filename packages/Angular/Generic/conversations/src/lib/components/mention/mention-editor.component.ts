@@ -13,7 +13,7 @@ import {
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { UserInfo } from '@memberjunction/core';
-import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentConfigurationEntity } from '@memberjunction/core-entities';
 
 /**
@@ -342,24 +342,13 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // For agents, get configuration presets (AIEngine.Config() already called during app init)
     let presets: AIAgentConfigurationEntity[] = [];
     if (suggestion.type === 'agent') {
-      console.log(`[MentionEditor] Loading presets for agent: ${suggestion.name} (${suggestion.id})`);
-      presets = AIEngine.Instance.GetAgentConfigurationPresets(suggestion.id, true);
-      console.log(`[MentionEditor] Found ${presets.length} active presets:`, presets.map(p => ({
-        Name: p.Name,
-        DisplayName: p.DisplayName,
-        IsDefault: p.IsDefault,
-        Priority: p.Priority,
-        AIConfigurationID: p.AIConfigurationID
-      })));
+      presets = AIEngineBase.Instance.GetAgentConfigurationPresets(suggestion.id, true);
 
       // Store default preset
       const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
       if (defaultPreset) {
-        console.log(`[MentionEditor] Using default preset: ${defaultPreset.DisplayName} (${defaultPreset.Name})`);
         chip.setAttribute('data-preset-id', defaultPreset.AIConfigurationID || '');
         chip.setAttribute('data-preset-name', defaultPreset.Name || '');
-      } else {
-        console.log(`[MentionEditor] No default preset found for agent`);
       }
     }
 
@@ -424,13 +413,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     // Add dropdown if 2+ presets for agents
     if (suggestion.type === 'agent' && presets.length >= 2) {
-      console.log(`[MentionEditor] Adding configuration dropdown with ${presets.length} presets`);
       this.addConfigurationDropdown(chip, presets);
-    } else if (suggestion.type === 'agent') {
-      console.log(`[MentionEditor] Skipping dropdown - only ${presets.length} preset(s) available`);
     }
-
-    console.log('[MentionEditor] Created chip:', chip.outerHTML);
 
     return chip;
   }
@@ -439,15 +423,26 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Add configuration preset dropdown to agent chip
    */
   private addConfigurationDropdown(chip: HTMLSpanElement, presets: AIAgentConfigurationEntity[]): void {
-    // Add vertical divider
-    const divider = document.createElement('span');
-    divider.style.cssText = `
-      width: 1px;
-      height: 16px;
-      background: rgba(255, 255, 255, 0.3);
-      margin: 0 6px 0 8px;
+    // Store default preset for comparison
+    const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
+
+    // Add preset indicator text (only shown when non-default selected)
+    const presetIndicator = document.createElement('span');
+    presetIndicator.className = 'preset-indicator';
+    presetIndicator.style.cssText = `
+      display: none;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+      background: rgba(255, 255, 255, 0.25);
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 4px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      border: 1px solid rgba(255, 255, 255, 0.15);
     `;
-    chip.appendChild(divider);
+    chip.appendChild(presetIndicator);
 
     // Add dropdown chevron button
     const chevron = document.createElement('i');
@@ -460,22 +455,19 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     `;
     chip.appendChild(chevron);
 
-    // Create dropdown menu (initially hidden)
+    // Create dropdown menu (initially hidden) - append to body for global positioning
     const dropdown = document.createElement('div');
     dropdown.className = 'preset-dropdown';
     dropdown.style.cssText = `
       display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      margin-top: 4px;
+      position: fixed;
       background: white;
       border: 1px solid #ddd;
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       min-width: 200px;
       max-width: 300px;
-      z-index: 1000;
+      z-index: 10000;
       overflow: hidden;
     `;
 
@@ -549,6 +541,15 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         chip.setAttribute('data-preset-id', preset.AIConfigurationID || '');
         chip.setAttribute('data-preset-name', preset.Name || '');
 
+        // Update preset indicator visibility and text
+        const isDefault = preset.AIConfigurationID === defaultPreset.AIConfigurationID;
+        if (isDefault) {
+          presetIndicator.style.display = 'none';
+        } else {
+          presetIndicator.style.display = 'inline';
+          presetIndicator.textContent = preset.DisplayName || preset.Name;
+        }
+
         // Update checkmarks
         dropdown.querySelectorAll('.preset-option').forEach((opt, idx) => {
           const check = opt.querySelector('i.fa-check') as HTMLElement;
@@ -564,31 +565,46 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       dropdown.appendChild(option);
     });
 
-    // Add dropdown to chip (make chip position: relative)
-    chip.style.position = 'relative';
-    chip.appendChild(dropdown);
+    // Append dropdown to document body for global positioning
+    document.body.appendChild(dropdown);
+
+    // Helper function to position dropdown relative to chip
+    const positionDropdown = () => {
+      const chipRect = chip.getBoundingClientRect();
+      dropdown.style.left = `${chipRect.left}px`;
+      dropdown.style.top = `${chipRect.bottom + 4}px`;
+    };
 
     // Toggle dropdown on chevron click
     chevron.addEventListener('click', (e) => {
       e.stopPropagation();
       const isVisible = dropdown.style.display === 'block';
-      dropdown.style.display = isVisible ? 'none' : 'block';
+
+      if (isVisible) {
+        dropdown.style.display = 'none';
+      } else {
+        positionDropdown();
+        dropdown.style.display = 'block';
+      }
     });
 
     // Close dropdown when clicking outside
     const closeDropdown = (e: MouseEvent) => {
-      if (!chip.contains(e.target as Node)) {
+      if (!dropdown.contains(e.target as Node) && !chip.contains(e.target as Node)) {
         dropdown.style.display = 'none';
       }
     };
     document.addEventListener('click', closeDropdown);
 
-    // Cleanup listener when chip is removed
+    // Cleanup: remove dropdown from body and event listeners when chip is removed
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.removedNodes.forEach((node) => {
           if (node === chip) {
             document.removeEventListener('click', closeDropdown);
+            if (dropdown.parentNode) {
+              dropdown.parentNode.removeChild(dropdown);
+            }
             observer.disconnect();
           }
         });
