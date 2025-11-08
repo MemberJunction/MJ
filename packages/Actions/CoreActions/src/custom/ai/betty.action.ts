@@ -29,6 +29,11 @@ import { ConfigInfo } from "@memberjunction/core";
  * - Supports full conversation history for context-aware interactions
  * - Returns structured responses with optional supporting documentation
  *
+ * Response format:
+ * - BettyResponse: Text answer from Betty
+ * - BettyReferences: Array of reference objects (if available)
+ *   - Each reference contains: { link: string, title: string, type: string }
+ *
  * @example
  * ```typescript
  * // Simple question
@@ -154,12 +159,28 @@ export class BettyAction extends BaseAction {
 
             const bettyResponse = assistantMessage.content;
 
-            // Extract references if provided (Betty returns references as second choice)
+            // Extract references if provided
+            // Betty returns references in multiple formats:
+            // - choice[1]: Formatted text (for display)
+            // - choice[2]: Raw JSON structure (for programmatic access)
             let bettyReferences: any[] | undefined;
-            if (result.data.choices.length > 1) {
+            if (result.data.choices.length > 2) {
+                // Use the structured JSON from choice[2]
+                const referencesJsonChoice = result.data.choices[2];
+                if (referencesJsonChoice.message.content && referencesJsonChoice.finish_reason === 'references_json') {
+                    try {
+                        bettyReferences = JSON.parse(referencesJsonChoice.message.content);
+                    } catch (parseError) {
+                        // If JSON parsing fails, fall back to text parsing from choice[1]
+                        if (result.data.choices.length > 1) {
+                            bettyReferences = this.parseReferences(result.data.choices[1].message.content);
+                        }
+                    }
+                }
+            } else if (result.data.choices.length > 1) {
+                // Backwards compatibility: parse text format from choice[1]
                 const referencesChoice = result.data.choices[1];
                 if (referencesChoice.message.content) {
-                    // References are formatted as text, parse them
                     bettyReferences = this.parseReferences(referencesChoice.message.content);
                 }
             }
@@ -206,10 +227,14 @@ export class BettyAction extends BaseAction {
     }
 
     /**
-     * Parses Betty's reference text into structured reference objects
+     * Parses Betty's reference text into structured reference objects.
+     * This is a fallback method for backwards compatibility when structured JSON is not available.
+     *
+     * Normally, Betty returns structured references as JSON in choice[2], but if that's not
+     * available (older API version or error), this method parses the formatted text from choice[1].
      *
      * @param referencesText - Formatted reference text from Betty
-     * @returns Array of reference objects
+     * @returns Array of reference objects with title and link properties
      * @private
      */
     private parseReferences(referencesText: string): any[] {
