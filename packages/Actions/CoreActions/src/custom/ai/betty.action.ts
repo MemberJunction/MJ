@@ -199,6 +199,27 @@ export class BettyAction extends BaseAction {
                 });
             }
 
+            // Create formatted response with markdown reference links
+            let formattedResponse = bettyResponse;
+            if (bettyReferences && bettyReferences.length > 0) {
+                formattedResponse += '\n\n**References:**\n';
+                for (const ref of bettyReferences) {
+                    if (ref.title && ref.link) {
+                        formattedResponse += `- [${ref.title}](${ref.link})`;
+                        if (ref.type) {
+                            formattedResponse += ` (${ref.type})`;
+                        }
+                        formattedResponse += '\n';
+                    }
+                }
+            }
+
+            params.Params.push({
+                Name: 'FormattedResponse',
+                Value: formattedResponse,
+                Type: "Output"
+            });
+
             // Return success with formatted message
             const resultData: any = {
                 response: bettyResponse

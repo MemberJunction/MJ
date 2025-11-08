@@ -45,7 +45,7 @@
               "ConversationMessages": "conversation.all"
             },
             "ActionOutputMapping": {
-              "BettyResponse": "$message",
+              "FormattedResponse": "$message",
               "BettyReferences": "references"
             },
             "Status": "Active",
@@ -60,8 +60,8 @@
             "ID": "254A75AF-2D6C-4DC0-BA42-F0B3D03F5788"
           },
           "sync": {
-            "lastModified": "2025-11-08T22:40:21.044Z",
-            "checksum": "c9c1e77ad63058e376012c7ff80dadd864d3392837a3c537be666221974add1d"
+            "lastModified": "2025-11-08T22:52:49.120Z",
+            "checksum": "2eea0a56c3befffdd4aafe95315d2e458489bfd1927c7d0fb6ec7bc309c9a6c9"
           }
         }
       ]
