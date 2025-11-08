@@ -1,11 +1,11 @@
 [
   {
     "fields": {
-      "Name": "Web Research Agent Prompt",
-      "Description": "System prompt for the Web Research Agent sub-agent. Guides the agent in formulating search queries, evaluating web sources, and extracting relevant research information from the internet.",
+      "Name": "Knowledge Base Research Agent Prompt",
+      "Description": "System prompt for the Knowledge Base Research Agent sub-agent. Guides the agent in formulating knowledge base queries, leveraging conversation context, and extracting relevant information from organizational knowledge systems like Betty.",
       "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
       "PromptRole": "System",
-      "TemplateText": "@file:templates/research-agent/web-research-agent.md",
+      "TemplateText": "@file:templates/research-agent/kb-research-agent.md",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "Status": "Active",
       "PromptPosition": "First"
@@ -20,10 +20,10 @@
             "Priority": 10
           },
           "primaryKey": {
-            "ID": "6851B1D0-6CDE-4975-A0E4-EB213C0C9301"
+            "ID": "8A1710E5-4B83-48CC-B54A-C15DCED743A1"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:35.875Z",
+            "lastModified": "2025-11-08T21:22:10.806Z",
             "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
           }
         },
@@ -35,10 +35,10 @@
             "Priority": 5
           },
           "primaryKey": {
-            "ID": "DE16E65B-E053-4C9C-AE85-E29E39C52EA0"
+            "ID": "1CB2B194-EEF2-40D5-B471-0697E4E7F5A9"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:35.888Z",
+            "lastModified": "2025-11-08T21:22:10.816Z",
             "checksum": "f9c074f4c7d9339c6b106c21d307d063b62cd5acf7d9e9a2960ffae45591a2bb"
           }
         },
@@ -50,21 +50,21 @@
             "Priority": 1
           },
           "primaryKey": {
-            "ID": "B38C2D1F-F349-4BF4-8C8A-A95A79CA2F64"
+            "ID": "5AAAB4EE-553D-47A1-9D61-579DDDF39FF9"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:35.898Z",
+            "lastModified": "2025-11-08T21:22:10.825Z",
             "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "60407FD8-1EC8-48A1-9D79-AA43B66A2026"
+      "ID": "B3DBD3AC-A529-45A9-AAB5-F682E2E0F73A"
     },
     "sync": {
-      "lastModified": "2025-11-08T21:22:19.240Z",
-      "checksum": "22cd39108f692075b6fcec6c696722f49046c8b5e8390b937ec76a569ed5a459"
+      "lastModified": "2025-11-08T21:22:10.761Z",
+      "checksum": "25314d1117ff3c0361d508ce8424f8916efd7e3f7c315b5ee10099473534fb26"
     }
   }
 ]

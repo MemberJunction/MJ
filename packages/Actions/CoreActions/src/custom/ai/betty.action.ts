@@ -12,9 +12,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { BettyBotLLM } from "@memberjunction/bettybot";
-import { ChatParams, ChatMessageRole, ChatMessage } from "@memberjunction/ai";
-import { ConfigInfo } from "@memberjunction/core";
+import { BettyBotLLM } from "@memberjunction/ai-betty-bot";
+import { ChatParams, ChatMessageRole, ChatMessage, GetAIAPIKey } from "@memberjunction/ai";
 
 /**
  * Betty Action - Queries your organization's knowledge base assistant
@@ -114,13 +113,13 @@ export class BettyAction extends BaseAction {
                 };
             }
 
-            // Get Betty API key from configuration
-            const apiKey = ConfigInfo.Instance.GetConfigValue('BettyBot_APIKey');
+            // Get Betty API key using AI package standard approach
+            const apiKey = GetAIAPIKey('BettyBotLLM');
             if (!apiKey) {
                 return {
                     Success: false,
-                    Message: "BettyBot API key not configured. Please set BettyBot_APIKey in configuration.",
-                    ResultCode: "CONFIGURATION_ERROR"
+                    Message: "Betty API key not found. Set AI_VENDOR_API_KEY__BETTYBOTLLM environment variable",
+                    ResultCode: "MISSING_API_KEY"
                 };
             }
 
@@ -132,11 +131,11 @@ export class BettyAction extends BaseAction {
                 messages: messages,
                 model: 'betty', // Betty doesn't use model selection, but required by interface
                 temperature: 0.7, // Default temperature
-                max_tokens: 2000 // Reasonable default
+                maxOutputTokens: 2000 // Reasonable default
             };
 
             // Execute chat completion
-            const result = await betty.GetChatCompletion(chatParams);
+            const result = await betty.ChatCompletion(chatParams);
 
             // Check for errors
             if (!result.success || !result.data) {

@@ -575,7 +575,9 @@
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
             "Status": "Active",
-            "SubAgentOutputMapping": "{\"*\": \"webResearch\"}",
+            "SubAgentOutputMapping": {
+              "*": "webResearch"
+            },
             "SubAgentContextPaths": [
               "*"
             ]
@@ -584,8 +586,8 @@
             "ID": "EC2EE264-31B8-42CE-AE9A-9177ACFC2947"
           },
           "sync": {
-            "lastModified": "2025-10-17T20:46:39.202Z",
-            "checksum": "174ae5edf5013f1cbab0fa834134f58d7f3b470d7ef1842257409c62fd479a55"
+            "lastModified": "2025-11-08T21:22:21.476Z",
+            "checksum": "0eab7c0145c086a1d705bd00cf4f1b8b171d3883fb01f3636fcf4299b2912d38"
           }
         },
         {
@@ -593,7 +595,9 @@
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
             "Status": "Active",
-            "SubAgentOutputMapping": "{\"*\": \"databaseResearch\"}",
+            "SubAgentOutputMapping": {
+              "*": "databaseResearch"
+            },
             "SubAgentContextPaths": [
               "*"
             ]
@@ -602,8 +606,8 @@
             "ID": "8DB9A71A-FD38-43A3-BE9C-759F4332ADD8"
           },
           "sync": {
-            "lastModified": "2025-10-17T20:46:39.213Z",
-            "checksum": "91dc174c9236c52b7a264e180df4e2cc4855247fccdc433f691dff6cd56b321f"
+            "lastModified": "2025-11-08T21:22:21.574Z",
+            "checksum": "5a3bda7291c9a0f9004966ca5041517d108efc0f413426d5bf13e7d3a33a400d"
           }
         },
         {
@@ -611,7 +615,9 @@
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=File Research Agent",
             "Status": "Active",
-            "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}",
+            "SubAgentOutputMapping": {
+              "*": "fileResearch"
+            },
             "SubAgentContextPaths": [
               "*"
             ]
@@ -620,8 +626,28 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-17T20:46:39.223Z",
-            "checksum": "81dbee9db56f4de70b4a546401709691b6d115cc5202f9ade0c3ff9f9aeaebe0"
+            "lastModified": "2025-11-08T21:22:21.587Z",
+            "checksum": "d26dd752c11cde23ea287403ddacc2c4424fd2cbeec2920ede39db9359bc5965"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Knowledge Base Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "*": "knowledgeBaseResearch"
+            },
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "950F921A-6C52-4170-8FFC-EDF166D3675C"
+          },
+          "sync": {
+            "lastModified": "2025-11-08T21:22:21.561Z",
+            "checksum": "687f5919aa025ec3e85c12f2cd87ec821b35bc68ab217c4f086acdcea5cab8fc"
           }
         }
       ],
