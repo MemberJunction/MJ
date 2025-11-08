@@ -3,13 +3,23 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Content Details Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="contentDetails"
-        sectionName="Content Details"
-        icon="fa fa-file-code"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
         [form]="this"
         [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentSourceID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -39,50 +49,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Checksum"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Text"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentType"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Source Information Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="sourceInformation"
-        sectionName="Source Information"
-        icon="fa fa-link"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentSourceID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="ContentSourceTypeID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -103,11 +69,53 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="Checksum"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="URL"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Text"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Source Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="sourceInformation"
+        sectionName="Source Information"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -135,25 +143,17 @@
 
     </mj-collapsible-panel>
 
-    <!-- System Metadata Section -->
+    <!-- Content Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
+        sectionKey="contentDetails"
+        sectionName="Content Details"
+        icon="fa fa-file-code"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
+            [ShowLabel]="false"
+            FieldName="ContentType"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"

@@ -14,9 +14,7 @@ export class ResourceLinkFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'linkDetails', sectionName: 'Link Details', isExpanded: true },
-            { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }

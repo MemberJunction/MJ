@@ -109,6 +109,7 @@ export interface Mention {
   type: MentionType;
   id: string;
   name: string;
+  configurationId?: string; // Optional AI configuration preset ID for agents
 }
 
 /**

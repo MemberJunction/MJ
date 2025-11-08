@@ -447,6 +447,22 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     isFirstMessage: boolean
   ): Promise<void> {
     console.log('🎯 Direct @mention detected, bypassing Sage');
+
+    // The agentMention already has configurationId from JSON parsing
+    // If it wasn't in JSON (legacy format), try to get from chip data
+    if (!agentMention.configurationId) {
+      const chipData = this.inputBox?.getMentionChipsData() || [];
+      const agentChip = chipData.find(chip => chip.id === agentMention.id && chip.type === 'agent');
+      if (agentChip?.presetId) {
+        agentMention.configurationId = agentChip.presetId;
+        console.log(`🎯 Using configuration preset from chip: ${agentChip.presetName} (${agentChip.presetId})`);
+      }
+    }
+
+    if (agentMention.configurationId) {
+      console.log(`🎯 Agent mention has configuration ID: ${agentMention.configurationId}`);
+    }
+
     await this.executeRouteWithNaming(
       () => this.invokeAgentDirectly(messageDetail, agentMention, this.conversationId),
       messageDetail.Message,
@@ -1673,7 +1689,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         previousPayload, // Pass previous payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
-        artifactInfo?.versionId
+        artifactInfo?.versionId,
+        agentMention.configurationId // Pass configuration preset ID
       );
 
       // Remove from active tasks
@@ -1760,6 +1777,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     let previousPayload: any = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
+    let previousConfigurationId: string | undefined = undefined;
 
     // Use targetArtifactVersionId if specified (from intent check)
     if (targetArtifactVersionId) {
@@ -1813,40 +1831,49 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
     }
 
+    // Find the last AI message from this agent (needed for both payload and configuration)
+    const lastAIMessage = this.conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+
+    // Extract configuration from previous agent run (for configuration continuity)
+    if (lastAIMessage && this.agentRunsByDetailId) {
+      const previousAgentRun = this.agentRunsByDetailId.get(lastAIMessage.ID);
+      if (previousAgentRun?.ConfigurationID) {
+        previousConfigurationId = previousAgentRun.ConfigurationID;
+        console.log(`🎯 Using configuration from previous agent run: ${previousConfigurationId}`);
+      } else {
+        console.log('📝 No configuration found on previous agent run, will use agent default');
+      }
+    }
+
     // Fall back to most recent artifact if no target specified or target not found
-    if (!previousPayload) {
+    if (!previousPayload && lastAIMessage) {
       console.log('📦 Using most recent artifact from last agent message');
 
-      // Find the last AI message from this same agent
-      const lastAIMessage = this.conversationHistory
-        .slice()
-        .reverse()
-        .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
+      let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
+      if (!artifacts || artifacts.length === 0) {
+        artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
+      }
 
-      if (lastAIMessage) {
-        // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
-        let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
-        if (!artifacts || artifacts.length === 0) {
-          artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
-        }
-
-        if (artifacts && artifacts.length > 0) {
-          try {
-            // Use the first artifact (should only be one OUTPUT per message)
-            const artifact = artifacts[0];
-            const version = await artifact.getVersion();
-            if (version.Content) {
-              previousPayload = JSON.parse(version.Content);
-              previousArtifactInfo = {
-                artifactId: artifact.artifactId,
-                versionId: artifact.artifactVersionId,
-                versionNumber: artifact.versionNumber
-              };
-              console.log('📦 Loaded most recent artifact as payload', previousArtifactInfo);
-            }
-          } catch (error) {
-            console.warn('⚠️ Could not parse artifact content:', error);
+      if (artifacts && artifacts.length > 0) {
+        try {
+          // Use the first artifact (should only be one OUTPUT per message)
+          const artifact = artifacts[0];
+          const version = await artifact.getVersion();
+          if (version.Content) {
+            previousPayload = JSON.parse(version.Content);
+            previousArtifactInfo = {
+              artifactId: artifact.artifactId,
+              versionId: artifact.artifactVersionId,
+              versionNumber: artifact.versionNumber
+            };
+            console.log('📦 Loaded most recent artifact as payload', previousArtifactInfo);
           }
+        } catch (error) {
+          console.warn('⚠️ Could not parse artifact content:', error);
         }
       }
     }
@@ -1896,7 +1923,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         previousPayload, // Pass previous OUTPUT artifact payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         previousArtifactInfo?.artifactId,
-        previousArtifactInfo?.versionId
+        previousArtifactInfo?.versionId,
+        previousConfigurationId // Pass configuration from previous agent run for continuity
       );
 
       // Remove from active tasks

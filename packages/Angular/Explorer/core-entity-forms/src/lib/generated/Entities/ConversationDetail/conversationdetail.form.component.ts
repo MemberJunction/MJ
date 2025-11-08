@@ -18,7 +18,6 @@ export class ConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'conversationLinksArtifacts', sectionName: 'Conversation Links & Artifacts', isExpanded: true },
             { sectionKey: 'messageDetails', sectionName: 'Message Details', isExpanded: true },
             { sectionKey: 'userFeedbackInsights', sectionName: 'User Feedback & Insights', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'MJ: Conversation Detail Artifacts', isExpanded: false },

@@ -15,9 +15,8 @@ export class ContentTypeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'contentTypeSpecification', sectionName: 'Content Type Specification', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'aIModelSettings', sectionName: 'AI Model Settings', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'contentSources', sectionName: 'Content Sources', isExpanded: false },
             { sectionKey: 'contentItems', sectionName: 'Content Items', isExpanded: false }
         ]);

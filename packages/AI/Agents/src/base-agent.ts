@@ -214,6 +214,45 @@ export class BaseAgent {
     }
 
     /**
+     * Gets the available configuration presets for an agent.
+     * Returns semantic presets like "Fast", "Balanced", "High Quality" that users can choose from.
+     * These are actual presets stored in the database with specific AIConfiguration references.
+     *
+     * @param agentId - The ID of the agent to get presets for
+     * @returns Array of configuration presets sorted by Priority, or empty array if none configured
+     *
+     * @example
+     * ```typescript
+     * const agent = new ResearchAgent();
+     * const presets = agent.GetConfigurationPresets('agent-uuid-here');
+     * // Returns presets defined in database: [
+     * //   { Name: 'Fast', DisplayName: 'Quick Draft', AIConfigurationID: 'fast-config-uuid', IsDefault: true },
+     * //   { Name: 'HighQuality', DisplayName: 'Maximum Detail', AIConfigurationID: 'frontier-uuid', IsDefault: false }
+     * // ]
+     * // Note: If no presets configured, returns empty array - agent will use default behavior
+     * ```
+     */
+    public GetConfigurationPresets(agentId: string) {
+        if (!agentId) {
+            return [];
+        }
+        return AIEngine.Instance.GetAgentConfigurationPresets(agentId);
+    }
+
+    /**
+     * Gets the default configuration preset for an agent.
+     *
+     * @param agentId - The ID of the agent to get the default preset for
+     * @returns The default preset, or undefined if none configured
+     */
+    public GetDefaultConfigurationPreset(agentId: string) {
+        if (!agentId) {
+            return undefined;
+        }
+        return AIEngine.Instance.GetDefaultAgentConfigurationPreset(agentId);
+    }
+
+    /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
      * Tracked separately as it's display-only and doesn't need persistence.
      * @private

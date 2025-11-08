@@ -51,6 +51,7 @@ export class MessageInputBoxComponent {
 
   /**
    * Handle Enter key from MentionEditorComponent
+   * Extracts plain text with JSON-encoded mentions for message submission
    */
   onEnterPressed(_text: string): void {
     this.onSendClick();
@@ -67,12 +68,20 @@ export class MessageInputBoxComponent {
 
   /**
    * Send the message
+   * Extracts plain text with JSON-encoded mentions for proper persistence
    */
   onSendClick(): void {
     if (this.canSend) {
-      const textToSend = this.value.trim();
+      // Get plain text with JSON-encoded mentions (preserves configuration info)
+      const textToSend = this.mentionEditor?.getPlainTextWithJsonMentions() || this.value.trim();
       this.textSubmitted.emit(textToSend);
       this.value = ''; // Clear input after sending
+
+      // Clear the editor content
+      if (this.mentionEditor) {
+        this.mentionEditor.clear();
+      }
+
       this.valueChange.emit(this.value);
     }
   }
@@ -118,5 +127,12 @@ export class MessageInputBoxComponent {
     if (editor) {
       editor.focus();
     }
+  }
+
+  /**
+   * Get mention chip data including configuration presets
+   */
+  getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
+    return this.mentionEditor?.getMentionChipsData() || [];
   }
 }

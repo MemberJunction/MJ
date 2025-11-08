@@ -18,6 +18,7 @@ export class ResourceTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'technicalDetails', sectionName: 'Technical Details', isExpanded: true },
             { sectionKey: 'resourceTypeDefinition', sectionName: 'Resource Type Definition', isExpanded: true },
             { sectionKey: 'entityAssociations', sectionName: 'Entity Associations', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'workspaceItems', sectionName: 'Workspace Items', isExpanded: false },
             { sectionKey: 'userNotifications', sectionName: 'User Notifications', isExpanded: false },

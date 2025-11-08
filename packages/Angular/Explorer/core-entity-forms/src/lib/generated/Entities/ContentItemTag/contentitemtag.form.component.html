@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Tag Association Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="tagAssociation"
-        sectionName="Tag Association"
-        icon="fa fa-tag"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -31,24 +31,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Item"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -58,6 +40,24 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Tag Association Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="tagAssociation"
+        sectionName="Tag Association"
+        icon="fa fa-tag"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="Item"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"

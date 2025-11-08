@@ -14,9 +14,8 @@ export class ContentSourceParamFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'identifierKeys', sectionName: 'Identifier Keys', isExpanded: true },
-            { sectionKey: 'parameterSettings', sectionName: 'Parameter Settings', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'parameterSettings', sectionName: 'Parameter Settings', isExpanded: true }
         ]);
     }
 }

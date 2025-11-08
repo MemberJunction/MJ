@@ -14,10 +14,10 @@ export class ResourcePermissionFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'resourceReference', sectionName: 'Resource Reference', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'recipientAccessScope', sectionName: 'Recipient & Access Scope', isExpanded: true },
             { sectionKey: 'sharingScheduleStatus', sectionName: 'Sharing Schedule & Status', isExpanded: false },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'resourceReference', sectionName: 'Resource Reference', isExpanded: false }
         ]);
     }
 }

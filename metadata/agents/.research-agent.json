@@ -624,6 +624,65 @@
             "checksum": "81dbee9db56f4de70b4a546401709691b6d115cc5202f9ade0c3ff9f9aeaebe0"
           }
         }
+      ],
+      "MJ: AI Agent Configurations": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Draft",
+            "DisplayName": "Draft",
+            "Description": "Fast/Lower Quality",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+            "IsDefault": false,
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5368BC4B-5D62-4D03-AE2F-F2B2DB7F52F1"
+          },
+          "sync": {
+            "lastModified": "2025-11-07T19:40:07.213Z",
+            "checksum": "be40b00e4a4fc7501797a417c8023cf28471b57a6afffd65753ed96d016d68e5"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Standard",
+            "DisplayName": "Standard",
+            "Description": "Balanced Quality/Speed",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
+            "IsDefault": true,
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F4DB3010-E073-4DD6-B185-8CCAC3D32BB7"
+          },
+          "sync": {
+            "lastModified": "2025-11-07T19:40:07.229Z",
+            "checksum": "a2d8cf24b10114f50e3047ae8f54cfefa2868f229de338c890ab50140121834f"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "High",
+            "DisplayName": "High",
+            "Description": "Highest Quality/Slower",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+            "IsDefault": false,
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FE85A838-D915-4B8A-973E-2142D675C22D"
+          },
+          "sync": {
+            "lastModified": "2025-11-07T19:40:07.240Z",
+            "checksum": "a0f0c1951e7d5d275024012f102e681b9761023c1ec6c9a1ef28d2e89c1769a1"
+          }
+        }
       ]
     },
     "primaryKey": {

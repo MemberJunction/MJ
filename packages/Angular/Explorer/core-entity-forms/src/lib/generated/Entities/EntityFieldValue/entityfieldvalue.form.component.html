@@ -3,21 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Technical Metadata Section -->
+    <!-- Entity Association Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="technicalMetadata"
-        sectionName="Technical Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
-
-    </mj-collapsible-panel>
-
-    <!-- Lookup Context Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="lookupContext"
-        sectionName="Lookup Context"
-        icon="fa fa-database"
+        sectionKey="entityAssociation"
+        sectionName="Entity Association"
+        icon="fa fa-link"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -57,10 +47,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Value Specification Section -->
+    <!-- Lookup Definition Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="valueSpecification"
-        sectionName="Value Specification"
+        sectionKey="lookupDefinition"
+        sectionName="Lookup Definition"
         icon="fa fa-list"
         [form]="this"
         [formContext]="formContext">
