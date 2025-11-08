@@ -125,6 +125,79 @@ export abstract class BaseAutoDocDriver {
   ): Promise<any[]>;
 
   // ============================================================================
+  // RELATIONSHIP DISCOVERY METHODS
+  // ============================================================================
+
+  /**
+   * Get simplified column statistics for discovery
+   * Uses existing getColumnStatistics but with simpler parameters
+   */
+  public async getColumnStatisticsForDiscovery(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    columnType: string,
+    maxSampleSize: number = 1000
+  ): Promise<import('../types/discovery.js').ColumnStatistics> {
+    const stats = await this.getColumnStatistics(
+      schemaName,
+      tableName,
+      columnName,
+      columnType,
+      100, // cardinalityThreshold
+      maxSampleSize
+    );
+
+    // Calculate total rows from null percentage if available
+    const totalRows = stats.nullCount > 0 && stats.nullPercentage > 0
+      ? Math.round(stats.nullCount / stats.nullPercentage)
+      : stats.nullCount + stats.distinctCount; // Estimate
+
+    return {
+      columnName,
+      dataType: columnType,
+      totalRows,
+      nullCount: stats.nullCount,
+      distinctCount: stats.distinctCount,
+      minValue: stats.min,
+      maxValue: stats.max,
+      avgLength: stats.avgLength,
+      sampleValues: stats.sampleValues || []
+    };
+  }
+
+  /**
+   * Get column information (for FK detection)
+   */
+  public abstract getColumnInfo(
+    schemaName: string,
+    tableName: string,
+    columnName: string
+  ): Promise<{ name: string; type: string; nullable: boolean }>;
+
+  /**
+   * Test value overlap between two columns (for FK detection)
+   * Returns percentage of source values that exist in target (0-1)
+   */
+  public abstract testValueOverlap(
+    sourceTable: string,  // format: "schema.table"
+    sourceColumn: string,
+    targetTable: string,  // format: "schema.table"
+    targetColumn: string,
+    sampleSize: number
+  ): Promise<number>;
+
+  /**
+   * Check if a combination of columns is unique (for composite PK detection)
+   */
+  public abstract checkColumnCombinationUniqueness(
+    schemaName: string,
+    tableName: string,
+    columnNames: string[],
+    sampleSize: number
+  ): Promise<boolean>;
+
+  // ============================================================================
   // QUERY EXECUTION
   // ============================================================================
 

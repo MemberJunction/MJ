@@ -348,6 +348,22 @@ DBAutoDoc is part of the MemberJunction project. Contributions welcome!
 
 MIT
 
+## Demo Databases
+
+### LousyDB - Legacy Database Demo
+
+Located in `/Demos/LousyDB/`, this demo showcases **Relationship Discovery** capabilities on a realistic legacy database:
+
+- ❌ **Zero metadata** - No PK or FK constraints defined
+- 🔤 **Cryptic naming** - Short abbreviations (`cst`, `ord`, `pmt`)
+- 🔡 **Single-char codes** - Undocumented status values (`A`, `T`, `P`)
+- 💔 **Data quality issues** - Orphaned records, NULLs, duplicates
+- 📊 **20 tables** across 2 schemas with 1000+ rows
+
+Perfect for testing DBAutoDoc's ability to **reverse-engineer** poorly-documented databases.
+
+See `/Demos/LousyDB/README.md` for details and testing instructions.
+
 ## Links
 
 - **GitHub**: https://github.com/MemberJunction/MJ

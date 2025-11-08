@@ -720,4 +720,163 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     const message = error.message.toLowerCase();
     return transientMessages.some(msg => message.includes(msg));
   }
+
+  // ============================================================================
+  // RELATIONSHIP DISCOVERY METHODS
+  // ============================================================================
+
+  /**
+   * Get column information for relationship discovery
+   */
+  public async getColumnInfo(
+    schemaName: string,
+    tableName: string,
+    columnName: string
+  ): Promise<{ name: string; type: string; nullable: boolean }> {
+    const query = `
+      SELECT
+        c.name,
+        t.name as type,
+        c.is_nullable as nullable
+      FROM sys.columns c
+      INNER JOIN sys.types t ON c.user_type_id = t.user_type_id
+      INNER JOIN sys.tables tbl ON c.object_id = tbl.object_id
+      INNER JOIN sys.schemas s ON tbl.schema_id = s.schema_id
+      WHERE s.name = '${schemaName}'
+        AND tbl.name = '${tableName}'
+        AND c.name = '${columnName}'
+    `;
+
+    const result = await this.executeQuery<{
+      name: string;
+      type: string;
+      nullable: boolean;
+    }>(query);
+
+    if (!result.success || !result.data || result.data.length === 0) {
+      throw new Error(
+        `Column ${schemaName}.${tableName}.${columnName} not found`
+      );
+    }
+
+    return {
+      name: result.data[0].name,
+      type: result.data[0].type,
+      nullable: result.data[0].nullable
+    };
+  }
+
+  /**
+   * Test value overlap between source and target columns
+   */
+  public async testValueOverlap(
+    sourceTable: string,
+    sourceColumn: string,
+    targetTable: string,
+    targetColumn: string,
+    sampleSize: number
+  ): Promise<number> {
+    try {
+      const [sourceSchema, sourceTableName] = this.parseTableIdentifier(sourceTable);
+      const [targetSchema, targetTableName] = this.parseTableIdentifier(targetTable);
+
+      const query = `
+        WITH SourceSample AS (
+          SELECT DISTINCT TOP ${sampleSize}
+            ${this.escapeIdentifier(sourceColumn)} as value
+          FROM ${this.escapeIdentifier(sourceSchema)}.${this.escapeIdentifier(sourceTableName)}
+          WHERE ${this.escapeIdentifier(sourceColumn)} IS NOT NULL
+        ),
+        TargetValues AS (
+          SELECT DISTINCT ${this.escapeIdentifier(targetColumn)} as value
+          FROM ${this.escapeIdentifier(targetSchema)}.${this.escapeIdentifier(targetTableName)}
+          WHERE ${this.escapeIdentifier(targetColumn)} IS NOT NULL
+        )
+        SELECT
+          COUNT(*) as total_source,
+          SUM(CASE WHEN tv.value IS NOT NULL THEN 1 ELSE 0 END) as matching_count
+        FROM SourceSample ss
+        LEFT JOIN TargetValues tv ON ss.value = tv.value
+      `;
+
+      const result = await this.executeQuery<{
+        total_source: number;
+        matching_count: number;
+      }>(query);
+
+      if (!result.success || !result.data || result.data.length === 0) {
+        return 0;
+      }
+
+      const row = result.data[0];
+      if (row.total_source === 0) {
+        return 0;
+      }
+
+      return row.matching_count / row.total_source;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  /**
+   * Check if combination of columns is unique
+   */
+  public async checkColumnCombinationUniqueness(
+    schemaName: string,
+    tableName: string,
+    columnNames: string[],
+    sampleSize: number
+  ): Promise<boolean> {
+    try {
+      if (columnNames.length === 0) {
+        return false;
+      }
+
+      const escapedColumns = columnNames.map(col => this.escapeIdentifier(col));
+      const columnList = escapedColumns.join(', ');
+
+      const query = `
+        WITH SampledData AS (
+          SELECT TOP ${sampleSize}
+            ${columnList}
+          FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+          WHERE ${escapedColumns.map(col => `${col} IS NOT NULL`).join(' AND ')}
+        ),
+        GroupedData AS (
+          SELECT
+            ${columnList},
+            COUNT(*) as occurrence_count
+          FROM SampledData
+          GROUP BY ${columnList}
+          HAVING COUNT(*) > 1
+        )
+        SELECT COUNT(*) as duplicate_count
+        FROM GroupedData
+      `;
+
+      const result = await this.executeQuery<{ duplicate_count: number }>(query);
+
+      if (!result.success || !result.data || result.data.length === 0) {
+        return false;
+      }
+
+      return result.data[0].duplicate_count === 0;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Parse table identifier in format "schema.table"
+   */
+  private parseTableIdentifier(tableIdentifier: string): [string, string] {
+    const parts = tableIdentifier.split('.');
+    if (parts.length !== 2) {
+      throw new Error(
+        `Invalid table identifier format: ${tableIdentifier}. Expected "schema.table"`
+      );
+    }
+    return [parts[0], parts[1]];
+  }
 }

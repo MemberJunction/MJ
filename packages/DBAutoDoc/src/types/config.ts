@@ -49,6 +49,57 @@ export interface AnalysisConfig {
   backpropagation: BackpropagationConfig;
   sanityChecks: SanityCheckConfig;
   guardrails?: GuardrailsConfig;
+  relationshipDiscovery?: RelationshipDiscoveryConfig;
+}
+
+export interface RelationshipDiscoveryConfig {
+  enabled: boolean;          // Enable automatic discovery (default: true)
+
+  // Triggers for when to run discovery
+  triggers: {
+    runOnMissingPKs: boolean;        // Run if any table missing PK (default: true)
+    runOnInsufficientFKs: boolean;   // Run if FK count below threshold (default: true)
+    fkDeficitThreshold: number;      // Run if actual FKs < threshold % of expected (default: 0.4)
+  };
+
+  // Token budget allocation
+  tokenBudget: {
+    maxTokens?: number;              // Max tokens for discovery phase (default: 25% of total)
+    ratioOfTotal?: number;           // Alternative: ratio of total budget (0-1, default: 0.25)
+  };
+
+  // Confidence thresholds
+  confidence: {
+    primaryKeyMinimum: number;       // Min confidence to treat as PK (default: 0.7)
+    foreignKeyMinimum: number;       // Min confidence to treat as FK (default: 0.6)
+    llmValidationThreshold: number;  // Use LLM validation if confidence below this (default: 0.8)
+  };
+
+  // Sampling configuration
+  sampling: {
+    maxRowsPerTable: number;         // Max rows to sample per table (default: 1000)
+    statisticalSignificance: number; // Min sample size for valid statistics (default: 100)
+    valueOverlapSampleSize: number;  // Rows to check for FK value overlap (default: 500)
+  };
+
+  // Pattern matching
+  patterns: {
+    primaryKeyNames: string[];       // Regex patterns for PK names (e.g., [".*[Ii][Dd]$", "^pk_.*"])
+    foreignKeyNames: string[];       // Regex patterns for FK names (e.g., [".*[Ii][Dd]$", "^fk_.*"])
+    compositeKeyIndicators: string[]; // Patterns suggesting composite keys
+  };
+
+  // LLM assistance
+  llmValidation: {
+    enabled: boolean;                // Use LLM to validate candidates (default: true)
+    batchSize: number;               // Validate N candidates per LLM call (default: 5)
+  };
+
+  // Backpropagation in discovery
+  backpropagation: {
+    enabled: boolean;                // Re-analyze after discoveries (default: true)
+    maxIterations: number;           // Max discovery iterations (default: 10)
+  };
 }
 
 export interface GuardrailsConfig {

@@ -3,11 +3,14 @@
  * Tracks all documentation, iterations, and analysis progress
  */
 
+import { RelationshipDiscoveryPhase } from './discovery.js';
+
 export interface DatabaseDocumentation {
   version: string;
   database: DatabaseInfo;
   summary: AnalysisSummary;
   seedContext?: SeedContext;
+  relationshipDiscoveryPhase?: RelationshipDiscoveryPhase; // Pre-analysis key discovery
   schemas: SchemaDefinition[];
   analysisRuns: AnalysisRun[];
   createdAt: string;

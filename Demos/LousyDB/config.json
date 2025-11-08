@@ -4,7 +4,7 @@
     "provider": "sqlserver",
     "server": "${DB_SERVER}",
     "port": 1433,
-    "database": "${DB_NAME}",
+    "database": "LousyDB",
     "user": "${DB_USER}",
     "password": "${DB_PASSWORD}",
     "encrypt": true,
@@ -46,17 +46,56 @@
       }
     },
     "relationshipDiscovery": {
-      "enabled": false
+      "enabled": true,
+      "triggers": {
+        "runOnMissingPKs": true,
+        "runOnInsufficientFKs": true,
+        "fkDeficitThreshold": 0.4
+      },
+      "tokenBudget": {
+        "ratioOfTotal": 0.25
+      },
+      "confidence": {
+        "primaryKeyMinimum": 0.7,
+        "foreignKeyMinimum": 0.6,
+        "llmValidationThreshold": 0.8
+      },
+      "sampling": {
+        "maxRowsPerTable": 1000,
+        "valueOverlapSampleSize": 100,
+        "compositeKeyMaxColumns": 3
+      },
+      "patterns": {
+        "primaryKeyNames": [
+          "^id$",
+          ".*_id$",
+          "^pk_.*",
+          ".*_key$"
+        ],
+        "foreignKeyNames": [
+          ".*_id$",
+          ".*_fk$",
+          "^fk_.*"
+        ]
+      },
+      "llmValidation": {
+        "enabled": false,
+        "batchSize": 10
+      },
+      "backpropagation": {
+        "enabled": true,
+        "maxIterations": 5
+      }
     }
   },
   "output": {
-    "stateFile": "./db-doc-state.json",
+    "stateFile": "./lousy-db-state.json",
     "outputDir": "./output",
     "sqlFile": "./output/add-descriptions.sql",
     "markdownFile": "./output/database-documentation.md"
   },
   "schemas": {
-    "include": ["AssociationDemo"],
+    "include": ["sales", "inv"],
     "exclude": ["sys", "INFORMATION_SCHEMA"]
   },
   "tables": {
