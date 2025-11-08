@@ -206,7 +206,7 @@ export class BettyAction extends BaseAction {
                 for (const ref of bettyReferences) {
                     if (ref.title && ref.link) {
                         formattedResponse += `- [${ref.title}](${ref.link})`;
-                        if (ref.type) {
+                        if (ref.type && ref.type.trim().toLowerCase() !== 'unknown') {
                             formattedResponse += ` (${ref.type})`;
                         }
                         formattedResponse += '\n';
