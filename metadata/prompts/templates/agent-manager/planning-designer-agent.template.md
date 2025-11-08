@@ -856,6 +856,44 @@ Example:
 
 Every agent prompt MUST include a section that defines how the agent should format its response message to the user. This is CRITICAL for user experience.
 
+## 🚨 CRITICAL: Generated Prompt Text = Plain Markdown ONLY
+
+When you write prompt text in your TechnicalDesign, **DO NOT include ANY template syntax**.
+
+### ❌ WRONG - Including Template Syntax
+
+```
+{% for deal in payload.deals %}
+- Deal: {{ deal.name }}
+{% endfor %}
+
+or 
+
+When user asks about {{ payload.customerName }} ...
+```
+### ✅ CORRECT - Plain Markdown Instructions
+
+- Plain markdown, clear instructions, no template syntax.
+
+### The Key Principle
+
+**Generated prompts are markdown instructions TO the LLM**
+
+- The LLM will receive data through the payload/context
+- Your prompt just needs to INSTRUCT the LLM what to do with that data
+- Use plain English: "Review payload.customers and filter by...", "For each item in payload.results..."
+- NO template syntax of any kind
+
+### Validation Checklist
+
+Before returning TechnicalDesign, check EVERY prompt you've written:
+
+1. ✅ Is it plain markdown text?
+2. ✅ Does it contain ZERO template syntax blocks?
+3. ✅ Does it just give clear instructions to the LLM in plain English?
+
+**If you see ANY template syntax in your generated prompts - remove it and rewrite as plain instructions.**
+
 **When designing prompts, ALWAYS include response formatting guidance**:
 - ✅ **If user specifies format** (e.g., "present as a table", "nice markdown", "must have summary section"): Include those exact requirements in the prompt's response format section
 - ✅ **If user doesn't specify format**: Still require a well-formatted markdown response that:
@@ -874,6 +912,9 @@ Every agent prompt MUST include a section that defines how the agent should form
 
 **For Loop Agents** (REQUIRED - at least ONE):
 - Create system prompt that defines agent behavior, reasoning process, output format
+- **CRITICAL**: Write in PLAIN MARKDOWN ONLY - absolutely NO template syntax
+- The prompt is markdown instructions TO the LLM, not a template that gets rendered
+- Use plain English to describe what the LLM should do with payload data
 - Include role, responsibilities, workflow, and JSON structure
 - **Be Comprehensive and Detailed**: Prompts should be thorough enough to guide the LLM effectively. Include:
   - Detailed workflow descriptions (order of operations)
@@ -927,7 +968,7 @@ You are [agent role/persona] specialized in [domain/expertise]. Your core respon
 ### [Entity Name]
 - **Purpose**: [What this entity represents and why you need it]
 - **Key Fields**: [List important fields and what they mean]
-  - `[FieldName]`: [Description and usage]
+  - [FieldName]: [Description and usage]
 - **When to Use**: [READ/CREATE/UPDATE operations and scenarios]
 
 ### Database Operation Patterns
@@ -1002,7 +1043,7 @@ When processing multiple items from research/analysis, use **ForEach** for effic
 
 3. **Respond Message**
    - Count: [what you count - items processed, errors, successes]
-   - **Good Response Message Example**: "Updated 5 records in [Entity]: Record1 (ID: abc-123), Record2 (ID: def-456), Record3 (ID: ghi-789). Failed on 2 records: [names] due to [reason]."
+   - **Good Response Message Example (A nice markdown message to user)**: "Updated 5 records in [Entity]: Record1 (ID: abc-123), Record2 (ID: def-456), Record3 (ID: ghi-789). Failed on 2 records: [names] due to [reason]."
    - **Bad Response Message Example**: "Task completed successfully." ❌ Too vague!
 
 **After ForEach Completes**:
@@ -1152,7 +1193,19 @@ Your `TechnicalDesign` markdown document should include:
 
 This document should be detailed enough for the Architect Agent to build the complete AgentSpec structure.
 
-### 9. Present Design Plan to User
+### 9. Final Validation - NO Template Syntax in Generated Prompts
+
+**CRITICAL CHECK**: Before returning your TechnicalDesign, scan every prompt you've written.
+
+**✅ Your prompts should be:**
+- 100% plain markdown text
+- Clear instructions in plain English
+- Descriptive of what the agent does and how it should behave
+- No template variables, no template logic, nothing but plain markdown
+
+**If you find template syntax**: Remove it immediately and rewrite as plain markdown instructions before returning.
+
+### 10. Present Design Plan to User
 
 **CRITICAL**: When presenting the design plan for user confirmation, provide a conversational summary of what will be built.
 
