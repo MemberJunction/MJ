@@ -138,6 +138,23 @@ export class ComponentSpec {
      * Relevant examples of components intended to inspire this component's creation
      */
     relevantExamples?: ComponentExample[];
+
+    /**
+     * Self-declared maturity level of the component. When a component is "in progress" and is not
+     * yet complete but is partially done, it can be marked as "incomplete". When it is functionally complete
+     * but not yet widely tested, it can be marked as "beta". When it is fully complete and tested, it can be marked
+     * as "production". This is intended to help architects and developers understand the readiness of a component
+     * for use in production systems.
+     */
+    readinessLevel?: "incomplete" | "beta" | "production";
+
+    /**
+     * If a component isn't complete or encounters problems in testing, this field can be used to
+     * track a work plan for completing or fixing the component. Generally this work plan string will contain
+     * a markdown formatted list of tasks to be done with rich explanations to allow developers (human+AI) to
+     * collaborate on completing the component.
+     */
+    workPlan?: string;
 };
 
 /**
