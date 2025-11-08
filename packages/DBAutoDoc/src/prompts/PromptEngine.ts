@@ -9,9 +9,12 @@ import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
 
+export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
+
 export class PromptEngine {
   private nunjucksEnv: nunjucks.Environment;
   private llm: BaseLLM;
+  private guardrailCheck?: GuardrailCheckFn;
 
   constructor(
     private config: AIConfig,
@@ -29,6 +32,14 @@ export class PromptEngine {
 
     // Initialize AI/Core LLM
     this.llm = this.createLLM();
+  }
+
+  /**
+   * Set guardrail checking callback
+   * This will be called before every LLM execution to check if we should continue
+   */
+  public setGuardrailCheck(checkFn: GuardrailCheckFn): void {
+    this.guardrailCheck = checkFn;
   }
 
   /**
@@ -133,6 +144,19 @@ export class PromptEngine {
     }
   ): Promise<PromptExecutionResult<T>> {
     try {
+      // Check guardrails before executing
+      if (this.guardrailCheck) {
+        const check = this.guardrailCheck();
+        if (!check.canContinue) {
+          return {
+            success: false,
+            errorMessage: `Guardrail limit exceeded: ${check.reason}`,
+            tokensUsed: 0,
+            guardrailExceeded: true
+          };
+        }
+      }
+
       // 1. Render Nunjucks template with context
       const renderedPrompt = await this.renderTemplate(promptName, context);
 
@@ -158,7 +182,8 @@ export class PromptEngine {
         messages,
         temperature: options?.temperature ?? this.config.temperature ?? 0.1,
         maxOutputTokens: options?.maxTokens ?? this.config.maxTokens,
-        responseFormat: options?.responseFormat ?? 'JSON'
+        responseFormat: options?.responseFormat ?? 'JSON',
+        ...(this.config.effortLevel != null && { effortLevel: this.config.effortLevel.toString() }) // Optional 1-100, BaseLLM drivers handle if supported
       };
 
       // 3. Execute with AI/Core (follows RunView pattern - doesn't throw)

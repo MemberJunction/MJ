@@ -1,6 +1,7 @@
 {
   "version": "1.0.0",
   "database": {
+    "provider": "sqlserver",
     "server": "${DB_SERVER}",
     "port": 1433,
     "database": "${DB_NAME}",
@@ -37,7 +38,7 @@
       "crossSchema": true
     },
     "guardrails": {
-      "maxTokensPerRun": 250000,
+      "maxTokensPerRun": 50000,
       "maxDurationSeconds": 2700,
       "warnThresholds": {
         "tokenPercentage": 80,

@@ -13,6 +13,7 @@ export interface DatabaseDocumentation {
   createdAt: string;
   lastModified: string;
   totalIterations: number;
+  resumedFromFile?: string; // Path to the state file this analysis resumed from
 }
 
 export interface AnalysisSummary {
@@ -143,6 +144,8 @@ export interface AnalysisRun {
   errors: string[];
   processingLog: ProcessingLogEntry[];
   sanityChecks: SanityCheckRecord[];
+  resumedFromFile?: string; // Path to the state file this run resumed from
+  resumedAt?: string; // Timestamp when this run resumed
 }
 
 export interface ProcessingLogEntry {

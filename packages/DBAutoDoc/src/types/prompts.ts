@@ -12,6 +12,7 @@ export interface PromptExecutionResult<T> {
   promptOutput?: string;
   inputTokens?: number;
   outputTokens?: number;
+  guardrailExceeded?: boolean;
 }
 
 export interface TableAnalysisPromptResult {

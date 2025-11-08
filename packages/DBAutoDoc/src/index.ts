@@ -17,6 +17,7 @@ export * from './state/index.js';
 
 // Analysis engine
 export * from './core/index.js';
+export * from './core/AnalysisOrchestrator.js';
 
 // Generators
 export * from './generators/index.js';

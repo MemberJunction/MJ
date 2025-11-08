@@ -13,14 +13,21 @@ export interface DBAutoDocConfig {
 }
 
 export interface DatabaseConfig {
+  provider?: 'sqlserver' | 'mysql' | 'postgresql' | 'oracle'; // Default: sqlserver
   server: string;
   port?: number;
   database: string;
   user: string;
   password: string;
+  // SQL Server specific
   encrypt?: boolean;
   trustServerCertificate?: boolean;
+  // Connection pool and timeout settings
   connectionTimeout?: number;
+  requestTimeout?: number;
+  maxConnections?: number;
+  minConnections?: number;
+  idleTimeoutMillis?: number;
 }
 
 export interface AIConfig {
@@ -30,6 +37,7 @@ export interface AIConfig {
   temperature?: number;
   maxTokens?: number;
   requestsPerMinute?: number;
+  effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
 }
 
 export interface AnalysisConfig {

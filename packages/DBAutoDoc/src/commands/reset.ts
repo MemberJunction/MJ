@@ -3,7 +3,7 @@
  */
 
 import { Command, Flags } from '@oclif/core';
-import * as inquirer from 'inquirer';
+import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { ConfigLoader } from '../utils/config-loader.js';
 import { StateManager } from '../state/StateManager.js';

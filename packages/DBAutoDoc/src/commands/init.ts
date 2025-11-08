@@ -3,7 +3,7 @@
  */
 
 import { Command } from '@oclif/core';
-import * as inquirer from 'inquirer';
+import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { ConfigLoader } from '../utils/config-loader.js';
 import { DatabaseConnection } from '../database/DatabaseConnection.js';
@@ -149,7 +149,7 @@ export default class Init extends Command {
     };
 
     if (contextAnswers.addContext) {
-      config['seedContext' as any] = {
+      (config as unknown as Record<string, unknown>)['seedContext'] = {
         overallPurpose: contextAnswers.overallPurpose || undefined,
         businessDomains: contextAnswers.businessDomains
           ? contextAnswers.businessDomains.split(',').map((d: string) => d.trim())

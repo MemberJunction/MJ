@@ -25,6 +25,7 @@ export class AnalysisEngine {
   private backpropagationEngine: BackpropagationEngine;
   private convergenceDetector: ConvergenceDetector;
   private startTime: number = 0;
+  private currentRun?: AnalysisRun;
 
   constructor(
     private config: DBAutoDocConfig,
@@ -44,13 +45,22 @@ export class AnalysisEngine {
       stateManager,
       iterationTracker
     );
+
+    // Set up guardrail checking in PromptEngine
+    this.promptEngine.setGuardrailCheck(() => {
+      if (!this.currentRun) {
+        return { canContinue: true };
+      }
+      return this.checkGuardrails(this.currentRun);
+    });
   }
 
   /**
-   * Initialize timing for guardrails
+   * Initialize timing for guardrails and set current run
    */
-  public startAnalysis(): void {
+  public startAnalysis(run: AnalysisRun): void {
     this.startTime = Date.now();
+    this.currentRun = run;
   }
 
   /**
@@ -65,18 +75,12 @@ export class AnalysisEngine {
     const triggers: BackpropagationTrigger[] = [];
 
     for (const tableNode of tables) {
-      // Check guardrails before processing each table
-      const guardrailCheck = this.checkGuardrails(run);
-      if (!guardrailCheck.canContinue) {
-        this.iterationTracker.addWarning(run, `Analysis stopped: ${guardrailCheck.reason}`);
+      const result = await this.analyzeTable(state, run, tableNode, level);
+
+      // Check if guardrail was exceeded during this table's analysis
+      if (result.guardrailExceeded) {
         break; // Stop processing this level
       }
-
-      if (guardrailCheck.warning) {
-        this.iterationTracker.addWarning(run, guardrailCheck.warning);
-      }
-
-      const result = await this.analyzeTable(state, run, tableNode, level);
 
       if (result.triggers) {
         triggers.push(...result.triggers);
@@ -96,7 +100,7 @@ export class AnalysisEngine {
     run: AnalysisRun,
     tableNode: TableNode,
     level: number
-  ): Promise<{ triggers?: BackpropagationTrigger[] }> {
+  ): Promise<{ triggers?: BackpropagationTrigger[]; guardrailExceeded?: boolean }> {
     const table = tableNode.tableDefinition;
     if (!table) {
       return {};
@@ -115,6 +119,12 @@ export class AnalysisEngine {
           temperature: this.config.ai.temperature
         }
       );
+
+      // Check if guardrail was exceeded
+      if (result.guardrailExceeded) {
+        this.iterationTracker.completeRun(run, false, result.errorMessage || 'Guardrail exceeded');
+        return { guardrailExceeded: true };
+      }
 
       if (!result.success || !result.result) {
         this.iterationTracker.addError(
