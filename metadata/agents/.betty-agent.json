@@ -7,7 +7,7 @@
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
-      "IconClass": "fa-solid fa-book-open-reader",
+      "IconClass": "mj-icon-betty",
       "PayloadDownstreamPaths": "*",
       "PayloadUpstreamPaths": "*",
       "EnableContextCompression": false,

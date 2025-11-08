@@ -58,7 +58,7 @@ import { ChatParams, ChatMessageRole, ChatMessage, GetAIAPIKey } from "@memberju
  * });
  * ```
  */
-@RegisterClass(BaseAction, "__Betty")
+@RegisterClass(BaseAction, "BettyAction")
 export class BettyAction extends BaseAction {
 
     /**
