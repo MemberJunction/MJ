@@ -1040,6 +1040,206 @@ return {
 };
 ```
 
+### Conversation Message Mapping for Actions and Sub-Agents
+
+The framework includes a **ConversationMessageResolver** utility that enables flexible conversation message referencing in action input mappings and sub-agent configurations. This is particularly useful for passing conversation context to knowledge base assistants, chatbots, or analysis agents.
+
+#### Basic Usage with Actions
+
+**In Flow Agent Step Configuration** (`ActionInputMapping`):
+```typescript
+// Pass full conversation history to an action
+{
+    "ActionInputMapping": {
+        "ConversationMessages": "conversation.all"
+    }
+}
+```
+
+**In Loop Agent Response**:
+```typescript
+{
+    "taskComplete": false,
+    "nextStep": {
+        "type": "Actions",
+        "actions": [{
+            "name": "Betty",  // Knowledge base assistant
+            "params": {
+                "ConversationMessages": "conversation.all"
+            }
+        }]
+    }
+}
+```
+
+#### Supported Conversation Patterns
+
+The `ConversationMessageResolver` supports powerful pattern-based message selection:
+
+**1. All Messages**:
+```typescript
+"ConversationMessages": "conversation.all"
+// Returns entire conversation history
+```
+
+**2. Role-Based Selection**:
+```typescript
+// Last N user messages
+"ConversationMessages": "conversation.user.last[5]"
+
+// Last N assistant messages
+"ConversationMessages": "conversation.assistant.last[3]"
+
+// Last N system messages
+"ConversationMessages": "conversation.system.last[1]"
+```
+
+**3. All Messages of a Role**:
+```typescript
+// All user messages
+"ConversationMessages": "conversation.user.all"
+
+// All assistant messages
+"ConversationMessages": "conversation.assistant.all"
+```
+
+**4. Single Last Message by Role**:
+```typescript
+// Just the last user message
+"ConversationMessages": "conversation.user.last"
+
+// Just the last assistant message
+"ConversationMessages": "conversation.assistant.last"
+```
+
+#### Use Cases
+
+**Knowledge Base Assistants** - Pass full conversation history for context-aware responses:
+```typescript
+// In Knowledge Base Research Agent step
+{
+    "StepType": "Action",
+    "ActionID": "betty-action-id",
+    "ActionInputMapping": {
+        "ConversationMessages": "conversation.all"  // Betty sees full context
+    }
+}
+```
+
+**Sentiment Analysis** - Analyze just user messages:
+```typescript
+{
+    "ActionInputMapping": {
+        "messagesToAnalyze": "conversation.user.last[10]",
+        "includeSentiment": true
+    }
+}
+```
+
+**Context Summarization** - Summarize recent conversation:
+```typescript
+{
+    "ActionInputMapping": {
+        "recentMessages": "conversation.all",  // or "conversation.last[20]" if supported
+        "summarizeAs": "bullet_points"
+    }
+}
+```
+
+**Follow-up Question Generation** - Based on assistant responses:
+```typescript
+{
+    "ActionInputMapping": {
+        "previousResponses": "conversation.assistant.last[3]",
+        "generateFollowUps": true
+    }
+}
+```
+
+#### Sub-Agent Usage
+
+Sub-agents automatically receive the parent's conversation context, but you can control which messages are passed:
+
+**In Loop Agent** (via agent prompt instructions):
+```typescript
+// The agent's system prompt can instruct:
+"When invoking sub-agents, you can specify which conversation messages to pass using the ConversationMessages parameter in your action input mappings."
+```
+
+**In Flow Agent** (via SubAgentConfiguration):
+```typescript
+// Configure sub-agent relationships with conversation context
+{
+    "AgentID": "parent-agent-id",
+    "SubAgentID": "knowledge-base-research-agent-id",
+    "SubAgentOutputMapping": { "*": "knowledgeBaseResearch" },
+    "SubAgentContextPaths": ["*"]  // Full context by default
+}
+```
+
+#### How It Works
+
+The resolver operates during the parameter mapping phase:
+
+1. **Detection**: Identifies `conversation.` prefixed strings in action/sub-agent parameters
+2. **Pattern Matching**: Parses the pattern (role, selector, count)
+3. **Message Filtering**: Extracts matching messages from conversation history
+4. **Type Validation**: Ensures the target parameter expects an array of messages
+5. **Injection**: Replaces the pattern with actual message objects
+
+**Example Resolution**:
+```typescript
+// Input mapping configuration
+{
+    "ConversationMessages": "conversation.user.last[3]"
+}
+
+// Conversation history
+[
+    { role: 'system', content: 'You are a helpful assistant' },
+    { role: 'user', content: 'What is MemberJunction?' },
+    { role: 'assistant', content: 'MemberJunction is...' },
+    { role: 'user', content: 'How do agents work?' },
+    { role: 'assistant', content: 'Agents work by...' },
+    { role: 'user', content: 'Can you give an example?' }
+]
+
+// Resolved parameter value (last 3 user messages)
+[
+    { role: 'user', content: 'What is MemberJunction?' },
+    { role: 'user', content: 'How do agents work?' },
+    { role: 'user', content: 'Can you give an example?' }
+]
+```
+
+#### Benefits
+
+- **Context-Aware Actions**: Actions receive relevant conversation history
+- **Flexible Filtering**: Select exactly which messages are needed
+- **Declarative Configuration**: No custom code needed in action implementations
+- **Type Safety**: Resolver validates parameter types at runtime
+- **Performance**: Only selected messages are passed, reducing token usage
+- **Composability**: Works seamlessly with Flow and Loop agents
+
+#### Integration with Betty Knowledge Base Action
+
+A prime example of this feature is the Betty action for knowledge base queries:
+
+```typescript
+// Betty action accepts ConversationMessages parameter
+{
+    "name": "Betty",
+    "params": {
+        "ConversationMessages": "conversation.all"  // Full conversation context
+    }
+}
+
+// Betty uses the conversation history to provide context-aware responses
+// and can reference earlier questions/answers in its knowledge base queries
+```
+
+This enables knowledge base agents to maintain conversation context across multiple queries, improving response relevance and follow-up question handling.
+
 ## Agent Permissions System
 
 The agent framework includes a comprehensive ACL-based permissions system that controls who can view, run, edit, and delete agents.
