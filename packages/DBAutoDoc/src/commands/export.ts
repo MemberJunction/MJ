@@ -12,7 +12,7 @@ import { StateManager } from '../state/StateManager.js';
 import { SQLGenerator } from '../generators/SQLGenerator.js';
 import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
 import { ReportGenerator } from '../generators/ReportGenerator.js';
-import { DatabaseConnection } from '../database/DatabaseConnection.js';
+import { DatabaseConnection } from '../database/Database.js';
 
 export default class Export extends Command {
   static description = 'Export documentation as SQL and/or Markdown';
@@ -97,7 +97,17 @@ export default class Export extends Command {
             this.warn('--apply requires a config file. Skipping database application.');
           } else {
             spinner.start('Applying SQL to database');
-            const db = new DatabaseConnection(config.database);
+            const dbConfig = {
+              provider: (config.database.provider as 'sqlserver' | 'mysql' | 'postgresql' | 'oracle') || 'sqlserver',
+              host: config.database.server,
+              port: config.database.port,
+              database: config.database.database,
+              user: config.database.user,
+              password: config.database.password,
+              encrypt: config.database.encrypt,
+              trustServerCertificate: config.database.trustServerCertificate
+            };
+            const db = new DatabaseConnection(dbConfig);
             await db.connect();
 
             const result = await db.query(sql);

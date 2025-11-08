@@ -6,7 +6,7 @@ import { Command } from '@oclif/core';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { ConfigLoader } from '../utils/config-loader.js';
-import { DatabaseConnection } from '../database/DatabaseConnection.js';
+import { DatabaseConnection } from '../database/Database.js';
 
 export default class Init extends Command {
   static description = 'Initialize a new DBAutoDoc project';
@@ -58,7 +58,16 @@ export default class Init extends Command {
 
     // Test connection
     this.log(chalk.yellow('\nTesting database connection...'));
-    const db = new DatabaseConnection(dbAnswers);
+    const dbConfig = {
+      provider: 'sqlserver' as const,
+      host: dbAnswers.server,
+      database: dbAnswers.database,
+      user: dbAnswers.user,
+      password: dbAnswers.password,
+      encrypt: dbAnswers.encrypt,
+      trustServerCertificate: dbAnswers.trustServerCertificate
+    };
+    const db = new DatabaseConnection(dbConfig);
     const testResult = await db.test();
     await db.close();
 

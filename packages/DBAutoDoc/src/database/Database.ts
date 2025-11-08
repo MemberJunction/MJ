@@ -1,6 +1,6 @@
 /**
- * Adapter classes that wrap the database driver
- * These provide backward compatibility while using the new driver architecture
+ * Database connection and introspection classes
+ * Primary interface for all database operations
  */
 
 import { MJGlobal } from '@memberjunction/global';
@@ -33,10 +33,10 @@ export function createDriver(config: AutoDocConnectionConfig): BaseAutoDocDriver
 }
 
 /**
- * Adapter for DatabaseConnection
- * Wraps the driver to provide the existing interface
+ * Database connection class
+ * Provides connection management and query execution
  */
-export class DatabaseConnectionAdapter {
+export class DatabaseConnection {
   private driver: BaseAutoDocDriver;
 
   constructor(dbConfig: AutoDocConnectionConfig) {
@@ -69,10 +69,10 @@ export class DatabaseConnectionAdapter {
 }
 
 /**
- * Adapter for Introspector
- * Wraps the driver to provide the existing interface
+ * Database introspector
+ * Retrieves schema and table information from the database
  */
-export class IntrospectorAdapter {
+export class Introspector {
   constructor(private driver: BaseAutoDocDriver) {}
 
   public async getSchemas(
@@ -166,10 +166,10 @@ export class IntrospectorAdapter {
 }
 
 /**
- * Adapter for DataSampler
- * Wraps the driver to provide the existing interface
+ * Data sampler
+ * Analyzes table data and gathers column statistics
  */
-export class DataSamplerAdapter {
+export class DataSampler {
   constructor(
     private driver: BaseAutoDocDriver,
     private config: AnalysisConfig

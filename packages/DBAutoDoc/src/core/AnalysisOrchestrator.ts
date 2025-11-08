@@ -5,7 +5,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { DatabaseConnectionAdapter, IntrospectorAdapter, DataSamplerAdapter } from '../database/DriverAdapter.js';
+import { DatabaseConnection, Introspector, DataSampler } from '../database/Database.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
 import { TopologicalSorter } from '../database/TopologicalSorter.js';
 import { StateManager } from '../state/StateManager.js';
@@ -89,7 +89,7 @@ export class AnalysisOrchestrator {
         idleTimeoutMillis: this.config.database.idleTimeoutMillis
       };
 
-      const db = new DatabaseConnectionAdapter(driverConfig);
+      const db = new DatabaseConnection(driverConfig);
       await db.connect();
       const testResult = await db.test();
 
@@ -102,7 +102,7 @@ export class AnalysisOrchestrator {
       if (!this.resumeFromState || state.schemas.length === 0) {
         this.onProgress('Introspecting database schema');
         const driver = db.getDriver();
-        const introspector = new IntrospectorAdapter(driver);
+        const introspector = new Introspector(driver);
         const schemas = await introspector.getSchemas(this.config.schemas, this.config.tables);
         state.schemas = schemas;
         this.onProgress('Schema introspection complete', {
@@ -112,7 +112,7 @@ export class AnalysisOrchestrator {
 
         // Analyze data
         this.onProgress('Analyzing table data');
-        const sampler = new DataSamplerAdapter(driver, this.config.analysis);
+        const sampler = new DataSampler(driver, this.config.analysis);
         for (const schema of schemas) {
           for (const table of schema.tables) {
             await sampler.analyzeTable(schema.name, table.name, table.columns);
