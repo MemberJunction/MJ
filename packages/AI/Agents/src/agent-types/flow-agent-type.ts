@@ -53,6 +53,13 @@ export class FlowExecutionState {
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];
 
+    /** Special fields from action output mappings (message, reasoning, confidence) */
+    specialFields?: {
+        message?: string;
+        reasoning?: string;
+        confidence?: number;
+    };
+
     constructor(agentId: string) {
         this.agentId = agentId;
     }
@@ -418,23 +425,30 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
-     * Applies action output mapping to update the payload
+     * Applies action output mapping to update the payload and extract special fields.
+     *
+     * Special fields (message, reasoning, confidence) are not added to the payload but
+     * are stored separately in FlowExecutionState for use in the final response.
      *
      * @private
+     * @returns Object with payloadChange and specialFields
      */
     private applyActionOutputMapping<P>(
         actionResult: Record<string, unknown>,
         _payload: P,
         mappingConfig: string
-    ): AgentPayloadChangeRequest<P> | null {
+    ): { payloadChange: AgentPayloadChangeRequest<P> | null; specialFields?: { message?: string; reasoning?: string; confidence?: number } } {
         try {
             const mapping: ActionOutputMapping = JSON.parse(mappingConfig);
             const updateObj: Record<string, unknown> = {};
-            
-            
+            const specialFields: { message?: string; reasoning?: string; confidence?: number } = {};
+
+            // List of special field names that should not go into payload
+            const specialFieldNames = ['message', 'reasoning', 'confidence'];
+
             for (const [outputParam, payloadPath] of Object.entries(mapping)) {
                 let value: unknown;
-                
+
                 if (outputParam === '*') {
                     value = actionResult;
                 } else if (outputParam.includes('.')) {
@@ -461,38 +475,51 @@ export class FlowAgentType extends BaseAgentType {
                     );
                     value = actualKey ? actionResult[actualKey] : undefined;
                 }
-                
+
                 if (value !== undefined) {
-                    // Parse the path and build nested object
-                    const pathParts = payloadPath.split('.');
-                    let current = updateObj;
-
-                    for (let i = 0; i < pathParts.length - 1; i++) {
-                        const part = pathParts[i];
-                        // Remove [] suffix for intermediate path parts
-                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
-                        if (!(cleanPart in current)) {
-                            current[cleanPart] = {};
+                    // Check if this is a special field mapping
+                    if (specialFieldNames.includes(payloadPath.toLowerCase())) {
+                        // Store in special fields instead of payload
+                        if (payloadPath.toLowerCase() === 'message' && typeof value === 'string') {
+                            specialFields.message = value;
+                        } else if (payloadPath.toLowerCase() === 'reasoning' && typeof value === 'string') {
+                            specialFields.reasoning = value;
+                        } else if (payloadPath.toLowerCase() === 'confidence' && typeof value === 'number') {
+                            specialFields.confidence = value;
                         }
-                        current = current[cleanPart] as Record<string, unknown>;
-                    }
+                    } else {
+                        // Regular payload mapping
+                        // Parse the path and build nested object
+                        const pathParts = payloadPath.split('.');
+                        let current = updateObj;
 
-                    // Use helper to support array append on final path part
-                    this.setMappedValue(current, pathParts[pathParts.length - 1], value);
+                        for (let i = 0; i < pathParts.length - 1; i++) {
+                            const part = pathParts[i];
+                            // Remove [] suffix for intermediate path parts
+                            const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
+                            if (!(cleanPart in current)) {
+                                current[cleanPart] = {};
+                            }
+                            current = current[cleanPart] as Record<string, unknown>;
+                        }
+
+                        // Use helper to support array append on final path part
+                        this.setMappedValue(current, pathParts[pathParts.length - 1], value);
+                    }
                 }
             }
-            
-            if (Object.keys(updateObj).length === 0) {
-                return null;
-            }
-            
-            
+
+            const payloadChange = Object.keys(updateObj).length > 0
+                ? { updateElements: updateObj as Partial<P> }
+                : null;
+
             return {
-                updateElements: updateObj as Partial<P>
+                payloadChange,
+                specialFields: Object.keys(specialFields).length > 0 ? specialFields : undefined
             };
         } catch (error) {
             LogError(`Failed to parse ActionOutputMapping: ${error.message}`);
-            return null;
+            return { payloadChange: null };
         }
     }
     
@@ -659,8 +686,11 @@ export class FlowAgentType extends BaseAgentType {
         if (!outputMapping) {
             return null;
         }
-        
-        return this.applyActionOutputMapping(actionResult, currentPayload || {} as P, outputMapping);
+
+        const result = this.applyActionOutputMapping(actionResult, currentPayload || {} as P, outputMapping);
+        // Note: Special fields are ignored in this legacy method
+        // Use PostProcessActionStep for full special field support
+        return result.payloadChange;
     }
     
     /**
@@ -898,13 +928,24 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         // Apply the mapping using our existing method
-        const payloadChange = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
-        
+        const result = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
+        const payloadChange = result.payloadChange;
+
+        // Store special fields in flow state for later use
+        const flowState = agentTypeState as FlowExecutionState;
+        if (result.specialFields) {
+            if (!flowState.specialFields) {
+                flowState.specialFields = {};
+            }
+            // Merge special fields (later values override earlier ones)
+            Object.assign(flowState.specialFields, result.specialFields);
+        }
+
         // Update flow state with the modified payload
         // This ensures the payload persists when DetermineNextStep is called again
         if (payloadChange && payloadChange.updateElements) {
             const existingPayload = currentPayload || {};
-            
+
             // Apply the payload change using PayloadManager's merge capabilities
             const mergeResult = this._payloadManager.applyAgentChangeRequest(
                 existingPayload,
@@ -913,14 +954,14 @@ export class FlowAgentType extends BaseAgentType {
                     logChanges: false,
                     verbose: IsVerboseLoggingEnabled()
                 }
-            ); 
-            
+            );
+
             // Log any warnings if present
             if (mergeResult.warnings && mergeResult.warnings.length > 0) {
                 LogError(`Warnings during payload merge in flow state: ${mergeResult.warnings.join(', ')}`);
             }
         }
-        
+
         return payloadChange;
     }
 
@@ -1044,11 +1085,17 @@ export class FlowAgentType extends BaseAgentType {
                 message: '✅ Flow Agent: Flow completed successfully - no more paths to follow',
                 verboseOnly: true
             });
-            return this.createSuccessStep({
-                message: 'Flow completed - no more paths to follow',
+
+            // Include special fields from action output mappings if available
+            const successStep = this.createSuccessStep({
+                message: flowState.specialFields?.message || 'Flow completed - no more paths to follow',
+                reasoning: flowState.specialFields?.reasoning,
+                confidence: flowState.specialFields?.confidence,
                 newPayload: currentPayload,
                 previousPayload: currentPayload
             });
+
+            return successStep;
         }
         
         // Get the destination step for the highest priority path
@@ -1405,17 +1452,20 @@ export class FlowAgentType extends BaseAgentType {
         );
 
         // Apply output mapping with resolved paths
-        const payloadChange = this.applyActionOutputMapping(
+        const result = this.applyActionOutputMapping(
             outputParams,
             iterationResult.currentPayload,
             resolvedOutputMapping
         );
 
-        if (payloadChange?.updateElements) {
+        // Note: Special fields are not supported in loop iterations
+        // They only apply to final flow steps
+
+        if (result.payloadChange?.updateElements) {
             // Deep merge to preserve existing payload structure
             return this._payloadManager.deepMerge(
                 iterationResult.currentPayload,
-                payloadChange.updateElements
+                result.payloadChange.updateElements
             );
         }
 
