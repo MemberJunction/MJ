@@ -27,7 +27,6 @@ import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 
-
    
 
 
@@ -43,11 +42,10 @@ export class GeneratedFormsModule { }
     
 export function LoadGeneratedForms() {
     // This function doesn't do much, but it calls each generated form's loader function
-    // which in turn calls the sections for that generated form. Ultimately, those bits of 
+    // which in turn calls the sections for that generated form. Ultimately, those bits of
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
-    
     
 }
     

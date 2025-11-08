@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.117.0
+
+### Patch Changes
+
+- Updated dependencies [8c092ec]
+  - @memberjunction/core@2.117.0
+  - @memberjunction/ai-vectors-pinecone@2.117.0
+  - @memberjunction/ai-vector-sync@2.117.0
+  - @memberjunction/actions-content-autotag@2.117.0
+  - @memberjunction/actions@2.117.0
+  - @memberjunction/scheduled-actions@2.117.0
+  - @memberjunction/core-entities@2.117.0
+  - @memberjunction/ai@2.117.0
+  - @memberjunction/ai-mistral@2.117.0
+  - @memberjunction/ai-openai@2.117.0
+
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/ai-vectors-pinecone@2.116.0
+  - @memberjunction/ai-vector-sync@2.116.0
+  - @memberjunction/actions-content-autotag@2.116.0
+  - @memberjunction/actions@2.116.0
+  - @memberjunction/scheduled-actions@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/ai@2.116.0
+  - @memberjunction/ai-mistral@2.116.0
+  - @memberjunction/ai-openai@2.116.0
+
 ## 2.115.0
 
 ### Patch Changes

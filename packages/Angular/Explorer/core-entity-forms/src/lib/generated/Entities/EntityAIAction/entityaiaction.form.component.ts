@@ -2,18 +2,26 @@ import { Component } from '@angular/core';
 import { EntityAIActionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadEntityAIActionDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Entity AI Actions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entityaiaction-form',
-    templateUrl: './entityaiaction.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './entityaiaction.form.component.html'
 })
 export class EntityAIActionFormComponent extends BaseFormComponent {
     public record!: EntityAIActionEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identificationRelationships', sectionName: 'Identification & Relationships', isExpanded: true },
+            { sectionKey: 'aIActionConfiguration', sectionName: 'AI Action Configuration', isExpanded: true },
+            { sectionKey: 'metadataNotes', sectionName: 'Metadata & Notes', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadEntityAIActionFormComponent() {
-    LoadEntityAIActionDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

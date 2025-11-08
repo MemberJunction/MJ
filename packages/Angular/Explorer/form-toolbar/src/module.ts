@@ -19,12 +19,14 @@ import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 
 // Local to package
 import { FormToolbarComponent } from './lib/form-toolbar';
+import { RecordFormContainerComponent } from './lib/record-form-container.component';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 
 
 @NgModule({
   declarations: [
     FormToolbarComponent,
+    RecordFormContainerComponent
   ],
   imports: [
     CommonModule,
@@ -41,6 +43,7 @@ import { BaseFormsModule } from '@memberjunction/ng-base-forms';
   ],
   exports: [
     FormToolbarComponent,
+    RecordFormContainerComponent
   ]
 })
 export class FormToolbarModule { }

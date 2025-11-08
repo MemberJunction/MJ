@@ -2,19 +2,31 @@ import { Component } from '@angular/core';
 import { CompanyEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadCompanyDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Companies') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-company-form',
-    templateUrl: './company.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './company.form.component.html'
 })
 export class CompanyFormComponent extends BaseFormComponent {
     public record!: CompanyEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'coreCompanyInfo', sectionName: 'Core Company Info', isExpanded: true },
+            { sectionKey: 'brandingDigitalPresence', sectionName: 'Branding & Digital Presence', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'companyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
+            { sectionKey: 'employees', sectionName: 'Employees', isExpanded: false },
+            { sectionKey: 'workflows', sectionName: 'Workflows', isExpanded: false },
+            { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadCompanyFormComponent() {
-    LoadCompanyDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

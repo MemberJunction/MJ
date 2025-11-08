@@ -2,7 +2,7 @@ import { EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeSc
 import fs from 'fs';
 import path from 'path';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { logStatus } from './status_logging';
+import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
@@ -284,7 +284,12 @@ ${fields}
         }
   
         // now Log and Execute the SQL
-        await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
+        try {
+          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
+        }
+        catch (e) {
+          logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
+        }
       }
 
       return ret.code;

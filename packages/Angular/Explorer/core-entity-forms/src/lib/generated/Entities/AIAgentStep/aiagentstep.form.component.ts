@@ -2,19 +2,30 @@ import { Component } from '@angular/core';
 import { AIAgentStepEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIAgentStepDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Steps') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiagentstep-form',
-    templateUrl: './aiagentstep.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aiagentstep.form.component.html'
 })
 export class AIAgentStepFormComponent extends BaseFormComponent {
     public record!: AIAgentStepEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'coreDefinition', sectionName: 'Core Definition', isExpanded: true },
+            { sectionKey: 'executionControls', sectionName: 'Execution Controls', isExpanded: true },
+            { sectionKey: 'targetResources', sectionName: 'Target Resources', isExpanded: false },
+            { sectionKey: 'visualLayout', sectionName: 'Visual Layout', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentStepPaths', sectionName: 'MJ: AI Agent Step Paths', isExpanded: false },
+            { sectionKey: 'mJAIAgentStepPaths1', sectionName: 'MJ: AI Agent Step Paths', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadAIAgentStepFormComponent() {
-    LoadAIAgentStepDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

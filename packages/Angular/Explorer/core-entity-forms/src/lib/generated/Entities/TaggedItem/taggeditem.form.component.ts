@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { TaggedItemEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadTaggedItemDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Tagged Items') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-taggeditem-form',
-    templateUrl: './taggeditem.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './taggeditem.form.component.html'
 })
 export class TaggedItemFormComponent extends BaseFormComponent {
     public record!: TaggedItemEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'tagDefinition', sectionName: 'Tag Definition', isExpanded: true },
+            { sectionKey: 'linkedRecord', sectionName: 'Linked Record', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadTaggedItemFormComponent() {
-    LoadTaggedItemDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

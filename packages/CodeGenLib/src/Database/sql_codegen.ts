@@ -221,8 +221,9 @@ export class SQLCodeGenBase {
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
+            // Run advanced generation here in case new virtual fields added, so we do NOT run advanced geneartion in the main manageMetadata() call
             startSpinner('Managing entity fields metadata...');
-            if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser)) {
+            if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false)) {
                 failSpinner('Failed to manage entity fields');
                 return false;
             }
@@ -247,7 +248,7 @@ export class SQLCodeGenBase {
             }
             succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
 
-            succeedSpinner(`CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
 
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();

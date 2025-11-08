@@ -2,18 +2,26 @@ import { Component } from '@angular/core';
 import { EntityPermissionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadEntityPermissionDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'Entity Permissions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-entitypermission-form',
-    templateUrl: './entitypermission.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './entitypermission.form.component.html'
 })
 export class EntityPermissionFormComponent extends BaseFormComponent {
     public record!: EntityPermissionEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'entityRoleDetails', sectionName: 'Entity & Role Details', isExpanded: true },
+            { sectionKey: 'accessRights', sectionName: 'Access Rights', isExpanded: true },
+            { sectionKey: 'securityFilters', sectionName: 'Security Filters', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadEntityPermissionFormComponent() {
-    LoadEntityPermissionDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

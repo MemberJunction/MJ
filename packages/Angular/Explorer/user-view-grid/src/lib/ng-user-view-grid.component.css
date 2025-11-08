@@ -1,3 +1,36 @@
+/* Grid container - match form cards */
+.user-view-grid-wrap {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    position: relative;
+}
+
+/* Loading container - contained within grid space (initial load) */
+.grid-loading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    padding: 40px;
+}
+
+/* Loading overlay - shown on top of grid during refresh */
+.grid-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
 .user-view-grid-column-header {
     background-color: #fff;
     font-size: 20pt;
@@ -81,17 +114,92 @@
     color: var(--sideNav);
 }
 
+/* Toolbar modernization - match form toolbar style */
+::ng-deep .user-view-grid-wrap .k-grid-toolbar {
+    background: #f9fafb !important;
+    border-bottom: 2px solid #e5e7eb !important;
+    padding: 12px 16px !important;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Toolbar buttons - match form toolbar style */
+::ng-deep .user-view-grid-wrap .k-grid-toolbar button {
+    padding: 8px 14px !important;
+    font-size: 14px !important;
+    border: 1px solid #d1d5db !important;
+    background: white !important;
+    color: #374151 !important;
+    border-radius: 6px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+
+/* Hide button text labels on toolbar buttons to save space, rely on icons + tooltips */
+::ng-deep .user-view-grid-wrap .k-grid-toolbar button .button-text {
+    display: none !important;
+}
+
+/* Icon-only buttons need less horizontal padding */
+::ng-deep .user-view-grid-wrap .k-grid-toolbar button span[class*="fa-"] {
+    font-size: 16px !important;
+}
+
+::ng-deep .user-view-grid-wrap .k-grid-toolbar button:hover {
+    background: #f9fafb !important;
+    border-color: #9ca3af !important;
+}
+
+/* Header styling */
+::ng-deep .user-view-grid-wrap .k-grid-header {
+    background: #f9fafb !important;
+    border-bottom: 2px solid #e5e7eb !important;
+}
+
 ::ng-deep .user-view-grid-wrap .k-grid-aria-root .k-grid-header .k-grid-header-table thead tr th {
     border-right: none;
     border-inline-start-width: 0;
-    color: var(--thead-color);
+    color: #374151 !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 12px 16px !important;
+}
+
+/* Row styling */
+::ng-deep .user-view-grid-wrap .k-grid tbody tr {
+    border-bottom: 1px solid #f3f4f6 !important;
+    transition: background-color 0.15s ease;
+}
+
+::ng-deep .user-view-grid-wrap .k-grid tbody tr:hover {
+    background: #f9fafb !important;
 }
 
 ::ng-deep .user-view-grid-wrap .k-grid-aria-root kendo-grid-list .k-grid-table tbody tr td {
     border-inline-start-width: 0;
-    color: var(--tdata-color);
+    color: #1f2937 !important;
     font-weight: 500;
     border-bottom-width: 1px;
+    font-size: 14px !important;
+    padding: 12px 16px !important;
+}
+
+/* Footer styling */
+::ng-deep .user-view-grid-wrap .k-grid-footer {
+    background: #f9fafb !important;
+    border-top: 2px solid #e5e7eb !important;
+    padding: 12px 16px !important;
+    font-size: 13px !important;
+    color: #6b7280 !important;
+}
+
+/* Selection checkbox column */
+::ng-deep .user-view-grid-wrap .k-grid .k-checkbox-column {
+    background: #fafbfc !important;
 }
 
 .overflow-y-scroll {

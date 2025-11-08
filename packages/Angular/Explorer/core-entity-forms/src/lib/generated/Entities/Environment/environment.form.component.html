@@ -1,112 +1,244 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="MJ: Environments" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="MJ: Projects" [Visible]="record.IsSaved"> 
-                        MJ: Projects
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Projects')"
-                            [AllowLoad]="IsCurrentTab('MJ: Projects')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Technical Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="technicalMetadata"
+        sectionName="Technical Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
 
-                    <mj-tab Name="MJ: Collections" [Visible]="record.IsSaved"> 
-                        MJ: Collections
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collections','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Collections')"
-                            [AllowLoad]="IsCurrentTab('MJ: Collections')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: Artifacts" [Visible]="record.IsSaved"> 
-                        MJ: Artifacts
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
-                            [AllowLoad]="IsCurrentTab('MJ: Artifacts')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Environment Definition Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="environmentDefinition"
+        sectionName="Environment Definition"
+        icon="fa fa-cubes"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsDefault"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
-                        MJ: Tasks
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Tasks')"
-                            [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Dashboards" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-table-columns tab-header-icon"></span>Dashboards
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('Dashboards')"
-                            [AllowLoad]="IsCurrentTab('Dashboards')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Environment Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="environmentSettings"
+        sectionName="Environment Settings"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="Settings"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="Reports" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Reports','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('Reports')"
-                            [AllowLoad]="IsCurrentTab('Reports')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Conversations" [Visible]="record.IsSaved"> 
-                        <span class="fa-regular fa-comments tab-header-icon"></span>Conversations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Conversations','EnvironmentID')"  
-                            [NewRecordValues]="NewRecordValues('Conversations')"
-                            [AllowLoad]="IsCurrentTab('Conversations')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
-    </form>
-</div>
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- MJ: Artifacts Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJArtifacts"
+        sectionName="MJ: Artifacts"
+        icon="fa fa-file"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJArtifacts')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
+                [AllowLoad]="IsSectionExpanded('mJArtifacts')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Collections Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJCollections"
+        sectionName="MJ: Collections"
+        icon="fa fa-folder-open"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJCollections')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collections','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Collections')"
+                [AllowLoad]="IsSectionExpanded('mJCollections')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJCollections', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Projects Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJProjects"
+        sectionName="MJ: Projects"
+        icon="fa fa-project-diagram"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJProjects')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Projects')"
+                [AllowLoad]="IsSectionExpanded('mJProjects')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJProjects', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Dashboards Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="dashboards"
+        sectionName="Dashboards"
+        icon="fa-solid fa-table-columns"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('dashboards')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('Dashboards')"
+                [AllowLoad]="IsSectionExpanded('dashboards')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('dashboards', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Tasks Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJTasks"
+        sectionName="MJ: Tasks"
+        icon="fa fa-tasks"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJTasks')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                [AllowLoad]="IsSectionExpanded('mJTasks')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Reports Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="reports"
+        sectionName="Reports"
+        icon="fa-solid fa-chart-line"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('reports')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Reports','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('Reports')"
+                [AllowLoad]="IsSectionExpanded('reports')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('reports', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Conversations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="conversations"
+        sectionName="Conversations"
+        icon="fa-regular fa-comments"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('conversations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Conversations','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('Conversations')"
+                [AllowLoad]="IsSectionExpanded('conversations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('conversations', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

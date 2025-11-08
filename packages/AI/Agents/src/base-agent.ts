@@ -214,6 +214,45 @@ export class BaseAgent {
     }
 
     /**
+     * Gets the available configuration presets for an agent.
+     * Returns semantic presets like "Fast", "Balanced", "High Quality" that users can choose from.
+     * These are actual presets stored in the database with specific AIConfiguration references.
+     *
+     * @param agentId - The ID of the agent to get presets for
+     * @returns Array of configuration presets sorted by Priority, or empty array if none configured
+     *
+     * @example
+     * ```typescript
+     * const agent = new ResearchAgent();
+     * const presets = agent.GetConfigurationPresets('agent-uuid-here');
+     * // Returns presets defined in database: [
+     * //   { Name: 'Fast', DisplayName: 'Quick Draft', AIConfigurationID: 'fast-config-uuid', IsDefault: true },
+     * //   { Name: 'HighQuality', DisplayName: 'Maximum Detail', AIConfigurationID: 'frontier-uuid', IsDefault: false }
+     * // ]
+     * // Note: If no presets configured, returns empty array - agent will use default behavior
+     * ```
+     */
+    public GetConfigurationPresets(agentId: string) {
+        if (!agentId) {
+            return [];
+        }
+        return AIEngine.Instance.GetAgentConfigurationPresets(agentId);
+    }
+
+    /**
+     * Gets the default configuration preset for an agent.
+     *
+     * @param agentId - The ID of the agent to get the default preset for
+     * @returns The default preset, or undefined if none configured
+     */
+    public GetDefaultConfigurationPreset(agentId: string) {
+        if (!agentId) {
+            return undefined;
+        }
+        return AIEngine.Instance.GetDefaultAgentConfigurationPreset(agentId);
+    }
+
+    /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
      * Tracked separately as it's display-only and doesn't need persistence.
      * @private
@@ -4623,9 +4662,11 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
-            return { 
-                ...subAgentResult, 
-                step: subAgentResult.success ? 'Success' : 'Failed', 
+            return {
+                ...subAgentResult,
+                step: subAgentResult.success ? 'Success' : 'Failed',
+                // Capture error message from sub-agent run for proper error propagation
+                errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload
@@ -4943,6 +4984,8 @@ The context is now within limits. Please retry your request with the recovered c
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
+                // Capture error message from sub-agent run for proper error propagation
+                errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload
@@ -6315,10 +6358,13 @@ The context is now within limits. Please retry your request with the recovered c
         if (this._agentRun) {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
-            if (!this._agentRun.Success && finalStep.message) {
-                // grab the message from the finalStep.message if it exists and append to any existing
-                // error messagge thjat might already be there
-                this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + finalStep.message;
+            if (!this._agentRun.Success) {
+                // Capture error message from either errorMessage or message field
+                const errorText = finalStep.errorMessage || finalStep.message;
+                if (errorText) {
+                    // Append to any existing error message
+                    this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + errorText;
+                }
             }
             if (!this._agentRun.Success) {
                 // set status to Failed

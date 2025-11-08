@@ -1,0 +1,64 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Form Layout Generation",
+      "Description": "Analyzes entity fields to generate semantic categories with icons for collapsible section layouts",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/form-layout-generation.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "4EAD0807-9E6E-496D-8F9E-F64376C5522A"
+          },
+          "sync": {
+            "lastModified": "2025-11-06T18:32:33.064Z",
+            "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "63B92084-D3C0-42FD-B5A1-0C98811D4075"
+          },
+          "sync": {
+            "lastModified": "2025-11-06T18:32:33.077Z",
+            "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "910D617C-56CE-4698-A938-E2E982BB91FD"
+    },
+    "sync": {
+      "lastModified": "2025-11-07T18:47:11.840Z",
+      "checksum": "207e3725a661121f4af2ea2094cfe694cc5163ea1ce9ce035ce83e448d2e6709"
+    }
+  }
+]

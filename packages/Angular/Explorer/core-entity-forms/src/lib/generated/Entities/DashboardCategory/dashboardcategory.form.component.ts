@@ -2,19 +2,28 @@ import { Component } from '@angular/core';
 import { DashboardCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadDashboardCategoryDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Dashboard Categories') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-dashboardcategory-form',
-    templateUrl: './dashboardcategory.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './dashboardcategory.form.component.html'
 })
 export class DashboardCategoryFormComponent extends BaseFormComponent {
     public record!: DashboardCategoryEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
+            { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'dashboardCategories', sectionName: 'Dashboard Categories', isExpanded: false },
+            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadDashboardCategoryFormComponent() {
-    LoadDashboardCategoryDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

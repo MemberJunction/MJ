@@ -2,19 +2,26 @@ import { Component } from '@angular/core';
 import { OutputDeliveryTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadOutputDeliveryTypeDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Output Delivery Types') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-outputdeliverytype-form',
-    templateUrl: './outputdeliverytype.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './outputdeliverytype.form.component.html'
 })
 export class OutputDeliveryTypeFormComponent extends BaseFormComponent {
     public record!: OutputDeliveryTypeEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'deliveryTypeDetails', sectionName: 'Delivery Type Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadOutputDeliveryTypeFormComponent() {
-    LoadOutputDeliveryTypeDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }
