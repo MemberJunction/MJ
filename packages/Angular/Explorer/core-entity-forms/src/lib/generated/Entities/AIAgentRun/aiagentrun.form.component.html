@@ -368,7 +368,9 @@
         icon="fa fa-sliders-h"
         [form]="this"
         [formContext]="formContext">
-        <mj-form-field 
+        <!-- Show Configuration by ID field which links to the record (only if set) -->
+        <mj-form-field
+            *ngIf="record.ConfigurationID"
             [record]="record"
             [ShowLabel]="true"
             FieldName="ConfigurationID"
@@ -378,7 +380,19 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
-        <mj-form-field 
+        <!-- Show Effort Level (only if set) -->
+        <mj-form-field
+            *ngIf="record.EffortLevel != null"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EffortLevel"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <!-- Show Override Model by ID field which links to the record (only if set) -->
+        <mj-form-field
+            *ngIf="record.OverrideModelID"
             [record]="record"
             [ShowLabel]="true"
             FieldName="OverrideModelID"
@@ -388,7 +402,9 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
-        <mj-form-field 
+        <!-- Show Override Vendor by ID field which links to the record (only if set) -->
+        <mj-form-field
+            *ngIf="record.OverrideVendorID"
             [record]="record"
             [ShowLabel]="true"
             FieldName="OverrideVendorID"
@@ -397,38 +413,6 @@
             [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EffortLevel"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OverrideModel"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OverrideVendor"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

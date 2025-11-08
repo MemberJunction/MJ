@@ -448,12 +448,19 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   ): Promise<void> {
     console.log('🎯 Direct @mention detected, bypassing Sage');
 
-    // Extract mention chip data to get configuration preset if any
-    const chipData = this.inputBox?.getMentionChipsData() || [];
-    const agentChip = chipData.find(chip => chip.id === agentMention.id && chip.type === 'agent');
-    if (agentChip?.presetId) {
-      agentMention.configurationId = agentChip.presetId;
-      console.log(`🎯 Using configuration preset: ${agentChip.presetName} (${agentChip.presetId})`);
+    // The agentMention already has configurationId from JSON parsing
+    // If it wasn't in JSON (legacy format), try to get from chip data
+    if (!agentMention.configurationId) {
+      const chipData = this.inputBox?.getMentionChipsData() || [];
+      const agentChip = chipData.find(chip => chip.id === agentMention.id && chip.type === 'agent');
+      if (agentChip?.presetId) {
+        agentMention.configurationId = agentChip.presetId;
+        console.log(`🎯 Using configuration preset from chip: ${agentChip.presetName} (${agentChip.presetId})`);
+      }
+    }
+
+    if (agentMention.configurationId) {
+      console.log(`🎯 Agent mention has configuration ID: ${agentMention.configurationId}`);
     }
 
     await this.executeRouteWithNaming(
