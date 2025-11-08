@@ -68,6 +68,7 @@ type SourceType =
   | 'web'                  // Google Custom Search
   | 'storage'              // File storage providers
   | 'database'             // SQL queries
+  | 'knowledge_base'       // Internal knowledge bases (Betty, etc.)
   | 'structured_data'      // Census, stock prices, etc.
   | 'sub_agent';           // Delegated to another agent
 
@@ -93,6 +94,15 @@ interface SourceRecord {
   databaseQuery?: string;                  // SQL query used
   databaseName?: string;                   // Database queried
   resultCount?: number;                    // Number of rows returned
+
+  // Knowledge Base-specific fields
+  kbQuery?: string;                        // Query sent to knowledge base
+  kbSystem?: string;                       // KB system name (e.g., "Betty")
+  kbReferences?: Array<{                   // Structured references from KB
+    title: string;
+    link: string;
+    type: string;
+  }>;
 
   // Common fields
   accessedAt: string;                      // ISO 8601 timestamp
@@ -626,9 +636,10 @@ interface ContradictionSummary {
 
 ### PayloadDownstreamPaths
 The Research Agent should configure these paths to pass relevant data to sub-agents:
-- `sources` → For Database Research Agent to understand context
+- `sources` → For Database Research Agent and Knowledge Base Research Agent to understand context
 - `plan.researchQuestions` → For sub-agents to focus efforts
 - `metadata.researchGoal` → For context awareness
+- Full conversation history → For Knowledge Base Research Agent (uses ConversationMessageResolver)
 
 ### PayloadUpstreamPaths
 Sub-agents should return:

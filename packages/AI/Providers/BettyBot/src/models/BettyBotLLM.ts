@@ -96,11 +96,15 @@ export class BettyBotLLM extends BaseLLM {
 
             /**
              * If Betty gave us any references, add them to the response
-             * as an additional choice
+             * as additional choices:
+             * - choice[1]: Formatted text version (for display/backwards compatibility)
+             * - choice[2]: Raw JSON structure (for programmatic access)
              */
             if(bettyResponse.data.references && bettyResponse.data.references.length > 0){
-                let text: string = "Here are some additional resources that may help you: \n";
                 const references = bettyResponse.data.references;
+
+                // Choice 1: Formatted text version
+                let text: string = "Here are some additional resources that may help you: \n";
                 for(const reference of references){
                     text += `${reference.title}: ${reference.link} \n`;
                 }
@@ -112,6 +116,16 @@ export class BettyBotLLM extends BaseLLM {
                     },
                     finish_reason: "",
                     index: 1
+                });
+
+                // Choice 2: Raw structured JSON
+                response.data.choices.push({
+                    message: {
+                        role: ChatMessageRole.assistant,
+                        content: JSON.stringify(references)
+                    },
+                    finish_reason: "references_json",
+                    index: 2
                 });
             }
 

@@ -20,6 +20,7 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { PayloadManager } from '../PayloadManager';
+import { ConversationMessageResolver } from '../utils/ConversationMessageResolver';
 
 /**
  * Extended BaseAgentNextStep for Flow Agent Type with additional prompt step metadata
@@ -805,15 +806,18 @@ export class FlowAgentType extends BaseAgentType {
     
     /**
      * Recursively resolves payload and static references in nested objects
-     * 
+     *
      * @private
      */
     private resolveNestedValue(value: unknown, currentPayload: any, params?: ExecuteAgentParams): unknown {
         if (typeof value === 'string') {
-            // Handle string values with payload/static/data resolution (case-insensitive)
+            // Handle string values with payload/static/data/conversation resolution (case-insensitive)
             const trimmedValue = value.trim();
-            
-            if (trimmedValue.toLowerCase().startsWith('static:')) {
+
+            // Check for conversation message references
+            if (ConversationMessageResolver.isConversationReference(trimmedValue) && params?.conversationMessages) {
+                return ConversationMessageResolver.resolve(trimmedValue, params.conversationMessages);
+            } else if (trimmedValue.toLowerCase().startsWith('static:')) {
                 return value.substring(value.indexOf(':') + 1);
             } else if (trimmedValue.toLowerCase().startsWith('payload.')) {
                 const pathStart = value.indexOf('.') + 1;
