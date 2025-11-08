@@ -14,21 +14,6 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "Priority": 1
-          },
-          "primaryKey": {
-            "ID": "9820890F-D814-486E-8994-2561669C48A3"
-          },
-          "sync": {
-            "lastModified": "2025-10-19T14:11:18.767Z",
-            "checksum": "c839e7a8438b7b515a761e8c6e8753b0ccd7156ac144b11a46c63f4aa85176f7"
-          }
-        },
-        {
-          "fields": {
-            "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=o4-mini",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
@@ -39,6 +24,54 @@
           "sync": {
             "lastModified": "2025-10-18T14:07:44.597Z",
             "checksum": "054c78fb84b017265259a92edf1c54199182e6f48d05f5c50b5af5b098f549ba"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "CA17A4A4-704A-4151-AE3C-09F706544BC3"
+          },
+          "sync": {
+            "lastModified": "2025-11-08T01:58:03.553Z",
+            "checksum": "d47304702399a10ae6790b3643dd789ad82e1794b60451ec17705f45394fd2d5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "9820890F-D814-486E-8994-2561669C48A3"
+          },
+          "sync": {
+            "lastModified": "2025-11-08T01:58:03.569Z",
+            "checksum": "801617fd16e0d4870d81f1ed03bde0038fa844adccd137db2bca0aea1e6fa7bb"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "AA48A0DD-5F77-4600-9127-8764A28E0C5C"
+          },
+          "sync": {
+            "lastModified": "2025-11-08T01:58:03.581Z",
+            "checksum": "434ac77962d6426e640f99e08db9514fb1fbd18fb7bd6ec70cefd4d0daed9b36"
           }
         },
         {
@@ -69,21 +102,6 @@
           "sync": {
             "lastModified": "2025-10-24T11:54:49.569Z",
             "checksum": "2f484cacbf7dd09c5d5d85128757626fbdd971275c06c75142f6f69e5709c25b"
-          }
-        },
-        {
-          "fields": {
-            "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 1
-          },
-          "primaryKey": {
-            "ID": "AA48A0DD-5F77-4600-9127-8764A28E0C5C"
-          },
-          "sync": {
-            "lastModified": "2025-10-18T14:07:44.608Z",
-            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
           }
         }
       ]
