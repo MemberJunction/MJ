@@ -38,7 +38,7 @@
       "crossSchema": true
     },
     "guardrails": {
-      "maxTokensPerRun": 50000,
+      "maxTokensPerRun": 200000,
       "maxDurationSeconds": 2700,
       "warnThresholds": {
         "tokenPercentage": 80,
@@ -95,10 +95,19 @@
     "markdownFile": "./output/database-documentation.md"
   },
   "schemas": {
-    "include": ["sales", "inv"],
-    "exclude": ["sys", "INFORMATION_SCHEMA"]
+    "include": [
+      "sales",
+      "inv"
+    ],
+    "exclude": [
+      "sys",
+      "INFORMATION_SCHEMA"
+    ]
   },
   "tables": {
-    "exclude": ["sysdiagrams", "__MigrationHistory"]
+    "exclude": [
+      "sysdiagrams",
+      "__MigrationHistory"
+    ]
   }
 }

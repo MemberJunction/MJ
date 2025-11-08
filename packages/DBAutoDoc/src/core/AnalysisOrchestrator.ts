@@ -16,6 +16,8 @@ import { SQLGenerator } from '../generators/SQLGenerator.js';
 import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
 import { DBAutoDocConfig } from '../types/config.js';
 import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
+import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
+import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 
 export interface AnalysisOptions {
   config: DBAutoDocConfig;
@@ -119,6 +121,56 @@ export class AnalysisOrchestrator {
           }
         }
         this.onProgress('Data analysis complete');
+
+        // Relationship Discovery Phase (if enabled)
+        if (this.config.analysis.relationshipDiscovery?.enabled) {
+          this.onProgress('Checking if relationship discovery should run');
+
+          const triggerAnalysis = DiscoveryTriggerAnalyzer.analyzeSchemas(state.schemas);
+
+          if (triggerAnalysis.shouldRun) {
+            this.onProgress('Relationship discovery triggered', {
+              reason: triggerAnalysis.reason,
+              tablesWithoutPK: triggerAnalysis.details.tablesWithoutPK,
+              actualFKs: triggerAnalysis.details.totalFKs,
+              expectedMinFKs: triggerAnalysis.details.expectedMinFKs
+            });
+
+            const discoveryEngine = new DiscoveryEngine({
+              driver,
+              config: this.config.analysis.relationshipDiscovery,
+              schemas: state.schemas,
+              onProgress: this.onProgress
+            });
+
+            // Calculate token budget for discovery
+            const totalTokenBudget = this.config.analysis.guardrails?.maxTokensPerRun;
+            const discoveryRatio = this.config.analysis.relationshipDiscovery.tokenBudget?.ratioOfTotal || 0.25;
+            const discoveryTokenBudget = totalTokenBudget
+              ? Math.floor(totalTokenBudget * discoveryRatio)
+              : this.config.analysis.relationshipDiscovery.tokenBudget?.maxTokens || 50000;
+
+            const discoveryResult = await discoveryEngine.discover(discoveryTokenBudget, triggerAnalysis);
+            state.relationshipDiscoveryPhase = discoveryResult.phase;
+
+            // Apply discovered relationships to schema
+            discoveryEngine.applyDiscoveriesToState(state, discoveryResult.phase);
+
+            this.onProgress('Relationship discovery complete', {
+              primaryKeysDiscovered: discoveryResult.phase.discovered.primaryKeys.length,
+              foreignKeysDiscovered: discoveryResult.phase.discovered.foreignKeys.length,
+              tokensUsed: discoveryResult.phase.tokenBudget.used,
+              guardrailsReached: discoveryResult.guardrailsReached
+            });
+
+            // Save state with discovery results
+            await stateManager.save(state);
+          } else {
+            this.onProgress('Relationship discovery skipped', {
+              reason: triggerAnalysis.reason
+            });
+          }
+        }
       }
 
       // Topological sort
