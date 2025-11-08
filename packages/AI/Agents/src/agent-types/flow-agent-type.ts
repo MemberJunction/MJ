@@ -427,8 +427,9 @@ export class FlowAgentType extends BaseAgentType {
     /**
      * Applies action output mapping to update the payload and extract special fields.
      *
-     * Special fields (message, reasoning, confidence) are not added to the payload but
-     * are stored separately in FlowExecutionState for use in the final response.
+     * Special fields ($message, $reasoning, $confidence) are prefixed with $ and are not
+     * added to the payload. Instead, they are stored separately in FlowExecutionState
+     * for use in the final response.
      *
      * @private
      * @returns Object with payloadChange and specialFields
@@ -442,9 +443,6 @@ export class FlowAgentType extends BaseAgentType {
             const mapping: ActionOutputMapping = JSON.parse(mappingConfig);
             const updateObj: Record<string, unknown> = {};
             const specialFields: { message?: string; reasoning?: string; confidence?: number } = {};
-
-            // List of special field names that should not go into payload
-            const specialFieldNames = ['message', 'reasoning', 'confidence'];
 
             for (const [outputParam, payloadPath] of Object.entries(mapping)) {
                 let value: unknown;
@@ -477,15 +475,20 @@ export class FlowAgentType extends BaseAgentType {
                 }
 
                 if (value !== undefined) {
-                    // Check if this is a special field mapping
-                    if (specialFieldNames.includes(payloadPath.toLowerCase())) {
+                    // Check if this is a special field mapping (starts with $)
+                    if (payloadPath.startsWith('$')) {
+                        const fieldName = payloadPath.substring(1).toLowerCase();
                         // Store in special fields instead of payload
-                        if (payloadPath.toLowerCase() === 'message' && typeof value === 'string') {
+                        if (fieldName === 'message' && typeof value === 'string') {
                             specialFields.message = value;
-                        } else if (payloadPath.toLowerCase() === 'reasoning' && typeof value === 'string') {
+                        } else if (fieldName === 'reasoning' && typeof value === 'string') {
                             specialFields.reasoning = value;
-                        } else if (payloadPath.toLowerCase() === 'confidence' && typeof value === 'number') {
+                        } else if (fieldName === 'confidence' && typeof value === 'number') {
                             specialFields.confidence = value;
+                        }
+                        // Ignore unknown special fields with warning
+                        else {
+                            LogError(`Unknown special field in ActionOutputMapping: ${payloadPath}. Valid special fields are: $message, $reasoning, $confidence`);
                         }
                     } else {
                         // Regular payload mapping

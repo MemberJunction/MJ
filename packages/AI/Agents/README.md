@@ -1706,7 +1706,7 @@ Paths are the edges connecting your workflow nodes. They determine the flow:
 }
 ```
 
-**Action Output Mapping** (`ActionOutputMapping`) - Maps action results back to payload:
+**Action Output Mapping** (`ActionOutputMapping`) - Maps action results back to payload or special fields:
 
 ```typescript
 // In AIAgentStep.ActionOutputMapping
@@ -1714,12 +1714,41 @@ Paths are the edges connecting your workflow nodes. They determine the flow:
     "userId": "payload.customer.id",                  // Map specific output param
     "orderTotal": "payload.order.total",              // Nested path in payload
     "metadata": "payload.action.lastResult",          // Arbitrary nesting
-    "*": "payload.rawResults.fullData"                // Wildcard = entire result
+    "*": "payload.rawResults.fullData",               // Wildcard = entire result
+    "responseText": "$message",                       // Special field - user message
+    "analysisDetails": "$reasoning",                  // Special field - reasoning
+    "confidenceScore": "$confidence"                  // Special field - confidence
 }
 
 // Case-insensitive output parameter matching
 // If action returns { UserId: "123" }, it matches "userId" in mapping
 ```
+
+**Special Fields** (Flow Agents Only):
+
+Use the `$` prefix to map action outputs to special response fields instead of the payload:
+
+- **`$message`**: Maps to the user-facing message in the final Success step
+- **`$reasoning`**: Optional reasoning/explanation shown with the response
+- **`$confidence`**: Optional confidence score (number) for the response
+
+**Example - Betty Knowledge Base Agent:**
+```typescript
+// Betty action returns: { BettyResponse: "The answer is...", BettyReferences: [...] }
+{
+    "BettyResponse": "$message",      // Shows directly to user
+    "BettyReferences": "references"   // Stored in payload
+}
+
+// When flow completes, user sees Betty's response as the message
+// No LLM processing needed - deterministic, single-step flow
+```
+
+**Special Field Benefits:**
+- ✅ Eliminates need for LLM to format final response
+- ✅ Enables deterministic flows with dynamic user messages
+- ✅ Clearly separates UI content from payload data
+- ✅ No namespace pollution - can still have `message` in payload
 
 #### 5. Prompt Result Merging
 
