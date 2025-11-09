@@ -119,10 +119,44 @@ export class PromptEngine {
    */
   private async renderTemplate(promptName: string, context: any): Promise<string> {
     return new Promise((resolve, reject) => {
+      // DEBUG: Log context for table-analysis prompts
+      if (promptName === 'table-analysis') {
+        console.log(`[PromptEngine] Rendering ${promptName}`);
+        console.log(`[PromptEngine] Context keys:`, Object.keys(context));
+        if (context.allTables) {
+          console.log(`[PromptEngine] allTables length: ${context.allTables.length}`);
+          console.log(`[PromptEngine] First 3 tables:`, context.allTables.slice(0, 3));
+        } else {
+          console.log(`[PromptEngine] WARNING: allTables is missing/empty`);
+        }
+      }
+
       this.nunjucksEnv.render(promptName, context, (err, result) => {
         if (err) {
-          reject(err);
+          // CRITICAL: Log full error and terminate
+          console.error(`[PromptEngine] FATAL: Template rendering failed for ${promptName}`);
+          console.error(`[PromptEngine] Error type:`, err.name);
+          console.error(`[PromptEngine] Error message:`, err.message);
+          console.error(`[PromptEngine] Stack trace:`, err.stack);
+          console.error(`[PromptEngine] Context keys:`, Object.keys(context));
+          if (context.allTables !== undefined) {
+            console.error(`[PromptEngine] allTables:`, context.allTables);
+          }
+          console.error(`[PromptEngine] Terminating process due to template rendering failure`);
+          process.exit(1); // Fail hard as requested
         } else {
+          // DEBUG: Log full rendered template for table-analysis
+          if (promptName === 'table-analysis') {
+            console.log(`[PromptEngine] ===== RENDERED TEMPLATE START =====`);
+            console.log(result);
+            console.log(`[PromptEngine] ===== RENDERED TEMPLATE END =====`);
+            // Check if "All Database Tables" section is present
+            if (result && result.includes('All Database Tables')) {
+              console.log(`[PromptEngine] ✓ "All Database Tables" section IS present in rendered template`);
+            } else {
+              console.log(`[PromptEngine] ✗ WARNING: "All Database Tables" section NOT found in rendered template`);
+            }
+          }
           resolve(result || '');
         }
       });

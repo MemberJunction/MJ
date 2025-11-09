@@ -297,18 +297,50 @@ export class PKDetector {
 
     // **CRITICAL FIX**: Reject obvious non-PK columns immediately
     const blacklistPatterns = [
+      // Quantities and counts
       /^qty$/i, /^quantity$/i, /^amount$/i, /^amt$/i,
+      /^count$/i, /^cnt$/i, /^num$/i, /^number$/i,
+
+      // Sequences and ordering
       /^seq$/i, /^sequence$/i, /^order$/i, /^sort$/i,
       /^lvl$/i, /^level$/i, /^depth$/i,
-      /^count$/i, /^cnt$/i, /^num$/i, /^number$/i,
+
+      // Financial/numeric values
       /^price$/i, /^prc$/i, /^cost$/i,
-      /^var$/i, /^variance$/i, /^diff$/i, /^delta$/i,
       /^total$/i, /^tot$/i, /^sum$/i,
+      /^balance$/i, /^bal$/i,
+      /^limit$/i, /^lmt$/i, /^capacity$/i, /^cap$/i,
+
+      // Statistical/calculated values
+      /^var$/i, /^variance$/i, /^diff$/i, /^delta$/i,
       /^min$/i, /^max$/i, /^avg$/i, /^mean$/i,
       /^rate$/i, /^rtg$/i, /^rating$/i, /^score$/i,
-      /^capacity$/i, /^cap$/i, /^limit$/i, /^lmt$/i,
       /^expected$/i, /^exp_/i, /^actual$/i, /^act_/i,
-      /^received$/i, /^rcv_/i, /^reserved$/i, /^rsv$/i
+      /^received$/i, /^rcv_/i, /^reserved$/i, /^rsv$/i,
+
+      // Date/time fields - NEVER primary keys
+      /_dt$/i, /_date$/i, /^date/i, /^dt$/i,
+      /_time$/i, /^time/i, /^timestamp/i,
+      /^created/i, /^modified/i, /^updated/i, /^deleted/i,
+      /^start/i, /^end/i, /^begin/i, /^finish/i,
+      /^ship_dt$/i, /^dlv_dt$/i, /^ord_dt$/i, /^rcv_dt$/i,
+      /^lst_ord$/i, /^last_/i,
+
+      // Text/description fields
+      /^description$/i, /^dsc$/i, /^desc$/i,
+      /^notes$/i, /^note$/i, /^comment$/i, /^txt$/i,
+      /^name$/i, /^nm$/i, /^title$/i,
+
+      // Address/location fields
+      /^address$/i, /^addr$/i, /^ln1$/i, /^ln2$/i,
+      /^city$/i, /^cty$/i, /^state$/i, /^st$/i, /^zip$/i,
+
+      // Flags/booleans
+      /^is_/i, /^has_/i, /^flag$/i, /^active$/i, /^enabled$/i,
+      /^default$/i, /^dflt$/i, /^primary$/i,
+
+      // Extensions/extra info
+      /^ext$/i, /^extension$/i, /^ref$/i, /^reference$/i
     ];
 
     for (const pattern of blacklistPatterns) {

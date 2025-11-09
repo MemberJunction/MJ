@@ -16,7 +16,7 @@
     "model": "${AI_MODEL}",
     "apiKey": "${AI_API_KEY}",
     "temperature": 0.1,
-    "maxTokens": 4000
+    "maxTokens": 8000
   },
   "analysis": {
     "cardinalityThreshold": 20,
@@ -38,8 +38,8 @@
       "crossSchema": true
     },
     "guardrails": {
-      "maxTokensPerRun": 100000,
-      "maxDurationSeconds": 2700,
+      "maxTokensPerRun": 250000,
+      "maxDurationSeconds": 3600,
       "warnThresholds": {
         "tokenPercentage": 80,
         "durationPercentage": 80
@@ -53,7 +53,7 @@
         "fkDeficitThreshold": 0.4
       },
       "tokenBudget": {
-        "ratioOfTotal": 0.25
+        "ratioOfTotal": 0.4
       },
       "confidence": {
         "primaryKeyMinimum": 0.7,

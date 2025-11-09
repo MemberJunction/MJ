@@ -397,8 +397,12 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     columnName: string,
     sampleSize: number
   ): Promise<any[]> {
+    // **IMPORTANT**: Limit sample size to max 20 to reduce JSON size
+    // User requested: "narrow that down to maybe 10-20 values randomly selected from each col"
+    const limitedSampleSize = Math.min(sampleSize, 20);
+
     const query = `
-      SELECT TOP ${sampleSize} ${this.escapeIdentifier(columnName)} as value
+      SELECT TOP ${limitedSampleSize} ${this.escapeIdentifier(columnName)} as value
       FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
       WHERE ${this.escapeIdentifier(columnName)} IS NOT NULL
       ORDER BY NEWID()

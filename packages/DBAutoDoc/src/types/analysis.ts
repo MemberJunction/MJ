@@ -55,6 +55,7 @@ export interface TableAnalysisContext {
   parentDescriptions?: ParentTableDescription[];
   userNotes?: string;
   seedContext?: any;
+  allTables?: Array<{ schema: string; name: string }>;
 }
 
 export interface ParentTableDescription {

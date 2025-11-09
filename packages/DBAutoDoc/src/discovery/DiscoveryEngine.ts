@@ -7,6 +7,7 @@ import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { PKDetector } from './PKDetector.js';
 import { FKDetector } from './FKDetector.js';
 import { LLMDiscoveryValidator } from './LLMDiscoveryValidator.js';
+import { LLMSanityChecker } from './LLMSanityChecker.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 import { SchemaDefinition, DatabaseDocumentation } from '../types/state.js';
 import {
@@ -43,6 +44,7 @@ export class DiscoveryEngine {
   private pkDetector: PKDetector;
   private fkDetector: FKDetector;
   private llmValidator?: LLMDiscoveryValidator;
+  private sanityChecker?: LLMSanityChecker;
 
   constructor(options: DiscoveryEngineOptions) {
     this.driver = options.driver;
@@ -56,7 +58,10 @@ export class DiscoveryEngine {
     this.pkDetector = new PKDetector(this.driver, this.config, this.statsCache);
     this.fkDetector = new FKDetector(this.driver, this.config);
 
-    // Create LLM validator if enabled
+    // Create LLM sanity checker (runs once after statistical detection)
+    this.sanityChecker = new LLMSanityChecker(this.aiConfig);
+
+    // Create LLM validator if enabled (runs per-table validation)
     if (this.config.llmValidation?.enabled) {
       this.llmValidator = new LLMDiscoveryValidator(
         this.driver,
@@ -328,12 +333,77 @@ export class DiscoveryEngine {
     const allPKs = [...phase.discovered.primaryKeys, ...newPKs];
     let newFKs = await this.detectForeignKeys(iteration, phase, allPKs);
 
-    this.onProgress(`Detected ${newFKs.length} FK candidates (pre-LLM)`, {
+    this.onProgress(`Detected ${newFKs.length} FK candidates (pre-sanity)`, {
       iteration,
       candidates: newFKs.map(fk =>
         `${fk.schemaName}.${fk.sourceTable}.${fk.sourceColumn} -> ${fk.targetSchema}.${fk.targetTable}.${fk.targetColumn}`
       ).slice(0, 5)
     });
+
+    // Phase 2.5: LLM Sanity Check (FIRST TIME ONLY - reject obviously wrong candidates)
+    if (this.sanityChecker && iteration === 1 && (newPKs.length > 0 || newFKs.length > 0)) {
+      iterationResult.phase = 'sanity_check';
+
+      this.onProgress('Running LLM sanity check for obvious errors', {
+        pkCandidates: newPKs.length,
+        fkCandidates: newFKs.length
+      });
+
+      const sanityResult = await this.sanityChecker.reviewCandidates(newPKs, newFKs);
+      iterationResult.tokensUsed += sanityResult.tokensUsed;
+
+      // Remove invalid PKs
+      if (sanityResult.invalidPKs.length > 0) {
+        console.log(`[DiscoveryEngine] Sanity check rejecting ${sanityResult.invalidPKs.length} PKs:`);
+        for (const invalid of sanityResult.invalidPKs) {
+          console.log(`  - ${invalid.schema}.${invalid.table}.${invalid.column}: ${invalid.reason}`);
+        }
+
+        newPKs = newPKs.filter(pk => {
+          return !sanityResult.invalidPKs.some(invalid =>
+            invalid.schema === pk.schemaName &&
+            invalid.table === pk.tableName &&
+            pk.columnNames.includes(invalid.column)
+          );
+        });
+      }
+
+      // Remove invalid FKs
+      if (sanityResult.invalidFKs.length > 0) {
+        console.log(`[DiscoveryEngine] Sanity check rejecting ${sanityResult.invalidFKs.length} FKs:`);
+        for (const invalid of sanityResult.invalidFKs) {
+          console.log(`  - ${invalid.schema}.${invalid.table}.${invalid.column}: ${invalid.reason}`);
+        }
+
+        newFKs = newFKs.filter(fk => {
+          return !sanityResult.invalidFKs.some(invalid =>
+            invalid.schema === fk.schemaName &&
+            invalid.table === fk.sourceTable &&
+            invalid.column === fk.sourceColumn
+          );
+        });
+      }
+
+      // Log suggestions
+      if (sanityResult.suggestions.length > 0) {
+        console.log(`[DiscoveryEngine] Sanity check suggestions:`);
+        for (const suggestion of sanityResult.suggestions) {
+          console.log(`  - ${suggestion}`);
+        }
+      }
+
+      this.onProgress(`Sanity check complete`, {
+        invalidPKs: sanityResult.invalidPKs.length,
+        invalidFKs: sanityResult.invalidFKs.length,
+        finalPKs: newPKs.length,
+        finalFKs: newFKs.length,
+        tokensUsed: sanityResult.tokensUsed
+      });
+
+      // Update discoveries
+      iterationResult.discoveries.newPKs = newPKs;
+      iterationResult.discoveries.newFKs = newFKs;
+    }
 
     // Phase 3: LLM Validation (if enabled and we have candidates or need validation)
     if (this.llmValidator && (newPKs.length > 0 || newFKs.length > 0)) {

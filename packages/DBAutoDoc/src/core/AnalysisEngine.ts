@@ -186,13 +186,13 @@ export class AnalysisEngine {
         }
       }
 
-      // Extract FK insights from column descriptions and feed back to discovery phase
-      if (state.phases.keyDetection) {
-        this.extractAndFeedbackFKInsights(
+      // Process structured FK insights from LLM and feed back to discovery phase
+      if (state.phases.keyDetection && result.result.foreignKeys) {
+        this.processFKInsightsFromLLM(
           state,
           tableNode.schema,
           tableNode.table,
-          result.result.columnDescriptions || []
+          result.result.foreignKeys
         );
       }
 
@@ -271,6 +271,14 @@ export class AnalysisEngine {
       })
       .filter(p => p !== null);
 
+    // Build list of all tables in the database for FK reference validation
+    const allTables: Array<{ schema: string; name: string }> = [];
+    for (const schema of state.schemas) {
+      for (const tbl of schema.tables) {
+        allTables.push({ schema: schema.name, name: tbl.name });
+      }
+    }
+
     return {
       schema: tableNode.schema,
       table: tableNode.table,
@@ -292,7 +300,8 @@ export class AnalysisEngine {
       sampleData: [], // Could add sample rows here if needed
       parentDescriptions: parentDescriptions as any,
       userNotes: table.userNotes,
-      seedContext: state.seedContext
+      seedContext: state.seedContext,
+      allTables
     };
   }
 
@@ -750,9 +759,23 @@ export class AnalysisEngine {
 
   /**
    * Extract FK insights from column descriptions and create feedback to discovery phase
-   * Example: "prd_id" described as "likely FK to a product master table" should:
-   * 1. Create feedback that prd_id is an FK, not a PK
-   * 2. Mark any PK candidate for prd_id as rejected
+   *
+   * **DEPRECATED**: This method previously used brittle regex heuristics to parse natural language
+   * descriptions. Per architectural decision, we should use LLM for language understanding, not regex.
+   *
+   * **TODO**: Replace with structured LLM output approach:
+   * 1. Update table-analysis prompt to include a "foreignKeys" array in JSON response:
+   *    {
+   *      "tableDescription": "...",
+   *      "columnDescriptions": [...],
+   *      "foreignKeys": [
+   *        { "column": "prd_id", "referencesTable": "inv.prd", "referencesColumn": "prd_id" }
+   *      ]
+   *    }
+   * 2. Process the structured foreignKeys array directly instead of parsing descriptions
+   * 3. Use deterministic code only for statistics calculation, LLM for reasoning
+   *
+   * For now, this method is disabled to prevent brittle regex-based FK detection.
    */
   private extractAndFeedbackFKInsights(
     state: DatabaseDocumentation,
@@ -760,73 +783,74 @@ export class AnalysisEngine {
     tableName: string,
     columnDescriptions: import('../types/prompts.js').ColumnDescriptionPromptResult[]
   ): void {
+    // Method disabled - awaiting structured LLM output implementation
+    console.log(`[AnalysisEngine] extractAndFeedbackFKInsights disabled - awaiting structured FK output from LLM`);
+    return;
+  }
+
+  /**
+   * Process structured FK insights from LLM and create feedback to discovery phase
+   *
+   * Uses the foreignKeys array from table-analysis prompt response instead of brittle regex parsing.
+   * Per architectural decision: use LLM for language understanding, deterministic code for processing.
+   */
+  private processFKInsightsFromLLM(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string,
+    foreignKeys: import('../types/prompts.js').ForeignKeyPromptResult[]
+  ): void {
     const discoveryPhase = state.phases.keyDetection;
-    if (!discoveryPhase) return;
+    if (!discoveryPhase || !foreignKeys || foreignKeys.length === 0) return;
 
-    // FK-related patterns in descriptions
-    const fkPatterns = [
-      /(?:likely\s+)?(?:foreign\s+)?key?\s+(?:to|for|of|referencing)\s+(?:a\s+|the\s+)?(\w+)/i,
-      /references?\s+(?:a\s+|the\s+)?(\w+)/i,
-      /links?\s+to\s+(?:a\s+|the\s+)?(\w+)/i,
-      /(?:identifier|ID)\s+(?:of|for)\s+(?:a\s+|the\s+)?(\w+)/i,
-      /FK\s+to\s+(\w+)/i
-    ];
+    console.log(`[AnalysisEngine] Processing ${foreignKeys.length} structured FK insights from LLM for ${schemaName}.${tableName}`);
 
-    for (const colDesc of columnDescriptions) {
-      const description = colDesc.description.toLowerCase();
+    for (const fk of foreignKeys) {
+      const { columnName, referencesSchema, referencesTable, referencesColumn, confidence } = fk;
 
-      // Check if description mentions FK relationship
-      let targetTableHint: string | null = null;
-      for (const pattern of fkPatterns) {
-        const match = description.match(pattern);
-        if (match) {
-          targetTableHint = match[1];
-          break;
-        }
-      }
-
-      if (!targetTableHint) continue;
-
-      // Found FK hint - create feedback
+      // Create feedback for this FK
       const feedback: import('../types/discovery.js').AnalysisToDiscoveryFeedback = {
-        type: 'fk_invalidated',
-        evidence: `Analysis phase description: "${colDesc.description}"`,
+        type: 'new_relationship',
+        evidence: `LLM-identified FK: ${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (confidence: ${confidence})`,
         tableName,
-        columnName: colDesc.columnName,
+        columnName,
         affectedCandidates: [],
-        recommendation: 'remove',
+        recommendation: 'add_new',
         newRelationship: {
-          targetTable: targetTableHint,
-          targetColumn: 'id' // Common assumption
+          targetTable: `${referencesSchema}.${referencesTable}`,
+          targetColumn: referencesColumn
         }
       };
 
-      // Check if this column was marked as a PK - if so, reject it
+      // Check if this column was incorrectly marked as a PK - reject it unless it's a surrogate key
       const falsePK = discoveryPhase.discovered.primaryKeys.find(pk =>
         pk.schemaName === schemaName &&
         pk.tableName === tableName &&
-        pk.columnNames.includes(colDesc.columnName)
+        pk.columnNames.includes(columnName)
       );
 
       if (falsePK) {
-        falsePK.status = 'rejected';
-        feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${colDesc.columnName}`);
+        const columnLower = columnName.toLowerCase();
+        const tableLower = tableName.toLowerCase();
+        const isSurrogateKey =
+          columnLower === `${tableLower}_id` ||
+          columnLower === tableLower + 'id' ||
+          columnLower === 'id';
 
-        // Update schema metadata: mark as NOT a primary key
-        const column = this.findColumnInState(state, schemaName, tableName, colDesc.columnName);
-        if (column) {
-          column.isPrimaryKey = false;
-          console.log(`[AnalysisEngine] Updated schema: ${schemaName}.${tableName}.${colDesc.columnName} isPrimaryKey = false`);
+        if (!isSurrogateKey) {
+          falsePK.status = 'rejected';
+          feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
+          const column = this.findColumnInState(state, schemaName, tableName, columnName);
+          if (column) column.isPrimaryKey = false;
+          console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting as PK`);
         }
-
-        console.log(`[AnalysisEngine] FK insight from LLM: ${schemaName}.${tableName}.${colDesc.columnName} is FK to ${targetTableHint}, rejecting as PK`);
       }
 
-      // Check if we already have this as an FK candidate - if so, boost confidence
+      // Check if we already have this FK - boost confidence
       const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>
         fk.schemaName === schemaName &&
         fk.sourceTable === tableName &&
-        fk.sourceColumn === colDesc.columnName
+        fk.sourceColumn === columnName
       );
 
       if (existingFK && existingFK.status === 'candidate') {
@@ -834,76 +858,62 @@ export class AnalysisEngine {
         existingFK.status = 'confirmed';
         existingFK.confidence = Math.min(existingFK.confidence + 20, 100);
         feedback.type = 'confidence_change';
-        feedback.recommendation = 'upgrade_confidence';
         feedback.newConfidence = existingFK.confidence;
-        feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${colDesc.columnName}`);
+        feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${columnName}`);
 
-        // Update schema metadata: mark as foreign key and set reference
-        const column = this.findColumnInState(state, schemaName, tableName, colDesc.columnName);
+        const column = this.findColumnInState(state, schemaName, tableName, columnName);
         if (column) {
           column.isForeignKey = true;
           column.foreignKeyReferences = {
-            schema: existingFK.targetSchema,
-            table: existingFK.targetTable,
-            column: existingFK.targetColumn,
-            referencedColumn: existingFK.targetColumn
+            schema: referencesSchema,
+            table: referencesTable,
+            column: referencesColumn,
+            referencedColumn: referencesColumn
           };
-          console.log(`[AnalysisEngine] Updated schema: ${schemaName}.${tableName}.${colDesc.columnName} isForeignKey = true -> ${existingFK.targetTable}.${existingFK.targetColumn}`);
         }
-
-        console.log(`[AnalysisEngine] FK insight from LLM: Confirmed ${schemaName}.${tableName}.${colDesc.columnName} -> ${existingFK.targetTable}.${existingFK.targetColumn}, boosting confidence to ${existingFK.confidence}`);
+        console.log(`[AnalysisEngine] Confirmed FK: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}, confidence: ${existingFK.confidence}`);
       } else {
-        // No existing FK candidate - create a new one from LLM insight
-        const targetInfo = this.resolveTargetTable(state, targetTableHint, schemaName);
+        // Create new FK from LLM insight
+        const newFK: import('../types/discovery.js').FKCandidate = {
+          schemaName,
+          sourceTable: tableName,
+          sourceColumn: columnName,
+          targetSchema: referencesSchema,
+          targetTable: referencesTable,
+          targetColumn: referencesColumn,
+          confidence: Math.round(confidence * 100),
+          evidence: {
+            namingMatch: 0.9,
+            valueOverlap: 0,
+            cardinalityRatio: 0,
+            dataTypeMatch: true,
+            nullPercentage: 0,
+            sampleSize: 0,
+            orphanCount: 0,
+            warnings: ['Created from structured LLM output']
+          },
+          discoveredInIteration: 1,
+          validatedByLLM: true,
+          status: 'confirmed'
+        };
 
-        if (targetInfo) {
-          const newFK: import('../types/discovery.js').FKCandidate = {
-            schemaName,
-            sourceTable: tableName,
-            sourceColumn: colDesc.columnName,
-            targetSchema: targetInfo.schema,
-            targetTable: targetInfo.table,
-            targetColumn: targetInfo.column,
-            confidence: 80, // High confidence from LLM insight
-            evidence: {
-              namingMatch: 0.8,
-              valueOverlap: 0,  // Not computed for LLM insights
-              cardinalityRatio: 0,
-              dataTypeMatch: true,
-              nullPercentage: 0,
-              sampleSize: 0,
-              orphanCount: 0,
-              warnings: ['Created from LLM description insight']
-            },
-            discoveredInIteration: 1,
-            validatedByLLM: true,
-            status: 'confirmed'
+        discoveryPhase.discovered.foreignKeys.push(newFK);
+        feedback.newConfidence = newFK.confidence;
+        feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${columnName}`);
+
+        const column = this.findColumnInState(state, schemaName, tableName, columnName);
+        if (column) {
+          column.isForeignKey = true;
+          column.foreignKeyReferences = {
+            schema: referencesSchema,
+            table: referencesTable,
+            column: referencesColumn,
+            referencedColumn: referencesColumn
           };
-
-          discoveryPhase.discovered.foreignKeys.push(newFK);
-          feedback.type = 'new_relationship';
-          feedback.recommendation = 'add_new';
-          feedback.newConfidence = 80;
-          feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${colDesc.columnName}`);
-
-          // Update schema metadata: mark as foreign key and set reference
-          const column = this.findColumnInState(state, schemaName, tableName, colDesc.columnName);
-          if (column) {
-            column.isForeignKey = true;
-            column.foreignKeyReferences = {
-              schema: targetInfo.schema,
-              table: targetInfo.table,
-              column: targetInfo.column,
-              referencedColumn: targetInfo.column
-            };
-            console.log(`[AnalysisEngine] Created new FK from LLM insight: ${schemaName}.${tableName}.${colDesc.columnName} -> ${targetInfo.table}.${targetInfo.column}`);
-          }
-        } else {
-          console.warn(`[AnalysisEngine] Could not resolve target table "${targetTableHint}" for FK ${schemaName}.${tableName}.${colDesc.columnName}`);
         }
+        console.log(`[AnalysisEngine] Created FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}`);
       }
 
-      // Add feedback to discovery phase
       discoveryPhase.feedbackFromAnalysis.push(feedback);
     }
   }

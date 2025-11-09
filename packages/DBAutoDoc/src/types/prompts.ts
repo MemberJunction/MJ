@@ -20,8 +20,17 @@ export interface TableAnalysisPromptResult {
   reasoning: string;
   confidence: number;
   columnDescriptions: ColumnDescriptionPromptResult[];
+  foreignKeys?: ForeignKeyPromptResult[];
   inferredBusinessDomain?: string;
   parentTableInsights?: ParentTableInsight[];
+}
+
+export interface ForeignKeyPromptResult {
+  columnName: string;
+  referencesSchema: string;
+  referencesTable: string;
+  referencesColumn: string;
+  confidence: number;
 }
 
 export interface ParentTableInsight {
