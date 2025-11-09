@@ -190,6 +190,69 @@ export interface AnalysisRun {
   sanityChecks: SanityCheckRecord[];
   resumedFromFile?: string; // Path to the state file this run resumed from
   resumedAt?: string; // Timestamp when this run resumed
+
+  // Granular guardrail tracking
+  phaseMetrics?: PhaseMetrics; // Per-phase token and cost tracking
+  iterationMetrics?: IterationMetrics[]; // Per-iteration tracking
+  guardrailsEnforced?: GuardrailEnforcement; // Info about guardrails that triggered
+}
+
+/**
+ * Per-phase token and cost metrics for granular guardrail enforcement
+ */
+export interface PhaseMetrics {
+  discovery?: PhaseMetric;     // Discovery phase
+  analysis?: PhaseMetric;      // Main analysis phase
+  sanityChecks?: PhaseMetric;  // Sanity checks phase
+}
+
+export interface PhaseMetric {
+  startedAt: string;
+  completedAt?: string;
+  tokensUsed: number;
+  estimatedCost: number;
+  warned?: boolean;      // Did this phase trigger a token warning?
+  exceeded?: boolean;    // Did this phase exceed its hard limit?
+}
+
+/**
+ * Per-iteration metrics for detecting iteration-level resource exhaustion
+ */
+export interface IterationMetrics {
+  iterationNumber: number;
+  startedAt: string;
+  completedAt?: string;
+  tokensUsed: number;
+  estimatedCost: number;
+  duration: number; // milliseconds
+  warned?: boolean;  // Did this iteration trigger a warning?
+}
+
+/**
+ * Information about guardrails that were enforced or triggered
+ */
+export interface GuardrailEnforcement {
+  exceedances: GuardrailExceeded[];  // Which limits were exceeded
+  warnings: GuardrailWarning[];      // Which warnings were triggered
+  stoppedDueToGuardrails?: boolean;  // Was execution stopped due to guardrails?
+  stoppedReason?: string;            // Reason for stopping
+}
+
+export interface GuardrailExceeded {
+  type: 'tokens_per_run' | 'tokens_per_phase' | 'tokens_per_iteration' | 'duration' | 'cost' | 'iteration_duration';
+  phase?: string;                    // Phase name if phase-specific
+  iteration?: number;                // Iteration number if iteration-specific
+  limit: number;
+  actual: number;
+  unit: string;                      // 'tokens', 'seconds', 'dollars', etc.
+}
+
+export interface GuardrailWarning {
+  type: string;                      // Type of warning
+  phase?: string;                    // Phase name if phase-specific
+  iteration?: number;                // Iteration number if iteration-specific
+  percentage: number;                // How close to limit (0-100)
+  message: string;
 }
 
 export interface ProcessingLogEntry {

@@ -103,16 +103,36 @@ export interface RelationshipDiscoveryConfig {
 }
 
 export interface GuardrailsConfig {
+  // Hard limits - stop execution when exceeded
   maxTokensPerRun?: number;        // Stop after N tokens total (default: unlimited)
   maxDurationSeconds?: number;      // Stop after N seconds (default: unlimited)
   maxCostDollars?: number;          // Stop after $N spent (default: unlimited)
   maxTokensPerPrompt?: number;      // Truncate individual prompts (default: model max)
-  warnThresholds?: {                // Warn at X% of limits (default: 80%)
-    tokenPercentage?: number;       // Warn at % of maxTokensPerRun
-    durationPercentage?: number;    // Warn at % of maxDurationSeconds
-    costPercentage?: number;        // Warn at % of maxCostDollars
+
+  // Per-phase token limits
+  maxTokensPerPhase?: {
+    discovery?: number;             // Max tokens for discovery phase
+    analysis?: number;              // Max tokens for main analysis phase
+    sanityChecks?: number;          // Max tokens for sanity checks
   };
-}
+
+  // Per-iteration limits
+  maxTokensPerIteration?: number;   // Max tokens per iteration (soft limit, warns at threshold)
+  maxIterationDurationSeconds?: number; // Max duration per iteration
+
+  // Warning thresholds (at X% of limits)
+  warnThresholds?: {
+    tokenPercentage?: number;       // Warn at % of maxTokensPerRun (default: 80%)
+    durationPercentage?: number;    // Warn at % of maxDurationSeconds (default: 80%)
+    costPercentage?: number;        // Warn at % of maxCostDollars (default: 80%)
+    iterationTokenPercentage?: number; // Warn at % of maxTokensPerIteration (default: 80%)
+    phaseTokenPercentage?: number;  // Warn at % of maxTokensPerPhase (default: 80%)
+  };
+
+  // Enable/disable guardrail enforcement
+  enabled?: boolean;                // Enable all guardrails (default: true)
+  stopOnExceeded?: boolean;         // Stop immediately when limit exceeded (default: true)
+};
 
 export interface ConvergenceConfig {
   maxIterations: number;

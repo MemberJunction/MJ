@@ -9,6 +9,8 @@ import { AutoDocConnectionConfig } from '../types/driver.js';
 import { SchemaDefinition, TableDefinition, ColumnDefinition, ForeignKeyReference } from '../types/state.js';
 import { SchemaFilterConfig, TableFilterConfig, AnalysisConfig } from '../types/config.js';
 import '../drivers/SQLServerDriver.js'; // Import to ensure registration
+import '../drivers/MySQLDriver.js'; // Import to ensure registration
+import '../drivers/PostgreSQLDriver.js'; // Import to ensure registration
 
 /**
  * Create a database driver instance

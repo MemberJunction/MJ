@@ -20,10 +20,12 @@ import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
 import { BackpropagationEngine } from './BackpropagationEngine.js';
 import { ConvergenceDetector } from './ConvergenceDetector.js';
+import { GuardrailsManager } from './GuardrailsManager.js';
 
 export class AnalysisEngine {
   private backpropagationEngine: BackpropagationEngine;
   private convergenceDetector: ConvergenceDetector;
+  private guardrailsManager: GuardrailsManager;
   private startTime: number = 0;
   private currentRun?: AnalysisRun;
 
@@ -46,12 +48,16 @@ export class AnalysisEngine {
       iterationTracker
     );
 
+    this.guardrailsManager = new GuardrailsManager(config.analysis.guardrails);
+
     // Set up guardrail checking in PromptEngine
     this.promptEngine.setGuardrailCheck(() => {
       if (!this.currentRun) {
         return { canContinue: true };
       }
-      return this.checkGuardrails(this.currentRun);
+      const result = this.guardrailsManager.checkGuardrails(this.currentRun);
+      this.guardrailsManager.recordEnforcement(this.currentRun, result);
+      return result;
     });
   }
 
@@ -61,6 +67,7 @@ export class AnalysisEngine {
   public startAnalysis(run: AnalysisRun): void {
     this.startTime = Date.now();
     this.currentRun = run;
+    this.guardrailsManager.startPhase('analysis');
   }
 
   /**
@@ -680,82 +687,6 @@ export class AnalysisEngine {
     await this.backpropagationEngine.execute(state, run, triggers);
   }
 
-  /**
-   * Check if guardrails are exceeded
-   */
-  private checkGuardrails(run: AnalysisRun): {
-    canContinue: boolean;
-    warning?: string;
-    reason?: string;
-  } {
-    const guardrails = this.config.analysis.guardrails;
-
-    // If no guardrails configured, always continue
-    if (!guardrails) {
-      return { canContinue: true };
-    }
-
-    const elapsedSeconds = (Date.now() - this.startTime) / 1000;
-    const totalTokens = run.totalTokensUsed || 0;
-    const totalCost = run.estimatedCost || 0;
-
-    // Get warn thresholds (default to 80%)
-    const warnThresholds = guardrails.warnThresholds || {};
-    const tokenWarnPercent = warnThresholds.tokenPercentage || 80;
-    const durationWarnPercent = warnThresholds.durationPercentage || 80;
-    const costWarnPercent = warnThresholds.costPercentage || 80;
-
-    // Check hard limits - STOP
-    if (guardrails.maxTokensPerRun && totalTokens >= guardrails.maxTokensPerRun) {
-      return {
-        canContinue: false,
-        reason: `Token limit exceeded: ${totalTokens.toLocaleString()} / ${guardrails.maxTokensPerRun.toLocaleString()} tokens`
-      };
-    }
-
-    if (guardrails.maxDurationSeconds && elapsedSeconds >= guardrails.maxDurationSeconds) {
-      return {
-        canContinue: false,
-        reason: `Duration limit exceeded: ${Math.round(elapsedSeconds)}s / ${guardrails.maxDurationSeconds}s`
-      };
-    }
-
-    if (guardrails.maxCostDollars && totalCost >= guardrails.maxCostDollars) {
-      return {
-        canContinue: false,
-        reason: `Cost limit exceeded: $${totalCost.toFixed(2)} / $${guardrails.maxCostDollars.toFixed(2)}`
-      };
-    }
-
-    // Check warning thresholds
-    let warning: string | undefined;
-
-    if (guardrails.maxTokensPerRun) {
-      const tokenPercent = (totalTokens / guardrails.maxTokensPerRun) * 100;
-      if (tokenPercent >= tokenWarnPercent && !warning) {
-        warning = `Token usage at ${tokenPercent.toFixed(0)}% (${totalTokens.toLocaleString()} / ${guardrails.maxTokensPerRun.toLocaleString()})`;
-      }
-    }
-
-    if (guardrails.maxDurationSeconds) {
-      const durationPercent = (elapsedSeconds / guardrails.maxDurationSeconds) * 100;
-      if (durationPercent >= durationWarnPercent && !warning) {
-        warning = `Duration at ${durationPercent.toFixed(0)}% (${Math.round(elapsedSeconds)}s / ${guardrails.maxDurationSeconds}s)`;
-      }
-    }
-
-    if (guardrails.maxCostDollars) {
-      const costPercent = (totalCost / guardrails.maxCostDollars) * 100;
-      if (costPercent >= costWarnPercent && !warning) {
-        warning = `Cost at ${costPercent.toFixed(0)}% ($${totalCost.toFixed(2)} / $${guardrails.maxCostDollars.toFixed(2)})`;
-      }
-    }
-
-    return {
-      canContinue: true,
-      warning
-    };
-  }
 
   /**
    * Extract FK insights from column descriptions and create feedback to discovery phase

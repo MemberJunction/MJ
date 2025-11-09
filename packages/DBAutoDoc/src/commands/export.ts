@@ -12,16 +12,22 @@ import { StateManager } from '../state/StateManager.js';
 import { SQLGenerator } from '../generators/SQLGenerator.js';
 import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
 import { ReportGenerator } from '../generators/ReportGenerator.js';
+import { HTMLGenerator } from '../generators/HTMLGenerator.js';
+import { CSVGenerator } from '../generators/CSVGenerator.js';
+import { MermaidGenerator } from '../generators/MermaidGenerator.js';
 import { DatabaseConnection } from '../database/Database.js';
 
 export default class Export extends Command {
-  static description = 'Export documentation as SQL and/or Markdown';
+  static description = 'Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)';
 
   static examples = [
     '$ db-auto-doc export --state-file=./db-doc-state.json',
     '$ db-auto-doc export --sql',
     '$ db-auto-doc export --markdown',
-    '$ db-auto-doc export --sql --markdown --apply'
+    '$ db-auto-doc export --html',
+    '$ db-auto-doc export --csv',
+    '$ db-auto-doc export --mermaid',
+    '$ db-auto-doc export --sql --markdown --html --csv --mermaid --apply'
   ];
 
   static flags = {
@@ -29,6 +35,9 @@ export default class Export extends Command {
     'output-dir': Flags.string({ description: 'Output directory for generated files', char: 'o' }),
     sql: Flags.boolean({ description: 'Generate SQL script' }),
     markdown: Flags.boolean({ description: 'Generate Markdown documentation' }),
+    html: Flags.boolean({ description: 'Generate interactive HTML documentation' }),
+    csv: Flags.boolean({ description: 'Generate CSV exports (tables and columns)' }),
+    mermaid: Flags.boolean({ description: 'Generate Mermaid ERD diagram files' }),
     report: Flags.boolean({ description: 'Generate analysis report' }),
     apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
     'approved-only': Flags.boolean({ description: 'Only export approved items', default: false }),
@@ -75,17 +84,24 @@ export default class Export extends Command {
       await fs.mkdir(outputDir, { recursive: true });
 
       // Default to SQL + Markdown if no specific format flags provided
-      const generateSQL = flags.sql || (!flags.sql && !flags.markdown && !flags.report);
-      const generateMarkdown = flags.markdown || (!flags.sql && !flags.markdown && !flags.report);
+      const anyFormatSpecified = flags.sql || flags.markdown || flags.html || flags.csv || flags.mermaid || flags.report;
+      const generateSQL = flags.sql || !anyFormatSpecified;
+      const generateMarkdown = flags.markdown || !anyFormatSpecified;
+      const generateHTML = flags.html;
+      const generateCSV = flags.csv;
+      const generateMermaid = flags.mermaid;
+
+      // Prepare generator options
+      const generatorOptions = {
+        approvedOnly: flags['approved-only'],
+        confidenceThreshold: parseFloat(flags['confidence-threshold'])
+      };
 
       // Generate SQL
       if (generateSQL) {
         spinner.start('Generating SQL script');
         const sqlGen = new SQLGenerator();
-        const sql = sqlGen.generate(state, {
-          approvedOnly: flags['approved-only'],
-          confidenceThreshold: parseFloat(flags['confidence-threshold'])
-        });
+        const sql = sqlGen.generate(state, generatorOptions);
 
         const sqlPath = path.join(outputDir, 'extended-props.sql');
         await fs.writeFile(sqlPath, sql, 'utf-8');
@@ -131,6 +147,48 @@ export default class Export extends Command {
         const mdPath = path.join(outputDir, 'summary.md');
         await fs.writeFile(mdPath, markdown, 'utf-8');
         spinner.succeed(`Markdown documentation saved to ${mdPath}`);
+      }
+
+      // Generate HTML
+      if (generateHTML) {
+        spinner.start('Generating HTML documentation');
+        const htmlGen = new HTMLGenerator();
+        const html = htmlGen.generate(state, generatorOptions);
+
+        const htmlPath = path.join(outputDir, 'documentation.html');
+        await fs.writeFile(htmlPath, html, 'utf-8');
+        spinner.succeed(`HTML documentation saved to ${htmlPath}`);
+      }
+
+      // Generate CSV
+      if (generateCSV) {
+        spinner.start('Generating CSV exports');
+        const csvGen = new CSVGenerator();
+        const csvExport = csvGen.generate(state, generatorOptions);
+
+        const tablesPath = path.join(outputDir, 'tables.csv');
+        const columnsPath = path.join(outputDir, 'columns.csv');
+
+        await fs.writeFile(tablesPath, csvExport.tables, 'utf-8');
+        await fs.writeFile(columnsPath, csvExport.columns, 'utf-8');
+
+        spinner.succeed(`CSV exports saved to ${tablesPath} and ${columnsPath}`);
+      }
+
+      // Generate Mermaid
+      if (generateMermaid) {
+        spinner.start('Generating Mermaid diagram');
+        const mermaidGen = new MermaidGenerator();
+        const mermaidDiagram = mermaidGen.generate(state, generatorOptions);
+        const mermaidHtml = mermaidGen.generateHtml(state, generatorOptions);
+
+        const mermaidPath = path.join(outputDir, 'erd.mmd');
+        const mermaidHtmlPath = path.join(outputDir, 'erd.html');
+
+        await fs.writeFile(mermaidPath, mermaidDiagram, 'utf-8');
+        await fs.writeFile(mermaidHtmlPath, mermaidHtml, 'utf-8');
+
+        spinner.succeed(`Mermaid diagram saved to ${mermaidPath} and ${mermaidHtmlPath}`);
       }
 
       // Generate Report

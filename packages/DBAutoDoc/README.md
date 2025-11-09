@@ -1,6 +1,6 @@
 # DBAutoDoc - AI-Powered Database Documentation Generator
 
-Automatically generate comprehensive documentation for SQL Server databases using AI. DBAutoDoc analyzes your database structure, uses Large Language Models to understand the purpose of tables and columns, and saves descriptions as SQL Server extended properties.
+Automatically generate comprehensive documentation for SQL Server, MySQL, and PostgreSQL databases using AI. DBAutoDoc analyzes your database structure, uses Large Language Models to understand the purpose of tables and columns, and saves descriptions as database metadata (extended properties for SQL Server, comments for MySQL/PostgreSQL).
 
 ## Features
 
@@ -10,8 +10,9 @@ Automatically generate comprehensive documentation for SQL Server databases usin
 - **📈 Data-Driven** - Leverages cardinality, statistics, and sample data for insights
 - **🎯 Convergence Detection** - Automatically knows when analysis is complete
 - **💾 State Tracking** - Full audit trail of all iterations and reasoning
-- **🔌 Standalone** - Works with ANY SQL Server database, no MemberJunction required
+- **🔌 Standalone** - Works with ANY SQL Server, MySQL, or PostgreSQL database, no MemberJunction required
 - **📝 Multiple Outputs** - SQL scripts, Markdown docs, and analysis reports
+- **🗄️ Multi-Database** - Supports SQL Server, MySQL, and PostgreSQL with unified interface
 
 ## Installation
 
@@ -133,13 +134,14 @@ This rich context enables AI to make accurate inferences.
 
 ## Configuration
 
-Example `config.json`:
+### SQL Server Configuration
 
 ```json
 {
   "version": "1.0.0",
   "database": {
-    "server": "localhost",
+    "provider": "sqlserver",
+    "host": "localhost",
     "database": "MyDatabase",
     "user": "sa",
     "password": "YourPassword",
@@ -181,6 +183,79 @@ Example `config.json`:
   },
   "tables": {
     "exclude": ["sysdiagrams", "__MigrationHistory"]
+  }
+}
+```
+
+### PostgreSQL Configuration
+
+```json
+{
+  "version": "1.0.0",
+  "database": {
+    "provider": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "mydatabase",
+    "user": "postgres",
+    "password": "YourPassword",
+    "ssl": false
+  },
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-4-turbo-preview",
+    "apiKey": "sk-...",
+    "temperature": 0.1,
+    "maxTokens": 4000
+  },
+  "analysis": {
+    "cardinalityThreshold": 20,
+    "sampleSize": 10,
+    "includeStatistics": true
+  },
+  "output": {
+    "stateFile": "./db-doc-state.json",
+    "sqlFile": "./output/add-descriptions.sql",
+    "markdownFile": "./output/database-documentation.md"
+  },
+  "schemas": {
+    "exclude": ["pg_catalog", "information_schema"]
+  }
+}
+```
+
+### MySQL Configuration
+
+```json
+{
+  "version": "1.0.0",
+  "database": {
+    "provider": "mysql",
+    "host": "localhost",
+    "port": 3306,
+    "database": "mydatabase",
+    "user": "root",
+    "password": "YourPassword"
+  },
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-4-turbo-preview",
+    "apiKey": "sk-...",
+    "temperature": 0.1,
+    "maxTokens": 4000
+  },
+  "analysis": {
+    "cardinalityThreshold": 20,
+    "sampleSize": 10,
+    "includeStatistics": true
+  },
+  "output": {
+    "stateFile": "./db-doc-state.json",
+    "sqlFile": "./output/add-descriptions.sql",
+    "markdownFile": "./output/database-documentation.md"
+  },
+  "schemas": {
+    "exclude": ["mysql", "information_schema", "performance_schema", "sys"]
   }
 }
 ```

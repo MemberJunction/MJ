@@ -3,6 +3,9 @@
  * Main exports for programmatic use
  */
 
+// Programmatic API (primary entry point for library usage)
+export * from './api/index.js';
+
 // Core types
 export * from './types/index.js';
 

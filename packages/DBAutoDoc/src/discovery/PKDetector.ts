@@ -41,16 +41,67 @@ export class PKDetector {
       }
     }
 
-    // Composite PK detection
-    const compositeCandidates = await this.detectCompositeKeys(
-      schemaName,
-      table,
-      iteration
-    );
-    candidates.push(...compositeCandidates);
+    // **IMPORTANT**: Check if we have a high-quality surrogate key candidate
+    // If we do, skip composite key detection entirely
+    const hasSurrogateKey = this.hasSurrogatePKCandidate(table.name, candidates);
+
+    if (hasSurrogateKey) {
+      console.log(`[PKDetector] Table ${table.name} has surrogate key candidate - skipping composite key detection`);
+    } else {
+      // Composite PK detection only if no good surrogate key exists
+      const compositeCandidates = await this.detectCompositeKeys(
+        schemaName,
+        table,
+        iteration
+      );
+      candidates.push(...compositeCandidates);
+    }
 
     // Sort by confidence descending
     return candidates.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * Check if we have a high-quality surrogate key candidate
+   * Surrogate keys are single-column integer keys with "_id" suffix or "id" name
+   * that have high uniqueness (>95%)
+   */
+  private hasSurrogatePKCandidate(tableName: string, candidates: PKCandidate[]): boolean {
+    const tableLower = tableName.toLowerCase();
+
+    for (const candidate of candidates) {
+      // Must be single column
+      if (candidate.columnNames.length !== 1) {
+        continue;
+      }
+
+      const columnName = candidate.columnNames[0];
+      const columnLower = columnName.toLowerCase();
+
+      // Check for surrogate key naming pattern
+      const isSurrogateNaming =
+        columnLower === 'id' ||                          // Generic "id"
+        columnLower === `${tableLower}_id` ||            // Table-specific "table_id"
+        columnLower === `${tableLower}id` ||             // Table-specific "tableid"
+        columnLower.endsWith('_id');                      // Any "_id" suffix
+
+      // Check for high uniqueness
+      const hasHighUniqueness = candidate.evidence.uniqueness >= 0.95;
+
+      // Check for appropriate data type (INT, BIGINT)
+      const hasGoodDataType = candidate.evidence.dataTypeScore >= 0.9;
+
+      // Check for high confidence (>= 70)
+      const hasGoodConfidence = candidate.confidence >= 70;
+
+      // If all criteria met, this is a good surrogate key candidate
+      if (isSurrogateNaming && hasHighUniqueness && hasGoodDataType && hasGoodConfidence) {
+        console.log(`[PKDetector] Found surrogate key: ${columnName} (uniqueness: ${(candidate.evidence.uniqueness * 100).toFixed(1)}%, confidence: ${candidate.confidence})`);
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -291,6 +342,12 @@ export class PKDetector {
 
   /**
    * Calculate overall PK confidence score (0-100)
+   *
+   * Scoring System:
+   * - Surrogate keys (id, table_id, etc.) with high uniqueness: 85-100
+   * - Natural keys with good uniqueness: 60-85
+   * - Composite keys: 50-75
+   * - Everything else: <50
    */
   private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string): number {
     let score = 0;
@@ -350,6 +407,15 @@ export class PKDetector {
       }
     }
 
+    // **SURROGATE KEY DETECTION**: Boost score for single-column surrogate keys
+    const tableLower = tableName.toLowerCase();
+    const colLower = columnName.toLowerCase();
+    const isSurrogateKey =
+      colLower === 'id' ||
+      colLower === `${tableLower}_id` ||
+      colLower === `${tableLower}id` ||
+      colLower.endsWith('_id');
+
     // Uniqueness is critical (50% weight)
     score += evidence.uniqueness * 50;
 
@@ -385,6 +451,14 @@ export class PKDetector {
     if (evidence.uniqueness >= 0.95 && evidence.namingScore < 0.3) {
       score *= 0.5; // 50% penalty if unique but poor naming
       console.log(`[PKDetector] ${columnName}: unique but poor naming (${evidence.namingScore.toFixed(2)}), score penalized`);
+    }
+
+    // **SURROGATE KEY BOOST**: Give significant bonus to surrogate keys
+    // This ensures single-column surrogate keys score higher than composite keys
+    if (isSurrogateKey && evidence.uniqueness >= 0.95 && evidence.dataTypeScore >= 0.9) {
+      const boost = 20; // Add 20 points for perfect surrogate key
+      score += boost;
+      console.log(`[PKDetector] ${columnName}: surrogate key boost +${boost} (final: ${Math.round(Math.min(score, 100))})`);
     }
 
     return Math.round(Math.min(score, 100));
