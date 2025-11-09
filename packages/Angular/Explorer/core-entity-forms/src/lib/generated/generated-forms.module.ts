@@ -188,6 +188,14 @@ import { ScheduledJobFormComponent, LoadScheduledJobFormComponent } from "./Enti
 import { TaskDependencyFormComponent, LoadTaskDependencyFormComponent } from "./Entities/TaskDependency/taskdependency.form.component";
 import { TaskTypeFormComponent, LoadTaskTypeFormComponent } from "./Entities/TaskType/tasktype.form.component";
 import { TaskFormComponent, LoadTaskFormComponent } from "./Entities/Task/task.form.component";
+import { TestRubricFormComponent, LoadTestRubricFormComponent } from "./Entities/TestRubric/testrubric.form.component";
+import { TestRunFeedbackFormComponent, LoadTestRunFeedbackFormComponent } from "./Entities/TestRunFeedback/testrunfeedback.form.component";
+import { TestRunFormComponent, LoadTestRunFormComponent } from "./Entities/TestRun/testrun.form.component";
+import { TestSuiteRunFormComponent, LoadTestSuiteRunFormComponent } from "./Entities/TestSuiteRun/testsuiterun.form.component";
+import { TestSuiteTestFormComponent, LoadTestSuiteTestFormComponent } from "./Entities/TestSuiteTest/testsuitetest.form.component";
+import { TestSuiteFormComponent, LoadTestSuiteFormComponent } from "./Entities/TestSuite/testsuite.form.component";
+import { TestTypeFormComponent, LoadTestTypeFormComponent } from "./Entities/TestType/testtype.form.component";
+import { TestFormComponent, LoadTestFormComponent } from "./Entities/Test/test.form.component";
 import { OutputDeliveryTypeFormComponent, LoadOutputDeliveryTypeFormComponent } from "./Entities/OutputDeliveryType/outputdeliverytype.form.component";
 import { OutputFormatTypeFormComponent, LoadOutputFormatTypeFormComponent } from "./Entities/OutputFormatType/outputformattype.form.component";
 import { OutputTriggerTypeFormComponent, LoadOutputTriggerTypeFormComponent } from "./Entities/OutputTriggerType/outputtriggertype.form.component";
@@ -612,6 +620,14 @@ export class GeneratedForms_SubModule_7 { }
 declarations: [
     TaskTypeFormComponent,
     TaskFormComponent,
+    TestRubricFormComponent,
+    TestRunFeedbackFormComponent,
+    TestRunFormComponent,
+    TestSuiteRunFormComponent,
+    TestSuiteTestFormComponent,
+    TestSuiteFormComponent,
+    TestTypeFormComponent,
+    TestFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
@@ -621,15 +637,7 @@ declarations: [
     QueryFieldFormComponent,
     QueryPermissionFormComponent,
     QueueTaskFormComponent,
-    QueueTypeFormComponent,
-    QueueFormComponent,
-    RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent,
-    RecommendationFormComponent,
-    RecordChangeReplayRunFormComponent,
-    RecordChangeFormComponent,
-    RecordMergeDeletionLogFormComponent],
+    QueueTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -655,6 +663,14 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    QueueFormComponent,
+    RecommendationItemFormComponent,
+    RecommendationProviderFormComponent,
+    RecommendationRunFormComponent,
+    RecommendationFormComponent,
+    RecordChangeReplayRunFormComponent,
+    RecordChangeFormComponent,
+    RecordMergeDeletionLogFormComponent,
     RecordMergeLogFormComponent,
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
@@ -666,15 +682,7 @@ declarations: [
     RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
     ScheduledActionFormComponent,
-    SchemaInfoFormComponent,
-    SkillFormComponent,
-    TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent,
-    TemplateContentTypeFormComponent,
-    TemplateContentFormComponent,
-    TemplateParamFormComponent,
-    TemplateFormComponent],
+    SchemaInfoFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -700,6 +708,14 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    SkillFormComponent,
+    TaggedItemFormComponent,
+    TagFormComponent,
+    TemplateCategoryFormComponent,
+    TemplateContentTypeFormComponent,
+    TemplateContentFormComponent,
+    TemplateParamFormComponent,
+    TemplateFormComponent,
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
@@ -711,7 +727,32 @@ declarations: [
     UserViewRunFormComponent,
     UserViewFormComponent,
     UserFormComponent,
-    VectorDatabaseFormComponent,
+    VectorDatabaseFormComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    UserViewGridModule,
+    LinkDirectivesModule,
+    BaseFormsModule,
+    FormToolbarModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
+    DropDownListModule,
+    ComboBoxModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_10 { }
+    
+
+
+@NgModule({
+declarations: [
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
     WorkflowEngineFormComponent,
@@ -738,7 +779,7 @@ imports: [
 exports: [
 ]
 })
-export class GeneratedForms_SubModule_10 { }
+export class GeneratedForms_SubModule_11 { }
     
 
 
@@ -756,7 +797,8 @@ imports: [
     GeneratedForms_SubModule_7,
     GeneratedForms_SubModule_8,
     GeneratedForms_SubModule_9,
-    GeneratedForms_SubModule_10
+    GeneratedForms_SubModule_10,
+    GeneratedForms_SubModule_11
 ]
 })
 export class CoreGeneratedFormsModule { }
@@ -929,6 +971,14 @@ export function LoadCoreGeneratedForms() {
     LoadTaskDependencyFormComponent();
     LoadTaskTypeFormComponent();
     LoadTaskFormComponent();
+    LoadTestRubricFormComponent();
+    LoadTestRunFeedbackFormComponent();
+    LoadTestRunFormComponent();
+    LoadTestSuiteRunFormComponent();
+    LoadTestSuiteTestFormComponent();
+    LoadTestSuiteFormComponent();
+    LoadTestTypeFormComponent();
+    LoadTestFormComponent();
     LoadOutputDeliveryTypeFormComponent();
     LoadOutputFormatTypeFormComponent();
     LoadOutputTriggerTypeFormComponent();

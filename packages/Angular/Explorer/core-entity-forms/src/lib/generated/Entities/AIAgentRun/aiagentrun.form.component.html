@@ -368,9 +368,7 @@
         icon="fa fa-sliders-h"
         [form]="this"
         [formContext]="formContext">
-        <!-- Show Configuration by ID field which links to the record (only if set) -->
-        <mj-form-field
-            *ngIf="record.ConfigurationID"
+        <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="ConfigurationID"
@@ -380,19 +378,7 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
-        <!-- Show Effort Level (only if set) -->
-        <mj-form-field
-            *ngIf="record.EffortLevel != null"
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EffortLevel"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <!-- Show Override Model by ID field which links to the record (only if set) -->
-        <mj-form-field
-            *ngIf="record.OverrideModelID"
+        <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="OverrideModelID"
@@ -402,9 +388,7 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
-        <!-- Show Override Vendor by ID field which links to the record (only if set) -->
-        <mj-form-field
-            *ngIf="record.OverrideVendorID"
+        <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="OverrideVendorID"
@@ -413,6 +397,90 @@
             [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EffortLevel"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OverrideModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OverrideVendor"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TestRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ConversationDetail"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="LastRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ScheduledJobRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -691,6 +691,204 @@ export class MJExplorerNavigationItemResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Explorer Navigation Items', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Test Run Feedbacks
+//****************************************************************************
+@ObjectType({ description: `Human-in-the-loop feedback on test run results. Allows human reviewers to validate, correct, or override automated test results. Essential for training and improving automated evaluation criteria.` })
+export class MJTestRunFeedback_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign Key - The test run being reviewed`}) 
+    @MaxLength(16)
+    TestRunID: string;
+        
+    @Field({description: `Foreign Key - The user providing the feedback`}) 
+    @MaxLength(16)
+    ReviewerUserID: string;
+        
+    @Field(() => Int, {nullable: true, description: `Numeric rating from 1 (poor) to 10 (excellent). Allows quantitative tracking of result quality.`}) 
+    Rating?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `Boolean indicating if the automated test result was correct. Can override automated Pass/Fail status.`}) 
+    IsCorrect?: boolean;
+        
+    @Field({nullable: true, description: `Summary of corrections or adjustments made by the human reviewer`}) 
+    CorrectionSummary?: string;
+        
+    @Field({nullable: true, description: `Free-form comments from the reviewer about the test result, quality, or issues found`}) 
+    Comments?: string;
+        
+    @Field({description: `Timestamp when the feedback was provided`}) 
+    @MaxLength(8)
+    ReviewedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    ReviewerUser: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Run Feedbacks
+//****************************************************************************
+@InputType()
+export class CreateMJTestRunFeedbackInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TestRunID?: string;
+
+    @Field({ nullable: true })
+    ReviewerUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Rating: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsCorrect: boolean | null;
+
+    @Field({ nullable: true })
+    CorrectionSummary: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+
+    @Field({ nullable: true })
+    ReviewedAt?: Date;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Run Feedbacks
+//****************************************************************************
+@InputType()
+export class UpdateMJTestRunFeedbackInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TestRunID?: string;
+
+    @Field({ nullable: true })
+    ReviewerUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Rating?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsCorrect?: boolean | null;
+
+    @Field({ nullable: true })
+    CorrectionSummary?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field({ nullable: true })
+    ReviewedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Test Run Feedbacks
+//****************************************************************************
+@ObjectType()
+export class RunMJTestRunFeedbackViewResult {
+    @Field(() => [MJTestRunFeedback_])
+    Results: MJTestRunFeedback_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTestRunFeedback_)
+export class MJTestRunFeedbackResolver extends ResolverBase {
+    @Query(() => RunMJTestRunFeedbackViewResult)
+    async RunMJTestRunFeedbackViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestRunFeedbackViewResult)
+    async RunMJTestRunFeedbackViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestRunFeedbackViewResult)
+    async RunMJTestRunFeedbackDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Test Run Feedbacks';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTestRunFeedback_, { nullable: true })
+    async MJTestRunFeedback(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTestRunFeedback_ | null> {
+        this.CheckUserReadPermissions('MJ: Test Run Feedbacks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRunFeedbacks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Run Feedbacks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Test Run Feedbacks', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => MJTestRunFeedback_)
+    async CreateMJTestRunFeedback(
+        @Arg('input', () => CreateMJTestRunFeedbackInput) input: CreateMJTestRunFeedbackInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Test Run Feedbacks', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTestRunFeedback_)
+    async UpdateMJTestRunFeedback(
+        @Arg('input', () => UpdateMJTestRunFeedbackInput) input: UpdateMJTestRunFeedbackInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Test Run Feedbacks', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTestRunFeedback_)
+    async DeleteMJTestRunFeedback(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Test Run Feedbacks', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -1744,9 +1942,17 @@ each time the agent processes a prompt step.`})
     @MaxLength(16)
     ScheduledJobRunID?: string;
         
+    @Field({nullable: true, description: `Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.`}) 
+    @MaxLength(16)
+    TestRunID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ParentRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -1755,6 +1961,13 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(200)
     User?: string;
+        
+    @Field({nullable: true}) 
+    ConversationDetail?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    LastRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -1767,6 +1980,10 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(100)
     OverrideVendor?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    ScheduledJobRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -1911,6 +2128,9 @@ export class CreateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     ScheduledJobRunID: string | null;
+
+    @Field({ nullable: true })
+    TestRunID: string | null;
 }
     
 
@@ -2032,6 +2252,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     ScheduledJobRunID?: string | null;
+
+    @Field({ nullable: true })
+    TestRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2175,6 +2398,463 @@ export class MJAIAgentRunResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Agent Runs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tests
+//****************************************************************************
+@ObjectType({ description: `Individual test definitions. Each test has a specific type (via TypeID) which determines how it executes. Tests store their inputs, expected outcomes, and configuration as JSON, allowing flexibility for different test types while maintaining a common schema.` })
+export class MJTest_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.`}) 
+    @MaxLength(16)
+    TypeID: string;
+        
+    @Field({description: `Name of the test (e.g., "Pie Chart with Drilldown", "Memory Recall Accuracy")`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed description of what this test validates and why it matters`}) 
+    Description?: string;
+        
+    @Field({description: `Status of the test: Pending (being configured), Active (ready to run), Disabled (archived/not in use)`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `JSON object defining the inputs/parameters for the test. Structure varies by test type (e.g., for Agent Eval: {prompt, context, conversationHistory})`}) 
+    InputDefinition?: string;
+        
+    @Field({nullable: true, description: `JSON object defining what success looks like. Structure varies by test type (e.g., for Agent Eval: {toolCalls, outputFormat, semanticGoals, dataAssertions})`}) 
+    ExpectedOutcomes?: string;
+        
+    @Field({nullable: true, description: `JSON object for test-specific configuration (e.g., oracles to use, rubrics, retry policies, timeout settings)`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `JSON array of tags for categorization and filtering (e.g., ["smoke", "agent-quality", "performance"])`}) 
+    Tags?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Priority for execution ordering. Lower numbers run first. Useful for dependencies or critical path tests.`}) 
+    Priority?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Estimated execution time in seconds. Used for scheduling and timeout calculations.`}) 
+    EstimatedDurationSeconds?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.`}) 
+    EstimatedCostUSD?: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    Type: string;
+        
+    @Field(() => [MJTestRun_])
+    MJ_TestRuns_TestIDArray: MJTestRun_[]; // Link to MJ_TestRuns
+    
+    @Field(() => [MJTestSuiteTest_])
+    MJ_TestSuiteTests_TestIDArray: MJTestSuiteTest_[]; // Link to MJ_TestSuiteTests
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tests
+//****************************************************************************
+@InputType()
+export class CreateMJTestInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    InputDefinition: string | null;
+
+    @Field({ nullable: true })
+    ExpectedOutcomes: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    Tags: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EstimatedDurationSeconds: number | null;
+
+    @Field(() => Float, { nullable: true })
+    EstimatedCostUSD: number | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tests
+//****************************************************************************
+@InputType()
+export class UpdateMJTestInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    InputDefinition?: string | null;
+
+    @Field({ nullable: true })
+    ExpectedOutcomes?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    Tags?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EstimatedDurationSeconds?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    EstimatedCostUSD?: number | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tests
+//****************************************************************************
+@ObjectType()
+export class RunMJTestViewResult {
+    @Field(() => [MJTest_])
+    Results: MJTest_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTest_)
+export class MJTestResolver extends ResolverBase {
+    @Query(() => RunMJTestViewResult)
+    async RunMJTestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestViewResult)
+    async RunMJTestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestViewResult)
+    async RunMJTestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tests';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTest_, { nullable: true })
+    async MJTest(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTest_ | null> {
+        this.CheckUserReadPermissions('MJ: Tests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTests] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Tests', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJTestRun_])
+    async MJ_TestRuns_TestIDArray(@Root() mjtest_: MJTest_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [TestID]='${mjtest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestSuiteTest_])
+    async MJ_TestSuiteTests_TestIDArray(@Root() mjtest_: MJTest_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Suite Tests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteTests] WHERE [TestID]='${mjtest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Tests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Tests', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJTest_)
+    async CreateMJTest(
+        @Arg('input', () => CreateMJTestInput) input: CreateMJTestInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tests', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTest_)
+    async UpdateMJTest(
+        @Arg('input', () => UpdateMJTestInput) input: UpdateMJTestInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tests', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTest_)
+    async DeleteMJTest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tests', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Test Types
+//****************************************************************************
+@ObjectType({ description: `Defines test type drivers that can be dynamically instantiated via MJGlobal.Instance.ClassFactory.CreateInstance(BaseTestDriver, DriverClass). Each test type represents a different category of testing (e.g., Agent Evals, Workflow Tests, Code Generation Tests).` })
+export class MJTestType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Unique name for the test type (e.g., "Agent Eval", "Workflow Test", "Code Generation Test")`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed description of what this test type validates and how it works`}) 
+    Description?: string;
+        
+    @Field({description: `Class name for the driver implementation (e.g., "AgentEvalDriver"). Used with ClassFactory to instantiate the appropriate BaseTestDriver subclass.`}) 
+    @MaxLength(510)
+    DriverClass: string;
+        
+    @Field({description: `Status of the test type: Pending (under development), Active (available for use), Disabled (no longer available)`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJTestRubric_])
+    MJ_TestRubrics_TypeIDArray: MJTestRubric_[]; // Link to MJ_TestRubrics
+    
+    @Field(() => [MJTest_])
+    MJ_Tests_TypeIDArray: MJTest_[]; // Link to MJ_Tests
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Types
+//****************************************************************************
+@InputType()
+export class CreateMJTestTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Types
+//****************************************************************************
+@InputType()
+export class UpdateMJTestTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Test Types
+//****************************************************************************
+@ObjectType()
+export class RunMJTestTypeViewResult {
+    @Field(() => [MJTestType_])
+    Results: MJTestType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTestType_)
+export class MJTestTypeResolver extends ResolverBase {
+    @Query(() => RunMJTestTypeViewResult)
+    async RunMJTestTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestTypeViewResult)
+    async RunMJTestTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestTypeViewResult)
+    async RunMJTestTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Test Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTestType_, { nullable: true })
+    async MJTestType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTestType_ | null> {
+        this.CheckUserReadPermissions('MJ: Test Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Test Types', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJTestRubric_])
+    async MJ_TestRubrics_TypeIDArray(@Root() mjtesttype_: MJTestType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Rubrics', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRubrics] WHERE [TypeID]='${mjtesttype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Rubrics', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Rubrics', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTest_])
+    async MJ_Tests_TypeIDArray(@Root() mjtesttype_: MJTestType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTests] WHERE [TypeID]='${mjtesttype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Tests', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJTestType_)
+    async CreateMJTestType(
+        @Arg('input', () => CreateMJTestTypeInput) input: CreateMJTestTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Test Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTestType_)
+    async UpdateMJTestType(
+        @Arg('input', () => UpdateMJTestTypeInput) input: UpdateMJTestTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Test Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTestType_)
+    async DeleteMJTestType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Test Types', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -5110,6 +5790,190 @@ export class MJAIAgentConfigurationResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Test Suite Tests
+//****************************************************************************
+@ObjectType({ description: `Junction table linking tests to test suites. Allows many-to-many relationship where a test can belong to multiple suites and a suite can contain multiple tests. Includes sequence for execution order and configuration overrides specific to this suite-test pairing.` })
+export class MJTestSuiteTest_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign Key - The test suite this relationship belongs to`}) 
+    @MaxLength(16)
+    SuiteID: string;
+        
+    @Field({description: `Foreign Key - The test included in this suite`}) 
+    @MaxLength(16)
+    TestID: string;
+        
+    @Field(() => Int, {description: `Execution sequence within the suite. Lower numbers run first. Tests with same sequence may run in parallel.`}) 
+    Sequence: number;
+        
+    @Field({description: `Status of this test within this suite: Active (will run), Disabled (temporarily excluded), Skip (documented exclusion)`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `JSON object to override test configuration for this specific suite. Allows same test to run with different parameters in different suites.`}) 
+    Configuration?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Suite: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Test: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Suite Tests
+//****************************************************************************
+@InputType()
+export class CreateMJTestSuiteTestInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SuiteID?: string;
+
+    @Field({ nullable: true })
+    TestID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Suite Tests
+//****************************************************************************
+@InputType()
+export class UpdateMJTestSuiteTestInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SuiteID?: string;
+
+    @Field({ nullable: true })
+    TestID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Test Suite Tests
+//****************************************************************************
+@ObjectType()
+export class RunMJTestSuiteTestViewResult {
+    @Field(() => [MJTestSuiteTest_])
+    Results: MJTestSuiteTest_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTestSuiteTest_)
+export class MJTestSuiteTestResolver extends ResolverBase {
+    @Query(() => RunMJTestSuiteTestViewResult)
+    async RunMJTestSuiteTestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestSuiteTestViewResult)
+    async RunMJTestSuiteTestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestSuiteTestViewResult)
+    async RunMJTestSuiteTestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Test Suite Tests';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTestSuiteTest_, { nullable: true })
+    async MJTestSuiteTest(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTestSuiteTest_ | null> {
+        this.CheckUserReadPermissions('MJ: Test Suite Tests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteTests] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Tests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Test Suite Tests', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => MJTestSuiteTest_)
+    async CreateMJTestSuiteTest(
+        @Arg('input', () => CreateMJTestSuiteTestInput) input: CreateMJTestSuiteTestInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Test Suite Tests', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTestSuiteTest_)
+    async UpdateMJTestSuiteTest(
+        @Arg('input', () => UpdateMJTestSuiteTestInput) input: UpdateMJTestSuiteTestInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Test Suite Tests', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTestSuiteTest_)
+    async DeleteMJTestSuiteTest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Test Suite Tests', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for AI Agent Notes
 //****************************************************************************
 @ObjectType({ description: `Stores notes, observations, and learnings for AI agents with multi-dimensional scoping (Agent, User, company). Scoping is determined by which FK fields are populated: all NULL = global, AgentID only = agent-specific, UserID only = user-specific across all agents, etc.` })
@@ -6098,6 +6962,205 @@ export class MJAIAgentActionResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Actions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Test Rubrics
+//****************************************************************************
+@ObjectType({ description: `Reusable evaluation criteria (rubrics) for consistent scoring across tests. Rubrics define structured evaluation dimensions and can include LLM prompts for automated judgment. Particularly useful for LLM-as-judge patterns where consistent evaluation criteria are critical.` })
+export class MJTestRubric_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign Key - The test type this rubric applies to (e.g., Agent Eval, Code Generation)`}) 
+    @MaxLength(16)
+    TypeID: string;
+        
+    @Field({description: `Unique name for the rubric (e.g., "Component Quality Rubric v1", "Agent Response Quality")`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true, description: `Description of what this rubric evaluates and when to use it`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `LLM prompt template for automated judgment. Can include placeholders for test inputs/outputs (e.g., "Evaluate the following React component for correctness, UX, and maintainability...")`}) 
+    PromptTemplate?: string;
+        
+    @Field({nullable: true, description: `JSON object defining structured evaluation criteria with dimensions, weights, and scoring guidance (e.g., {correctness: {weight: 0.4, description: "..."}, ux: {weight: 0.3, description: "..."}})`}) 
+    Criteria?: string;
+        
+    @Field({nullable: true, description: `Version identifier for the rubric. Allows tracking changes and comparing results across rubric versions.`}) 
+    @MaxLength(100)
+    Version?: string;
+        
+    @Field({description: `Status of the rubric: Pending (under development), Active (available for use), Disabled (deprecated)`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    Type: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Rubrics
+//****************************************************************************
+@InputType()
+export class CreateMJTestRubricInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    PromptTemplate: string | null;
+
+    @Field({ nullable: true })
+    Criteria: string | null;
+
+    @Field({ nullable: true })
+    Version: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Rubrics
+//****************************************************************************
+@InputType()
+export class UpdateMJTestRubricInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    PromptTemplate?: string | null;
+
+    @Field({ nullable: true })
+    Criteria?: string | null;
+
+    @Field({ nullable: true })
+    Version?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Test Rubrics
+//****************************************************************************
+@ObjectType()
+export class RunMJTestRubricViewResult {
+    @Field(() => [MJTestRubric_])
+    Results: MJTestRubric_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTestRubric_)
+export class MJTestRubricResolver extends ResolverBase {
+    @Query(() => RunMJTestRubricViewResult)
+    async RunMJTestRubricViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestRubricViewResult)
+    async RunMJTestRubricViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestRubricViewResult)
+    async RunMJTestRubricDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Test Rubrics';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTestRubric_, { nullable: true })
+    async MJTestRubric(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTestRubric_ | null> {
+        this.CheckUserReadPermissions('MJ: Test Rubrics', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRubrics] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Rubrics', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Test Rubrics', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => MJTestRubric_)
+    async CreateMJTestRubric(
+        @Arg('input', () => CreateMJTestRubricInput) input: CreateMJTestRubricInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Test Rubrics', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTestRubric_)
+    async UpdateMJTestRubric(
+        @Arg('input', () => UpdateMJTestRubricInput) input: UpdateMJTestRubricInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Test Rubrics', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTestRubric_)
+    async DeleteMJTestRubric(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Test Rubrics', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -12900,11 +13963,11 @@ export class MJUser_ {
     @Field(() => [MJPublicLink_])
     MJ_PublicLinks_UserIDArray: MJPublicLink_[]; // Link to MJ_PublicLinks
     
-    @Field(() => [MJScheduledJob_])
-    MJ_ScheduledJobs_NotifyUserIDArray: MJScheduledJob_[]; // Link to MJ_ScheduledJobs
-    
     @Field(() => [MJScheduledJobRun_])
     MJ_ScheduledJobRuns_ExecutedByUserIDArray: MJScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
+    
+    @Field(() => [MJScheduledJob_])
+    MJ_ScheduledJobs_NotifyUserIDArray: MJScheduledJob_[]; // Link to MJ_ScheduledJobs
     
     @Field(() => [MJArtifactPermission_])
     MJ_ArtifactPermissions_UserIDArray: MJArtifactPermission_[]; // Link to MJ_ArtifactPermissions
@@ -12914,6 +13977,12 @@ export class MJUser_ {
     
     @Field(() => [MJConversationDetailRating_])
     MJ_ConversationDetailRatings_UserIDArray: MJConversationDetailRating_[]; // Link to MJ_ConversationDetailRatings
+    
+    @Field(() => [MJTestRunFeedback_])
+    MJ_TestRunFeedbacks_ReviewerUserIDArray: MJTestRunFeedback_[]; // Link to MJ_TestRunFeedbacks
+    
+    @Field(() => [MJTestSuiteRun_])
+    MJ_TestSuiteRuns_RunByUserIDArray: MJTestSuiteRun_[]; // Link to MJ_TestSuiteRuns
     
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
@@ -12938,6 +14007,9 @@ export class MJUser_ {
     
     @Field(() => [MJArtifactPermission_])
     MJ_ArtifactPermissions_SharedByUserIDArray: MJArtifactPermission_[]; // Link to MJ_ArtifactPermissions
+    
+    @Field(() => [MJTestRun_])
+    MJ_TestRuns_RunByUserIDArray: MJTestRun_[]; // Link to MJ_TestRuns
     
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -13571,17 +14643,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJScheduledJob_])
-    async MJ_ScheduledJobs_NotifyUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [NotifyUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJScheduledJobRun_])
     async MJ_ScheduledJobRuns_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
@@ -13590,6 +14651,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ExecutedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJScheduledJob_])
+    async MJ_ScheduledJobs_NotifyUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [NotifyUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
         return result;
     }
         
@@ -13623,6 +14695,28 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetailRatings] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Detail Ratings', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Detail Ratings', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestRunFeedback_])
+    async MJ_TestRunFeedbacks_ReviewerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Run Feedbacks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRunFeedbacks] WHERE [ReviewerUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Run Feedbacks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Run Feedbacks', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestSuiteRun_])
+    async MJ_TestSuiteRuns_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Suite Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteRuns] WHERE [RunByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Runs', rows);
         return result;
     }
         
@@ -13711,6 +14805,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactPermissions] WHERE [SharedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Permissions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestRun_])
+    async MJ_TestRuns_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [RunByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows);
         return result;
     }
         
@@ -24606,6 +25711,10 @@ export class MJConversationDetail_ {
     @Field({nullable: true, description: `JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).`}) 
     SuggestedResponses?: string;
         
+    @Field({nullable: true, description: `Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`}) 
+    @MaxLength(16)
+    TestRunID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Conversation?: string;
@@ -24617,6 +25726,13 @@ export class MJConversationDetail_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Artifact?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ArtifactVersion?: string;
+        
+    @Field({nullable: true}) 
+    Parent?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -24716,6 +25832,9 @@ export class CreateMJConversationDetailInput {
 
     @Field({ nullable: true })
     SuggestedResponses: string | null;
+
+    @Field({ nullable: true })
+    TestRunID: string | null;
 }
     
 
@@ -24783,6 +25902,9 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     SuggestedResponses?: string | null;
+
+    @Field({ nullable: true })
+    TestRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25029,6 +26151,10 @@ export class MJConversation_ {
     @Field(() => Boolean, {description: `Indicates if this conversation is pinned to the top of lists`}) 
     IsPinned: boolean;
         
+    @Field({nullable: true, description: `Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`}) 
+    @MaxLength(16)
+    TestRunID?: string;
+        
     @Field() 
     @MaxLength(200)
     User: string;
@@ -25115,6 +26241,9 @@ export class CreateMJConversationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsPinned?: boolean;
+
+    @Field({ nullable: true })
+    TestRunID: string | null;
 }
     
 
@@ -25164,6 +26293,9 @@ export class UpdateMJConversationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsPinned?: boolean;
+
+    @Field({ nullable: true })
+    TestRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -39463,6 +40595,400 @@ export class MJResourceLinkResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Test Runs
+//****************************************************************************
+@ObjectType({ description: `Execution instance of a single test. Captures inputs, outputs, results, and links to the target being tested (e.g., Agent Run). Can be part of a suite run or standalone. The TargetLogID links to type-specific execution logs (AgentRun, WorkflowRun, etc.) which contain the detailed trace information.` })
+export class MJTestRun_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign Key - The test definition that was executed`}) 
+    @MaxLength(16)
+    TestID: string;
+        
+    @Field({nullable: true, description: `Foreign Key - Optional parent suite run if this test was part of a suite execution. NULL for standalone test runs.`}) 
+    @MaxLength(16)
+    TestSuiteRunID?: string;
+        
+    @Field({description: `Foreign Key - The user who triggered the test run (could be system user for automated runs)`}) 
+    @MaxLength(16)
+    RunByUserID: string;
+        
+    @Field(() => Int, {nullable: true, description: `Execution sequence within the suite run. Indicates order of execution for tests in the same suite.`}) 
+    Sequence?: number;
+        
+    @Field({nullable: true, description: `Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.`}) 
+    @MaxLength(200)
+    TargetType?: string;
+        
+    @Field({nullable: true, description: `ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.`}) 
+    @MaxLength(16)
+    TargetLogID?: string;
+        
+    @Field({description: `Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `Timestamp when the test run started execution`}) 
+    @MaxLength(8)
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp when the test run completed`}) 
+    @MaxLength(8)
+    CompletedAt?: Date;
+        
+    @Field(() => Float, {nullable: true, description: `Execution time in seconds for this test`}) 
+    DurationSeconds?: number;
+        
+    @Field({nullable: true, description: `JSON object with the actual inputs used for this test run (may differ from test definition if parameterized)`}) 
+    InputData?: string;
+        
+    @Field({nullable: true, description: `JSON object with the expected outputs/outcomes for this test run`}) 
+    ExpectedOutputData?: string;
+        
+    @Field({nullable: true, description: `JSON object with the actual outputs produced by the test execution`}) 
+    ActualOutputData?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Number of validation checks that passed`}) 
+    PassedChecks?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of validation checks that failed`}) 
+    FailedChecks?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total number of validation checks performed`}) 
+    TotalChecks?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Overall test score from 0.0000 to 1.0000 (0-100%). Calculated by test driver based on passed/failed checks and weights.`}) 
+    Score?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Cost in USD for running this test (e.g., LLM token costs, compute resources)`}) 
+    CostUSD?: number;
+        
+    @Field({nullable: true, description: `Error message if the test encountered an execution error`}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `JSON object with detailed results including individual check results, metrics, oracle outputs, and diagnostic information`}) 
+    ResultDetails?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Test: string;
+        
+    @Field() 
+    @MaxLength(200)
+    RunByUser: string;
+        
+    @Field(() => [MJTestRunFeedback_])
+    MJ_TestRunFeedbacks_TestRunIDArray: MJTestRunFeedback_[]; // Link to MJ_TestRunFeedbacks
+    
+    @Field(() => [MJAIPromptRun_])
+    MJ_AIPromptRuns_TestRunIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
+    
+    @Field(() => [MJAIAgentRun_])
+    MJ_AIAgentRuns_TestRunIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
+    @Field(() => [MJConversation_])
+    Conversations_TestRunIDArray: MJConversation_[]; // Link to Conversations
+    
+    @Field(() => [MJConversationDetail_])
+    ConversationDetails_TestRunIDArray: MJConversationDetail_[]; // Link to ConversationDetails
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Runs
+//****************************************************************************
+@InputType()
+export class CreateMJTestRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TestID?: string;
+
+    @Field({ nullable: true })
+    TestSuiteRunID: string | null;
+
+    @Field({ nullable: true })
+    RunByUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence: number | null;
+
+    @Field({ nullable: true })
+    TargetType: string | null;
+
+    @Field({ nullable: true })
+    TargetLogID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    DurationSeconds: number | null;
+
+    @Field({ nullable: true })
+    InputData: string | null;
+
+    @Field({ nullable: true })
+    ExpectedOutputData: string | null;
+
+    @Field({ nullable: true })
+    ActualOutputData: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PassedChecks: number | null;
+
+    @Field(() => Int, { nullable: true })
+    FailedChecks: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalChecks: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Score: number | null;
+
+    @Field(() => Float, { nullable: true })
+    CostUSD: number | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    ResultDetails: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJTestRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TestID?: string;
+
+    @Field({ nullable: true })
+    TestSuiteRunID?: string | null;
+
+    @Field({ nullable: true })
+    RunByUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number | null;
+
+    @Field({ nullable: true })
+    TargetType?: string | null;
+
+    @Field({ nullable: true })
+    TargetLogID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    DurationSeconds?: number | null;
+
+    @Field({ nullable: true })
+    InputData?: string | null;
+
+    @Field({ nullable: true })
+    ExpectedOutputData?: string | null;
+
+    @Field({ nullable: true })
+    ActualOutputData?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PassedChecks?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    FailedChecks?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalChecks?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Score?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    CostUSD?: number | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    ResultDetails?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Test Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJTestRunViewResult {
+    @Field(() => [MJTestRun_])
+    Results: MJTestRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTestRun_)
+export class MJTestRunResolver extends ResolverBase {
+    @Query(() => RunMJTestRunViewResult)
+    async RunMJTestRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestRunViewResult)
+    async RunMJTestRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestRunViewResult)
+    async RunMJTestRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Test Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTestRun_, { nullable: true })
+    async MJTestRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTestRun_ | null> {
+        this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Test Runs', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJTestRunFeedback_])
+    async MJ_TestRunFeedbacks_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Run Feedbacks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRunFeedbacks] WHERE [TestRunID]='${mjtestrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Run Feedbacks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Run Feedbacks', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIPromptRun_])
+    async MJ_AIPromptRuns_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [TestRunID]='${mjtestrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentRun_])
+    async MJ_AIAgentRuns_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [TestRunID]='${mjtestrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversation_])
+    async Conversations_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Conversations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [TestRunID]='${mjtestrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Conversations', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversationDetail_])
+    async ConversationDetails_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Conversation Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [TestRunID]='${mjtestrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJTestRun_)
+    async CreateMJTestRun(
+        @Arg('input', () => CreateMJTestRunInput) input: CreateMJTestRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Test Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTestRun_)
+    async UpdateMJTestRun(
+        @Arg('input', () => UpdateMJTestRunInput) input: UpdateMJTestRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Test Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTestRun_)
+    async DeleteMJTestRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Test Runs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Artifact Types
 //****************************************************************************
 @ObjectType({ description: `Junction table linking AI Agents to the artifact types they can produce. An agent can produce zero to many artifact types.` })
@@ -43273,6 +44799,241 @@ export class MJAIAgentExampleResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Test Suites
+//****************************************************************************
+@ObjectType({ description: `Hierarchical organization of tests into suites. Test suites can contain other suites (via ParentID) and tests (via TestSuiteTest junction table). Suites provide logical grouping for running batches of related tests.` })
+export class MJTestSuite_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({nullable: true, description: `Optional parent suite ID for hierarchical organization. NULL for root-level suites.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({description: `Name of the test suite (e.g., "Skip Component Generation Suite", "Agent Memory Tests")`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed description of what this suite tests and its purpose`}) 
+    Description?: string;
+        
+    @Field({description: `Status of the suite: Pending (being configured), Active (available for use), Disabled (archived/not in use)`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `JSON array of tags for categorization and filtering (e.g., ["smoke", "regression", "nightly"])`}) 
+    Tags?: string;
+        
+    @Field({nullable: true, description: `JSON configuration object for suite-level settings (e.g., environment defaults, retry policies, notification settings)`}) 
+    Configuration?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
+    @Field(() => [MJTestSuite_])
+    MJ_TestSuites_ParentIDArray: MJTestSuite_[]; // Link to MJ_TestSuites
+    
+    @Field(() => [MJTestSuiteRun_])
+    MJ_TestSuiteRuns_SuiteIDArray: MJTestSuiteRun_[]; // Link to MJ_TestSuiteRuns
+    
+    @Field(() => [MJTestSuiteTest_])
+    MJ_TestSuiteTests_SuiteIDArray: MJTestSuiteTest_[]; // Link to MJ_TestSuiteTests
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Suites
+//****************************************************************************
+@InputType()
+export class CreateMJTestSuiteInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Tags: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Suites
+//****************************************************************************
+@InputType()
+export class UpdateMJTestSuiteInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Tags?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Test Suites
+//****************************************************************************
+@ObjectType()
+export class RunMJTestSuiteViewResult {
+    @Field(() => [MJTestSuite_])
+    Results: MJTestSuite_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTestSuite_)
+export class MJTestSuiteResolver extends ResolverBase {
+    @Query(() => RunMJTestSuiteViewResult)
+    async RunMJTestSuiteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestSuiteViewResult)
+    async RunMJTestSuiteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestSuiteViewResult)
+    async RunMJTestSuiteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Test Suites';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTestSuite_, { nullable: true })
+    async MJTestSuite(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTestSuite_ | null> {
+        this.CheckUserReadPermissions('MJ: Test Suites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuites] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Test Suites', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJTestSuite_])
+    async MJ_TestSuites_ParentIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Suites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuites] WHERE [ParentID]='${mjtestsuite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suites', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestSuiteRun_])
+    async MJ_TestSuiteRuns_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Suite Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteRuns] WHERE [SuiteID]='${mjtestsuite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestSuiteTest_])
+    async MJ_TestSuiteTests_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Suite Tests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteTests] WHERE [SuiteID]='${mjtestsuite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Tests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Tests', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJTestSuite_)
+    async CreateMJTestSuite(
+        @Arg('input', () => CreateMJTestSuiteInput) input: CreateMJTestSuiteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Test Suites', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTestSuite_)
+    async UpdateMJTestSuite(
+        @Arg('input', () => UpdateMJTestSuiteInput) input: UpdateMJTestSuiteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Test Suites', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTestSuite_)
+    async DeleteMJTestSuite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Test Suites', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifacts
 //****************************************************************************
 @ObjectType({ description: `Stores metadata for artifacts created within conversations` })
@@ -45564,6 +47325,336 @@ export class MJComponentLibraryLinkResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Component Library Links', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Test Suite Runs
+//****************************************************************************
+@ObjectType({ description: `Execution instance of a test suite. Captures who ran it, when, in what environment, and aggregates results from all tests in the suite. Supports versioning via GitCommit and AgentVersion fields to track system state during execution.` })
+export class MJTestSuiteRun_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign Key - The test suite that was executed`}) 
+    @MaxLength(16)
+    SuiteID: string;
+        
+    @Field({description: `Foreign Key - The user who triggered the suite run (could be system user for automated runs)`}) 
+    @MaxLength(16)
+    RunByUserID: string;
+        
+    @Field({nullable: true, description: `Environment where tests were executed (e.g., "dev", "staging", "prod", "ci")`}) 
+    @MaxLength(100)
+    Environment?: string;
+        
+    @Field({nullable: true, description: `How the run was triggered (e.g., "manual", "ci", "scheduled", "shadow", "release")`}) 
+    @MaxLength(100)
+    TriggerType?: string;
+        
+    @Field({nullable: true, description: `Git commit SHA of the code version being tested. Enables correlation between test results and code changes.`}) 
+    @MaxLength(200)
+    GitCommit?: string;
+        
+    @Field({nullable: true, description: `Version of the agent or system being tested (e.g., "skip-agent-2.1.0", "workflow-engine-3.4.2"). Enables version comparison and regression detection.`}) 
+    @MaxLength(200)
+    AgentVersion?: string;
+        
+    @Field({description: `Current status of the suite run: Pending (queued), Running (in progress), Completed (finished successfully), Failed (suite-level failure), Cancelled (stopped by user)`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `Timestamp when the suite run started execution`}) 
+    @MaxLength(8)
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp when the suite run completed (successfully or with failures)`}) 
+    @MaxLength(8)
+    CompletedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Total number of tests executed in this suite run`}) 
+    TotalTests?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of tests that passed all checks`}) 
+    PassedTests?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of tests that failed at least one check`}) 
+    FailedTests?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of tests that were skipped (not executed)`}) 
+    SkippedTests?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of tests that encountered execution errors (different from failing validation)`}) 
+    ErrorTests?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Total execution time in seconds for the entire suite`}) 
+    TotalDurationSeconds?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Total cost in USD for running the entire suite (sum of all test costs)`}) 
+    TotalCostUSD?: number;
+        
+    @Field({nullable: true, description: `JSON snapshot of the runtime configuration used for this suite run`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `JSON object with aggregated results and statistics from the suite run`}) 
+    ResultSummary?: string;
+        
+    @Field({nullable: true, description: `Error message if the suite-level execution failed (before individual tests could run)`}) 
+    ErrorMessage?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Suite: string;
+        
+    @Field() 
+    @MaxLength(200)
+    RunByUser: string;
+        
+    @Field(() => [MJTestRun_])
+    MJ_TestRuns_TestSuiteRunIDArray: MJTestRun_[]; // Link to MJ_TestRuns
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Suite Runs
+//****************************************************************************
+@InputType()
+export class CreateMJTestSuiteRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SuiteID?: string;
+
+    @Field({ nullable: true })
+    RunByUserID?: string;
+
+    @Field({ nullable: true })
+    Environment: string | null;
+
+    @Field({ nullable: true })
+    TriggerType: string | null;
+
+    @Field({ nullable: true })
+    GitCommit: string | null;
+
+    @Field({ nullable: true })
+    AgentVersion: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTests: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PassedTests: number | null;
+
+    @Field(() => Int, { nullable: true })
+    FailedTests: number | null;
+
+    @Field(() => Int, { nullable: true })
+    SkippedTests: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ErrorTests: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalDurationSeconds: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalCostUSD: number | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    ResultSummary: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Test Suite Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJTestSuiteRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SuiteID?: string;
+
+    @Field({ nullable: true })
+    RunByUserID?: string;
+
+    @Field({ nullable: true })
+    Environment?: string | null;
+
+    @Field({ nullable: true })
+    TriggerType?: string | null;
+
+    @Field({ nullable: true })
+    GitCommit?: string | null;
+
+    @Field({ nullable: true })
+    AgentVersion?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTests?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PassedTests?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    FailedTests?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    SkippedTests?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ErrorTests?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalDurationSeconds?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    TotalCostUSD?: number | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    ResultSummary?: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Test Suite Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJTestSuiteRunViewResult {
+    @Field(() => [MJTestSuiteRun_])
+    Results: MJTestSuiteRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTestSuiteRun_)
+export class MJTestSuiteRunResolver extends ResolverBase {
+    @Query(() => RunMJTestSuiteRunViewResult)
+    async RunMJTestSuiteRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestSuiteRunViewResult)
+    async RunMJTestSuiteRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTestSuiteRunViewResult)
+    async RunMJTestSuiteRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Test Suite Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTestSuiteRun_, { nullable: true })
+    async MJTestSuiteRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTestSuiteRun_ | null> {
+        this.CheckUserReadPermissions('MJ: Test Suite Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Test Suite Runs', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJTestRun_])
+    async MJ_TestRuns_TestSuiteRunIDArray(@Root() mjtestsuiterun_: MJTestSuiteRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [TestSuiteRunID]='${mjtestsuiterun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJTestSuiteRun_)
+    async CreateMJTestSuiteRun(
+        @Arg('input', () => CreateMJTestSuiteRunInput) input: CreateMJTestSuiteRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Test Suite Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTestSuiteRun_)
+    async UpdateMJTestSuiteRun(
+        @Arg('input', () => UpdateMJTestSuiteRunInput) input: UpdateMJTestSuiteRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Test Suite Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTestSuiteRun_)
+    async DeleteMJTestSuiteRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Test Suite Runs', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -48540,6 +50631,10 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `Human-readable notes and comments about this prompt run`}) 
     Comments?: string;
         
+    @Field({nullable: true, description: `Optional Foreign Key - Links this prompt run to a test run if this prompt execution was part of a test. Enables testing individual prompts for quality and consistency before agent integration.`}) 
+    @MaxLength(16)
+    TestRunID?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -48561,8 +50656,20 @@ export class MJAIPromptRun_ {
     Configuration?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    AgentRun?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     OriginalModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    RerunFromPromptRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -48835,6 +50942,9 @@ export class CreateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field({ nullable: true })
+    TestRunID: string | null;
 }
     
 
@@ -49085,6 +51195,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     Comments?: string | null;
+
+    @Field({ nullable: true })
+    TestRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
