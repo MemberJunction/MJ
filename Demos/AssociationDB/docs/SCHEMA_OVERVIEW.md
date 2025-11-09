@@ -4,36 +4,36 @@ Complete documentation of all schemas, tables, and relationships in the Associat
 
 ## 🏗️ Architecture
 
-The database uses a **multi-schema architecture** with clear domain separation:
+The database uses a **single consolidated schema (AssociationDemo)** with logical domain separation through table naming conventions and grouping:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     MEMBERSHIP (Core)                        │
-│  Organizations, Members, Membership Types, Memberships       │
+│                  AssociationDemo Schema                      │
+│  All tables organized by business domain prefixes/groups     │
 └──────────────────┬──────────────────────────────────────────┘
-                   │ Referenced by all other domains
+                   │
         ┌──────────┼──────────┬──────────┬──────────┐
         ▼          ▼          ▼          ▼          ▼
-    ┌───────┐  ┌────────┐ ┌────────┐ ┌──────────┐ ┌───────────┐
-    │EVENTS │  │LEARNING│ │FINANCE │ │MARKETING │ │  EMAIL    │
-    └───────┘  └────────┘ └────────┘ └──────────┘ └───────────┘
+    Member/    Event/     Course/    Invoice/  Campaign/
+    Membership EventReg   Enrollment  LineItem  Segment
 
         ┌──────────┬──────────┐
         ▼          ▼
-    ┌──────────┐ ┌───────────┐
-    │CHAPTERS  │ │GOVERNANCE │
-    └──────────┘ └───────────┘
+    Chapter/   Committee/
+    ChapterMem BoardMember
 ```
 
-## 📊 Schemas
+## 📊 Business Domains
 
-### 1. Membership Schema
+All tables reside in the `AssociationDemo` schema but are logically organized into 8 business domains:
+
+### 1. Membership Domain (Core)
 
 **Purpose**: Core member and organization data - foundation for all other domains
 
 #### Tables
 
-##### membership.Organization
+##### AssociationDemo.Organization
 Organizations that members belong to or represent.
 
 | Column | Type | Description |
@@ -51,7 +51,7 @@ Organizations that members belong to or represent.
 
 **Sample Count**: 40 organizations across technology, healthcare, finance, consulting, and international sectors
 
-##### membership.MembershipType
+##### AssociationDemo.MembershipType
 Types of memberships available.
 
 | Column | Type | Description |
@@ -69,7 +69,7 @@ Types of memberships available.
 
 **Sample Count**: 8 types (Individual, Student, Corporate, Lifetime, Retired, Early Career, International, Honorary)
 
-##### membership.Member
+##### AssociationDemo.Member
 Individual members of the association.
 
 | Column | Type | Description |
@@ -90,7 +90,7 @@ Individual members of the association.
 
 **Sample Count**: 500 members with realistic names, titles, and distribution across organizations
 
-##### membership.Membership
+##### AssociationDemo.Membership
 Individual membership records (includes renewal history).
 
 | Column | Type | Description |
@@ -108,13 +108,13 @@ Individual membership records (includes renewal history).
 
 ---
 
-### 2. Events Schema
+### 2. Events Domain
 
 **Purpose**: Conference, webinar, workshop, and meeting management
 
 #### Tables
 
-##### events.Event
+##### AssociationDemo.Event
 Events organized by the association.
 
 | Column | Type | Description |
@@ -142,7 +142,7 @@ Events organized by the association.
 
 **Sample Count**: 35 events (5 annual conferences 2020-2024, virtual summits, workshops, webinars, networking)
 
-##### events.EventSession
+##### AssociationDemo.EventSession
 Individual sessions within multi-track events.
 
 | Column | Type | Description |
@@ -161,7 +161,7 @@ Individual sessions within multi-track events.
 
 **Sample Count**: 85 sessions across major conferences
 
-##### events.EventRegistration
+##### AssociationDemo.EventRegistration
 Member registrations and attendance tracking.
 
 | Column | Type | Description |
@@ -183,13 +183,13 @@ Member registrations and attendance tracking.
 
 ---
 
-### 3. Learning Schema
+### 3. Learning Domain
 
 **Purpose**: Learning management system (LMS) for courses and certifications
 
 #### Tables
 
-##### learning.Course
+##### AssociationDemo.Course
 Educational courses and certification programs.
 
 | Column | Type | Description |
@@ -213,7 +213,7 @@ Educational courses and certification programs.
 
 **Sample Count**: 60 courses across Cloud, Security, Data Science, DevOps, Leadership, Software Development, Business
 
-##### learning.Enrollment
+##### AssociationDemo.Enrollment
 Member course enrollments and progress.
 
 | Column | Type | Description |
@@ -236,7 +236,7 @@ Member course enrollments and progress.
 
 **Sample Count**: 900 enrollments with realistic completion rates (72% completed)
 
-##### learning.Certificate
+##### AssociationDemo.Certificate
 Completion certificates issued to members.
 
 | Column | Type | Description |
@@ -253,13 +253,13 @@ Completion certificates issued to members.
 
 ---
 
-### 4. Finance Schema
+### 4. Finance Domain
 
 **Purpose**: Financial management including invoicing and payments
 
 #### Tables
 
-##### finance.Invoice
+##### AssociationDemo.Invoice
 Invoices for dues, events, courses, etc.
 
 | Column | Type | Description |
@@ -281,7 +281,7 @@ Invoices for dues, events, courses, etc.
 
 **Sample Count**: Programmatically generated for all memberships, events, and courses
 
-##### finance.InvoiceLineItem
+##### AssociationDemo.InvoiceLineItem
 Detailed line items on invoices.
 
 | Column | Type | Description |
@@ -299,7 +299,7 @@ Detailed line items on invoices.
 
 **Sample Count**: Multiple line items per invoice
 
-##### finance.Payment
+##### AssociationDemo.Payment
 Payment transactions.
 
 | Column | Type | Description |
@@ -319,13 +319,13 @@ Payment transactions.
 
 ---
 
-### 5. Marketing Schema
+### 5. Marketing Domain
 
 **Purpose**: Marketing campaign management and member segmentation
 
 #### Tables
 
-##### marketing.Segment
+##### AssociationDemo.Segment
 Member segments for targeted marketing.
 
 | Column | Type | Description |
@@ -341,7 +341,7 @@ Member segments for targeted marketing.
 
 **Sample Count**: 80 segments (demographic, behavioral, engagement-based)
 
-##### marketing.Campaign
+##### AssociationDemo.Campaign
 Marketing campaigns.
 
 | Column | Type | Description |
@@ -360,7 +360,7 @@ Marketing campaigns.
 
 **Sample Count**: 45 campaigns across various types and goals
 
-##### marketing.CampaignMember
+##### AssociationDemo.CampaignMember
 Member assignments to campaigns.
 
 | Column | Type | Description |
@@ -378,13 +378,13 @@ Member assignments to campaigns.
 
 ---
 
-### 6. Email Schema
+### 6. Email Domain
 
 **Purpose**: Email communications and engagement tracking
 
 #### Tables
 
-##### email.EmailTemplate
+##### AssociationDemo.EmailTemplate
 Reusable email templates.
 
 | Column | Type | Description |
@@ -401,7 +401,7 @@ Reusable email templates.
 
 **Sample Count**: 30 templates for various purposes
 
-##### email.EmailSend
+##### AssociationDemo.EmailSend
 Individual email sends to members.
 
 | Column | Type | Description |
@@ -421,7 +421,7 @@ Individual email sends to members.
 
 **Sample Count**: Thousands of sends with realistic engagement (25% open, 5% click rates)
 
-##### email.EmailClick
+##### AssociationDemo.EmailClick
 Click tracking for links in emails.
 
 | Column | Type | Description |
@@ -436,13 +436,13 @@ Click tracking for links in emails.
 
 ---
 
-### 7. Chapters Schema
+### 7. Chapters Domain
 
 **Purpose**: Geographic and special interest chapter management
 
 #### Tables
 
-##### chapters.Chapter
+##### AssociationDemo.Chapter
 Local chapters and special interest groups.
 
 | Column | Type | Description |
@@ -459,7 +459,7 @@ Local chapters and special interest groups.
 
 **Sample Count**: 15 chapters (geographic and special interest)
 
-##### chapters.ChapterMembership
+##### AssociationDemo.ChapterMembership
 Chapter member assignments.
 
 | Column | Type | Description |
@@ -473,7 +473,7 @@ Chapter member assignments.
 
 **Sample Count**: 275+ chapter memberships
 
-##### chapters.ChapterOfficer
+##### AssociationDemo.ChapterOfficer
 Chapter leadership positions.
 
 | Column | Type | Description |
@@ -490,13 +490,13 @@ Chapter leadership positions.
 
 ---
 
-### 8. Governance Schema
+### 8. Governance Domain
 
 **Purpose**: Committee and board management
 
 #### Tables
 
-##### governance.Committee
+##### AssociationDemo.Committee
 Association committees and task forces.
 
 | Column | Type | Description |
@@ -514,7 +514,7 @@ Association committees and task forces.
 
 **Sample Count**: 12 committees (standing, ad hoc, task forces)
 
-##### governance.CommitteeMembership
+##### AssociationDemo.CommitteeMembership
 Committee member assignments.
 
 | Column | Type | Description |
@@ -530,7 +530,7 @@ Committee member assignments.
 
 **Sample Count**: Programmatically generated (5-8 per committee)
 
-##### governance.BoardPosition
+##### AssociationDemo.BoardPosition
 Board of directors positions.
 
 | Column | Type | Description |
@@ -545,7 +545,7 @@ Board of directors positions.
 
 **Sample Count**: 9 positions (4 officers + 5 directors)
 
-##### governance.BoardMember
+##### AssociationDemo.BoardMember
 Current and historical board members.
 
 | Column | Type | Description |

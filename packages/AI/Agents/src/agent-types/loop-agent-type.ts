@@ -12,10 +12,11 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { LoopAgentResponse } from './loop-agent-response-type'; 
+import { LoopAgentResponse } from './loop-agent-response-type';
+import { ConversationMessageResolver } from '../utils/ConversationMessageResolver'; 
 
 /**
  * Implementation of the Loop Agent Type pattern.
@@ -412,12 +413,12 @@ export class LoopAgentType extends BaseAgentType {
     /**
      * Gets the prompt to use for a specific step.
      * Loop agents always use the default prompt from configuration.
-     * 
+     *
      * @param {ExecuteAgentParams} params - The execution parameters (unused)
      * @param {AgentConfiguration} config - The loaded agent configuration
      * @param {BaseAgentNextStep | null} previousDecision - The previous step decision (unused)
      * @returns {Promise<AIPromptEntityExtended | null>} Returns config.childPrompt
-     * 
+     *
      * @override
      * @since 2.76.0
      */
@@ -431,8 +432,77 @@ export class LoopAgentType extends BaseAgentType {
         // Loop agents always use the default prompt from configuration
         return config.childPrompt || null;
     }
- 
-    
+
+    /**
+     * Pre-processes action parameters to resolve conversation references.
+     *
+     * Loop agents get action parameters directly from the LLM's JSON response.
+     * This method resolves any "conversation.*" references in those parameters
+     * before the actions are executed.
+     *
+     * @param {AgentAction[]} actions - The actions that will be executed (modified in place)
+     * @param {P} currentPayload - The current payload
+     * @param {ATS} agentTypeState - The agent type state
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * @param {ExecuteAgentParams<P>} params - The execution parameters with conversation messages
+     *
+     * @returns {Promise<void>} Actions are modified in place
+     *
+     * @override
+     * @since 2.120.0
+     */
+    public async PreProcessActionStep<P = any, ATS = any>(
+        actions: AgentAction[],
+        currentPayload: P,
+        agentTypeState: ATS,
+        currentStep: BaseAgentNextStep<P>,
+        params?: ExecuteAgentParams<P>
+    ): Promise<void> {
+        // Resolve conversation references in action parameters
+        for (const action of actions) {
+            if (action.params) {
+                action.params = this.resolveConversationReferences(action.params, params) as Record<string, unknown>;
+            }
+        }
+    }
+
+    /**
+     * Recursively resolves conversation references in action parameters.
+     *
+     * Handles nested objects and arrays, resolving any string values that start
+     * with "conversation." using the ConversationMessageResolver.
+     *
+     * @param {unknown} value - The value to resolve (can be object, array, string, or primitive)
+     * @param {ExecuteAgentParams} params - The execution parameters with conversation messages
+     * @returns {unknown} The resolved value
+     *
+     * @private
+     */
+    private resolveConversationReferences(value: unknown, params?: ExecuteAgentParams): unknown {
+        if (typeof value === 'string') {
+            // Check if this is a conversation reference
+            const trimmedValue = value.trim();
+            if (ConversationMessageResolver.isConversationReference(trimmedValue) && params?.conversationMessages) {
+                return ConversationMessageResolver.resolve(trimmedValue, params.conversationMessages);
+            }
+            return value;
+        } else if (Array.isArray(value)) {
+            // Recursively resolve array elements
+            return value.map(item => this.resolveConversationReferences(item, params));
+        } else if (value && typeof value === 'object') {
+            // Recursively resolve object properties
+            const resolvedObj: Record<string, unknown> = {};
+            for (const [key, val] of Object.entries(value)) {
+                resolvedObj[key] = this.resolveConversationReferences(val, params);
+            }
+            return resolvedObj;
+        } else {
+            // Primitives (numbers, booleans, null, undefined) pass through
+            return value;
+        }
+    }
+
+
 }
 
 /**

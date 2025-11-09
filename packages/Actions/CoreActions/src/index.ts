@@ -172,6 +172,7 @@ import { LoadParallelExecuteAction } from './custom/workflow/parallel-execute.ac
 import { LoadRetryAction } from './custom/workflow/retry.action';
 import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
+import { LoadBettyAction } from './custom/ai/betty.action';
 import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action';
 import { LoadFindBestAgentAction } from './custom/ai/find-candidate-agents.action';
 import { LoadFindBestActionAction } from './custom/ai/find-candidate-actions.action';
@@ -281,6 +282,7 @@ export function LoadAllCoreActions() {
     LoadCreateSVGSketchDiagramAction();
     LoadCreateMermaidDiagramAction();
     LoadCodeExecutionAction();
+    LoadBettyAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

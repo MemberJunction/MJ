@@ -1,1296 +1,401 @@
-# Database Documentation Generator - Implementation Plan
+# Database Documentation Generator - Implementation Status
 
 ## Summary
 
-An AI-powered database documentation system that automatically generates comprehensive table and column descriptions by analyzing database structure, constraints, relationships, and sample data. The system produces both human-readable documentation and executable SQL scripts that inject descriptions into the database via `sp_addextendedproperty`, which then flow into MemberJunction metadata through CodeGen.
+An AI-powered database documentation system that automatically generates comprehensive table and column descriptions by analyzing database structure, constraints, relationships, and sample data. The system produces both human-readable documentation and executable SQL scripts that inject descriptions into the database via `sp_addextendedproperty`.
 
 **Created**: 2025-01-21
-**Status**: ⏳ Pending Review & Approval
-**Package**: `@memberjunction/db-documenter`
+**Updated**: 2025-01-08
+**Status**: ✅ **Implemented as `@memberjunction/db-auto-doc`**
+**Package**: `@memberjunction/db-auto-doc` (was `@memberjunction/db-documenter` in plan)
+**Branch**: `db-auto-doc` (tracking remote `claude/study-dbautodoc-package-011CUshjrU3Ly3qaYHRyMHoZ`)
 
 ---
 
-## Problem Statement
+## Implementation Status
 
-### Current State
-- Users bring external data into MJ (read-only replicas, custom tables, SaaS integrations)
-- Most databases lack comprehensive documentation
-- Empty or minimal descriptions in MJ Entity/EntityField metadata
-- Agents and humans struggle to understand schema purpose and relationships
-- Manual documentation is time-consuming and often skipped
+### ✅ Core Features Implemented
 
-### Desired State
-- Automated analysis of database structure and relationships
-- AI-generated descriptions for all tables and columns
-- Documentation injected into database via extended properties
-- Metadata automatically synced to MJ entities through CodeGen
-- Both human-readable docs and machine-readable metadata
+The package has been **fully implemented** with the following architecture:
 
-### Value Proposition
-- **For AI Agents**: Rich schema context improves query generation and data understanding
-- **For Developers**: Instant onboarding to unfamiliar databases
-- **For Documentation**: Always up-to-date, automatically maintained
-- **For MJ Platform**: Enhanced metadata drives better UI generation and validation
+#### 1. **Standalone SQL Server Tool**
+- ✅ Works with ANY SQL Server database (zero MJ runtime dependencies)
+- ✅ Uses `mssql` driver directly (not MJ's DataProvider)
+- ✅ Integrates MJ's AI packages (`@memberjunction/ai`, `ai-openai`, `ai-anthropic`, `ai-groq`)
 
----
+#### 2. **Iterative Analysis with Backpropagation**
+- ✅ Multi-pass analysis system
+- ✅ Topological processing (tables in dependency order)
+- ✅ Convergence detection (stability window + confidence threshold)
+- ⚠️ **Backpropagation detection INCOMPLETE** (see Issues below)
 
-## Architecture Overview
+#### 3. **Intelligent Data Analysis**
+- ✅ Cardinality analysis (distinct counts, uniqueness ratios)
+- ✅ Statistical profiling (min, max, avg, stddev)
+- ✅ Value distribution for low-cardinality columns (enum detection)
+- ✅ Sample data collection for AI context
+- ⚠️ NO sensitive data detection/anonymization
 
-### System Components
+#### 4. **Prompt Engineering**
+- ✅ Nunjucks-based templating system (like MJ Templates package)
+- ✅ File-based prompts in `/prompts` directory:
+  - `table-analysis.md` - Table/column documentation
+  - `backpropagation.md` - Parent table refinement
+  - `schema-sanity-check.md` - Schema-level validation
+  - `cross-schema-check.md` - Multi-schema consistency
+  - `convergence-check.md` - Completion detection
+- ✅ Structured JSON output with confidence scores
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  DatabaseDocumenter                         │
-│                   (Core Engine)                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Phase 1: Structural Analysis                              │
-│  ├─ Build dependency graph (PK/FK relationships)           │
-│  ├─ Identify root tables (no dependencies)                 │
-│  ├─ Extract constraints (CHECK, UNIQUE, DEFAULT)           │
-│  ├─ Detect patterns (audit fields, soft delete, etc.)      │
-│  └─ Load existing MJ metadata (Entity/EntityField)         │
-│                                                             │
-│  Phase 2: Data Profiling                                   │
-│  ├─ Top N rows per table                                   │
-│  ├─ Random sampling (multiple passes)                      │
-│  ├─ Statistical analysis (nulls, distinct values, etc.)    │
-│  ├─ Pattern detection (enums, common values, etc.)         │
-│  └─ Data type inference (email, phone, URL, etc.)          │
-│                                                             │
-│  Phase 3: Table-Level Documentation (Micro Analysis)       │
-│  ├─ Process tables in dependency order (roots first)       │
-│  ├─ Include parent table context in prompts                │
-│  ├─ Generate table + column descriptions via AI            │
-│  ├─ Assign confidence scores                               │
-│  └─ Store in-memory documentation state                    │
-│                                                             │
-│  Phase 4: Schema-Level Review (Macro Analysis)             │
-│  ├─ Group tables by schema/business domain                 │
-│  ├─ Review all descriptions in context                     │
-│  ├─ Identify inconsistencies or improvements               │
-│  └─ Refine documentation based on holistic view            │
-│                                                             │
-│  Phase 5: Output Generation                                │
-│  ├─ Generate Markdown documentation                        │
-│  ├─ Generate sp_addextendedproperty SQL scripts            │
-│  ├─ Generate summary report                                │
-│  └─ Optionally execute SQL (with safeguards)               │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-         │                              │
-         │                              │
-         ▼                              ▼
-┌──────────────────┐          ┌──────────────────┐
-│   CLI Interface  │          │   Output Files   │
-│   mj-document    │          ├──────────────────┤
-├──────────────────┤          │ • documentation/ │
-│ • analyze        │          │   ├─ README.md   │
-│ • configure      │          │   ├─ schema1.md  │
-│ • help           │          │   └─ schema2.md  │
-└──────────────────┘          │ • scripts/       │
-                              │   └─ extended-   │
-                              │     properties.  │
-                              │     sql          │
-                              └──────────────────┘
+#### 5. **State Management**
+- ✅ Full state tracking in `db-doc-state.json`
+- ✅ Iteration history with reasoning and confidence
+- ✅ Audit trail for all AI decisions
+- ✅ Token usage and cost tracking
+
+#### 6. **Output Generation**
+- ✅ SQL script generator (`sp_addextendedproperty`)
+- ✅ Markdown documentation
+- ✅ Analysis reports (convergence, metrics, warnings)
+
+#### 7. **CLI Interface** (oclif framework)
+```bash
+db-auto-doc init      # Interactive setup
+db-auto-doc analyze   # Run analysis
+db-auto-doc status    # Check progress
+db-auto-doc export    # Generate SQL/markdown
+db-auto-doc reset     # Clear state
 ```
 
-### Design Principles
-
-1. **Stateless Execution** (MVP)
-   - No database tables for tracking runs (future enhancement)
-   - In-memory state during execution only
-   - All outputs persisted to files
-   - Idempotent operations (can re-run safely)
-
-2. **Dependency-Aware Processing**
-   - Build full dependency graph via FK analysis
-   - Document root tables first (no dependencies)
-   - Each level inherits context from parent tables
-   - Ensures accurate relationship descriptions
-
-3. **Two-Phase AI Analysis**
-   - **Micro**: Table-by-table with parent context
-   - **Macro**: Schema-level holistic review
-   - Catches inconsistencies missed in micro phase
-   - Provides cross-table insights
-
-4. **Non-Destructive Outputs**
-   - Never auto-execute SQL without explicit flag
-   - Always generate review-able scripts first
-   - Respect existing extended properties (configurable)
-   - Provide confidence scores for all descriptions
-
-5. **MJ Integration**
-   - Read existing Entity/EntityField metadata
-   - Include MJ context in AI prompts
-   - Output compatible with CodeGen expectations
-   - Extended properties flow into MJ metadata
-
 ---
 
-## Data Structures
+## 🚨 Critical Issues to Fix
 
-### Configuration
+### Issue #1: Backpropagation Detection Not Implemented
+
+**File**: `/packages/DBAutoDoc/src/core/BackpropagationEngine.ts` (lines 127-150)
+
+**Problem**: The `detectParentInsights()` method is a **placeholder**:
 ```typescript
-interface DocumenterConfig {
-  // Scope
-  schemas?: string[];           // Specific schemas (default: all non-system)
-  tables?: string[];            // Specific tables as 'schema.table'
-  excludeSchemas?: string[];    // Schemas to skip (e.g., 'sys', 'INFORMATION_SCHEMA')
-  excludeTables?: string[];     // Tables to skip as 'schema.table'
+public detectParentInsights(
+  table: TableDefinition,
+  analysisResult: any
+): BackpropagationTrigger[] {
+  const triggers: BackpropagationTrigger[] = [];
 
-  // Sampling Strategy
-  topN?: number;                // Top N rows ordered by PK (default: 100)
-  randomSamplePasses?: number;  // Number of random sample passes (default: 2)
-  randomSampleSize?: number;    // Rows per random sample (default: 50)
-  maxSampleRows?: number;       // Max total sample rows per table (default: 200)
+  // PLACEHOLDER COMMENT:
+  // "This is a placeholder - in practice, you might want to:"
+  // Returns empty array - NO LOGIC IMPLEMENTED
 
-  // AI Configuration
-  aiProvider?: string;          // Provider name (default: from config)
-  modelName?: string;           // Model name (default: from config)
-  maxTablesPerPrompt?: number;  // Tables in macro review prompt (default: 10)
-  temperature?: number;         // LLM temperature (default: 0.3)
-
-  // Output Options
-  outputPath?: string;          // Base output directory (default: './db-docs')
-  generateMarkdown?: boolean;   // Create markdown docs (default: true)
-  generateSQL?: boolean;        // Create SQL scripts (default: true)
-  executeSQL?: boolean;         // Auto-execute SQL (default: false, requires confirmation)
-
-  // Behavioral Options
-  overwriteExisting?: boolean;  // Overwrite existing extended properties (default: false)
-  onlyIfEmpty?: boolean;        // Only add if no existing description (default: true)
-  confidenceThreshold?: number; // Min confidence to include (0-1, default: 0.6)
-  includeSystemColumns?: boolean; // Document __mj columns (default: false)
+  return triggers; // Always empty!
 }
 ```
 
-### Dependency Graph
+**Impact**: Backpropagation never actually triggers! Child table analysis won't improve parent descriptions.
+
+**Fix Required**:
+- [ ] Parse `analysisResult.reasoning` for mentions of parent tables
+- [ ] Detect when child analysis contradicts parent description
+- [ ] Identify patterns suggesting parent misclassification
+- [ ] Generate `BackpropagationTrigger` objects with insights
+
+**Example Logic Needed**:
 ```typescript
-interface TableNode {
-  schema: string;
-  table: string;
-  fullName: string;              // 'schema.table'
-
-  // Relationships
-  dependsOn: TableReference[];    // Foreign keys pointing to other tables
-  referencedBy: TableReference[]; // Tables that reference this table
-  dependencyLevel: number;        // Distance from root (0 = no dependencies)
-
-  // Pattern Detection
-  tableType: TableType;           // Lookup, Transactional, Bridge, Audit, Config
-  isLookup: boolean;              // ID + Name + few columns
-  isBridge: boolean;              // Composite PK of all FKs
-  isAudit: boolean;               // _Audit, _History suffix or audit columns
-  hasAuditFields: boolean;        // CreatedAt, CreatedBy, ModifiedAt, ModifiedBy
-  hasSoftDelete: boolean;         // IsDeleted, DeletedAt, __mj_DeletedAt
-  hasRowVersion: boolean;         // timestamp/rowversion column
-
-  // MJ Metadata
-  mjEntity?: EntityInfo;          // Existing MJ entity (if any)
-  hasExistingDescription: boolean;
-}
-
-interface TableReference {
-  schema: string;
-  table: string;
-  constraintName: string;
-  columns: ColumnMapping[];       // FK column → PK column mappings
-}
-
-type TableType =
-  | 'Lookup'          // Reference data (countries, statuses, categories)
-  | 'Transactional'   // Business events (orders, invoices, logs)
-  | 'Bridge'          // M:M junction tables
-  | 'Audit'           // Change tracking tables
-  | 'Configuration'   // System settings
-  | 'Unknown';
-```
-
-### Structural Analysis
-```typescript
-interface TableStructure {
-  // Identity
-  schema: string;
-  table: string;
-  fullName: string;
-
-  // Existing Metadata
-  mjEntity?: EntityInfo;
-  existingDescription?: string;
-  existingExtendedProperty?: string;
-
-  // Statistics
-  rowCount: number;
-  approximateSizeKB: number;
-  indexCount: number;
-
-  // Keys & Constraints
-  primaryKey?: PrimaryKeyInfo;
-  foreignKeys: ForeignKeyInfo[];
-  uniqueConstraints: UniqueConstraintInfo[];
-  checkConstraints: CheckConstraintInfo[];
-  defaultConstraints: DefaultConstraintInfo[];
-  indexes: IndexInfo[];
-
-  // Columns
-  columns: ColumnStructure[];
-
-  // Patterns
-  node: TableNode;                // From dependency graph
-}
-
-interface ColumnStructure {
-  name: string;
-  dataType: string;
-  maxLength?: number;
-  precision?: number;
-  scale?: number;
-  isNullable: boolean;
-  isPrimaryKey: boolean;
-  isForeignKey: boolean;
-  isIdentity: boolean;
-  isComputed: boolean;
-  computedFormula?: string;
-  defaultValue?: string;
-
-  // Existing Metadata
-  mjField?: EntityFieldInfo;
-  existingDescription?: string;
-  existingExtendedProperty?: string;
-
-  // Foreign Key Info
-  referencedTable?: string;       // 'schema.table'
-  referencedColumn?: string;
-  foreignKeyName?: string;
-
-  // Constraints
-  checkConstraints: string[];     // CHECK constraint expressions
-  uniqueConstraintName?: string;
-}
-
-interface ColumnProfile {
-  column: ColumnStructure;
-
-  // Statistics
-  nullCount: number;
-  nullPercentage: number;
-  distinctCount: number;
-  distinctPercentage: number;
-
-  // Value Analysis
-  minValue?: any;
-  maxValue?: any;
-  avgValue?: number;              // For numeric columns
-  minLength?: number;             // For string columns
-  maxLength?: number;
-  avgLength?: number;
-
-  // Common Values
-  topValues: ValueFrequency[];    // Top 10 most common values
-
-  // Pattern Detection
-  isLikelyEnum: boolean;          // Low cardinality (< 50 distinct)
-  isLikelyBoolean: boolean;       // Only 0/1 or true/false
-  likelyDataType?: InferredType;  // email, phone, url, date, currency, etc.
-  regexPatterns?: string[];       // Detected patterns in values
-
-  // Sample Data (anonymized)
-  sampleValues: any[];            // Up to 10 example values
-}
-
-type InferredType =
-  | 'email' | 'phone' | 'url' | 'ip_address'
-  | 'currency' | 'percentage' | 'quantity'
-  | 'date' | 'datetime' | 'time'
-  | 'guid' | 'hash' | 'base64'
-  | 'json' | 'xml'
-  | 'zip_code' | 'country_code' | 'state_code'
-  | 'ssn' | 'credit_card'        // Detect but don't sample!
-  | 'unknown';
-
-interface ValueFrequency {
-  value: any;
-  count: number;
-  percentage: number;
-}
-```
-
-### Documentation Output
-```typescript
-interface TableDocumentation {
-  table: TableStructure;
-
-  // Generated Descriptions
-  tableDescription: string;
-  tablePurpose: string;           // High-level purpose
-  tableUsageNotes?: string;       // How to use this table
-  businessDomain?: string;        // CRM, Finance, HR, etc.
-
-  columnDescriptions: Map<string, ColumnDocumentation>;
-
-  // Relationship Explanations
-  parentRelationships: RelationshipDescription[];   // Tables this depends on
-  childRelationships: RelationshipDescription[];    // Tables that depend on this
-
-  // Confidence & Quality
-  tableConfidence: number;        // 0-1 confidence score
-  columnConfidenceAvg: number;    // Average column confidence
-
-  // Generation Metadata
-  generatedAt: Date;
-  aiModel: string;
-  processingPhase: 'micro' | 'macro';
-  refinedInMacro: boolean;        // True if changed during macro phase
-}
-
-interface ColumnDocumentation {
-  column: ColumnStructure;
-  profile: ColumnProfile;
-
-  description: string;
-  purpose?: string;               // Why this column exists
-  validValues?: string;           // Allowed values/ranges
-  usageNotes?: string;            // How to use this column
-
-  confidence: number;             // 0-1 confidence score
-}
-
-interface RelationshipDescription {
-  fromTable: string;
-  toTable: string;
-  constraintName: string;
-  description: string;            // Natural language explanation
-  cardinality: string;            // "One-to-Many", "Many-to-Many", etc.
-  isRequired: boolean;            // FK column is NOT NULL
-}
-```
-
-### Processing State
-```typescript
-interface DocumentationState {
-  // Configuration
-  config: DocumenterConfig;
-
-  // Progress Tracking
-  phase: 'analyzing' | 'profiling' | 'documenting' | 'reviewing' | 'generating';
-  currentSchema?: string;
-  currentTable?: string;
-  tablesProcessed: number;
-  tablesTotal: number;
-  startTime: Date;
-
-  // Analysis Results
-  dependencyGraph: Map<string, TableNode>;
-  tableStructures: Map<string, TableStructure>;
-  tableProfiles: Map<string, ColumnProfile[]>;
-
-  // Documentation Results
-  tableDocs: Map<string, TableDocumentation>;
-
-  // Statistics
-  stats: {
-    schemasAnalyzed: number;
-    tablesAnalyzed: number;
-    columnsAnalyzed: number;
-    descriptionsGenerated: number;
-    existingDescriptionsFound: number;
-    lowConfidenceItems: number;
-    aiTokensUsed: number;
-    aiCostEstimate: number;
-  };
-
-  // Errors & Warnings
-  errors: ProcessingError[];
-  warnings: ProcessingWarning[];
-}
-```
-
----
-
-## Implementation Tasks
-
-### Phase 1: Package Setup & Core Infrastructure
-**Estimated Time**: 4-6 hours
-
-#### Task 1.1: Create Package Structure
-- [ ] Create `packages/DocUtils/` directory structure
-- [ ] Set up `package.json` with dependencies:
-  - `@memberjunction/core`
-  - `@memberjunction/global`
-  - `@memberjunction/ai`
-  - `mssql` (already used in MJ)
-  - `commander` (for CLI)
-  - `zod` (for validation)
-- [ ] Create `tsconfig.json` extending base config
-- [ ] Add package to workspace `package.json`
-- [ ] Add package to `turbo.json` build pipeline
-
-#### Task 1.2: Define Core Interfaces
-- [ ] Create `src/types/config.ts` - DocumenterConfig interface
-- [ ] Create `src/types/graph.ts` - TableNode, TableReference, etc.
-- [ ] Create `src/types/structure.ts` - TableStructure, ColumnStructure, etc.
-- [ ] Create `src/types/profile.ts` - ColumnProfile, ValueFrequency, etc.
-- [ ] Create `src/types/documentation.ts` - TableDocumentation, etc.
-- [ ] Create `src/types/state.ts` - DocumentationState, errors, warnings
-
-#### Task 1.3: Create Engine Class Skeleton
-- [ ] Create `src/Engine.ts` with `DatabaseDocumenter` class
-- [ ] Implement constructor with config validation (Zod schema)
-- [ ] Create main orchestration method `documentDatabase()`
-- [ ] Add progress tracking and logging
-- [ ] Implement state management (in-memory)
-- [ ] Add error handling and recovery
-
----
-
-### Phase 2: Structural Analysis
-**Estimated Time**: 8-10 hours
-
-#### Task 2.1: Database Connection & Introspection
-- [ ] Create `src/database/connection.ts`
-  - [ ] Establish SQL Server connection using MJ config
-  - [ ] Handle connection pooling
-  - [ ] Add retry logic for transient failures
-- [ ] Create `src/database/introspection.ts`
-  - [ ] Query `INFORMATION_SCHEMA` for tables/columns
-  - [ ] Query `sys.tables`, `sys.columns` for detailed metadata
-  - [ ] Extract data types, lengths, nullability, defaults
-  - [ ] Handle user-defined types
-
-#### Task 2.2: Constraint Analysis
-- [ ] Create `src/analyzers/constraints.ts`
-- [ ] Extract Primary Keys (`sys.key_constraints`, `sys.index_columns`)
-- [ ] Extract Foreign Keys (`sys.foreign_keys`, `sys.foreign_key_columns`)
-- [ ] Extract Unique Constraints (`sys.indexes` where `is_unique = 1`)
-- [ ] Extract Check Constraints (`sys.check_constraints`)
-- [ ] Extract Default Constraints (`sys.default_constraints`)
-- [ ] Parse constraint definitions for insights
-
-#### Task 2.3: Index Analysis
-- [ ] Create `src/analyzers/indexes.ts`
-- [ ] Extract all indexes (`sys.indexes`, `sys.index_columns`)
-- [ ] Identify clustered vs non-clustered
-- [ ] Identify unique vs non-unique
-- [ ] Extract included columns
-- [ ] Identify filtered indexes
-
-#### Task 2.4: Dependency Graph Builder
-- [ ] Create `src/analyzers/dependency-graph.ts`
-- [ ] Build directed graph from FK relationships
-- [ ] Implement topological sort to determine levels
-- [ ] Identify root tables (level 0)
-- [ ] Detect circular dependencies (log warnings)
-- [ ] Calculate dependency depth for each table
-
-#### Task 2.5: Pattern Detection
-- [ ] Create `src/analyzers/pattern-detector.ts`
-- [ ] Detect lookup tables (ID + Name pattern, few columns, no FKs)
-- [ ] Detect bridge tables (composite PK of all FKs)
-- [ ] Detect audit tables (naming suffixes, audit columns)
-- [ ] Detect soft delete pattern (`IsDeleted`, `__mj_DeletedAt`)
-- [ ] Detect audit fields (`CreatedAt`, `CreatedBy`, `ModifiedAt`, `ModifiedBy`)
-- [ ] Detect row version fields (`timestamp`, `rowversion`)
-- [ ] Classify table types (Lookup, Transactional, Bridge, etc.)
-
-#### Task 2.6: MJ Metadata Integration
-- [ ] Create `src/analyzers/mj-metadata.ts`
-- [ ] Load Entity metadata from `__mj.Entity` (match by schema.table)
-- [ ] Load EntityField metadata from `__mj.EntityField`
-- [ ] Extract existing descriptions
-- [ ] Query extended properties (`sys.extended_properties`)
-- [ ] Merge MJ and SQL Server metadata
-- [ ] Flag tables/columns already documented
-
----
-
-### Phase 3: Data Profiling
-**Estimated Time**: 8-10 hours
-
-#### Task 3.1: Sampling Strategy
-- [ ] Create `src/profilers/sampler.ts`
-- [ ] Implement top N sampling (ORDER BY primary key)
-- [ ] Implement random sampling (TABLESAMPLE or ORDER BY NEWID())
-- [ ] Handle tables without primary keys (use OFFSET/FETCH)
-- [ ] Respect `maxSampleRows` configuration
-- [ ] Skip very large BLOBs (log warning)
-
-#### Task 3.2: Statistical Analysis
-- [ ] Create `src/profilers/statistics.ts`
-- [ ] Calculate null counts and percentages
-- [ ] Calculate distinct value counts
-- [ ] Calculate min/max/avg for numeric columns
-- [ ] Calculate min/max/avg length for string columns
-- [ ] Generate value frequency distribution (top 10 values)
-- [ ] Handle NULL values correctly in statistics
-
-#### Task 3.3: Pattern Recognition
-- [ ] Create `src/profilers/pattern-recognizer.ts`
-- [ ] Detect enum-like columns (low cardinality < 50)
-- [ ] Detect boolean columns (only 0/1 or true/false)
-- [ ] Detect email addresses (regex pattern)
-- [ ] Detect phone numbers (regex pattern)
-- [ ] Detect URLs (regex pattern)
-- [ ] Detect GUIDs (regex pattern)
-- [ ] Detect dates/times (parse success rate)
-- [ ] Detect JSON/XML content
-- [ ] Detect sensitive data (SSN, credit card) - log warning, DO NOT SAMPLE
-
-#### Task 3.4: Column Profiler
-- [ ] Create `src/profilers/column-profiler.ts`
-- [ ] Orchestrate sampling + statistics + pattern recognition
-- [ ] Generate `ColumnProfile` for each column
-- [ ] Handle errors gracefully (continue on failure)
-- [ ] Add timeout protection for slow queries
-- [ ] Log profiling progress
-
-#### Task 3.5: Sensitive Data Protection
-- [ ] Create `src/profilers/privacy.ts`
-- [ ] Never send actual PII/PHI to AI models
-- [ ] Replace sensitive values with patterns (e.g., "XXX-XX-1234")
-- [ ] Anonymize sample data before AI processing
-- [ ] Log when sensitive data detected
-
----
-
-### Phase 4: AI-Powered Documentation (Micro Analysis)
-**Estimated Time**: 12-15 hours
-
-#### Task 4.1: Prompt Engineering - Table Level
-- [ ] Create `src/ai/prompts/table-prompt-builder.ts`
-- [ ] Design prompt structure:
-  - [ ] Table name and schema
-  - [ ] Column list with types, constraints, FK references
-  - [ ] Existing MJ descriptions (if any)
-  - [ ] Existing extended properties (if any)
-  - [ ] Primary key and unique constraints
-  - [ ] Check constraints
-  - [ ] Table type classification (lookup, transactional, etc.)
-  - [ ] Pattern detection results (audit fields, soft delete, etc.)
-- [ ] Include parent table context (already documented tables this depends on)
-- [ ] Include sample data (anonymized)
-- [ ] Request structured JSON output:
-  ```json
-  {
-    "tableDescription": "...",
-    "tablePurpose": "...",
-    "tableUsageNotes": "...",
-    "businessDomain": "...",
-    "confidence": 0.85,
-    "columns": [
-      {
-        "name": "...",
-        "description": "...",
-        "purpose": "...",
-        "validValues": "...",
-        "usageNotes": "...",
-        "confidence": 0.9
-      }
-    ],
-    "relationships": [
-      {
-        "type": "parent",
-        "table": "...",
-        "description": "...",
-        "cardinality": "..."
-      }
-    ]
-  }
-  ```
-
-#### Task 4.2: Prompt Engineering - Relationship Context
-- [ ] Create `src/ai/prompts/relationship-context-builder.ts`
-- [ ] For each FK, generate natural language explanation:
-  - "This table references {ParentTable} via {ColumnName}"
-  - Include parent table's purpose (if already documented)
-  - Explain cardinality (one-to-many, many-to-many)
-  - Note if FK is required (NOT NULL) or optional
-- [ ] Build hierarchical context (grandparent tables if available)
-
-#### Task 4.3: AI Integration
-- [ ] Create `src/ai/ai-client.ts`
-- [ ] Use `@memberjunction/ai` package for LLM calls
-- [ ] Support multiple providers (OpenAI, Anthropic, etc.)
-- [ ] Implement retry logic with exponential backoff
-- [ ] Track token usage and costs
-- [ ] Implement rate limiting to avoid API throttling
-- [ ] Handle structured output (JSON mode if available)
-
-#### Task 4.4: Table Documentation Processor
-- [ ] Create `src/processors/table-documenter.ts`
-- [ ] Process tables in dependency order (level 0 first)
-- [ ] For each table:
-  - [ ] Build prompt with all available context
-  - [ ] Call AI with structured output request
-  - [ ] Parse and validate response (Zod schema)
-  - [ ] Store documentation in state
-  - [ ] Update progress tracking
-  - [ ] Handle AI errors (retry or log failure)
-- [ ] Batch tables at same level if `maxTablesPerPrompt > 1`
-
-#### Task 4.5: Confidence Scoring
-- [ ] Create `src/processors/confidence-scorer.ts`
-- [ ] Use AI-provided confidence scores
-- [ ] Adjust confidence based on:
-  - Availability of sample data (higher confidence)
-  - Existence of FK relationships (higher confidence)
-  - Presence of constraints (higher confidence)
-  - Existing MJ/extended property descriptions (boost confidence)
-  - Generic table/column names (lower confidence)
-- [ ] Flag low-confidence items for review
-
----
-
-### Phase 5: AI-Powered Review (Macro Analysis)
-**Estimated Time**: 6-8 hours
-
-#### Task 5.1: Schema-Level Prompt Engineering
-- [ ] Create `src/ai/prompts/schema-review-prompt-builder.ts`
-- [ ] Design macro review prompt:
-  - [ ] List all tables in schema with generated descriptions
-  - [ ] Show table relationships (dependency graph)
-  - [ ] Highlight table types (lookup, transactional, etc.)
-  - [ ] Request review for:
-    - Inconsistent terminology
-    - Missing relationships
-    - Incorrect business domain classification
-    - Better descriptions based on holistic view
-- [ ] Request structured JSON output with refinements:
-  ```json
-  {
-    "overallAssessment": "...",
-    "businessDomain": "...",
-    "refinements": [
-      {
-        "table": "...",
-        "field": "tableDescription" | "columnName",
-        "currentValue": "...",
-        "suggestedValue": "...",
-        "reason": "...",
-        "confidence": 0.8
-      }
-    ]
-  }
-  ```
-
-#### Task 5.2: Schema Grouping Strategy
-- [ ] Create `src/processors/schema-grouper.ts`
-- [ ] Group tables by schema
-- [ ] Optionally sub-group by business domain (if detected in micro phase)
-- [ ] Respect `maxTablesPerPrompt` when batching
-- [ ] Handle large schemas (split into multiple macro reviews)
-
-#### Task 5.3: Refinement Processor
-- [ ] Create `src/processors/refinement-processor.ts`
-- [ ] For each schema/group:
-  - [ ] Build macro review prompt
-  - [ ] Call AI with all table documentation
-  - [ ] Parse refinement suggestions
-  - [ ] Apply high-confidence refinements automatically
-  - [ ] Log medium-confidence refinements as warnings
-  - [ ] Track which descriptions were refined
-- [ ] Update confidence scores based on macro review
-
----
-
-### Phase 6: Output Generation
-**Estimated Time**: 8-10 hours
-
-#### Task 6.1: Markdown Documentation Generator
-- [ ] Create `src/generators/markdown-generator.ts`
-- [ ] Generate overall README.md:
-  - [ ] Database overview
-  - [ ] Schema list with descriptions
-  - [ ] Table counts and statistics
-  - [ ] Business domains identified
-  - [ ] Generation metadata (date, model, token usage)
-- [ ] Generate per-schema markdown files:
-  - [ ] Schema description
-  - [ ] Table of contents
-  - [ ] Table dependency diagram (Mermaid ERD)
-  - [ ] Table-by-table detailed documentation:
-    - Table description and purpose
-    - Column list with descriptions
-    - Primary key, foreign keys, indexes
-    - Relationships (parent and child tables)
-    - Sample queries (if applicable)
-  - [ ] Cross-reference links between related tables
-- [ ] Use proper markdown formatting (headers, tables, code blocks)
-- [ ] Include confidence scores in metadata section
-
-#### Task 6.2: SQL Script Generator
-- [ ] Create `src/generators/sql-generator.ts`
-- [ ] Generate `sp_addextendedproperty` calls for tables:
-  ```sql
-  EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Table description here',
-    @level0type = N'SCHEMA', @level0name = N'dbo',
-    @level1type = N'TABLE', @level1name = N'TableName';
-  ```
-- [ ] Generate `sp_addextendedproperty` calls for columns:
-  ```sql
-  EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Column description here',
-    @level0type = N'SCHEMA', @level0name = N'dbo',
-    @level1type = N'TABLE', @level1name = N'TableName',
-    @level2type = N'COLUMN', @level2name = N'ColumnName';
-  ```
-- [ ] Respect `overwriteExisting` and `onlyIfEmpty` flags:
-  - If `onlyIfEmpty`: Wrap in `IF NOT EXISTS` check
-  - If `overwriteExisting`: Use `sp_updateextendedproperty` for existing
-- [ ] Respect `confidenceThreshold` - only include high-confidence items
-- [ ] Add comments with confidence scores and generation metadata
-- [ ] Add transaction wrapper (BEGIN TRAN / COMMIT / ROLLBACK)
-- [ ] Add rollback script (drop extended properties)
-
-#### Task 6.3: Summary Report Generator
-- [ ] Create `src/generators/summary-generator.ts`
-- [ ] Generate summary report with:
-  - [ ] Execution time
-  - [ ] Schemas analyzed
-  - [ ] Tables processed
-  - [ ] Columns documented
-  - [ ] Descriptions generated vs existing
-  - [ ] Low confidence items (require review)
-  - [ ] Errors and warnings
-  - [ ] AI token usage and estimated cost
-  - [ ] Next steps (review, execute SQL, etc.)
-- [ ] Output as both console log and text file
-
-#### Task 6.4: File Output Manager
-- [ ] Create `src/generators/file-manager.ts`
-- [ ] Create output directory structure:
-  ```
-  {outputPath}/
-  ├─ README.md
-  ├─ summary.txt
-  ├─ documentation/
-  │  ├─ schema1.md
-  │  ├─ schema2.md
-  │  └─ ...
-  └─ scripts/
-     ├─ extended-properties.sql
-     └─ rollback.sql
-  ```
-- [ ] Handle file write errors gracefully
-- [ ] Overwrite existing files with user confirmation
-- [ ] Log file paths after generation
-
----
-
-### Phase 7: CLI Implementation
-**Estimated Time**: 6-8 hours
-
-#### Task 7.1: Create Standalone CLI
-- [ ] Create `src/cli.ts`
-- [ ] Use `commander` for CLI parsing
-- [ ] Implement `analyze` command:
-  ```bash
-  mj-document analyze [options]
-    --schemas <schemas>       Comma-separated schema names
-    --tables <tables>         Comma-separated table names (schema.table)
-    --exclude <schemas>       Exclude these schemas
-    --output <path>           Output directory (default: ./db-docs)
-    --execute                 Execute SQL (apply extended properties)
-    --overwrite               Overwrite existing descriptions
-    --only-if-empty          Only add if no existing description
-    --confidence <n>          Min confidence threshold (0-1)
-    --provider <name>         AI provider (default: from config)
-    --model <name>            AI model name
-    --top-n <n>               Top N rows to sample (default: 100)
-    --random-samples <n>      Random sample passes (default: 2)
-  ```
-- [ ] Add `--dry-run` flag to show what would be processed
-- [ ] Add `--verbose` flag for detailed logging
-- [ ] Add `--help` with examples
-
-#### Task 7.2: Configuration File Support
-- [ ] Support `.mjdocrc` or `mjdoc.config.json` file
-- [ ] Allow overriding config with CLI flags
-- [ ] Validate configuration with Zod schema
-- [ ] Support environment variable overrides
-
-#### Task 7.3: Interactive Mode
-- [ ] Prompt for confirmation before executing SQL
-- [ ] Show summary and ask "Proceed? (y/n)"
-- [ ] Allow reviewing low-confidence items
-- [ ] Support cancellation (SIGINT handler)
-
-#### Task 7.4: Progress Reporting
-- [ ] Create `src/cli/progress-reporter.ts`
-- [ ] Show progress bar for table processing
-- [ ] Display current phase and table being processed
-- [ ] Show real-time statistics (tables processed, tokens used)
-- [ ] Use colored output for better UX (chalk or similar)
-
-#### Task 7.5: Integration with Main MJ CLI
-- [ ] Update `packages/MJCLI/src/index.ts`
-- [ ] Add `document` command that delegates to DocUtils CLI:
-  ```typescript
-  program
-    .command('document', 'Generate database documentation', {
-      executableFile: '../DocUtils/dist/cli.js'
+// If child table reasoning mentions parent characteristics:
+const parentMentions = this.extractParentTableMentions(analysisResult.reasoning);
+for (const mention of parentMentions) {
+  if (this.contradictsParentDescription(mention, parentTable)) {
+    triggers.push({
+      sourceTable: `${table.schema}.${table.name}`,
+      targetTable: mention.parentFullName,
+      insight: mention.insight,
+      confidence: mention.confidence
     });
-  ```
-- [ ] Test integration: `npx mj document analyze --help`
-
----
-
-### Phase 8: Testing & Validation
-**Estimated Time**: 8-10 hours
-
-#### Task 8.1: Unit Tests
-- [ ] Create `tests/` directory
-- [ ] Test dependency graph builder with mock data
-- [ ] Test pattern detector with known table structures
-- [ ] Test sampler with different table sizes
-- [ ] Test statistical analyzers with sample data
-- [ ] Test prompt builders (verify output structure)
-- [ ] Test confidence scoring logic
-- [ ] Test SQL generator output correctness
-
-#### Task 8.2: Integration Tests
-- [ ] Create test database with sample schemas:
-  - [ ] Lookup tables (Countries, Statuses)
-  - [ ] Transactional tables (Orders, Invoices)
-  - [ ] Bridge tables (OrderItems)
-  - [ ] Audit tables (Orders_Audit)
-  - [ ] Tables with complex FKs and constraints
-- [ ] Run full documentation process
-- [ ] Validate markdown output format
-- [ ] Validate SQL script syntax
-- [ ] Verify extended properties are applied correctly
-
-#### Task 8.3: AI Prompt Validation
-- [ ] Test prompts with different AI providers
-- [ ] Verify structured JSON output parsing
-- [ ] Test error handling for malformed AI responses
-- [ ] Validate confidence scores are reasonable
-- [ ] Test macro review refinements
-
-#### Task 8.4: Edge Case Testing
-- [ ] Tables with no primary key
-- [ ] Tables with no foreign keys
-- [ ] Tables with circular FK references
-- [ ] Very large tables (test sampling strategy)
-- [ ] Tables with complex check constraints
-- [ ] Tables with user-defined types
-- [ ] Empty tables (no data to profile)
-- [ ] Tables with existing extended properties
-
-#### Task 8.5: Performance Testing
-- [ ] Test with small database (10 tables)
-- [ ] Test with medium database (100 tables)
-- [ ] Test with large database (500+ tables)
-- [ ] Measure execution time and token usage
-- [ ] Optimize slow queries
-- [ ] Add caching where beneficial
-
----
-
-### Phase 9: Documentation & Examples
-**Estimated Time**: 4-6 hours
-
-#### Task 9.1: Package README
-- [ ] Create `packages/DocUtils/README.md`
-- [ ] Document purpose and features
-- [ ] Add installation instructions
-- [ ] Provide usage examples (CLI and programmatic)
-- [ ] Document configuration options
-- [ ] Add troubleshooting section
-
-#### Task 9.2: API Documentation
-- [ ] Document `DatabaseDocumenter` class API
-- [ ] Document configuration interfaces
-- [ ] Add JSDoc comments to all public methods
-- [ ] Provide code examples for programmatic usage
-
-#### Task 9.3: Examples Directory
-- [ ] Create `packages/DocUtils/examples/`
-- [ ] Add example configuration files
-- [ ] Add example output (markdown and SQL)
-- [ ] Add example scripts for common scenarios
-
-#### Task 9.4: CLAUDE.md
-- [ ] Create `packages/DocUtils/CLAUDE.md`
-- [ ] Document package architecture
-- [ ] Explain design decisions
-- [ ] Add AI prompt templates
-- [ ] Document future enhancement ideas
-
----
-
-### Phase 10: Deployment & CI
-**Estimated Time**: 2-3 hours
-
-#### Task 10.1: Build Configuration
-- [ ] Ensure package builds correctly in Turbo pipeline
-- [ ] Add CLI shebang to `src/cli.ts`
-- [ ] Configure `bin` field in package.json:
-  ```json
-  {
-    "bin": {
-      "mj-document": "./dist/cli.js"
-    }
   }
+}
+```
+
+---
+
+### Issue #2: No Cost/Duration Guardrails
+
+**Files**:
+- `/packages/DBAutoDoc/src/types/config.ts`
+- `/packages/DBAutoDoc/src/core/AnalysisEngine.ts`
+
+**Problem**: No limits on:
+- Total token usage per run
+- Maximum run duration
+- Maximum cost in dollars
+- Tokens per individual prompt
+
+**Impact**:
+- Large databases could run indefinitely
+- Unexpected API costs
+- No graceful stop mechanism
+
+**Fix Required**:
+- [ ] Add to `DBAutoDocConfig`:
+  ```typescript
+  guardrails?: {
+    maxTokensPerRun?: number;        // Stop after N tokens total
+    maxDurationSeconds?: number;      // Stop after N seconds
+    maxCostDollars?: number;          // Stop after $N spent
+    maxTokensPerPrompt?: number;      // Truncate individual prompts
+    warnThresholds?: {                // Warn at 80% of limits
+      tokens?: number;
+      duration?: number;
+      cost?: number;
+    };
+  };
   ```
-- [ ] Make CLI executable after build
-
-#### Task 10.2: NPM Publishing
-- [ ] Add package to `@memberjunction` scope
-- [ ] Configure version and dependencies
-- [ ] Test local installation: `npm link`
-- [ ] Publish to NPM registry
-
-#### Task 10.3: CI/CD Integration
-- [ ] Add package to GitHub Actions build workflow
-- [ ] Run tests in CI pipeline
-- [ ] Add linting and type checking
-- [ ] Configure automated publishing on release
+- [ ] Enforce in `AnalysisEngine.processLevel()`:
+  - Check limits before each table analysis
+  - Log warnings at threshold
+  - Gracefully stop and save state if exceeded
+  - Return reason in convergence result
 
 ---
 
-## AI Prompt Templates
+## 🎯 Current To-Do List
 
-### Table Documentation Prompt (Micro Analysis)
+### **High Priority** (Before Testing)
 
-```markdown
-You are a database documentation expert. Analyze the following SQL Server table and generate comprehensive documentation.
+- [ ] **Implement backpropagation detection**
+  - [ ] Write NLP-style parsing of AI reasoning
+  - [ ] Detect parent table mentions and insights
+  - [ ] Generate triggers with confidence scores
+  - [ ] Add unit tests for detection logic
 
-## Table Information
-- **Schema**: {schema}
-- **Table**: {table}
-- **Type**: {tableType} (Lookup, Transactional, Bridge, Audit, etc.)
-- **Row Count**: {rowCount}
-- **Pattern Detection**:
-  - Has Audit Fields: {hasAuditFields}
-  - Has Soft Delete: {hasSoftDelete}
-  - Is Bridge Table: {isBridge}
+- [ ] **Add guardrails configuration**
+  - [ ] Extend `DBAutoDocConfig` interface
+  - [ ] Implement enforcement in `AnalysisEngine`
+  - [ ] Add warning/stop logic with state save
+  - [ ] Document in README and config examples
 
-## Columns
-{columnList with types, constraints, FK references}
+- [ ] **Build package**
+  - [ ] Run `npm run build` in `/packages/DBAutoDoc`
+  - [ ] Fix any compilation errors
+  - [ ] Verify CLI executable
 
-## Primary Key
-{primaryKey definition}
+### **Testing Phase**
 
-## Foreign Keys
-{foreignKey list with referenced tables}
+- [ ] **Set up AssociationDB test database**
+  - [ ] Use existing schema from `/Demos/AssociationDB`
+  - [ ] Install database WITHOUT ms_descriptions
+  - [ ] Verify schema completeness (all FKs, constraints)
+  - [ ] Document connection details
 
-## Constraints
-- Unique Constraints: {uniqueConstraints}
-- Check Constraints: {checkConstraints}
-- Default Constraints: {defaultConstraints}
+- [ ] **Run first test**
+  - [ ] `db-auto-doc init` with test config
+  - [ ] Configure AI provider (use Anthropic Claude for quality)
+  - [ ] Add seed context ("nonprofit membership management")
+  - [ ] Run `db-auto-doc analyze` with verbose logging
+  - [ ] Monitor convergence and backpropagation
 
-## Sample Data (Anonymized)
-{sampleData in table format}
+- [ ] **Evaluate results**
+  - [ ] Review generated descriptions quality
+  - [ ] Check confidence scores distribution
+  - [ ] Verify topological processing order
+  - [ ] Validate FK relationship context usage
+  - [ ] Test export to SQL and markdown
 
-## Existing Documentation
-- Existing Table Description: {existingDescription || "None"}
-- Existing Column Descriptions: {existingColumnDescriptions || "None"}
+- [ ] **Iterate improvements**
+  - [ ] Tune prompts based on output quality
+  - [ ] Adjust convergence thresholds
+  - [ ] Refine backpropagation triggers
+  - [ ] Optimize token usage
 
-## Parent Tables (Already Documented)
-{parentTableDescriptions}
+### **Nice-to-Have Enhancements**
 
-## Task
-Generate comprehensive documentation for this table and all columns. Return ONLY a JSON object with this exact structure:
+- [ ] Sensitive data detection (SSN, credit cards) with anonymization
+- [ ] Timeout protection for slow data profiling queries
+- [ ] Pattern detection improvements:
+  - [ ] Lookup table classification (ID + Name pattern)
+  - [ ] Bridge table detection (composite PK of FKs)
+  - [ ] Audit table detection (naming conventions, audit fields)
+- [ ] Cost estimation before running (based on table count)
+- [ ] Resume capability (restart from specific iteration)
 
-{
-  "tableDescription": "Detailed description of the table's purpose and contents (2-3 sentences)",
-  "tablePurpose": "High-level purpose in one sentence",
-  "tableUsageNotes": "How to use this table, important notes, caveats (optional)",
-  "businessDomain": "Business domain (e.g., CRM, Finance, HR, Inventory, etc.)",
-  "confidence": 0.85,
-  "columns": [
-    {
-      "name": "ColumnName",
-      "description": "What this column stores (1-2 sentences)",
-      "purpose": "Why this column exists (optional)",
-      "validValues": "Allowed values, ranges, or patterns (optional)",
-      "usageNotes": "Important notes about using this column (optional)",
-      "confidence": 0.9
-    }
-  ],
-  "relationships": [
-    {
-      "type": "parent" | "child",
-      "table": "SchemaName.TableName",
-      "description": "Natural language explanation of the relationship",
-      "cardinality": "One-to-Many" | "Many-to-Many" | etc.,
-      "isRequired": true | false
-    }
-  ]
-}
+---
 
-Guidelines:
-- Use business-friendly language, not just technical descriptions
-- Explain WHY, not just WHAT (purpose, not just content)
-- For FK columns, explain the relationship in business terms
-- Confidence score should reflect certainty (0-1 scale)
-- Use sample data to infer purpose and valid values
-- Consider table type when describing purpose (lookup vs transactional)
-- Include audit field information if detected
-- Note if this appears to be a soft-delete enabled table
+## Architecture Reference
+
+### **Package Structure**
+```
+packages/DBAutoDoc/
+├── prompts/               # Nunjucks templates for AI prompts
+│   ├── table-analysis.md
+│   ├── backpropagation.md
+│   ├── schema-sanity-check.md
+│   ├── cross-schema-check.md
+│   └── convergence-check.md
+├── src/
+│   ├── commands/          # CLI commands (init, analyze, status, export, reset)
+│   ├── core/              # Analysis engines
+│   │   ├── AnalysisEngine.ts
+│   │   ├── BackpropagationEngine.ts ⚠️ NEEDS FIX
+│   │   └── ConvergenceDetector.ts
+│   ├── database/          # DB introspection and sampling
+│   │   ├── DatabaseConnection.ts
+│   │   ├── Introspector.ts
+│   │   ├── DataSampler.ts
+│   │   └── TopologicalSorter.ts
+│   ├── generators/        # Output generation
+│   │   ├── SQLGenerator.ts
+│   │   ├── MarkdownGenerator.ts
+│   │   └── ReportGenerator.ts
+│   ├── prompts/           # Prompt engine
+│   │   ├── PromptEngine.ts
+│   │   └── PromptFileLoader.ts
+│   ├── state/             # State management
+│   │   ├── StateManager.ts
+│   │   ├── IterationTracker.ts
+│   │   └── StateValidator.ts
+│   └── types/             # TypeScript interfaces
+│       ├── config.ts ⚠️ NEEDS GUARDRAILS
+│       ├── state.ts
+│       ├── analysis.ts
+│       └── prompts.ts
+├── package.json           # oclif CLI configuration
+├── README.md              # User documentation
+└── DESIGN.md              # Architecture documentation
 ```
 
-### Schema Review Prompt (Macro Analysis)
+### **Key Design Patterns**
 
-```markdown
-You are a database architecture expert. Review the following schema documentation for consistency, accuracy, and completeness.
+1. **Topological Processing**
+   - Tables processed in dependency order (Level 0 → Level N)
+   - Parent context available when analyzing children
+   - Example: `Users` (L0) → `Orders` (L1) → `OrderItems` (L2)
 
-## Schema: {schemaName}
+2. **Iterative Refinement**
+   - Multiple passes over entire database
+   - Each iteration can improve previous descriptions
+   - Stops when converged (no changes + high confidence)
 
-## Overall Context
-- Total Tables: {tableCount}
-- Business Domains Detected: {businessDomains}
-- Dependency Depth: {maxDependencyLevel} levels
+3. **Backpropagation**
+   - Child analysis reveals insights about parents
+   - Triggers re-analysis of upstream tables
+   - Example: `Students` table reveals `Persons.Type` is role-based
 
-## Table Documentation
-{allTableDescriptions with relationships}
-
-## Dependency Graph
-{tableDependencyGraph in text format}
-
-## Task
-Review all table and column descriptions for:
-1. **Consistency**: Do tables use consistent terminology?
-2. **Accuracy**: Are relationships and business domains correct?
-3. **Completeness**: Are any important aspects missing?
-4. **Clarity**: Can descriptions be improved based on the holistic view?
-
-Return ONLY a JSON object with this exact structure:
-
-{
-  "overallAssessment": "Summary of the schema's purpose and business domain (2-3 sentences)",
-  "primaryBusinessDomain": "Primary business domain for this schema",
-  "refinements": [
-    {
-      "table": "TableName",
-      "field": "tableDescription" | "tablePurpose" | "columnName",
-      "currentValue": "Current description",
-      "suggestedValue": "Improved description",
-      "reason": "Why this refinement is suggested",
-      "confidence": 0.8
-    }
-  ],
-  "terminologyStandardization": {
-    "inconsistentTerms": ["term1", "term2"],
-    "suggestedStandard": "Standard term to use"
-  },
-  "missingRelationships": [
-    {
-      "fromTable": "TableA",
-      "toTable": "TableB",
-      "description": "Relationship that should be documented"
-    }
-  ]
-}
-
-Guidelines:
-- Only suggest refinements if you're confident they improve clarity or accuracy
-- Look for inconsistent terminology (e.g., "Customer" vs "Client")
-- Verify business domains are appropriate based on table relationships
-- Suggest improvements that add value, not just rephrase
-- Consider the entire schema context when evaluating individual tables
-- Confidence score should reflect certainty (0-1 scale)
-```
+4. **Convergence Detection**
+   - Max iterations limit
+   - Stability window (no changes in N iterations)
+   - Confidence threshold (all tables above X%)
 
 ---
 
-## Success Criteria
+## Testing Strategy
 
-### Functional Requirements
-- [ ] Successfully analyzes any SQL Server database schema
-- [ ] Generates accurate dependency graphs with correct levels
-- [ ] Profiles data efficiently (within reasonable time limits)
-- [ ] Produces high-quality AI-generated descriptions
-- [ ] Generates valid `sp_addextendedproperty` SQL scripts
-- [ ] Integrates existing MJ metadata correctly
-- [ ] Respects configuration options (schemas, tables, thresholds)
-- [ ] Handles errors gracefully without crashing
+### **Test Database: AssociationDB**
 
-### Quality Requirements
-- [ ] Table descriptions are business-friendly, not just technical
-- [ ] Column descriptions explain purpose, not just repeat the name
-- [ ] Relationships are described in natural language
-- [ ] Confidence scores accurately reflect certainty
-- [ ] Markdown documentation is well-formatted and readable
-- [ ] SQL scripts are syntactically correct and idempotent
+**Why it's perfect:**
+- ✅ Real-world nonprofit/membership management schema
+- ✅ Complex FK relationships (good for topological testing)
+- ✅ Enum-like fields (good for data analysis testing)
+- ✅ No existing ms_descriptions (clean slate)
+- ✅ ~25 tables (medium-sized, manageable)
 
-### Performance Requirements
-- [ ] Small database (10 tables): < 2 minutes
-- [ ] Medium database (100 tables): < 15 minutes
-- [ ] Large database (500 tables): < 60 minutes
-- [ ] Token usage is reasonable (< $5 for typical database)
-- [ ] No memory leaks during long runs
+**Test Scenarios:**
+1. **Topological ordering**
+   - Verify `Member` processed before `Membership`
+   - Verify `Organization` processed before `Chapter`
 
-### Usability Requirements
-- [ ] CLI is intuitive with helpful error messages
-- [ ] Progress reporting keeps user informed
-- [ ] Configuration is flexible and well-documented
-- [ ] Output files are organized and easy to navigate
-- [ ] Low-confidence items are clearly flagged for review
+2. **Enum detection**
+   - `MembershipType.Type` should detect values
+   - `Member.Status` should show active/inactive/lapsed
+
+3. **FK context usage**
+   - `ChapterMembership` description should reference both `Chapter` and `Member`
+   - Should explain M:M relationship
+
+4. **Backpropagation** (once implemented)
+   - If `BoardMember` reveals `Member` has leadership roles
+   - Should trigger re-analysis of `Member` table
+
+5. **Convergence**
+   - Should stabilize in 2-4 iterations
+   - Confidence scores should be ≥ 0.85 for most tables
 
 ---
 
-## Non-Goals (Future Enhancements)
+## Success Metrics
 
-These are explicitly **out of scope** for MVP but may be added later:
+### **Quality Metrics**
+- [ ] ≥ 90% of table descriptions are business-friendly (not just technical)
+- [ ] ≥ 85% average confidence score
+- [ ] All FK relationships correctly described
+- [ ] Enum-like columns have value lists documented
 
-1. **Persistent State** - Storing runs in database tables
-2. **Web UI** - MJ Explorer dashboard for reviewing/editing
-3. **Incremental Updates** - Only process new/changed tables
-4. **Multi-Database Support** - Cross-database relationship analysis
-5. **User Feedback Loop** - Learning from manual edits
-6. **Auto-Scheduling** - Periodic re-documentation via Actions
-7. **Version Comparison** - Tracking schema changes over time
-8. **Custom Prompt Templates** - User-defined prompts
-9. **Database Support Beyond SQL Server** - PostgreSQL, MySQL, etc.
-10. **Diagram Generation** - Visual ERD diagrams (beyond Mermaid)
+### **Performance Metrics**
+- [ ] AssociationDB (25 tables) analyzed in < 5 minutes
+- [ ] Token usage < 100K tokens (~ $0.15 with GPT-4)
+- [ ] Converges in ≤ 4 iterations
+- [ ] No crashes or errors
 
----
-
-## Risks & Mitigations
-
-### Risk 1: AI Hallucinations
-**Risk**: LLM generates incorrect or nonsensical descriptions
-**Likelihood**: Medium
-**Impact**: Medium
-**Mitigation**:
-- Use structured output (JSON mode) to constrain responses
-- Include sample data and constraints in prompts for grounding
-- Assign confidence scores and flag low-confidence items
-- Two-phase analysis catches inconsistencies
-- User review before executing SQL
-
-### Risk 2: Sensitive Data Exposure
-**Risk**: PII/PHI sent to AI provider
-**Likelihood**: Medium
-**Impact**: High
-**Mitigation**:
-- Never send actual data, only anonymized patterns
-- Detect sensitive columns (SSN, credit card) and skip sampling
-- Replace sample values with patterns (e.g., "XXX-XX-1234")
-- Log warnings when sensitive data detected
-- Document data privacy approach in README
-
-### Risk 3: API Rate Limiting
-**Risk**: AI provider throttles requests during large runs
-**Likelihood**: Medium
-**Impact**: Low
-**Mitigation**:
-- Implement retry logic with exponential backoff
-- Add rate limiting to stay within provider limits
-- Batch tables in macro review to reduce API calls
-- Show progress so user knows it's not stuck
-
-### Risk 4: Poor Performance on Large Databases
-**Risk**: Analysis takes too long or runs out of memory
-**Likelihood**: Low
-**Impact**: Medium
-**Mitigation**:
-- Implement sampling limits (max rows per table)
-- Process tables in batches, not all at once
-- Add timeout protection for slow queries
-- Use streaming/pagination for large result sets
-- Add progress reporting so user can cancel if needed
-
-### Risk 5: Overwriting Existing Documentation
-**Risk**: Accidentally replacing good human-written descriptions
-**Likelihood**: Low
-**Impact**: Medium
-**Mitigation**:
-- Default to `onlyIfEmpty: true` (never overwrite)
-- Require explicit `--overwrite` flag to replace existing
-- Always generate SQL script for review before execution
-- Include existing descriptions in AI prompts (preserve good ones)
-- Log all changes clearly in summary report
-
-### Risk 6: SQL Injection or Invalid SQL
-**Risk**: Generated SQL scripts contain errors or injection risks
-**Likelihood**: Low
-**Impact**: Medium
-**Mitigation**:
-- Use parameterized queries for introspection
-- Escape special characters in descriptions
-- Validate generated SQL syntax before writing file
-- Wrap all operations in transactions (rollback on error)
-- Test SQL scripts in integration tests
+### **Technical Metrics**
+- [ ] All TypeScript compilation errors fixed
+- [ ] Backpropagation triggers ≥ 1 time during analysis
+- [ ] Guardrails tested (stop at token limit)
+- [ ] Generated SQL is valid and idempotent
 
 ---
 
-## Open Questions
+## Comparison to Original Plan
 
-### Question 1: AI Provider Selection
-**Question**: Which AI provider should be the default?
-**Options**:
-- OpenAI GPT-4 (widely used, structured output support)
-- Anthropic Claude (longer context, better at analysis)
-- Google Gemini (large context, cost-effective)
-**Recommendation**: Default to configured provider in MJ settings, allow override via CLI flag
+### **What Changed from Original Plan**
 
-### Question 2: Confidence Threshold Default
-**Question**: What should the default confidence threshold be?
-**Options**:
-- 0.5 (permissive, include most items)
-- 0.6 (balanced, filter low-confidence)
-- 0.7 (conservative, only high-confidence)
-**Recommendation**: 0.6 (balanced) for initial version, configurable via flag
+| Original Plan | Actual Implementation | Reason |
+|--------------|----------------------|--------|
+| Package: `@memberjunction/db-documenter` | `@memberjunction/db-auto-doc` | Shorter, clearer name |
+| CLI: `mj-document` | `db-auto-doc` | Standalone branding |
+| MJ metadata integration | Removed | Standalone tool focus |
+| Sensitive data anonymization | Not implemented | Deferred to v2 |
+| Pattern detection (lookup/bridge tables) | Partial | Basic heuristics only |
+| Two-phase analysis (Micro + Macro) | Single-phase + backprop | Simpler, more elegant |
 
-### Question 3: Extended Property Overwrite Strategy
-**Question**: How should we handle existing extended properties by default?
-**Options**:
-- Never overwrite (safest)
-- Always overwrite (most automated)
-- Merge AI + existing (complex)
-**Recommendation**: Default to `onlyIfEmpty: true`, require explicit flag to overwrite
+### **What Was Better Than Planned**
 
-### Question 4: Sample Data Privacy
-**Question**: Should we support on-premise AI models to avoid sending data externally?
-**Options**:
-- Phase 1: Cloud only (simpler)
-- Phase 2: Add local LLM support (complex)
-**Recommendation**: Phase 1 cloud only with anonymization, consider local models in future
-
----
-
-## Timeline Estimate
-
-| Phase | Tasks | Estimated Time |
-|-------|-------|----------------|
-| Phase 1: Package Setup | 1.1 - 1.3 | 4-6 hours |
-| Phase 2: Structural Analysis | 2.1 - 2.6 | 8-10 hours |
-| Phase 3: Data Profiling | 3.1 - 3.5 | 8-10 hours |
-| Phase 4: Micro AI Documentation | 4.1 - 4.5 | 12-15 hours |
-| Phase 5: Macro AI Review | 5.1 - 5.3 | 6-8 hours |
-| Phase 6: Output Generation | 6.1 - 6.4 | 8-10 hours |
-| Phase 7: CLI Implementation | 7.1 - 7.5 | 6-8 hours |
-| Phase 8: Testing & Validation | 8.1 - 8.5 | 8-10 hours |
-| Phase 9: Documentation | 9.1 - 9.4 | 4-6 hours |
-| Phase 10: Deployment | 10.1 - 10.3 | 2-3 hours |
-| **Total** | **All Phases** | **66-86 hours** |
-
-**Realistic Calendar Estimate**: 2-3 weeks with focused development
+✅ **Iterative + Convergence** - More sophisticated than original "two-phase" plan
+✅ **State File Audit Trail** - Full iteration history with reasoning
+✅ **Nunjucks Templates** - Reusable, maintainable prompt engineering
+✅ **Topological Dependency Analysis** - Kahn's algorithm implementation
 
 ---
 
 ## Next Steps
 
-1. **Review this plan** with stakeholders
-2. **Answer open questions** (AI provider, confidence threshold, overwrite strategy)
-3. **Approve plan** for implementation
-4. **Set up development branch** (`feature/db-documenter`)
-5. **Begin Phase 1** (Package Setup)
+**Immediate** (This Session):
+1. ✅ Review plan vs. implementation - DONE
+2. 🔧 Implement backpropagation detection
+3. 🔧 Add guardrails configuration
+4. 🏗️ Build package and test CLI
+
+**Testing Phase**:
+5. 🗄️ Set up AssociationDB clean database
+6. 🚀 Run first analysis with monitoring
+7. 📊 Evaluate quality and iterate
+
+**Future Enhancements** (v2):
+- Sensitive data detection/anonymization
+- Timeout protection for queries
+- Advanced pattern detection
+- Resume from iteration N
+- Web UI for review/editing
 
 ---
 
-## Document Metadata
+## Links
 
-**Document Version**: 1.0
-**Created**: 2025-01-21
-**Status**: ⏳ Awaiting Review & Approval
-**Estimated Effort**: 66-86 hours (2-3 weeks)
-**Package**: `@memberjunction/db-documenter`
-**Dependencies**: `@memberjunction/core`, `@memberjunction/ai`, `mssql`, `commander`
+- **GitHub PR**: https://github.com/MemberJunction/MJ/pull/1579
+- **Package**: `/packages/DBAutoDoc`
+- **Prompts**: `/packages/DBAutoDoc/prompts/`
+- **README**: `/packages/DBAutoDoc/README.md`
+- **DESIGN**: `/packages/DBAutoDoc/DESIGN.md`
+
+---
+
+**Document Version**: 2.0
+**Last Updated**: 2025-01-08
+**Status**: ✅ Implemented, 🔧 Needs Fixes, 🚀 Ready for Testing
+**Maintainer**: MemberJunction Team
