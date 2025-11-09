@@ -852,6 +852,55 @@ export class AnalysisEngine {
         }
 
         console.log(`[AnalysisEngine] FK insight from LLM: Confirmed ${schemaName}.${tableName}.${colDesc.columnName} -> ${existingFK.targetTable}.${existingFK.targetColumn}, boosting confidence to ${existingFK.confidence}`);
+      } else {
+        // No existing FK candidate - create a new one from LLM insight
+        const targetInfo = this.resolveTargetTable(state, targetTableHint, schemaName);
+
+        if (targetInfo) {
+          const newFK: import('../types/discovery.js').FKCandidate = {
+            schemaName,
+            sourceTable: tableName,
+            sourceColumn: colDesc.columnName,
+            targetSchema: targetInfo.schema,
+            targetTable: targetInfo.table,
+            targetColumn: targetInfo.column,
+            confidence: 80, // High confidence from LLM insight
+            evidence: {
+              namingMatch: 0.8,
+              valueOverlap: 0,  // Not computed for LLM insights
+              cardinalityRatio: 0,
+              dataTypeMatch: true,
+              nullPercentage: 0,
+              sampleSize: 0,
+              orphanCount: 0,
+              warnings: ['Created from LLM description insight']
+            },
+            discoveredInIteration: 1,
+            validatedByLLM: true,
+            status: 'confirmed'
+          };
+
+          discoveryPhase.discovered.foreignKeys.push(newFK);
+          feedback.type = 'new_relationship';
+          feedback.recommendation = 'add_new';
+          feedback.newConfidence = 80;
+          feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${colDesc.columnName}`);
+
+          // Update schema metadata: mark as foreign key and set reference
+          const column = this.findColumnInState(state, schemaName, tableName, colDesc.columnName);
+          if (column) {
+            column.isForeignKey = true;
+            column.foreignKeyReferences = {
+              schema: targetInfo.schema,
+              table: targetInfo.table,
+              column: targetInfo.column,
+              referencedColumn: targetInfo.column
+            };
+            console.log(`[AnalysisEngine] Created new FK from LLM insight: ${schemaName}.${tableName}.${colDesc.columnName} -> ${targetInfo.table}.${targetInfo.column}`);
+          }
+        } else {
+          console.warn(`[AnalysisEngine] Could not resolve target table "${targetTableHint}" for FK ${schemaName}.${tableName}.${colDesc.columnName}`);
+        }
       }
 
       // Add feedback to discovery phase
@@ -875,5 +924,75 @@ export class AnalysisEngine {
     if (!table) return null;
 
     return table.columns.find(c => c.name === columnName) || null;
+  }
+
+  /**
+   * Resolve target table from LLM hint (e.g., "product", "warehouse", "supplier")
+   * Returns the best matching table and its likely PK column
+   */
+  private resolveTargetTable(
+    state: DatabaseDocumentation,
+    tableHint: string,
+    currentSchema: string
+  ): { schema: string; table: string; column: string } | null {
+    const hint = tableHint.toLowerCase().trim();
+
+    // Search all schemas for matching table names
+    for (const schema of state.schemas) {
+      for (const table of schema.tables) {
+        const tableLower = table.name.toLowerCase();
+
+        // Direct match
+        if (tableLower === hint || tableLower === hint + 's' || tableLower + 's' === hint) {
+          // Find PK column (prefer columns ending in _id or named id)
+          const pkColumn = table.columns.find(c => c.isPrimaryKey);
+          if (pkColumn) {
+            return {
+              schema: schema.name,
+              table: table.name,
+              column: pkColumn.name
+            };
+          }
+
+          // Fallback: look for column ending in _id or just 'id'
+          const idColumn = table.columns.find(c =>
+            c.name.toLowerCase() === 'id' ||
+            c.name.toLowerCase() ===  `${tableLower}_id` ||
+            c.name.toLowerCase().endsWith('_id')
+          );
+
+          if (idColumn) {
+            return {
+              schema: schema.name,
+              table: table.name,
+              column: idColumn.name
+            };
+          }
+
+          // Fallback: first column
+          if (table.columns.length > 0) {
+            return {
+              schema: schema.name,
+              table: table.name,
+              column: table.columns[0].name
+            };
+          }
+        }
+
+        // Partial match (e.g., "product" matches "prd", "products")
+        if (tableLower.includes(hint) || hint.includes(tableLower)) {
+          const pkColumn = table.columns.find(c => c.isPrimaryKey);
+          if (pkColumn) {
+            return {
+              schema: schema.name,
+              table: table.name,
+              column: pkColumn.name
+            };
+          }
+        }
+      }
+    }
+
+    return null;
   }
 }

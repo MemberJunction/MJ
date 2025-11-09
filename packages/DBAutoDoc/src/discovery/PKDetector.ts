@@ -295,6 +295,29 @@ export class PKDetector {
   private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string): number {
     let score = 0;
 
+    // **CRITICAL FIX**: Reject obvious non-PK columns immediately
+    const blacklistPatterns = [
+      /^qty$/i, /^quantity$/i, /^amount$/i, /^amt$/i,
+      /^seq$/i, /^sequence$/i, /^order$/i, /^sort$/i,
+      /^lvl$/i, /^level$/i, /^depth$/i,
+      /^count$/i, /^cnt$/i, /^num$/i, /^number$/i,
+      /^price$/i, /^prc$/i, /^cost$/i,
+      /^var$/i, /^variance$/i, /^diff$/i, /^delta$/i,
+      /^total$/i, /^tot$/i, /^sum$/i,
+      /^min$/i, /^max$/i, /^avg$/i, /^mean$/i,
+      /^rate$/i, /^rtg$/i, /^rating$/i, /^score$/i,
+      /^capacity$/i, /^cap$/i, /^limit$/i, /^lmt$/i,
+      /^expected$/i, /^exp_/i, /^actual$/i, /^act_/i,
+      /^received$/i, /^rcv_/i, /^reserved$/i, /^rsv$/i
+    ];
+
+    for (const pattern of blacklistPatterns) {
+      if (pattern.test(columnName)) {
+        console.log(`[PKDetector] REJECT ${columnName} - matches blacklist pattern ${pattern}`);
+        return 0; // Immediate rejection
+      }
+    }
+
     // Uniqueness is critical (50% weight)
     score += evidence.uniqueness * 50;
 
@@ -324,6 +347,12 @@ export class PKDetector {
     // Penalties
     if (evidence.nullCount > 0) {
       score *= 0.7; // 30% penalty for nulls
+    }
+
+    // **STRICTER REQUIREMENT**: Require BOTH high uniqueness AND naming score
+    if (evidence.uniqueness >= 0.95 && evidence.namingScore < 0.3) {
+      score *= 0.5; // 50% penalty if unique but poor naming
+      console.log(`[PKDetector] ${columnName}: unique but poor naming (${evidence.namingScore.toFixed(2)}), score penalized`);
     }
 
     return Math.round(Math.min(score, 100));

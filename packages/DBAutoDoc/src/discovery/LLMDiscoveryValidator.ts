@@ -144,7 +144,30 @@ export class LLMDiscoveryValidator {
     // Get table stats from cache
     const tableStats = this.statsCache.getTableStats(schemaName, tableName);
     if (!tableStats) {
-      throw new Error(`No cached stats found for table ${schemaName}.${tableName}`);
+      console.warn(`[LLMDiscoveryValidator] No cached stats found for table ${schemaName}.${tableName} - validation will be limited`);
+
+      // Return minimal context without column stats
+      return {
+        targetTable: {
+          schema: schemaName,
+          table: tableName,
+          rowCount: 0,
+          columns: []
+        },
+        relatedTables: [],
+        pkCandidates: pkCandidates.map(pk => ({
+          columnNames: pk.columnNames,
+          confidence: pk.confidence,
+          reasoning: pk.evidence ? `Uniqueness: ${pk.evidence.uniqueness}, Naming: ${pk.evidence.namingScore}` : 'Statistical analysis'
+        })),
+        fkCandidates: fkCandidates.map(fk => ({
+          sourceColumn: fk.sourceColumn,
+          targetTable: `${fk.targetSchema}.${fk.targetTable}`,
+          targetColumn: fk.targetColumn,
+          confidence: fk.confidence,
+          reasoning: fk.evidence ? `Naming: ${fk.evidence.namingMatch}, Value overlap: ${fk.evidence.valueOverlap}` : 'Statistical analysis'
+        }))
+      };
     }
 
     // Build target table context with column stats
