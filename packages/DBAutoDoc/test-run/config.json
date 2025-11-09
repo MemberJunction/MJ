@@ -46,7 +46,47 @@
       }
     },
     "relationshipDiscovery": {
-      "enabled": false
+      "enabled": true,
+      "triggers": {
+        "runOnMissingPKs": true,
+        "runOnInsufficientFKs": true,
+        "fkDeficitThreshold": 0.4
+      },
+      "tokenBudget": {
+        "ratioOfTotal": 0.25
+      },
+      "confidence": {
+        "primaryKeyMinimum": 0.7,
+        "foreignKeyMinimum": 0.6,
+        "llmValidationThreshold": 0.8
+      },
+      "sampling": {
+        "maxRowsPerTable": 1000,
+        "valueOverlapSampleSize": 100,
+        "statisticalSignificance": 100,
+        "compositeKeyMaxColumns": 3
+      },
+      "patterns": {
+        "primaryKeyNames": [
+          "^id$",
+          ".*_id$",
+          "^pk_.*",
+          ".*_key$"
+        ],
+        "foreignKeyNames": [
+          ".*_id$",
+          ".*_fk$",
+          "^fk_.*"
+        ]
+      },
+      "llmValidation": {
+        "enabled": true,
+        "batchSize": 10
+      },
+      "backpropagation": {
+        "enabled": true,
+        "maxIterations": 5
+      }
     }
   },
   "output": {
@@ -56,7 +96,6 @@
     "markdownFile": "./output/database-documentation.md"
   },
   "schemas": {
-    "include": ["AssociationDemo"],
     "exclude": ["sys", "INFORMATION_SCHEMA"]
   },
   "tables": {

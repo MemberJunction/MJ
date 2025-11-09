@@ -282,11 +282,14 @@ export abstract class BaseAutoDocDriver {
   ): string {
     const conditions: string[] = [];
 
+    // If include list is provided, only include those schemas
+    // If not provided or empty, include all schemas (except those in exclude list)
     if (filter.include && filter.include.length > 0) {
       const schemaList = filter.include.map(s => `'${s}'`).join(',');
       conditions.push(`${schemaColumnName} IN (${schemaList})`);
     }
 
+    // Always apply exclude list if provided
     if (filter.exclude && filter.exclude.length > 0) {
       const schemaList = filter.exclude.map(s => `'${s}'`).join(',');
       conditions.push(`${schemaColumnName} NOT IN (${schemaList})`);

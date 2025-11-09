@@ -6,6 +6,8 @@
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { PKDetector } from './PKDetector.js';
 import { FKDetector } from './FKDetector.js';
+import { LLMDiscoveryValidator } from './LLMDiscoveryValidator.js';
+import { ColumnStatsCache } from './ColumnStatsCache.js';
 import { SchemaDefinition, DatabaseDocumentation } from '../types/state.js';
 import {
   RelationshipDiscoveryPhase,
@@ -14,11 +16,12 @@ import {
   FKCandidate,
   DiscoveryTriggerAnalysis
 } from '../types/discovery.js';
-import { RelationshipDiscoveryConfig } from '../types/config.js';
+import { RelationshipDiscoveryConfig, AIConfig } from '../types/config.js';
 
 export interface DiscoveryEngineOptions {
   driver: BaseAutoDocDriver;
   config: RelationshipDiscoveryConfig;
+  aiConfig: AIConfig;
   schemas: SchemaDefinition[];
   onProgress?: (message: string, data?: any) => void;
 }
@@ -27,23 +30,49 @@ export interface DiscoveryResult {
   phase: RelationshipDiscoveryPhase;
   guardrailsReached: boolean;
   guardrailReason?: string;
+  statsCache: ColumnStatsCache; // Return the stats cache for persistence
 }
 
 export class DiscoveryEngine {
   private driver: BaseAutoDocDriver;
   private config: RelationshipDiscoveryConfig;
+  private aiConfig: AIConfig;
   private schemas: SchemaDefinition[];
   private onProgress: (message: string, data?: any) => void;
+  private statsCache: ColumnStatsCache;
   private pkDetector: PKDetector;
   private fkDetector: FKDetector;
+  private llmValidator?: LLMDiscoveryValidator;
 
   constructor(options: DiscoveryEngineOptions) {
     this.driver = options.driver;
     this.config = options.config;
+    this.aiConfig = options.aiConfig;
     this.schemas = options.schemas;
     this.onProgress = options.onProgress || (() => {});
-    this.pkDetector = new PKDetector(this.driver, this.config);
+
+    // Create stats cache and detectors
+    this.statsCache = new ColumnStatsCache();
+    this.pkDetector = new PKDetector(this.driver, this.config, this.statsCache);
     this.fkDetector = new FKDetector(this.driver, this.config);
+
+    // Create LLM validator if enabled
+    if (this.config.llmValidation?.enabled) {
+      this.llmValidator = new LLMDiscoveryValidator(
+        this.driver,
+        this.config,
+        this.aiConfig,
+        this.statsCache,
+        this.schemas
+      );
+    }
+  }
+
+  /**
+   * Get the column statistics cache
+   */
+  public getStatsCache(): ColumnStatsCache {
+    return this.statsCache;
   }
 
   /**
@@ -186,7 +215,8 @@ export class DiscoveryEngine {
     return {
       phase,
       guardrailsReached,
-      guardrailReason
+      guardrailReason,
+      statsCache: this.statsCache
     };
   }
 

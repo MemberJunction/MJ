@@ -79,7 +79,7 @@
         ]
       },
       "llmValidation": {
-        "enabled": false,
+        "enabled": true,
         "batchSize": 10
       },
       "backpropagation": {

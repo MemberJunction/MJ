@@ -196,3 +196,110 @@ export interface DiscoveryTriggerAnalysis {
     fkDeficitPercentage: number;
   };
 }
+
+/**
+ * Cached column statistics for reuse across discovery and analysis
+ * Pre-computed once and stored to avoid redundant queries
+ */
+export interface CachedColumnStats {
+  schemaName: string;
+  tableName: string;
+  columnName: string;
+  dataType: string;
+
+  // Core statistics
+  totalRows: number;
+  nullCount: number;
+  nullPercentage: number;
+  distinctCount: number;
+  uniqueness: number;        // distinctCount / totalRows
+
+  // Data ranges
+  minValue?: string | number;
+  maxValue?: string | number;
+  avgLength?: number;        // For string columns
+
+  // Patterns and samples
+  dataPattern: 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown';
+  sampleValues: Array<string | number | null>;
+  valueDistribution?: Array<{ value: string | number; frequency: number }>;
+
+  // Timing
+  computedAt: string;
+  queryTimeMs: number;
+}
+
+/**
+ * Collection of cached stats for a table
+ */
+export interface TableStatsCache {
+  schemaName: string;
+  tableName: string;
+  totalRows: number;
+  columns: Map<string, CachedColumnStats>;
+  computedAt: string;
+}
+
+/**
+ * LLM context for relationship discovery
+ * Provides selective stats to LLM for intelligent reasoning
+ */
+export interface LLMDiscoveryContext {
+  targetTable: {
+    schema: string;
+    table: string;
+    rowCount: number;
+    columns: Array<{
+      name: string;
+      type: string;
+      uniqueness: number;
+      nullPercentage: number;
+      distinctCount: number;
+      dataPattern: string;
+      sampleValues: Array<string | number | null>;
+    }>;
+  };
+
+  relatedTables?: Array<{
+    schema: string;
+    table: string;
+    rowCount: number;
+    potentialRelationships: Array<{
+      columnName: string;
+      similarity: number;
+      reason: string;
+    }>;
+  }>;
+
+  pkCandidates: Array<{
+    columnNames: string[];
+    confidence: number;
+    reasoning: string;
+  }>;
+
+  fkCandidates: Array<{
+    sourceColumn: string;
+    targetTable: string;
+    targetColumn: string;
+    confidence: number;
+    reasoning: string;
+  }>;
+}
+
+/**
+ * LLM validation result
+ */
+export interface LLMValidationResult {
+  validated: boolean;
+  reasoning: string;
+  confidenceAdjustment: number;  // -100 to +100
+  recommendations: Array<{
+    type: 'confirm' | 'reject' | 'modify' | 'add_new';
+    target: 'pk' | 'fk';
+    schemaName?: string;
+    tableName?: string;
+    columnName?: string;
+    details: string;
+  }>;
+  tokensUsed: number;
+}

@@ -3,13 +3,14 @@
  * Tracks all documentation, iterations, and analysis progress
  */
 
-import { RelationshipDiscoveryPhase } from './discovery.js';
+import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 
 export interface DatabaseDocumentation {
   version: string;
   database: DatabaseInfo;
   summary: AnalysisSummary;
   seedContext?: SeedContext;
+  columnStatistics?: ColumnStatisticsCache; // Pre-computed stats for all columns
   relationshipDiscoveryPhase?: RelationshipDiscoveryPhase; // Pre-analysis key discovery
   schemas: SchemaDefinition[];
   analysisRuns: AnalysisRun[];
@@ -186,4 +187,23 @@ export interface SanityCheckRecord {
   tokensUsed: number;
   promptInput?: string;
   promptOutput?: string;
+}
+
+/**
+ * Top-level column statistics cache stored in state JSON
+ * Pre-computed during discovery phase and reused in description phase
+ */
+export interface ColumnStatisticsCache {
+  computedAt: string;
+  totalSchemas: number;
+  totalTables: number;
+  totalColumns: number;
+  tables: Record<string, TableStatisticsEntry>; // Key: "schema.table"
+}
+
+export interface TableStatisticsEntry {
+  schemaName: string;
+  tableName: string;
+  totalRows: number;
+  columns: CachedColumnStats[];
 }

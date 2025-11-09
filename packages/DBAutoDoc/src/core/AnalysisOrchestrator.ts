@@ -139,6 +139,7 @@ export class AnalysisOrchestrator {
             const discoveryEngine = new DiscoveryEngine({
               driver,
               config: this.config.analysis.relationshipDiscovery,
+              aiConfig: this.config.ai,
               schemas: state.schemas,
               onProgress: this.onProgress
             });
@@ -153,6 +154,9 @@ export class AnalysisOrchestrator {
             const discoveryResult = await discoveryEngine.discover(discoveryTokenBudget, triggerAnalysis);
             state.relationshipDiscoveryPhase = discoveryResult.phase;
 
+            // Save column statistics cache to state
+            state.columnStatistics = discoveryResult.statsCache.toStateJSON();
+
             // Apply discovered relationships to schema
             discoveryEngine.applyDiscoveriesToState(state, discoveryResult.phase);
 
@@ -160,10 +164,11 @@ export class AnalysisOrchestrator {
               primaryKeysDiscovered: discoveryResult.phase.discovered.primaryKeys.length,
               foreignKeysDiscovered: discoveryResult.phase.discovered.foreignKeys.length,
               tokensUsed: discoveryResult.phase.tokenBudget.used,
-              guardrailsReached: discoveryResult.guardrailsReached
+              guardrailsReached: discoveryResult.guardrailsReached,
+              columnStatsCached: Object.keys(state.columnStatistics.tables).length
             });
 
-            // Save state with discovery results
+            // Save state with discovery results and stats cache
             await stateManager.save(state);
           } else {
             this.onProgress('Relationship discovery skipped', {

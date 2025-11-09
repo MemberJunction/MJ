@@ -6,13 +6,15 @@
 
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { TableDefinition, ColumnDefinition } from '../types/state.js';
-import { PKCandidate, PKEvidence, ColumnStatistics } from '../types/discovery.js';
+import { PKCandidate, PKEvidence, ColumnStatistics, CachedColumnStats } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
+import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export class PKDetector {
   constructor(
     private driver: BaseAutoDocDriver,
-    private config: RelationshipDiscoveryConfig
+    private config: RelationshipDiscoveryConfig,
+    private statsCache: ColumnStatsCache
   ) {}
 
   /**
@@ -60,22 +62,48 @@ export class PKDetector {
     column: ColumnDefinition,
     iteration: number
   ): Promise<PKCandidate | null> {
-    // Get column statistics
-    const stats = await this.driver.getColumnStatisticsForDiscovery(
-      schemaName,
-      tableName,
-      column.name,
-      column.dataType,
-      this.config.sampling.maxRowsPerTable
-    );
+    // Get or compute column statistics
+    let cachedStats = this.statsCache.getColumnStats(schemaName, tableName, column.name);
 
-    // Calculate uniqueness
-    const uniqueness = stats.totalRows > 0
-      ? stats.distinctCount / stats.totalRows
-      : 0;
+    if (!cachedStats) {
+      // Compute and cache the stats
+      const startTime = Date.now();
+      const stats = await this.driver.getColumnStatisticsForDiscovery(
+        schemaName,
+        tableName,
+        column.name,
+        column.dataType,
+        this.config.sampling.maxRowsPerTable
+      );
 
-    // Check for nulls
-    const hasNulls = stats.nullCount > 0;
+      // Detect data pattern
+      const dataPattern = this.detectDataPattern(stats.sampleValues, column.dataType);
+
+      cachedStats = {
+        schemaName,
+        tableName,
+        columnName: column.name,
+        dataType: column.dataType,
+        totalRows: stats.totalRows,
+        nullCount: stats.nullCount,
+        nullPercentage: stats.totalRows > 0 ? stats.nullCount / stats.totalRows : 0,
+        distinctCount: stats.distinctCount,
+        uniqueness: stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0,
+        minValue: stats.minValue,
+        maxValue: stats.maxValue,
+        avgLength: stats.avgLength,
+        dataPattern,
+        sampleValues: stats.sampleValues,
+        computedAt: new Date().toISOString(),
+        queryTimeMs: Date.now() - startTime
+      };
+
+      this.statsCache.setColumnStats(cachedStats);
+    }
+
+    // Use cached stats for PK analysis
+    const uniqueness = cachedStats.uniqueness;
+    const hasNulls = cachedStats.nullCount > 0;
 
     // Analyze naming pattern
     const namingScore = this.calculateNamingScore(column.name);
@@ -83,14 +111,14 @@ export class PKDetector {
     // Analyze data type
     const dataTypeScore = this.calculateDataTypeScore(column.dataType);
 
-    // Detect data pattern
-    const dataPattern = this.detectDataPattern(stats, column.dataType);
+    // Use cached data pattern
+    const dataPattern = cachedStats.dataPattern;
 
     // Calculate overall confidence
     const confidence = this.calculatePKConfidence({
       uniqueness,
-      nullCount: stats.nullCount,
-      totalRows: stats.totalRows,
+      nullCount: cachedStats.nullCount,
+      totalRows: cachedStats.totalRows,
       dataPattern,
       namingScore,
       dataTypeScore,
@@ -100,8 +128,8 @@ export class PKDetector {
     // Build evidence
     const evidence: PKEvidence = {
       uniqueness,
-      nullCount: stats.nullCount,
-      totalRows: stats.totalRows,
+      nullCount: cachedStats.nullCount,
+      totalRows: cachedStats.totalRows,
       dataPattern,
       namingScore,
       dataTypeScore,
@@ -215,19 +243,20 @@ export class PKDetector {
    * Detect data pattern (sequential, GUID, etc.)
    */
   private detectDataPattern(
-    stats: ColumnStatistics,
-    dataType: string
+    sampleValues: Array<string | number | null>,
+    dataType?: string
   ): 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown' {
     // GUID pattern
-    if (dataType.toLowerCase().includes('uniqueidentifier') ||
+    if (dataType && (
+        dataType.toLowerCase().includes('uniqueidentifier') ||
         dataType.toLowerCase().includes('uuid') ||
-        dataType.toLowerCase().includes('guid')) {
+        dataType.toLowerCase().includes('guid'))) {
       return 'guid';
     }
 
     // Check sample values for patterns
-    if (stats.sampleValues && stats.sampleValues.length > 1) {
-      const values = stats.sampleValues.filter(v => v != null) as Array<string | number>;
+    if (sampleValues && sampleValues.length > 1) {
+      const values = sampleValues.filter(v => v != null) as Array<string | number>;
 
       // Check for GUID pattern in string values
       if (values.length > 0 && typeof values[0] === 'string') {
@@ -251,8 +280,9 @@ export class PKDetector {
     }
 
     // Natural key (string based on actual data)
-    if (dataType.toLowerCase().includes('varchar') ||
-        dataType.toLowerCase().includes('char')) {
+    if (dataType && (
+        dataType.toLowerCase().includes('varchar') ||
+        dataType.toLowerCase().includes('char'))) {
       return 'natural';
     }
 

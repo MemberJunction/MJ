@@ -1,20 +1,20 @@
 -- Database Documentation Script
--- Generated: 2025-11-08T17:13:22.501Z
--- Database: AssociationDB
+-- Generated: 2025-11-09T00:03:20.124Z
+-- Database: LousyDB
 -- Server: localhost
 
 -- This script adds MS_Description extended properties to database objects
 
 
--- Schema: AssociationDemo
+-- Schema: inv
 
--- Table: AssociationDemo.BoardMember
+-- Table: inv.adj
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -22,18 +22,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember';
+        @level1name = N'adj';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores the assignment of members to specific board positions within an association, including the term start and end dates, election date and whether the assignment is currently active.',
+    @value = N'Stores records of inventory adjustments linking a product, warehouse and adjustment event, capturing when the adjustment occurred, the quantity change, reason, user and notes.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember';
+    @level1name = N'adj';
 GO
 
 IF EXISTS (
@@ -41,472 +41,257 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'adj_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'adj_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each board‑member assignment record.',
+    @value = N'Unique identifier for the inventory adjustment event',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'adj_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
-    AND c.name = 'BoardPositionID'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'prd_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'BoardPositionID';
+        @level2name = N'prd_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the specific board role (e.g., President, Treasurer) the member holds.',
+    @value = N'Identifier of the product whose inventory is being adjusted',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'BoardPositionID';
+    @level2name = N'prd_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
-    AND c.name = 'MemberID'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'whs_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'MemberID';
+        @level2name = N'whs_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the member who occupies the board position.',
+    @value = N'Identifier of the warehouse/location where the adjustment takes place',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'MemberID';
+    @level2name = N'whs_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
-    AND c.name = 'StartDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'adj_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'StartDate';
+        @level2name = N'adj_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date when the member’s term in the board position began.',
+    @value = N'Date when the inventory adjustment was recorded',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'StartDate';
+    @level2name = N'adj_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
-    AND c.name = 'EndDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'EndDate';
+        @level2name = N'qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date when the member’s term in the board position ended (null if still serving).',
+    @value = N'Quantity change (positive or negative) applied to the stock',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'EndDate';
+    @level2name = N'qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
-    AND c.name = 'IsActive'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'rsn'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'IsActive';
+        @level2name = N'rsn';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the board assignment is currently active.',
+    @value = N'Reason code or description for why the adjustment was made',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'IsActive';
+    @level2name = N'rsn';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardMember'
-    AND c.name = 'ElectionDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'usr'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardMember',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'ElectionDate';
+        @level2name = N'usr';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date on which the member was elected to the board position.',
+    @value = N'User identifier who performed the adjustment',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardMember',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'ElectionDate';
-GO
-
--- Table: AssociationDemo.BoardPosition
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND ep.name = 'MS_Description'
-    AND ep.minor_id = 0
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'BoardPosition';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Stores the predefined board positions for an organization, including titles, display order, term length, and flags indicating officer status and active status. It serves as a lookup for assigning members to specific board roles.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'BoardPosition';
-GO
-
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND c.name = 'ID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'BoardPosition',
-        @level2type = N'COLUMN',
-        @level2name = N'ID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Unique identifier for each board position record.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'BoardPosition',
-    @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'usr';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND c.name = 'PositionTitle'
+    WHERE s.name = 'inv'
+    AND t.name = 'adj'
+    AND c.name = 'notes'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'BoardPosition',
+        @level1name = N'adj',
         @level2type = N'COLUMN',
-        @level2name = N'PositionTitle';
+        @level2name = N'notes';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'The official title of the board position (e.g., President, Treasurer, Director at Large #3).',
+    @value = N'Optional free‑form comments about the adjustment',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'BoardPosition',
+    @level1name = N'adj',
     @level2type = N'COLUMN',
-    @level2name = N'PositionTitle';
+    @level2name = N'notes';
 GO
+
+-- Table: inv.cat
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND c.name = 'PositionOrder'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'BoardPosition',
-        @level2type = N'COLUMN',
-        @level2name = N'PositionOrder';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Numeric order used to sort or rank positions, with 1 being highest priority.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'BoardPosition',
-    @level2type = N'COLUMN',
-    @level2name = N'PositionOrder';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND c.name = 'Description'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'BoardPosition',
-        @level2type = N'COLUMN',
-        @level2name = N'Description';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional free‑text description of the position; currently unused (all NULL).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'BoardPosition',
-    @level2type = N'COLUMN',
-    @level2name = N'Description';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND c.name = 'TermLengthYears'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'BoardPosition',
-        @level2type = N'COLUMN',
-        @level2name = N'TermLengthYears';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Length of the term for the position in years (commonly 2 or 3).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'BoardPosition',
-    @level2type = N'COLUMN',
-    @level2name = N'TermLengthYears';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND c.name = 'IsOfficer'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'BoardPosition',
-        @level2type = N'COLUMN',
-        @level2name = N'IsOfficer';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Flag indicating whether the position is an officer role (true) or a non‑officer director (false).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'BoardPosition',
-    @level2type = N'COLUMN',
-    @level2name = N'IsOfficer';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'BoardPosition'
-    AND c.name = 'IsActive'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'BoardPosition',
-        @level2type = N'COLUMN',
-        @level2name = N'IsActive';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Indicates if the position is currently active in the organization (always true in current data).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'BoardPosition',
-    @level2type = N'COLUMN',
-    @level2name = N'IsActive';
-GO
-
--- Table: AssociationDemo.Campaign
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
+    WHERE s.name = 'inv'
+    AND t.name = 'cat'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -514,18 +299,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Campaign';
+        @level1name = N'cat';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores the definition and planning details of marketing campaigns, including identifiers, names, types, status, schedule, budget, and descriptive information. It also serves as the parent entity for revenue attribution, as child tables track per‑member ConversionValue tied to a campaign. While it can link members and email sends to specific campaigns, the linkage is optional—many email sends have a null CampaignID, indicating they are not always associated with a campaign.',
+    @value = N'A hierarchical lookup table that defines office‑related product categories, their parent‑child relationships, display order and descriptive text. It is used to classify inventory items such as computers, furniture, supplies, etc.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Campaign';
+    @level1name = N'cat';
 GO
 
 IF EXISTS (
@@ -533,350 +318,195 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'cat'
+    AND c.name = 'cat_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Campaign',
+        @level1name = N'cat',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'cat_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each campaign record.',
+    @value = N'Unique identifier for each category record',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Campaign',
+    @level1name = N'cat',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'cat_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'Name'
+    WHERE s.name = 'inv'
+    AND t.name = 'cat'
+    AND c.name = 'prnt_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Campaign',
+        @level1name = N'cat',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'prnt_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable title of the campaign.',
+    @value = N'Identifier of the parent category; null for top‑level categories',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Campaign',
+    @level1name = N'cat',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'prnt_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'CampaignType'
+    WHERE s.name = 'inv'
+    AND t.name = 'cat'
+    AND c.name = 'nm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Campaign',
+        @level1name = N'cat',
         @level2type = N'COLUMN',
-        @level2name = N'CampaignType';
+        @level2name = N'nm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Category of the campaign (e.g., Member Engagement, Membership Renewal, Event Promotion, Course Launch).',
+    @value = N'Short name of the category (e.g., "Computers", "Furniture")',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Campaign',
+    @level1name = N'cat',
     @level2type = N'COLUMN',
-    @level2name = N'CampaignType';
+    @level2name = N'nm';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'Status'
+    WHERE s.name = 'inv'
+    AND t.name = 'cat'
+    AND c.name = 'dsc'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Campaign',
+        @level1name = N'cat',
         @level2type = N'COLUMN',
-        @level2name = N'Status';
+        @level2name = N'dsc';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current lifecycle state of the campaign (e.g., Active, Completed).',
+    @value = N'Longer description of the category’s purpose or contents',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Campaign',
+    @level1name = N'cat',
     @level2type = N'COLUMN',
-    @level2name = N'Status';
+    @level2name = N'dsc';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'StartDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'cat'
+    AND c.name = 'lvl'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Campaign',
+        @level1name = N'cat',
         @level2type = N'COLUMN',
-        @level2name = N'StartDate';
+        @level2name = N'lvl';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Planned start date of the campaign.',
+    @value = N'Depth level of the category in the hierarchy (1 = top level, 2 = sub‑category)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Campaign',
+    @level1name = N'cat',
     @level2type = N'COLUMN',
-    @level2name = N'StartDate';
+    @level2name = N'lvl';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'EndDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'cat'
+    AND c.name = 'seq'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Campaign',
+        @level1name = N'cat',
         @level2type = N'COLUMN',
-        @level2name = N'EndDate';
+        @level2name = N'seq';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Planned end date of the campaign.',
+    @value = N'Display order of categories within the same level',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Campaign',
+    @level1name = N'cat',
     @level2type = N'COLUMN',
-    @level2name = N'EndDate';
+    @level2name = N'seq';
 GO
+
+-- Table: inv.cnt
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'Budget'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Campaign',
-        @level2type = N'COLUMN',
-        @level2name = N'Budget';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Allocated monetary budget for the campaign.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Campaign',
-    @level2type = N'COLUMN',
-    @level2name = N'Budget';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'ActualCost'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Campaign',
-        @level2type = N'COLUMN',
-        @level2name = N'ActualCost';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Actual amount spent; currently null for all rows, indicating costs not yet recorded.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Campaign',
-    @level2type = N'COLUMN',
-    @level2name = N'ActualCost';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'TargetAudience'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Campaign',
-        @level2type = N'COLUMN',
-        @level2name = N'TargetAudience';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Intended audience segment for the campaign; optional and currently null.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Campaign',
-    @level2type = N'COLUMN',
-    @level2name = N'TargetAudience';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'Goals'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Campaign',
-        @level2type = N'COLUMN',
-        @level2name = N'Goals';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Specific objectives or KPIs for the campaign; optional and currently null.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Campaign',
-    @level2type = N'COLUMN',
-    @level2name = N'Goals';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Campaign'
-    AND c.name = 'Description'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Campaign',
-        @level2type = N'COLUMN',
-        @level2name = N'Description';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Detailed textual description of the campaign purpose and content.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Campaign',
-    @level2type = N'COLUMN',
-    @level2name = N'Description';
-GO
-
--- Table: AssociationDemo.CampaignMember
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -884,18 +514,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember';
+        @level1name = N'cnt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Tracks the interaction of individual members with specific marketing campaigns and segments, recording when they were added, their current status (e.g., Targeted, Sent, Responded, Converted, Opted Out), response dates and any monetary conversion value associated with the interaction.',
+    @value = N'Stores inventory count records per warehouse, product and date, capturing expected quantity, actual counted quantity, variance and the user who performed the count.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember';
+    @level1name = N'cnt';
 GO
 
 IF EXISTS (
@@ -903,503 +533,257 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'cnt_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'cnt_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each campaign‑member‑segment record.',
+    @value = N'Unique identifier for the inventory count transaction',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'cnt_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'CampaignID'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'whs_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'CampaignID';
+        @level2name = N'whs_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the campaign to which the member interaction belongs.',
+    @value = N'Identifier of the warehouse where the count was performed',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'CampaignID';
+    @level2name = N'whs_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'MemberID'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'cnt_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'MemberID';
+        @level2name = N'cnt_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the member (contact/lead) involved in the campaign.',
+    @value = N'Date on which the inventory count was taken',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'MemberID';
+    @level2name = N'cnt_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'SegmentID'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'prd_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'SegmentID';
+        @level2name = N'prd_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Optional reference to the audience segment used for targeting within the campaign.',
+    @value = N'Identifier of the product being counted',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'SegmentID';
+    @level2name = N'prd_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'AddedDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'exp_qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'AddedDate';
+        @level2name = N'exp_qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Timestamp when the member was added to the campaign/segment.',
+    @value = N'Expected quantity of the product according to system records',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'AddedDate';
+    @level2name = N'exp_qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'Status'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'act_qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'Status';
+        @level2name = N'act_qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current state of the member in the campaign lifecycle (Targeted, Sent, Responded, Converted, Opted Out).',
+    @value = N'Actual quantity counted during the inventory audit',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'Status';
+    @level2name = N'act_qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'ResponseDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'var'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'ResponseDate';
+        @level2name = N'var';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date when the member responded or took the next action (e.g., opened, clicked, converted).',
+    @value = N'Variance between actual and expected quantities (act_qty‑exp_qty)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'ResponseDate';
+    @level2name = N'var';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CampaignMember'
-    AND c.name = 'ConversionValue'
+    WHERE s.name = 'inv'
+    AND t.name = 'cnt'
+    AND c.name = 'usr'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CampaignMember',
+        @level1name = N'cnt',
         @level2type = N'COLUMN',
-        @level2name = N'ConversionValue';
+        @level2name = N'usr';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Monetary value attributed to the member''s conversion, if any.',
+    @value = N'User or employee who performed the count',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CampaignMember',
+    @level1name = N'cnt',
     @level2type = N'COLUMN',
-    @level2name = N'ConversionValue';
+    @level2name = N'usr';
 GO
 
--- Table: AssociationDemo.Certificate
+-- Table: inv.po
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND ep.name = 'MS_Description'
-    AND ep.minor_id = 0
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Stores digital certificates issued to individuals or entities for a specific enrollment, including identification numbers, issue/expiration dates, PDF location, and a verification code.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate';
-GO
-
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND c.name = 'ID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate',
-        @level2type = N'COLUMN',
-        @level2name = N'ID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Primary key GUID uniquely identifying each certificate record.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate',
-    @level2type = N'COLUMN',
-    @level2name = N'ID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND c.name = 'EnrollmentID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate',
-        @level2type = N'COLUMN',
-        @level2name = N'EnrollmentID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Foreign key to the Enrollment table, indicating which enrollment the certificate belongs to.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate',
-    @level2type = N'COLUMN',
-    @level2name = N'EnrollmentID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND c.name = 'CertificateNumber'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate',
-        @level2type = N'COLUMN',
-        @level2name = N'CertificateNumber';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Human‑readable, unique certificate identifier (e.g., "CERT-2025-000156").',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate',
-    @level2type = N'COLUMN',
-    @level2name = N'CertificateNumber';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND c.name = 'IssuedDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate',
-        @level2type = N'COLUMN',
-        @level2name = N'IssuedDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the certificate was issued to the enrollee.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate',
-    @level2type = N'COLUMN',
-    @level2name = N'IssuedDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND c.name = 'ExpirationDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate',
-        @level2type = N'COLUMN',
-        @level2name = N'ExpirationDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional date when the certificate expires; null for non‑expiring certificates.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate',
-    @level2type = N'COLUMN',
-    @level2name = N'ExpirationDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND c.name = 'CertificatePDFURL'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate',
-        @level2type = N'COLUMN',
-        @level2name = N'CertificatePDFURL';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'URL pointing to the stored PDF version of the certificate.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate',
-    @level2type = N'COLUMN',
-    @level2name = N'CertificatePDFURL';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Certificate'
-    AND c.name = 'VerificationCode'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Certificate',
-        @level2type = N'COLUMN',
-        @level2name = N'VerificationCode';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Unique code used to verify the authenticity of the certificate online.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Certificate',
-    @level2type = N'COLUMN',
-    @level2name = N'VerificationCode';
-GO
-
--- Table: AssociationDemo.Chapter
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -1407,18 +791,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter';
+        @level1name = N'po';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores the definition and core attributes of each organizational chapter within a professional association, including its identity, name, type, geographic location, founding date, description, activity status, meeting cadence and member count.',
+    @value = N'This table stores purchase order header records, capturing each order placed with a supplier. Each row uniquely identifies a purchase order (po_id) for a specific supplier (sup_id) and records the order date, expected delivery/expiration date, status, total order amount, shipping cost, and optional notes such as expedited shipping.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter';
+    @level1name = N'po';
 GO
 
 IF EXISTS (
@@ -1426,443 +810,257 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'po_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'po_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key GUID that uniquely identifies each chapter record.',
+    @value = N'Unique identifier for the purchase order (primary key component).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'po_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'Name'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'sup_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'sup_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable name of the chapter, often including the focus area or location.',
+    @value = N'Identifier of the supplier to which the purchase order is issued (primary key component).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'sup_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'ChapterType'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'po_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'ChapterType';
+        @level2name = N'po_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Categorizes the chapter as either Geographic or Special Interest (or Industry per constraint).',
+    @value = N'Date the purchase order was created or issued.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'ChapterType';
+    @level2name = N'po_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'Region'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'exp_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'Region';
+        @level2name = N'exp_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Broad region classification for the chapter (e.g., National, Northeast, Canada).',
+    @value = N'Expected delivery or expiration date for the order items.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'Region';
+    @level2name = N'exp_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'City'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'City';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'City where the chapter is based, when applicable.',
+    @value = N'Current status of the purchase order, using single‑letter codes (e.g., P=Pending, A=Approved, X=Cancelled, S=Shipped, R=Received).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'City';
+    @level2name = N'sts';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'State'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'tot'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'State';
+        @level2name = N'tot';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'State or province abbreviation for the chapter''s location.',
+    @value = N'Total monetary value of the purchase order before shipping.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'State';
+    @level2name = N'tot';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'Country'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'ship_amt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'Country';
+        @level2name = N'ship_amt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Country of the chapter, defaulting to United States; includes Canada for Canadian chapters.',
+    @value = N'Shipping cost associated with the purchase order.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'Country';
+    @level2name = N'ship_amt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'FoundedDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'po'
+    AND c.name = 'notes'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Chapter',
+        @level1name = N'po',
         @level2type = N'COLUMN',
-        @level2name = N'FoundedDate';
+        @level2name = N'notes';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the chapter was officially established.',
+    @value = N'Optional free‑text note; in this data set it almost always contains "Expedited shipping" indicating a special handling flag.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Chapter',
+    @level1name = N'po',
     @level2type = N'COLUMN',
-    @level2name = N'FoundedDate';
+    @level2name = N'notes';
 GO
+
+-- Table: inv.po_dtl
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'Description'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Chapter',
-        @level2type = N'COLUMN',
-        @level2name = N'Description';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Brief narrative describing the chapter''s focus or community.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Chapter',
-    @level2type = N'COLUMN',
-    @level2name = N'Description';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'Website'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Chapter',
-        @level2type = N'COLUMN',
-        @level2name = N'Website';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'URL of the chapter''s website (currently missing).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Chapter',
-    @level2type = N'COLUMN',
-    @level2name = N'Website';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'Email'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Chapter',
-        @level2type = N'COLUMN',
-        @level2name = N'Email';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Contact email address for the chapter (currently missing).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Chapter',
-    @level2type = N'COLUMN',
-    @level2name = N'Email';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'IsActive'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Chapter',
-        @level2type = N'COLUMN',
-        @level2name = N'IsActive';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Flag indicating whether the chapter is currently active.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Chapter',
-    @level2type = N'COLUMN',
-    @level2name = N'IsActive';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'MeetingFrequency'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Chapter',
-        @level2type = N'COLUMN',
-        @level2name = N'MeetingFrequency';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'How often the chapter meets, either Monthly or Quarterly.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Chapter',
-    @level2type = N'COLUMN',
-    @level2name = N'MeetingFrequency';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Chapter'
-    AND c.name = 'MemberCount'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Chapter',
-        @level2type = N'COLUMN',
-        @level2name = N'MemberCount';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Number of members in the chapter (currently not populated).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Chapter',
-    @level2type = N'COLUMN',
-    @level2name = N'MemberCount';
-GO
-
--- Table: AssociationDemo.ChapterMembership
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterMembership'
+    WHERE s.name = 'inv'
+    AND t.name = 'po_dtl'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -1870,18 +1068,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'ChapterMembership';
+        @level1name = N'po_dtl';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores the association between members and chapters, recording each member''s enrollment in a specific chapter, when they joined, and their active/inactive status.',
+    @value = N'This table stores the line‑item details of purchase orders, capturing which product is ordered, the ordered quantity, unit price, and the quantity actually received for each line on a purchase order.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'ChapterMembership';
+    @level1name = N'po_dtl';
 GO
 
 IF EXISTS (
@@ -1889,441 +1087,195 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterMembership'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'po_dtl'
+    AND c.name = 'po_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'ChapterMembership',
+        @level1name = N'po_dtl',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'po_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each membership record (row).',
+    @value = N'Identifier of the purchase order to which the line belongs',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'ChapterMembership',
+    @level1name = N'po_dtl',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'po_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterMembership'
-    AND c.name = 'ChapterID'
+    WHERE s.name = 'inv'
+    AND t.name = 'po_dtl'
+    AND c.name = 'seq'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'ChapterMembership',
+        @level1name = N'po_dtl',
         @level2type = N'COLUMN',
-        @level2name = N'ChapterID';
+        @level2name = N'seq';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the Chapter the member belongs to.',
+    @value = N'Sequential line number within the purchase order',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'ChapterMembership',
+    @level1name = N'po_dtl',
     @level2type = N'COLUMN',
-    @level2name = N'ChapterID';
+    @level2name = N'seq';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterMembership'
-    AND c.name = 'MemberID'
+    WHERE s.name = 'inv'
+    AND t.name = 'po_dtl'
+    AND c.name = 'prd_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'ChapterMembership',
+        @level1name = N'po_dtl',
         @level2type = N'COLUMN',
-        @level2name = N'MemberID';
+        @level2name = N'prd_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the Member who is part of the chapter.',
+    @value = N'Identifier of the product being ordered',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'ChapterMembership',
+    @level1name = N'po_dtl',
     @level2type = N'COLUMN',
-    @level2name = N'MemberID';
+    @level2name = N'prd_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterMembership'
-    AND c.name = 'JoinDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'po_dtl'
+    AND c.name = 'qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'ChapterMembership',
+        @level1name = N'po_dtl',
         @level2type = N'COLUMN',
-        @level2name = N'JoinDate';
+        @level2name = N'qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the member joined the chapter.',
+    @value = N'Quantity of the product ordered on this line',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'ChapterMembership',
+    @level1name = N'po_dtl',
     @level2type = N'COLUMN',
-    @level2name = N'JoinDate';
+    @level2name = N'qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterMembership'
-    AND c.name = 'Status'
+    WHERE s.name = 'inv'
+    AND t.name = 'po_dtl'
+    AND c.name = 'prc'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'ChapterMembership',
+        @level1name = N'po_dtl',
         @level2type = N'COLUMN',
-        @level2name = N'Status';
+        @level2name = N'prc';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Indicates whether the membership is currently Active or Inactive.',
+    @value = N'Unit price of the product at the time of ordering',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'ChapterMembership',
+    @level1name = N'po_dtl',
     @level2type = N'COLUMN',
-    @level2name = N'Status';
+    @level2name = N'prc';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterMembership'
-    AND c.name = 'Role'
+    WHERE s.name = 'inv'
+    AND t.name = 'po_dtl'
+    AND c.name = 'rcv_qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'ChapterMembership',
+        @level1name = N'po_dtl',
         @level2type = N'COLUMN',
-        @level2name = N'Role';
+        @level2name = N'rcv_qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Role of the member within the chapter; currently only ''Member''.',
+    @value = N'Quantity of the product actually received against the order line',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'ChapterMembership',
+    @level1name = N'po_dtl',
     @level2type = N'COLUMN',
-    @level2name = N'Role';
+    @level2name = N'rcv_qty';
 GO
 
--- Table: AssociationDemo.ChapterOfficer
+-- Table: inv.prd
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND ep.name = 'MS_Description'
-    AND ep.minor_id = 0
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Stores the assignment of members to leadership positions within each association chapter, recording which member holds which role (President, Vice President, Secretary), the start date of the term, optional end date, and whether the assignment is currently active.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer';
-GO
-
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND c.name = 'ID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer',
-        @level2type = N'COLUMN',
-        @level2name = N'ID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Surrogate primary key for each officer assignment record',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer',
-    @level2type = N'COLUMN',
-    @level2name = N'ID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND c.name = 'ChapterID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer',
-        @level2type = N'COLUMN',
-        @level2name = N'ChapterID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Foreign key referencing the Chapter the officer serves in',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer',
-    @level2type = N'COLUMN',
-    @level2name = N'ChapterID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND c.name = 'MemberID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer',
-        @level2type = N'COLUMN',
-        @level2name = N'MemberID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Foreign key referencing the Member who holds the position',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer',
-    @level2type = N'COLUMN',
-    @level2name = N'MemberID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND c.name = 'Position'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer',
-        @level2type = N'COLUMN',
-        @level2name = N'Position';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'The role held by the member within the chapter (e.g., President, Vice President, Secretary)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer',
-    @level2type = N'COLUMN',
-    @level2name = N'Position';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND c.name = 'StartDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer',
-        @level2type = N'COLUMN',
-        @level2name = N'StartDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the member began serving in the position',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer',
-    @level2type = N'COLUMN',
-    @level2name = N'StartDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND c.name = 'EndDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer',
-        @level2type = N'COLUMN',
-        @level2name = N'EndDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the member''s term ended; null when the term is ongoing',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer',
-    @level2type = N'COLUMN',
-    @level2name = N'EndDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'ChapterOfficer'
-    AND c.name = 'IsActive'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'ChapterOfficer',
-        @level2type = N'COLUMN',
-        @level2name = N'IsActive';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Flag indicating whether the assignment is currently active (default true)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'ChapterOfficer',
-    @level2type = N'COLUMN',
-    @level2name = N'IsActive';
-GO
-
--- Table: AssociationDemo.Committee
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -2331,18 +1283,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee';
+        @level1name = N'prd';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores details of association committees and task forces, including a unique identifier, name, type (standing, ad hoc, task force), purpose, meeting frequency, active status, formation and disbandment dates, maximum allowed members, and a reference to the chair member. Committee leadership (Chair, Vice Chair) is also represented in the related CommitteeMembership table via role designations, providing a flexible way to track leadership assignments.',
+    @value = N'A product master table that stores detailed information about each product offered, including its unique identifier, category, supplier, SKU, name, description, pricing, cost, status, weight and unit of measure.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee';
+    @level1name = N'prd';
 GO
 
 IF EXISTS (
@@ -2350,596 +1302,350 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'prd_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'prd_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key GUID that uniquely identifies each committee record.',
+    @value = N'Unique integer identifier for each product (primary key).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'prd_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'Name'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'cat_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'cat_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Descriptive title of the committee or project (e.g., "Technology Committee").',
+    @value = N'Identifier of the product category the item belongs to.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'cat_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'CommitteeType'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'sup_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'CommitteeType';
+        @level2name = N'sup_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Categorizes the committee as Standing, Ad Hoc, or Task Force.',
+    @value = N'Identifier of the supplier that provides the product.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'CommitteeType';
+    @level2name = N'sup_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'Purpose'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'sku'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'Purpose';
+        @level2name = N'sku';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Brief statement of the committee''s mission or responsibility.',
+    @value = N'Stock Keeping Unit code used for inventory tracking.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'Purpose';
+    @level2name = N'sku';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'MeetingFrequency'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'nm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'MeetingFrequency';
+        @level2name = N'nm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'How often the committee meets (Monthly, Quarterly, Bi-Weekly).',
+    @value = N'Human‑readable product name.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'MeetingFrequency';
+    @level2name = N'nm';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'IsActive'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'dsc'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'IsActive';
+        @level2name = N'dsc';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the committee is currently active (true).',
+    @value = N'Longer textual description of the product.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'IsActive';
+    @level2name = N'dsc';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'FormedDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'prc'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'FormedDate';
+        @level2name = N'prc';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the committee was established.',
+    @value = N'Selling price of the product.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'FormedDate';
+    @level2name = N'prc';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'DisbandedDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'cost'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'DisbandedDate';
+        @level2name = N'cost';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the committee was dissolved, if applicable; null for active committees.',
+    @value = N'Cost to acquire or produce the product.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'DisbandedDate';
+    @level2name = N'cost';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'ChairMemberID'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'ChairMemberID';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the Member who serves as the chair of the committee.',
+    @value = N'Current status of the product (A=Active, O=On hold, D=Discontinued).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'ChairMemberID';
+    @level2name = N'sts';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Committee'
-    AND c.name = 'MaxMembers'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'wgt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Committee',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'MaxMembers';
+        @level2name = N'wgt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Maximum number of members allowed in the committee.',
+    @value = N'Weight of the product measured in the unit defined by uom.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Committee',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'MaxMembers';
-GO
-
--- Table: AssociationDemo.CommitteeMembership
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND ep.name = 'MS_Description'
-    AND ep.minor_id = 0
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'This table records the membership of individuals in association committees, capturing which member belongs to which committee, their role (e.g., Chair, Vice Chair, Member), the period of service and whether the assignment is currently active.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership';
-GO
-
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'ID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
-        @level2type = N'COLUMN',
-        @level2name = N'ID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Surrogate primary key for each committee‑member assignment record.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
-    @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'wgt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'CommitteeID'
+    WHERE s.name = 'inv'
+    AND t.name = 'prd'
+    AND c.name = 'uom'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
+        @level1name = N'prd',
         @level2type = N'COLUMN',
-        @level2name = N'CommitteeID';
+        @level2name = N'uom';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the committee to which the member is assigned.',
+    @value = N'Unit of measure for weight (CS=case, BX=box, EA=each).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
+    @level1name = N'prd',
     @level2type = N'COLUMN',
-    @level2name = N'CommitteeID';
+    @level2name = N'uom';
 GO
+
+-- Table: inv.rcv
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'MemberID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
-        @level2type = N'COLUMN',
-        @level2name = N'MemberID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Identifier of the member who holds the assignment.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
-    @level2type = N'COLUMN',
-    @level2name = N'MemberID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'Role'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
-        @level2type = N'COLUMN',
-        @level2name = N'Role';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'The function the member performs on the committee (Member, Chair, Vice Chair).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
-    @level2type = N'COLUMN',
-    @level2name = N'Role';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'StartDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
-        @level2type = N'COLUMN',
-        @level2name = N'StartDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the member’s term on the committee began.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
-    @level2type = N'COLUMN',
-    @level2name = N'StartDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'EndDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
-        @level2type = N'COLUMN',
-        @level2name = N'EndDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the member’s term ended; null for all rows indicating active or open‑ended assignments.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
-    @level2type = N'COLUMN',
-    @level2name = N'EndDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'IsActive'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
-        @level2type = N'COLUMN',
-        @level2name = N'IsActive';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Flag indicating whether the assignment is currently active (always true in sample).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
-    @level2type = N'COLUMN',
-    @level2name = N'IsActive';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'CommitteeMembership'
-    AND c.name = 'AppointedBy'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'CommitteeMembership',
-        @level2type = N'COLUMN',
-        @level2name = N'AppointedBy';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Name or identifier of the person who appointed the member; currently unused (all null).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'CommitteeMembership',
-    @level2type = N'COLUMN',
-    @level2name = N'AppointedBy';
-GO
-
--- Table: AssociationDemo.Course
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
+    WHERE s.name = 'inv'
+    AND t.name = 'rcv'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -2947,18 +1653,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Course';
+        @level1name = N'rcv';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores detailed information about training courses offered, including identifiers, codes, titles, descriptions, categorization, difficulty level, duration, CEU credits, pricing, availability, publication date, instructor, and optional prerequisite relationships.',
+    @value = N'Stores records of goods received against purchase orders at specific warehouses, capturing the receipt identifier, associated purchase order, receipt date, warehouse location, and optional notes.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Course';
+    @level1name = N'rcv';
 GO
 
 IF EXISTS (
@@ -2966,505 +1672,164 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'rcv'
+    AND c.name = 'rcv_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Course',
+        @level1name = N'rcv',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'rcv_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key GUID uniquely identifying each course record',
+    @value = N'Unique identifier for a receipt event',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Course',
+    @level1name = N'rcv',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'rcv_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'Code'
+    WHERE s.name = 'inv'
+    AND t.name = 'rcv'
+    AND c.name = 'po_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Course',
+        @level1name = N'rcv',
         @level2type = N'COLUMN',
-        @level2name = N'Code';
+        @level2name = N'po_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique alphanumeric code used to reference the course (e.g., "SEC-204")',
+    @value = N'Identifier of the purchase order linked to the receipt',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Course',
+    @level1name = N'rcv',
     @level2type = N'COLUMN',
-    @level2name = N'Code';
+    @level2name = N'po_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'Title'
+    WHERE s.name = 'inv'
+    AND t.name = 'rcv'
+    AND c.name = 'rcv_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Course',
+        @level1name = N'rcv',
         @level2type = N'COLUMN',
-        @level2name = N'Title';
+        @level2name = N'rcv_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable name of the course',
+    @value = N'Date when the goods were received',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Course',
+    @level1name = N'rcv',
     @level2type = N'COLUMN',
-    @level2name = N'Title';
+    @level2name = N'rcv_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'Description'
+    WHERE s.name = 'inv'
+    AND t.name = 'rcv'
+    AND c.name = 'whs_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Course',
+        @level1name = N'rcv',
         @level2type = N'COLUMN',
-        @level2name = N'Description';
+        @level2name = N'whs_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Brief textual overview of the course content',
+    @value = N'Identifier of the warehouse where receipt occurred',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Course',
+    @level1name = N'rcv',
     @level2type = N'COLUMN',
-    @level2name = N'Description';
+    @level2name = N'whs_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'Category'
+    WHERE s.name = 'inv'
+    AND t.name = 'rcv'
+    AND c.name = 'notes'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Course',
+        @level1name = N'rcv',
         @level2type = N'COLUMN',
-        @level2name = N'Category';
+        @level2name = N'notes';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Broad subject area classification (e.g., Data Science, Security)',
+    @value = N'Optional free‑text comments about the receipt',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Course',
+    @level1name = N'rcv',
     @level2type = N'COLUMN',
-    @level2name = N'Category';
+    @level2name = N'notes';
 GO
+
+-- Table: inv.stk
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'Level'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'Level';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Difficulty or target audience level (Beginner, Intermediate, Advanced)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'Level';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'DurationHours'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'DurationHours';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Total instructional time in hours',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'DurationHours';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'CEUCredits'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'CEUCredits';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Continuing Education Units awarded upon completion',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'CEUCredits';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'Price'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'Price';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Standard purchase price for the course (non‑member)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'Price';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'MemberPrice'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'MemberPrice';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Discounted price for members or subscribers',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'MemberPrice';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'IsActive'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'IsActive';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Flag indicating whether the course is currently offered',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'IsActive';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'PublishedDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'PublishedDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the course was first made available to learners',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'PublishedDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'InstructorName'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'InstructorName';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Name of the primary instructor or presenter for the course',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'InstructorName';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'PrerequisiteCourseID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'PrerequisiteCourseID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional reference to another course that must be completed first',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'PrerequisiteCourseID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'ThumbnailURL'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'ThumbnailURL';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Link to an image representing the course (currently not populated)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'ThumbnailURL';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Course'
-    AND c.name = 'LearningObjectives'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Course',
-        @level2type = N'COLUMN',
-        @level2name = N'LearningObjectives';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Detailed learning outcomes for the course (currently not populated)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Course',
-    @level2type = N'COLUMN',
-    @level2name = N'LearningObjectives';
-GO
-
--- Table: AssociationDemo.EmailClick
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -3472,18 +1837,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick';
+        @level1name = N'stk';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores a log of individual link click events generated from emails sent through the system, capturing when a recipient clicked a specific URL, which email send it belongs to, and optional client details.',
+    @value = N'Stores inventory levels and thresholds for each product at each warehouse, including on‑hand quantity, reserved quantity, minimum and maximum stock levels, and dates of the last physical count and last receipt.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick';
+    @level1name = N'stk';
 GO
 
 IF EXISTS (
@@ -3491,813 +1856,257 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'prd_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'prd_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key uniquely identifying each click record',
+    @value = N'Identifier of the product; links to the product master table',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'prd_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
-    AND c.name = 'EmailSendID'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'whs_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'EmailSendID';
+        @level2name = N'whs_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Foreign key to the EmailSend record that generated the email containing the clicked link',
+    @value = N'Identifier of the warehouse where the stock is held; links to a warehouse master table',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'EmailSendID';
+    @level2name = N'whs_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
-    AND c.name = 'ClickDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'ClickDate';
+        @level2name = N'qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Timestamp when the recipient clicked the link',
+    @value = N'Current on‑hand quantity of the product in the warehouse',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'ClickDate';
+    @level2name = N'qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
-    AND c.name = 'URL'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'rsv'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'URL';
+        @level2name = N'rsv';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'The full URL that was clicked by the recipient',
+    @value = N'Quantity of the product that is reserved for pending orders',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'URL';
+    @level2name = N'rsv';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
-    AND c.name = 'LinkName'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'min_qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'LinkName';
+        @level2name = N'min_qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable name of the link as defined in the email template',
+    @value = N'Minimum desired stock level (reorder point) for the product at the warehouse',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'LinkName';
+    @level2name = N'min_qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
-    AND c.name = 'IPAddress'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'max_qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'IPAddress';
+        @level2name = N'max_qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'IP address of the client at click time (optional)',
+    @value = N'Maximum allowable stock level (capacity) for the product at the warehouse',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'IPAddress';
+    @level2name = N'max_qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailClick'
-    AND c.name = 'UserAgent'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'lst_cnt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailClick',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'UserAgent';
+        @level2name = N'lst_cnt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Browser user‑agent string of the client (optional)',
+    @value = N'Date of the most recent physical inventory count',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailClick',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'UserAgent';
-GO
-
--- Table: AssociationDemo.EmailSend
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND ep.name = 'MS_Description'
-    AND ep.minor_id = 0
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Stores a log of each email sent to a member, capturing which email template was used, the associated campaign (if any), timestamps for sending, delivery, opens and clicks, interaction counts, bounce and unsubscribe information, and the current status of the email. Each EmailSend record serves as a parent to a dedicated click‑tracking table that records individual link clicks, enabling detailed campaign analytics beyond aggregate click counts.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend';
-GO
-
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'ID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'ID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Unique identifier for each email send record.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'lst_cnt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'TemplateID'
+    WHERE s.name = 'inv'
+    AND t.name = 'stk'
+    AND c.name = 'lst_rcv'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailSend',
+        @level1name = N'stk',
         @level2type = N'COLUMN',
-        @level2name = N'TemplateID';
+        @level2name = N'lst_rcv';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the email template used for this send.',
+    @value = N'Date of the most recent receipt (stock replenishment) for the product at the warehouse',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailSend',
+    @level1name = N'stk',
     @level2type = N'COLUMN',
-    @level2name = N'TemplateID';
+    @level2name = N'lst_rcv';
 GO
+
+-- Table: inv.sup
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'CampaignID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'CampaignID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional reference to the marketing campaign that triggered the email.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'CampaignID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'MemberID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'MemberID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Reference to the member (recipient) of the email.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'MemberID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'Subject'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'Subject';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Subject line of the email that was sent.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'Subject';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'SentDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'SentDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date and time when the email was queued/sent.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'SentDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'DeliveredDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'DeliveredDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Timestamp when the email was successfully delivered to the recipient''s mailbox.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'DeliveredDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'OpenedDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'OpenedDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Timestamp of the first time the recipient opened the email.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'OpenedDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'OpenCount'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'OpenCount';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Number of times the email was opened.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'OpenCount';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'ClickedDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'ClickedDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Timestamp of the first click on a link within the email.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'ClickedDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'ClickCount'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'ClickCount';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Number of link clicks recorded for the email.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'ClickCount';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'BouncedDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'BouncedDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Timestamp when the email bounced back.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'BouncedDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'BounceType'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'BounceType';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Category of bounce (hard, soft, etc.).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'BounceType';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'BounceReason'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'BounceReason';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Detailed reason for the bounce.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'BounceReason';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'UnsubscribedDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'UnsubscribedDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Timestamp when the recipient unsubscribed via this email.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'UnsubscribedDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'SpamReportedDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'SpamReportedDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Timestamp when the email was reported as spam.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'SpamReportedDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'Status'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'Status';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Current processing state of the email (e.g., Sent, Delivered, Opened, Clicked, Bounced).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'Status';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailSend'
-    AND c.name = 'ExternalMessageID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailSend',
-        @level2type = N'COLUMN',
-        @level2name = N'ExternalMessageID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Identifier assigned by the external email service provider.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailSend',
-    @level2type = N'COLUMN',
-    @level2name = N'ExternalMessageID';
-GO
-
--- Table: AssociationDemo.EmailTemplate
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -4305,18 +2114,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate';
+        @level1name = N'sup';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores predefined email templates used by the association for automated communications such as welcome messages, renewal reminders, newsletters, and event invitations.',
+    @value = N'This table is a Supplier master list that stores core information about each supplier, including a unique supplier ID, supplier name, current status, payment terms, rating, and primary contact details (name, phone, email). It serves as a reference for procurement and purchasing processes.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate';
+    @level1name = N'sup';
 GO
 
 IF EXISTS (
@@ -4324,382 +2133,257 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'sup_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'sup_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key GUID that uniquely identifies each email template.',
+    @value = N'Unique identifier for each supplier (primary key).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'sup_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'Name'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'nm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'nm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable name of the template (e.g., "Welcome Email - New Members").',
+    @value = N'Legal or trade name of the supplier company.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'nm';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'Subject'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'Subject';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Default subject line for the email when the template is used.',
+    @value = N'Current status of the supplier (e.g., Active, Suspended, Inactive).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'Subject';
+    @level2name = N'sts';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'FromName'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'pmt_trm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'FromName';
+        @level2name = N'pmt_trm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Display name shown as the sender of the email.',
+    @value = N'Standard payment terms agreed with the supplier (e.g., Net 30, Cash on Delivery).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'FromName';
+    @level2name = N'pmt_trm';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'FromEmail'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'rtg'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'FromEmail';
+        @level2name = N'rtg';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Email address used as the sender address for the template.',
+    @value = N'Supplier rating on a scale of 1 to 5, reflecting performance or reliability.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'FromEmail';
+    @level2name = N'rtg';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'ReplyToEmail'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'cnt_nm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'ReplyToEmail';
+        @level2name = N'cnt_nm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Optional reply‑to address; currently null for all rows.',
+    @value = N'Name of the primary contact person at the supplier.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'ReplyToEmail';
+    @level2name = N'cnt_nm';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'HtmlBody'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'cnt_phn'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'HtmlBody';
+        @level2name = N'cnt_phn';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'HTML version of the email body; currently empty/null placeholders.',
+    @value = N'Phone number of the primary contact.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'HtmlBody';
+    @level2name = N'cnt_phn';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'TextBody'
+    WHERE s.name = 'inv'
+    AND t.name = 'sup'
+    AND c.name = 'cnt_eml'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
+        @level1name = N'sup',
         @level2type = N'COLUMN',
-        @level2name = N'TextBody';
+        @level2name = N'cnt_eml';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Plain‑text version of the email body; currently empty/null placeholders.',
+    @value = N'Email address of the primary contact.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
+    @level1name = N'sup',
     @level2type = N'COLUMN',
-    @level2name = N'TextBody';
+    @level2name = N'cnt_eml';
 GO
+
+-- Table: inv.whs
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'Category'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
-        @level2type = N'COLUMN',
-        @level2name = N'Category';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Broad classification of the template (Renewal, Welcome, Newsletter, Event).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
-    @level2type = N'COLUMN',
-    @level2name = N'Category';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'IsActive'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
-        @level2type = N'COLUMN',
-        @level2name = N'IsActive';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Flag indicating whether the template is active and can be used for sending.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
-    @level2type = N'COLUMN',
-    @level2name = N'IsActive';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'PreviewText'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
-        @level2type = N'COLUMN',
-        @level2name = N'PreviewText';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Short preview snippet shown in email clients before opening the message.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
-    @level2type = N'COLUMN',
-    @level2name = N'PreviewText';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EmailTemplate'
-    AND c.name = 'Tags'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EmailTemplate',
-        @level2type = N'COLUMN',
-        @level2name = N'Tags';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional free‑form tags for additional categorisation; currently null.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EmailTemplate',
-    @level2type = N'COLUMN',
-    @level2name = N'Tags';
-GO
-
-
--- Table: AssociationDemo.Event
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -4707,18 +2391,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event';
+        @level1name = N'whs';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores detailed information about industry events, conferences, workshops, webinars and chapter meetings related to artisan cheese. Each event serves as a master record that can comprise multiple scheduled sessions with individual speakers, session‑specific capacities, and CEU credits, supporting multi‑track conference or workshop structures. The table includes scheduling, location, virtual access, overall event capacity, registration periods, pricing, and current status.',
+    @value = N'Stores information about company warehouses, including unique identifiers, location codes, names, city, state, warehouse type, capacity, and operational status.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event';
+    @level1name = N'whs';
 GO
 
 IF EXISTS (
@@ -4726,629 +2410,260 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'ID'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'whs_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'whs_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key uniquely identifying each event record',
+    @value = N'Primary key uniquely identifying each warehouse record',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'whs_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'Name'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'cd'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'cd';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Descriptive title of the event',
+    @value = N'Short code representing the warehouse location, often an airport or city abbreviation',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'cd';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'EventType'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'nm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'EventType';
+        @level2name = N'nm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Category of the event (Conference, Workshop, Webinar)',
+    @value = N'Full descriptive name of the warehouse, often including city and function',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'EventType';
+    @level2name = N'nm';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'StartDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'cty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'StartDate';
+        @level2name = N'cty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date and time when the event begins',
+    @value = N'City where the warehouse is located',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'StartDate';
+    @level2name = N'cty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'EndDate'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'st'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'EndDate';
+        @level2name = N'st';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date and time when the event ends',
+    @value = N'Two‑letter state abbreviation for the warehouse location',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'EndDate';
+    @level2name = N'st';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'Timezone'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'typ'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'Timezone';
+        @level2name = N'typ';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'IANA timezone identifier for the event''s local time',
+    @value = N'Warehouse type/category (e.g., Regional, Main, Distribution)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'Timezone';
+    @level2name = N'typ';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'Location'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'cap'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'Location';
+        @level2name = N'cap';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Physical venue or indication of virtual attendance',
+    @value = N'Maximum storage capacity of the warehouse (units unspecified)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'Location';
+    @level2name = N'cap';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'IsVirtual'
+    WHERE s.name = 'inv'
+    AND t.name = 'whs'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'inv',
         @level1type = N'TABLE',
-        @level1name = N'Event',
+        @level1name = N'whs',
         @level2type = N'COLUMN',
-        @level2name = N'IsVirtual';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the event is held online',
+    @value = N'Current operational status of the warehouse (Active or Maintenance)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'inv',
     @level1type = N'TABLE',
-    @level1name = N'Event',
+    @level1name = N'whs',
     @level2type = N'COLUMN',
-    @level2name = N'IsVirtual';
+    @level2name = N'sts';
 GO
+
+
+-- Schema: sales
+
+-- Table: sales.addr
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'VirtualPlatform'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'VirtualPlatform';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Online platform used when IsVirtual is true (Zoom or Teams)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'VirtualPlatform';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'MeetingURL'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'MeetingURL';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Link to join the virtual event',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'MeetingURL';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'ChapterID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'ChapterID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional foreign key to a Chapter entity (currently all null)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'ChapterID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'Capacity'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'Capacity';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Maximum number of attendees allowed',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'Capacity';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'RegistrationOpenDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'RegistrationOpenDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date when registration opens for the event',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'RegistrationOpenDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'RegistrationCloseDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'RegistrationCloseDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date when registration closes for the event',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'RegistrationCloseDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'RegistrationFee'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'RegistrationFee';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Overall fee for registering (currently null for all rows)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'RegistrationFee';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'MemberPrice'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'MemberPrice';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Price for members to attend the event',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'MemberPrice';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'NonMemberPrice'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'NonMemberPrice';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Price for non‑members to attend the event',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'NonMemberPrice';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'CEUCredits'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'CEUCredits';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Continuing Education Units awarded for attending',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'CEUCredits';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'Description'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'Description';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Long textual summary of the event content and objectives',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'Description';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Event'
-    AND c.name = 'Status'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Event',
-        @level2type = N'COLUMN',
-        @level2name = N'Status';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Current lifecycle state of the event (Draft, Published, Registration Open, Completed, etc.)',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Event',
-    @level2type = N'COLUMN',
-    @level2name = N'Status';
-GO
-
--- Table: AssociationDemo.EventRegistration
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -5356,18 +2671,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration';
+        @level1name = N'addr';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'This table records each member''s registration and attendance for association events, linking a member to a specific event and tracking registration details, status, check‑in, invoicing, CEU awards and cancellations.',
+    @value = N'Stores mailing addresses associated with customers, including address lines, city, state, zip, country, address type (shipping or billing) and a flag indicating the default address for the customer.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration';
+    @level1name = N'addr';
 GO
 
 IF EXISTS (
@@ -5375,381 +2690,319 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'addr_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'addr_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key for the registration record, uniquely identifying each row.',
+    @value = N'Surrogate primary key for each address record',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'addr_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'EventID'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'cst_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'EventID';
+        @level2name = N'cst_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Foreign key to the Event table identifying the event for which the member registered.',
+    @value = N'Identifier of the customer to which the address belongs',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'EventID';
+    @level2name = N'cst_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'MemberID'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'typ'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'MemberID';
+        @level2name = N'typ';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Foreign key to the Member table identifying the member who registered for the event.',
+    @value = N'Address type code: ''S'' for Shipping, ''B'' for Billing',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'MemberID';
+    @level2name = N'typ';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'RegistrationDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'ln1'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'RegistrationDate';
+        @level2name = N'ln1';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the member signed up for the event.',
+    @value = N'First line of the street address (e.g., street number and name)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'RegistrationDate';
+    @level2name = N'ln1';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'RegistrationType'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'ln2'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'RegistrationType';
+        @level2name = N'ln2';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Category of registration, such as ''Standard'' or ''Early Bird''.',
+    @value = N'Second address line, usually suite or apartment number; optional',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'RegistrationType';
+    @level2name = N'ln2';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'Status'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'cty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'Status';
+        @level2name = N'cty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current state of the registration (e.g., Registered, Attended, No Show).',
+    @value = N'City name where the address is located',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'Status';
+    @level2name = N'cty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'CheckInTime'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'st'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'CheckInTime';
+        @level2name = N'st';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Timestamp when the member actually checked in to the event, if applicable.',
+    @value = N'Two‑letter US state abbreviation',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'CheckInTime';
+    @level2name = N'st';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'InvoiceID'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'zip'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'InvoiceID';
+        @level2name = N'zip';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to an invoice record for paid registrations; currently null for all rows.',
+    @value = N'Five‑digit ZIP code for the address',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'InvoiceID';
+    @level2name = N'zip';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'CEUAwarded'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'ctry'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'CEUAwarded';
+        @level2name = N'ctry';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the member earned Continuing Education Units for this event.',
+    @value = N'Country code, fixed to ''US''',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'CEUAwarded';
+    @level2name = N'ctry';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'CEUAwardedDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'addr'
+    AND c.name = 'dflt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
+        @level1name = N'addr',
         @level2type = N'COLUMN',
-        @level2name = N'CEUAwardedDate';
+        @level2name = N'dflt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the CEU credit was awarded; null when CEUAwarded is false.',
+    @value = N'Flag indicating whether this address is the customer''s default (true) or not (false)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
+    @level1name = N'addr',
     @level2type = N'COLUMN',
-    @level2name = N'CEUAwardedDate';
+    @level2name = N'dflt';
 GO
+
+-- Table: sales.cst
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'CancellationDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
-        @level2type = N'COLUMN',
-        @level2name = N'CancellationDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the registration was cancelled, if applicable.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
-    @level2type = N'COLUMN',
-    @level2name = N'CancellationDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventRegistration'
-    AND c.name = 'CancellationReason'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'EventRegistration',
-        @level2type = N'COLUMN',
-        @level2name = N'CancellationReason';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Text explaining why a registration was cancelled.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'EventRegistration',
-    @level2type = N'COLUMN',
-    @level2name = N'CancellationReason';
-GO
-
--- Table: AssociationDemo.EventSession
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -5757,18 +3010,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession';
+        @level1name = N'cst';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores detailed information about individual sessions or program items that belong to a larger event, including title, description, schedule, location, speaker, type, capacity and CEU credits.',
+    @value = N'A master/customer table that stores core information about each client, including identification, name, status, acquisition date, source channel, assigned sales representative, market segment, rating, current balance, credit limit, and the date of the most recent order.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession';
+    @level1name = N'cst';
 GO
 
 IF EXISTS (
@@ -5776,813 +3029,350 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'cst_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'cst_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for the session record',
+    @value = N'Unique identifier for each customer.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'cst_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'EventID'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'nm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'EventID';
+        @level2name = N'nm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the parent event to which this session belongs',
+    @value = N'Customer name or display label.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'EventID';
+    @level2name = N'nm';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'Name'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Title or name of the session',
+    @value = N'Current status of the customer (e.g., Active, Terminated, Suspended, Inactive).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'sts';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'Description'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'Description';
+        @level2name = N'dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Longer textual description of the session content',
+    @value = N'Date the customer was created or first recorded in the system.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'Description';
+    @level2name = N'dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'StartTime'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'src'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'StartTime';
+        @level2name = N'src';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Scheduled start date and time of the session',
+    @value = N'Acquisition source/channel for the customer (e.g., Web, Referral, Store, Phone).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'StartTime';
+    @level2name = N'src';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'EndTime'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'rep_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'EndTime';
+        @level2name = N'rep_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Scheduled end date and time of the session',
+    @value = N'Identifier of the sales representative responsible for the customer.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'EndTime';
+    @level2name = N'rep_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'Room'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'seg'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'Room';
+        @level2name = N'seg';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Physical or virtual location where the session takes place',
+    @value = N'Market segment classification (e.g., Wholesale, Retail, Enterprise).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'Room';
+    @level2name = N'seg';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'SpeakerName'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'rtg'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'SpeakerName';
+        @level2name = N'rtg';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Name of the person presenting or leading the session',
+    @value = N'Customer rating or priority level ranging from 1 (lowest) to 5 (highest).',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'SpeakerName';
+    @level2name = N'rtg';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'SessionType'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'bal'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'SessionType';
+        @level2name = N'bal';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Category of the session (e.g., workshop, lecture, panel)',
+    @value = N'Current account balance for the customer.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'SessionType';
+    @level2name = N'bal';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'Capacity'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'cr_lmt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'Capacity';
+        @level2name = N'cr_lmt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Maximum number of attendees allowed for the session',
+    @value = N'Credit limit assigned to the customer.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'Capacity';
+    @level2name = N'cr_lmt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'EventSession'
-    AND c.name = 'CEUCredits'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst'
+    AND c.name = 'lst_ord'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'EventSession',
+        @level1name = N'cst',
         @level2type = N'COLUMN',
-        @level2name = N'CEUCredits';
+        @level2name = N'lst_ord';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Continuing Education Units awarded for attending the session',
+    @value = N'Date of the customer''s most recent order; null when no orders exist.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'EventSession',
+    @level1name = N'cst',
     @level2type = N'COLUMN',
-    @level2name = N'CEUCredits';
+    @level2name = N'lst_ord';
 GO
 
--- Table: AssociationDemo.Invoice
+-- Table: sales.cst_note
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND ep.name = 'MS_Description'
-    AND ep.minor_id = 0
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Represents a consolidated invoice for a member, aggregating line‑item charges from events, memberships, and courses. It stores billing amounts, dates, status, and links to a single payment record, with a foreign key to the member and a RelatedEntity reference for the various service types.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice';
-GO
-
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'ID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'ID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Primary key uniquely identifying each invoice record.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'ID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'InvoiceNumber'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'InvoiceNumber';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Human‑readable, sequential invoice code used for reference and communication with the member.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'InvoiceNumber';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'MemberID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'MemberID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Foreign key to the Member table identifying the customer to whom the invoice is addressed.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'MemberID';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'InvoiceDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'InvoiceDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the invoice was created or issued.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'InvoiceDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'DueDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'DueDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date by which payment is expected, usually a set period after InvoiceDate.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'DueDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'SubTotal'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'SubTotal';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Sum of line‑item amounts before tax and discounts.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'SubTotal';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'Tax'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'Tax';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Tax amount applied to the SubTotal.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'Tax';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'Discount'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'Discount';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Discount applied to the invoice; currently always zero.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'Discount';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'Total'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'Total';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Final amount due after adding Tax and subtracting Discount from SubTotal.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'Total';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'AmountPaid'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'AmountPaid';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Total amount the member has already paid toward this invoice.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'AmountPaid';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'Balance'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'Balance';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Remaining amount owed (Total minus AmountPaid).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'Balance';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'Status'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'Status';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Current lifecycle state of the invoice (Paid, Sent, Overdue, etc.).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'Status';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'Notes'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'Notes';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional free‑form text for additional information about the invoice.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'Notes';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Invoice'
-    AND c.name = 'PaymentTerms'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Invoice',
-        @level2type = N'COLUMN',
-        @level2name = N'PaymentTerms';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Text describing the payment terms (e.g., Net 30), currently unused.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Invoice',
-    @level2type = N'COLUMN',
-    @level2name = N'PaymentTerms';
-GO
-
--- Table: AssociationDemo.InvoiceLineItem
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst_note'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -6590,18 +3380,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem';
+        @level1name = N'cst_note';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores individual line items for each invoice, capturing what was sold or billed (event registrations, membership dues, course enrollments, etc.), the pricing, tax, and a link to the underlying entity (event, membership, or course).',
+    @value = N'This table stores individual notes or interaction records linked to customers, capturing when the note was made, who created it, the content of the note, and the type of interaction (e.g., call, email, meeting, other). It serves as a chronological log of customer communications for sales/CRM purposes.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem';
+    @level1name = N'cst_note';
 GO
 
 IF EXISTS (
@@ -6609,319 +3399,195 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst_note'
+    AND c.name = 'note_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
+        @level1name = N'cst_note',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'note_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for the line‑item record.',
+    @value = N'Unique identifier for each note entry',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
+    @level1name = N'cst_note',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'note_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'InvoiceID'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst_note'
+    AND c.name = 'cst_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
+        @level1name = N'cst_note',
         @level2type = N'COLUMN',
-        @level2name = N'InvoiceID';
+        @level2name = N'cst_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the parent invoice to which this line belongs.',
+    @value = N'Identifier of the customer associated with the note',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
+    @level1name = N'cst_note',
     @level2type = N'COLUMN',
-    @level2name = N'InvoiceID';
+    @level2name = N'cst_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'Description'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst_note'
+    AND c.name = 'dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
+        @level1name = N'cst_note',
         @level2type = N'COLUMN',
-        @level2name = N'Description';
+        @level2name = N'dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable text describing the billed item (e.g., event name, membership type).',
+    @value = N'Date of the note or interaction',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
+    @level1name = N'cst_note',
     @level2type = N'COLUMN',
-    @level2name = N'Description';
+    @level2name = N'dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'ItemType'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst_note'
+    AND c.name = 'usr'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
+        @level1name = N'cst_note',
         @level2type = N'COLUMN',
-        @level2name = N'ItemType';
+        @level2name = N'usr';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Category of the billed item; limited to a set of enums such as Event Registration, Membership Dues, Course Enrollment, Other, Donation, Merchandise.',
+    @value = N'User who created the note (e.g., sales rep)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
+    @level1name = N'cst_note',
     @level2type = N'COLUMN',
-    @level2name = N'ItemType';
+    @level2name = N'usr';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'Quantity'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst_note'
+    AND c.name = 'txt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
+        @level1name = N'cst_note',
         @level2type = N'COLUMN',
-        @level2name = N'Quantity';
+        @level2name = N'txt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Number of units billed; always 1 in this dataset.',
+    @value = N'Full text of the note describing the customer interaction',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
+    @level1name = N'cst_note',
     @level2type = N'COLUMN',
-    @level2name = N'Quantity';
+    @level2name = N'txt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'UnitPrice'
+    WHERE s.name = 'sales'
+    AND t.name = 'cst_note'
+    AND c.name = 'typ'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
+        @level1name = N'cst_note',
         @level2type = N'COLUMN',
-        @level2name = N'UnitPrice';
+        @level2name = N'typ';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Price per single unit before tax.',
+    @value = N'Type of interaction (O=Other, M=Meeting, E=Email, C=Call)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
+    @level1name = N'cst_note',
     @level2type = N'COLUMN',
-    @level2name = N'UnitPrice';
+    @level2name = N'typ';
 GO
+
+-- Table: sales.eml
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'Amount'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
-        @level2type = N'COLUMN',
-        @level2name = N'Amount';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Total price for the line (UnitPrice × Quantity).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
-    @level2type = N'COLUMN',
-    @level2name = N'Amount';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'TaxAmount'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
-        @level2type = N'COLUMN',
-        @level2name = N'TaxAmount';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Tax applied to this line item.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
-    @level2type = N'COLUMN',
-    @level2name = N'TaxAmount';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'RelatedEntityType'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
-        @level2type = N'COLUMN',
-        @level2name = N'RelatedEntityType';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Type of the underlying business entity the line refers to (Event, Membership, or Course).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
-    @level2type = N'COLUMN',
-    @level2name = N'RelatedEntityType';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'InvoiceLineItem'
-    AND c.name = 'RelatedEntityID'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'InvoiceLineItem',
-        @level2type = N'COLUMN',
-        @level2name = N'RelatedEntityID';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Identifier of the specific event, membership, or course record linked to this line item.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'InvoiceLineItem',
-    @level2type = N'COLUMN',
-    @level2name = N'RelatedEntityID';
-GO
-
--- Table: AssociationDemo.Member
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
+    WHERE s.name = 'sales'
+    AND t.name = 'eml'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -6929,18 +3595,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Member';
+        @level1name = N'eml';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores individual contact/person records representing members or leads associated with organizations, while also tracking governance roles (e.g., committee chairs, board positions) and serving as the primary customer entity for billing through its relationship to the Invoice table.',
+    @value = N'Stores email address records associated with customers, including the address, its type, verification status, and whether it is the default contact email.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Member';
+    @level1name = N'eml';
 GO
 
 IF EXISTS (
@@ -6948,722 +3614,195 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'eml'
+    AND c.name = 'eml_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Member',
+        @level1name = N'eml',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'eml_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key GUID uniquely identifying each person record.',
+    @value = N'Unique identifier for each email record',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Member',
+    @level1name = N'eml',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'eml_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Email'
+    WHERE s.name = 'sales'
+    AND t.name = 'eml'
+    AND c.name = 'cst_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Member',
+        @level1name = N'eml',
         @level2type = N'COLUMN',
-        @level2name = N'Email';
+        @level2name = N'cst_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Person''s email address, used as a unique contact identifier.',
+    @value = N'Identifier of the customer to whom the email belongs',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Member',
+    @level1name = N'eml',
     @level2type = N'COLUMN',
-    @level2name = N'Email';
+    @level2name = N'cst_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'FirstName'
+    WHERE s.name = 'sales'
+    AND t.name = 'eml'
+    AND c.name = 'typ'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Member',
+        @level1name = N'eml',
         @level2type = N'COLUMN',
-        @level2name = N'FirstName';
+        @level2name = N'typ';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Given name of the person.',
+    @value = N'Code indicating the type of email (e.g., work, personal)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Member',
+    @level1name = N'eml',
     @level2type = N'COLUMN',
-    @level2name = N'FirstName';
+    @level2name = N'typ';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'LastName'
+    WHERE s.name = 'sales'
+    AND t.name = 'eml'
+    AND c.name = 'adr'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Member',
+        @level1name = N'eml',
         @level2type = N'COLUMN',
-        @level2name = N'LastName';
+        @level2name = N'adr';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Family name of the person.',
+    @value = N'The email address string',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Member',
+    @level1name = N'eml',
     @level2type = N'COLUMN',
-    @level2name = N'LastName';
+    @level2name = N'adr';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Title'
+    WHERE s.name = 'sales'
+    AND t.name = 'eml'
+    AND c.name = 'vrf'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Member',
+        @level1name = N'eml',
         @level2type = N'COLUMN',
-        @level2name = N'Title';
+        @level2name = N'vrf';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Professional title or role within the organization.',
+    @value = N'Flag indicating whether the email address has been verified',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Member',
+    @level1name = N'eml',
     @level2type = N'COLUMN',
-    @level2name = N'Title';
+    @level2name = N'vrf';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'OrganizationID'
+    WHERE s.name = 'sales'
+    AND t.name = 'eml'
+    AND c.name = 'dflt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Member',
+        @level1name = N'eml',
         @level2type = N'COLUMN',
-        @level2name = N'OrganizationID';
+        @level2name = N'dflt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Foreign key linking the person to their employer or affiliated organization.',
+    @value = N'Flag indicating whether this email is the customer''s default contact address',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Member',
+    @level1name = N'eml',
     @level2type = N'COLUMN',
-    @level2name = N'OrganizationID';
+    @level2name = N'dflt';
 GO
+
+-- Table: sales.oli
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Industry'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'Industry';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Industry sector of the person''s organization or professional focus.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'Industry';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'JobFunction'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'JobFunction';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Broad functional area of the person''s work (e.g., Engineering, QA, Product).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'JobFunction';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'YearsInProfession'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'YearsInProfession';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Number of years the person has worked in their profession.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'YearsInProfession';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'JoinDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'JoinDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the person was added to the system or joined the association.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'JoinDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'LinkedInURL'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'LinkedInURL';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'URL to the person''s LinkedIn profile, when available.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'LinkedInURL';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Bio'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'Bio';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Free‑form biography or description of the person (currently empty).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'Bio';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'PreferredLanguage'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'PreferredLanguage';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Language locale preferred by the person, default ''en-US''.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'PreferredLanguage';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Timezone'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'Timezone';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Time zone identifier for the person (currently missing).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'Timezone';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Phone'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'Phone';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Primary phone number for the person, when provided.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'Phone';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Mobile'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'Mobile';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Mobile phone number (currently missing).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'Mobile';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'City'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'City';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'City of residence or work location.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'City';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'State'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'State';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'State or province abbreviation for the person.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'State';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'Country'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'Country';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Country of residence, default ''United States''.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'Country';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'PostalCode'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'PostalCode';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Postal/ZIP code (currently missing).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'PostalCode';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'EngagementScore'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'EngagementScore';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Numeric score representing the person''s engagement level (currently always 0).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'EngagementScore';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'LastActivityDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'LastActivityDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Timestamp of the person''s most recent activity (currently missing).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'LastActivityDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Member'
-    AND c.name = 'ProfilePhotoURL'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Member',
-        @level2type = N'COLUMN',
-        @level2name = N'ProfilePhotoURL';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'URL to the person''s profile picture (currently missing).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Member',
-    @level2type = N'COLUMN',
-    @level2name = N'ProfilePhotoURL';
-GO
-
--- Table: AssociationDemo.Membership
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -7671,18 +3810,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership';
+        @level1name = N'oli';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores each member''s enrollment record for a specific membership tier, tracking the period of coverage, status, renewal settings, and any cancellation details.',
+    @value = N'Stores each line item of a customer order, capturing the product, quantity, price, discount, tax and line sequence within the order.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership';
+    @level1name = N'oli';
 GO
 
 IF EXISTS (
@@ -7690,319 +3829,257 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'oli_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'oli_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Surrogate primary key for the membership enrollment record',
+    @value = N'Unique identifier for the order line item',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'oli_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'MemberID'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'ord_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'MemberID';
+        @level2name = N'ord_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the member who holds this membership',
+    @value = N'Identifier of the parent order to which this line belongs',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'MemberID';
+    @level2name = N'ord_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'MembershipTypeID'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'prd_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'MembershipTypeID';
+        @level2name = N'prd_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the tier/plan of the membership',
+    @value = N'Identifier of the product being sold in this line item',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'MembershipTypeID';
+    @level2name = N'prd_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'Status'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'Status';
+        @level2name = N'qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current lifecycle state of the membership (Active, Lapsed, Cancelled)',
+    @value = N'Quantity of the product ordered in this line',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'Status';
+    @level2name = N'qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'StartDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'prc'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'StartDate';
+        @level2name = N'prc';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the membership became effective',
+    @value = N'Unit price of the product at the time of the order',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'StartDate';
+    @level2name = N'prc';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'EndDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'disc'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'EndDate';
+        @level2name = N'disc';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the membership is scheduled to end or expired',
+    @value = N'Discount amount applied to this line item',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'EndDate';
+    @level2name = N'disc';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'RenewalDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'tax_amt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'RenewalDate';
+        @level2name = N'tax_amt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the membership is set to renew (if applicable)',
+    @value = N'Tax amount calculated for this line item',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'RenewalDate';
+    @level2name = N'tax_amt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'AutoRenew'
+    WHERE s.name = 'sales'
+    AND t.name = 'oli'
+    AND c.name = 'seq'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Membership',
+        @level1name = N'oli',
         @level2type = N'COLUMN',
-        @level2name = N'AutoRenew';
+        @level2name = N'seq';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the membership should renew automatically',
+    @value = N'Line sequence number within the order (1‑5)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Membership',
+    @level1name = N'oli',
     @level2type = N'COLUMN',
-    @level2name = N'AutoRenew';
+    @level2name = N'seq';
 GO
+
+-- Table: sales.ord
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'CancellationDate'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Membership',
-        @level2type = N'COLUMN',
-        @level2name = N'CancellationDate';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Date the membership was cancelled, if any',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Membership',
-    @level2type = N'COLUMN',
-    @level2name = N'CancellationDate';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Membership'
-    AND c.name = 'CancellationReason'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Membership',
-        @level2type = N'COLUMN',
-        @level2name = N'CancellationReason';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Text explaining why the membership was cancelled',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Membership',
-    @level2type = N'COLUMN',
-    @level2name = N'CancellationReason';
-GO
-
--- Table: AssociationDemo.MembershipType
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -8010,18 +4087,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType';
+        @level1name = N'ord';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores the definitions of membership tiers for an organization, including the tier name, description, annual dues, renewal period, activation status, auto‑renewal and approval settings, associated benefits, and display order for UI presentation.',
+    @value = N'Stores sales order header information, capturing each order''s identifier, customer, dates, status, financial totals, shipping details, discounts, payment terms, and optional notes.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType';
+    @level1name = N'ord';
 GO
 
 IF EXISTS (
@@ -8029,319 +4106,350 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'ord_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'ord_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key uniquely identifying each membership tier.',
+    @value = N'Unique order identifier',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'ord_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'Name'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'cst_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'cst_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable name of the membership tier (e.g., Student, Corporate).',
+    @value = N'Identifier of the customer who placed the order',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'cst_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'Description'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'ord_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'Description';
+        @level2name = N'ord_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Longer textual description of what the tier offers and its eligibility criteria.',
+    @value = N'Date the order was created',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'Description';
+    @level2name = N'ord_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'AnnualDues'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'ship_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'AnnualDues';
+        @level2name = N'ship_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Yearly fee associated with the tier; 0 indicates a complimentary tier.',
+    @value = N'Date the order was shipped; null when not yet shipped',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'AnnualDues';
+    @level2name = N'ship_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'RenewalPeriodMonths'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'RenewalPeriodMonths';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Number of months a membership is valid before renewal; typical value is 12 months, with a special 1200‑month (100‑year) option for lifetime tiers.',
+    @value = N'Current status of the order (e.g., X=Cancelled, S=Submitted, P=Processing, D=Delivered, C=Closed)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'RenewalPeriodMonths';
+    @level2name = N'sts';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'IsActive'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'tot'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'IsActive';
+        @level2name = N'tot';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the tier is currently offered.',
+    @value = N'Total monetary amount of the order before tax and shipping',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'IsActive';
+    @level2name = N'tot';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'AllowAutoRenew'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'tax'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'AllowAutoRenew';
+        @level2name = N'tax';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Indicates if members of this tier may have their membership automatically renewed.',
+    @value = N'Tax amount applied to the order',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'AllowAutoRenew';
+    @level2name = N'tax';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'RequiresApproval'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'ship_amt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'RequiresApproval';
+        @level2name = N'ship_amt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Specifies whether enrollment in this tier needs manual approval.',
+    @value = N'Flat shipping charge (0 if free shipping, 15 otherwise)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'RequiresApproval';
+    @level2name = N'ship_amt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'Benefits'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'disc_pct'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'Benefits';
+        @level2name = N'disc_pct';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Detailed list of benefits granted to members of this tier.',
+    @value = N'Discount percentage applied to the order (0% or 10%)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'Benefits';
+    @level2name = N'disc_pct';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'MembershipType'
-    AND c.name = 'DisplayOrder'
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'pmt_trm'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'MembershipType',
+        @level1name = N'ord',
         @level2type = N'COLUMN',
-        @level2name = N'DisplayOrder';
+        @level2name = N'pmt_trm';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Numeric order used to sort tiers in UI lists.',
+    @value = N'Payment terms: COD (cash on delivery), N30 (net 30 days), N60 (net 60 days)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'MembershipType',
+    @level1name = N'ord',
     @level2type = N'COLUMN',
-    @level2name = N'DisplayOrder';
+    @level2name = N'pmt_trm';
 GO
-
--- Table: AssociationDemo.Organization
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'ord'
+    AND c.name = 'notes'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'ord',
+        @level2type = N'COLUMN',
+        @level2name = N'notes';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Optional free‑text note, often indicating a rush order',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'ord',
+    @level2type = N'COLUMN',
+    @level2name = N'notes';
+GO
+
+-- Table: sales.phn
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE s.name = 'sales'
+    AND t.name = 'phn'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -8349,18 +4457,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Organization';
+        @level1name = N'phn';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores master records for client organizations that function as tenant/parent entities in a multi‑tenant system. It captures identifying information, financial metrics, industry classification, and contact details, and serves as the parent for individual members and related transactions.',
+    @value = N'Stores phone contact information for customers, linking each phone number (including type, extension and default flag) to a customer record.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Organization';
+    @level1name = N'phn';
 GO
 
 IF EXISTS (
@@ -8368,536 +4476,195 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'phn'
+    AND c.name = 'phn_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Organization',
+        @level1name = N'phn',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'phn_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key GUID uniquely identifying each company record.',
+    @value = N'Unique identifier for each phone record',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Organization',
+    @level1name = N'phn',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'phn_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'Name'
+    WHERE s.name = 'sales'
+    AND t.name = 'phn'
+    AND c.name = 'cst_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Organization',
+        @level1name = N'phn',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'cst_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Legal or trade name of the company.',
+    @value = N'Identifier of the customer that owns the phone number',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Organization',
+    @level1name = N'phn',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'cst_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'Industry'
+    WHERE s.name = 'sales'
+    AND t.name = 'phn'
+    AND c.name = 'typ'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Organization',
+        @level1name = N'phn',
         @level2type = N'COLUMN',
-        @level2name = N'Industry';
+        @level2name = N'typ';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Broad sector classification of the company (e.g., Dairy Farming, Cloud Consulting).',
+    @value = N'Code indicating the phone type (e.g., Mobile, Home, Work)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Organization',
+    @level1name = N'phn',
     @level2type = N'COLUMN',
-    @level2name = N'Industry';
+    @level2name = N'typ';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'EmployeeCount'
+    WHERE s.name = 'sales'
+    AND t.name = 'phn'
+    AND c.name = 'num'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Organization',
+        @level1name = N'phn',
         @level2type = N'COLUMN',
-        @level2name = N'EmployeeCount';
+        @level2name = N'num';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Total number of employees working for the company.',
+    @value = N'The phone number string',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Organization',
+    @level1name = N'phn',
     @level2type = N'COLUMN',
-    @level2name = N'EmployeeCount';
+    @level2name = N'num';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'AnnualRevenue'
+    WHERE s.name = 'sales'
+    AND t.name = 'phn'
+    AND c.name = 'ext'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Organization',
+        @level1name = N'phn',
         @level2type = N'COLUMN',
-        @level2name = N'AnnualRevenue';
+        @level2name = N'ext';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Fiscal year revenue reported by the company, in monetary units.',
+    @value = N'Optional extension number associated with the phone',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Organization',
+    @level1name = N'phn',
     @level2type = N'COLUMN',
-    @level2name = N'AnnualRevenue';
+    @level2name = N'ext';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'MarketCapitalization'
+    WHERE s.name = 'sales'
+    AND t.name = 'phn'
+    AND c.name = 'dflt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Organization',
+        @level1name = N'phn',
         @level2type = N'COLUMN',
-        @level2name = N'MarketCapitalization';
+        @level2name = N'dflt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Total market value of the company''s outstanding shares, when publicly traded.',
+    @value = N'Flag indicating whether this is the customer''s default phone number',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Organization',
+    @level1name = N'phn',
     @level2type = N'COLUMN',
-    @level2name = N'MarketCapitalization';
+    @level2name = N'dflt';
 GO
+
+-- Table: sales.pmt
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'TickerSymbol'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'TickerSymbol';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Stock ticker used on a public exchange to identify the company''s shares.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'TickerSymbol';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'Exchange'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'Exchange';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Stock exchange where the company''s shares are listed (NYSE or NASDAQ).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'Exchange';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'Website'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'Website';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Public-facing website URL for the company.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'Website';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'Description'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'Description';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Brief textual description of the company''s business activities.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'Description';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'YearFounded'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'YearFounded';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Calendar year the company was established.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'YearFounded';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'City'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'City';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'City where the company''s headquarters or primary office is located.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'City';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'State'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'State';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'State or province abbreviation for the company''s primary location.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'State';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'Country'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'Country';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Country of the company''s primary location; defaults to United States.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'Country';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'PostalCode'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'PostalCode';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Postal/ZIP code for the company''s address (currently not populated).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'PostalCode';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'Phone'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'Phone';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Primary contact telephone number for the company.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'Phone';
-GO
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Organization'
-    AND c.name = 'LogoURL'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Organization',
-        @level2type = N'COLUMN',
-        @level2name = N'LogoURL';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'URL to the company''s logo image (currently not populated).',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Organization',
-    @level2type = N'COLUMN',
-    @level2name = N'LogoURL';
-GO
-
--- Table: AssociationDemo.Payment
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -8905,18 +4672,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment';
+        @level1name = N'pmt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores individual payment transactions linked to invoices, capturing when a payment was made, how much, the method used, processing status, and related metadata.',
+    @value = N'Stores individual payment transactions linking payments to orders and customers, capturing when a payment was made, its amount, method, status, reference code and optional notes.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment';
+    @level1name = N'pmt';
 GO
 
 IF EXISTS (
@@ -8924,319 +4691,288 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'pmt_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'pmt_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for the payment record, generated sequentially.',
+    @value = N'Unique identifier for each payment record',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'pmt_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'InvoiceID'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'ord_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'InvoiceID';
+        @level2name = N'ord_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reference to the invoice being paid.',
+    @value = N'Identifier of the order associated with the payment (nullable)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'InvoiceID';
+    @level2name = N'ord_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'PaymentDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'cst_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'PaymentDate';
+        @level2name = N'cst_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the payment was initiated or received.',
+    @value = N'Identifier of the customer who made the payment',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'PaymentDate';
+    @level2name = N'cst_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'Amount'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'pmt_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'Amount';
+        @level2name = N'pmt_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Monetary amount of the payment.',
+    @value = N'Date the payment was received or processed',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'Amount';
+    @level2name = N'pmt_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'PaymentMethod'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'amt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'PaymentMethod';
+        @level2name = N'amt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Channel used to process the payment (e.g., Credit Card, Stripe, ACH, PayPal).',
+    @value = N'Monetary amount of the payment',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'PaymentMethod';
+    @level2name = N'amt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'TransactionID'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'mthd'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'TransactionID';
+        @level2name = N'mthd';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'External transaction reference from the payment processor.',
+    @value = N'Payment method code (WR=Wire, CK=Check, CC=Credit Card, CA=Cash)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'TransactionID';
+    @level2name = N'mthd';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'Status'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'Status';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current outcome of the payment attempt (Completed or Failed).',
+    @value = N'Current status of the payment (R=Received, P=Pending, F=Failed, A=Approved)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'Status';
+    @level2name = N'sts';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'ProcessedDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'ref'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'ProcessedDate';
+        @level2name = N'ref';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Timestamp when the payment was processed in the system.',
+    @value = N'External reference or transaction code for the payment',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'ProcessedDate';
+    @level2name = N'ref';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'FailureReason'
+    WHERE s.name = 'sales'
+    AND t.name = 'pmt'
+    AND c.name = 'notes'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Payment',
+        @level1name = N'pmt',
         @level2type = N'COLUMN',
-        @level2name = N'FailureReason';
+        @level2name = N'notes';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reason for a failed payment, if applicable.',
+    @value = N'Optional comment about the payment, defaulting to "Account credit"',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Payment',
+    @level1name = N'pmt',
     @level2type = N'COLUMN',
-    @level2name = N'FailureReason';
+    @level2name = N'notes';
 GO
+
+-- Table: sales.rtn
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Payment'
-    AND c.name = 'Notes'
-    AND ep.name = 'MS_Description'
-)
-BEGIN
-    EXEC sp_dropextendedproperty
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
-        @level1type = N'TABLE',
-        @level1name = N'Payment',
-        @level2type = N'COLUMN',
-        @level2name = N'Notes';
-END
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Optional free‑form comments about the payment.',
-    @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
-    @level1type = N'TABLE',
-    @level1name = N'Payment',
-    @level2type = N'COLUMN',
-    @level2name = N'Notes';
-GO
-
--- Table: AssociationDemo.Segment
-IF EXISTS (
-    SELECT 1 FROM sys.extended_properties ep
-    INNER JOIN sys.tables t ON ep.major_id = t.object_id
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -9244,18 +4980,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment';
+        @level1name = N'rtn';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'This table stores predefined member segments (or audience groups) used for targeting in campaigns and communications. Each row defines a segment with a unique ID, name, description, type, optional filter logic, member count, calculation timestamp, and an active flag.',
+    @value = N'Stores records of product returns linked to specific orders and order line items, capturing when the return occurred, why, quantity, monetary amount, status, and any additional notes.',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment';
+    @level1name = N'rtn';
 GO
 
 IF EXISTS (
@@ -9263,246 +4999,616 @@ IF EXISTS (
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'ID'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'rtn_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'ID';
+        @level2name = N'rtn_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary‑key GUID that uniquely identifies each segment definition.',
+    @value = N'Unique identifier for the return transaction',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'ID';
+    @level2name = N'rtn_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'Name'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'ord_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'Name';
+        @level2name = N'ord_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Human‑readable name of the segment (e.g., "Technology Industry").',
+    @value = N'Identifier of the related order',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'Name';
+    @level2name = N'ord_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'Description'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'oli_id'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'Description';
+        @level2name = N'oli_id';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Longer textual description of the segment’s criteria or purpose.',
+    @value = N'Identifier of the specific order line item being returned',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'Description';
+    @level2name = N'oli_id';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'SegmentType'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'rtn_dt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'SegmentType';
+        @level2name = N'rtn_dt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Category or taxonomy of the segment (e.g., Industry, Geography, Membership Status).',
+    @value = N'Date the return was processed',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'SegmentType';
+    @level2name = N'rtn_dt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'FilterCriteria'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'rsn'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'FilterCriteria';
+        @level2name = N'rsn';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stored filter expression or query that defines the segment membership; currently null for all rows.',
+    @value = N'Reason code for the return',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'FilterCriteria';
+    @level2name = N'rsn';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'MemberCount'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'qty'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'MemberCount';
+        @level2name = N'qty';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Number of members currently belonging to the segment; presently zero because the segment has not been calculated.',
+    @value = N'Quantity of items returned',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'MemberCount';
+    @level2name = N'qty';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'LastCalculatedDate'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'amt'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'LastCalculatedDate';
+        @level2name = N'amt';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Timestamp of the last time the segment’s membership was computed; null indicates no calculation performed yet.',
+    @value = N'Monetary amount refunded for the return',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'LastCalculatedDate';
+    @level2name = N'amt';
 GO
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = 'AssociationDemo'
-    AND t.name = 'Segment'
-    AND c.name = 'IsActive'
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'sts'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'AssociationDemo',
+        @level0name = N'sales',
         @level1type = N'TABLE',
-        @level1name = N'Segment',
+        @level1name = N'rtn',
         @level2type = N'COLUMN',
-        @level2name = N'IsActive';
+        @level2name = N'sts';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the segment is active and can be used in campaigns.',
+    @value = N'Current status of the return (e.g., pending, approved, rejected)',
     @level0type = N'SCHEMA',
-    @level0name = N'AssociationDemo',
+    @level0name = N'sales',
     @level1type = N'TABLE',
-    @level1name = N'Segment',
+    @level1name = N'rtn',
     @level2type = N'COLUMN',
-    @level2name = N'IsActive';
+    @level2name = N'sts';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'rtn'
+    AND c.name = 'notes'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'rtn',
+        @level2type = N'COLUMN',
+        @level2name = N'notes';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Free‑form notes about the return',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'rtn',
+    @level2type = N'COLUMN',
+    @level2name = N'notes';
+GO
+
+-- Table: sales.shp
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND ep.name = 'MS_Description'
+    AND ep.minor_id = 0
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Stores detailed shipment records linking orders to warehouses, including shipping dates, delivery dates, carrier information, tracking numbers, status, weight and cost.',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp';
+GO
+
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'shp_id'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'shp_id';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Unique identifier for the shipment record',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'shp_id';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'ord_id'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'ord_id';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Identifier of the order associated with the shipment',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'ord_id';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'whs_id'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'whs_id';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Identifier of the warehouse from which the shipment originated',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'whs_id';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'ship_dt'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'ship_dt';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Date the items were shipped from the warehouse',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'ship_dt';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'dlv_dt'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'dlv_dt';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Actual or expected delivery date to the customer',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'dlv_dt';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'carr'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'carr';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Carrier used for the shipment (USPS, UPS, FedEx)',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'carr';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'trk'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'trk';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Tracking number assigned by the carrier',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'trk';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'sts'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'sts';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Current shipment status (S=Shipped, P=Pending, N=In‑Transit, D=Delivered)',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'sts';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'wgt'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'wgt';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Weight of the shipment (likely pounds or kilograms)',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'wgt';
+GO
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    INNER JOIN sys.tables t ON ep.major_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+    WHERE s.name = 'sales'
+    AND t.name = 'shp'
+    AND c.name = 'cost'
+    AND ep.name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA',
+        @level0name = N'sales',
+        @level1type = N'TABLE',
+        @level1name = N'shp',
+        @level2type = N'COLUMN',
+        @level2name = N'cost';
+END
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Shipping cost for the shipment',
+    @level0type = N'SCHEMA',
+    @level0name = N'sales',
+    @level1type = N'TABLE',
+    @level1name = N'shp',
+    @level2type = N'COLUMN',
+    @level2name = N'cost';
 GO
