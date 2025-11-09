@@ -3,12 +3,12 @@
  * Master Build Script
  *
  * This script creates a complete association management database with
- * realistic sample data across 8 business domains.
+ * realistic sample data in a single AssociationDemo schema.
  *
- * EXECUTION TIME: Approximately 2-5 minutes depending on server performance
+ * EXECUTION TIME: Approximately 1-2 minutes depending on server performance
  *
  * CONTENTS:
- * - 8 schemas (membership, events, learning, finance, marketing, email, chapters, governance)
+ * - Single AssociationDemo schema with 27 tables across 8 business domains
  * - 500 members with organizations and membership records
  * - 35 events with 1,400+ registrations
  * - 60 courses with 900 enrollments
@@ -31,16 +31,32 @@
  *   -- From sqlcmd:
  *   sqlcmd -S localhost -d YourDatabaseName -i MASTER_BUILD_AssociationDB.sql
  *
+ * CONFIGURATION:
+ *   -- To install WITHOUT documentation (extended properties):
+ *   :setvar INCLUDE_DOCUMENTATION 0
+ *   :r MASTER_BUILD_AssociationDB.sql
+ *
+ *   -- To install WITH documentation (default):
+ *   :setvar INCLUDE_DOCUMENTATION 1
+ *   :r MASTER_BUILD_AssociationDB.sql
+ *
  * NOTES:
  * - All dates are relative to execution time (evergreen data)
  * - Schema and table creation is idempotent (uses IF NOT EXISTS)
  * - Data inserts use NEWID() for randomization on each run
  * - Designed to work with MemberJunction CodeGen
+ * - Documentation installation is useful for testing auto-doc generation tools
  *
  ******************************************************************************/
 
+-- Default to including documentation if not specified
+:setvar INCLUDE_DOCUMENTATION 1
+
 SET NOCOUNT ON;
 GO
+
+-- Begin transaction to enable rollback on error
+BEGIN TRANSACTION;
 
 PRINT '';
 PRINT '###################################################################';
@@ -81,52 +97,56 @@ PRINT 'PHASE 1: CREATING SCHEMAS AND TABLES';
 PRINT '===================================================================';
 PRINT '';
 
--- Create schemas
-:r schema/V001__create_schemas.sql
+-- Create schema
+:r schema/V001__create_schema.sql
 
--- Membership schema tables
-:r schema/V002__membership_tables.sql
+-- Create all tables
+:r schema/V002__create_tables.sql
 
--- Events schema tables
-:r schema/V003__events_tables.sql
+PRINT '';
+PRINT '-------------------------------------------------------------------';
+PRINT 'PHASE 1A: Schema and table creation complete';
+PRINT '-------------------------------------------------------------------';
+PRINT '';
+GO
 
--- Learning schema tables
-:r schema/V004__learning_tables.sql
+/******************************************************************************
+ * PHASE 1B: DOCUMENTATION
+ * Adds extended properties for schema and table documentation
+ ******************************************************************************/
 
--- Finance schema tables
-:r schema/V005__finance_tables.sql
+PRINT '';
+PRINT '-------------------------------------------------------------------';
+PRINT 'PHASE 1B: ADDING DATABASE DOCUMENTATION';
+PRINT '-------------------------------------------------------------------';
+PRINT '';
+GO
 
--- Marketing schema tables
-:r schema/V006__marketing_tables.sql
+-- Table documentation
+:r schema/V003__table_documentation.sql
+GO
 
--- Email schema tables
-:r schema/V007__email_tables.sql
-
--- Chapters schema tables
-:r schema/V008__chapters_tables.sql
-
--- Governance schema tables
-:r schema/V009__governance_tables.sql
+PRINT '';
+PRINT '-------------------------------------------------------------------';
+PRINT 'PHASE 1B COMPLETE: Documentation added successfully';
+PRINT '-------------------------------------------------------------------';
+PRINT '';
+GO
 
 PRINT '';
 PRINT '===================================================================';
-PRINT 'PHASE 1 COMPLETE: All schemas and tables created successfully';
+PRINT 'PHASE 1 COMPLETE: AssociationDemo schema and all tables created';
 PRINT '===================================================================';
 PRINT '';
+GO
 
 /******************************************************************************
  * PHASE 2: SAMPLE DATA POPULATION
  * Inserts realistic sample data across all domains
  ******************************************************************************/
 
-PRINT '';
-PRINT '===================================================================';
-PRINT 'PHASE 2: POPULATING SAMPLE DATA';
-PRINT '===================================================================';
-PRINT '';
-PRINT 'NOTE: Data generation includes randomization and may produce';
-PRINT 'slightly different results on each execution.';
-PRINT '';
+-- Load parameters (date calculations and UUID declarations used by all data files)
+:r data/00_parameters.sql
 
 -- Membership data (foundation - must run first)
 :r data/01_membership_data.sql
@@ -178,25 +198,25 @@ DECLARE @ChapterCount INT, @ChapterMemberCount INT;
 DECLARE @CommitteeCount INT, @BoardPositionCount INT;
 
 -- Get counts
-SELECT @MemberCount = COUNT(*) FROM membership.Member;
-SELECT @OrgCount = COUNT(*) FROM membership.Organization;
-SELECT @MembershipCount = COUNT(*) FROM membership.Membership;
-SELECT @EventCount = COUNT(*) FROM events.Event;
-SELECT @RegistrationCount = COUNT(*) FROM events.EventRegistration;
-SELECT @SessionCount = COUNT(*) FROM events.EventSession;
-SELECT @CourseCount = COUNT(*) FROM learning.Course;
-SELECT @EnrollmentCount = COUNT(*) FROM learning.Enrollment;
-SELECT @CertificateCount = COUNT(*) FROM learning.Certificate;
-SELECT @InvoiceCount = COUNT(*) FROM finance.Invoice;
-SELECT @PaymentCount = COUNT(*) FROM finance.Payment;
-SELECT @CampaignCount = COUNT(*) FROM marketing.Campaign;
-SELECT @SegmentCount = COUNT(*) FROM marketing.Segment;
-SELECT @EmailTemplateCount = COUNT(*) FROM email.EmailTemplate;
-SELECT @EmailSendCount = COUNT(*) FROM email.EmailSend;
-SELECT @ChapterCount = COUNT(*) FROM chapters.Chapter;
-SELECT @ChapterMemberCount = COUNT(*) FROM chapters.ChapterMembership;
-SELECT @CommitteeCount = COUNT(*) FROM governance.Committee;
-SELECT @BoardPositionCount = COUNT(*) FROM governance.BoardPosition;
+SELECT @MemberCount = COUNT(*) FROM AssociationDemo.Member;
+SELECT @OrgCount = COUNT(*) FROM AssociationDemo.Organization;
+SELECT @MembershipCount = COUNT(*) FROM AssociationDemo.Membership;
+SELECT @EventCount = COUNT(*) FROM AssociationDemo.Event;
+SELECT @RegistrationCount = COUNT(*) FROM AssociationDemo.EventRegistration;
+SELECT @SessionCount = COUNT(*) FROM AssociationDemo.EventSession;
+SELECT @CourseCount = COUNT(*) FROM AssociationDemo.Course;
+SELECT @EnrollmentCount = COUNT(*) FROM AssociationDemo.Enrollment;
+SELECT @CertificateCount = COUNT(*) FROM AssociationDemo.Certificate;
+SELECT @InvoiceCount = COUNT(*) FROM AssociationDemo.Invoice;
+SELECT @PaymentCount = COUNT(*) FROM AssociationDemo.Payment;
+SELECT @CampaignCount = COUNT(*) FROM AssociationDemo.Campaign;
+SELECT @SegmentCount = COUNT(*) FROM AssociationDemo.Segment;
+SELECT @EmailTemplateCount = COUNT(*) FROM AssociationDemo.EmailTemplate;
+SELECT @EmailSendCount = COUNT(*) FROM AssociationDemo.EmailSend;
+SELECT @ChapterCount = COUNT(*) FROM AssociationDemo.Chapter;
+SELECT @ChapterMemberCount = COUNT(*) FROM AssociationDemo.ChapterMembership;
+SELECT @CommitteeCount = COUNT(*) FROM AssociationDemo.Committee;
+SELECT @BoardPositionCount = COUNT(*) FROM AssociationDemo.BoardPosition;
 
 -- Print summary
 PRINT 'MEMBERSHIP DOMAIN:';
@@ -250,7 +270,7 @@ PRINT '';
 DECLARE @IntegrityErrors INT = 0;
 
 -- Check for orphaned event registrations
-IF EXISTS (SELECT 1 FROM events.EventRegistration er WHERE NOT EXISTS (SELECT 1 FROM membership.Member m WHERE m.ID = er.MemberID))
+IF EXISTS (SELECT 1 FROM AssociationDemo.EventRegistration er WHERE NOT EXISTS (SELECT 1 FROM AssociationDemo.Member m WHERE m.ID = er.MemberID))
 BEGIN
     PRINT '  ✗ FAILED: Orphaned event registrations detected';
     SET @IntegrityErrors = @IntegrityErrors + 1;
@@ -259,7 +279,7 @@ ELSE
     PRINT '  ✓ PASSED: Event registrations → Members';
 
 -- Check for orphaned enrollments
-IF EXISTS (SELECT 1 FROM learning.Enrollment e WHERE NOT EXISTS (SELECT 1 FROM membership.Member m WHERE m.ID = e.MemberID))
+IF EXISTS (SELECT 1 FROM AssociationDemo.Enrollment e WHERE NOT EXISTS (SELECT 1 FROM AssociationDemo.Member m WHERE m.ID = e.MemberID))
 BEGIN
     PRINT '  ✗ FAILED: Orphaned enrollments detected';
     SET @IntegrityErrors = @IntegrityErrors + 1;
@@ -268,7 +288,7 @@ ELSE
     PRINT '  ✓ PASSED: Course enrollments → Members';
 
 -- Check for orphaned invoices
-IF EXISTS (SELECT 1 FROM finance.Invoice i WHERE NOT EXISTS (SELECT 1 FROM membership.Member m WHERE m.ID = i.MemberID))
+IF EXISTS (SELECT 1 FROM AssociationDemo.Invoice i WHERE NOT EXISTS (SELECT 1 FROM AssociationDemo.Member m WHERE m.ID = i.MemberID))
 BEGIN
     PRINT '  ✗ FAILED: Orphaned invoices detected';
     SET @IntegrityErrors = @IntegrityErrors + 1;
@@ -277,7 +297,7 @@ ELSE
     PRINT '  ✓ PASSED: Invoices → Members';
 
 -- Check for orphaned chapter memberships
-IF EXISTS (SELECT 1 FROM chapters.ChapterMembership cm WHERE NOT EXISTS (SELECT 1 FROM membership.Member m WHERE m.ID = cm.MemberID))
+IF EXISTS (SELECT 1 FROM AssociationDemo.ChapterMembership cm WHERE NOT EXISTS (SELECT 1 FROM AssociationDemo.Member m WHERE m.ID = cm.MemberID))
 BEGIN
     PRINT '  ✗ FAILED: Orphaned chapter memberships detected';
     SET @IntegrityErrors = @IntegrityErrors + 1;
@@ -327,6 +347,12 @@ PRINT '-------------------------------------------------------------------';
 PRINT '';
 PRINT 'For more information, see README.md';
 PRINT '';
+
+-- Commit the transaction
+COMMIT TRANSACTION;
+PRINT '';
+PRINT 'Transaction committed successfully!';
+GO
 
 SET NOCOUNT OFF;
 GO

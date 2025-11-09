@@ -23,12 +23,16 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 // Markdown
 import { MarkdownModule } from 'ngx-markdown';
 import { MJLinkField } from './lib/link-field.component';
+import { FormSectionControlsComponent } from './lib/form-section-controls.component';
+import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
 
 @NgModule({
   declarations: [
     SectionLoaderComponent,
     MJFormField,
-    MJLinkField
+    MJLinkField,
+    FormSectionControlsComponent,
+    CollapsiblePanelComponent
   ],
   imports: [
     CommonModule,
@@ -50,7 +54,9 @@ import { MJLinkField } from './lib/link-field.component';
   exports: [
     SectionLoaderComponent,
     MJFormField,
-    MJLinkField
+    MJLinkField,
+    FormSectionControlsComponent,
+    CollapsiblePanelComponent
   ]
 })
 export class BaseFormsModule { }

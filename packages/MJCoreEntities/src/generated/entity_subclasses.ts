@@ -6515,6 +6515,24 @@ export const EntityFieldSchema = z.object({
     *   * Deprecated
     *   * Disabled
         * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`),
+    AutoUpdateIsNameField: z.boolean().describe(`
+        * * Field Name: AutoUpdateIsNameField
+        * * Display Name: Auto Update Is Name Field
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field`),
+    AutoUpdateDefaultInView: z.boolean().describe(`
+        * * Field Name: AutoUpdateDefaultInView
+        * * Display Name: Auto Update Default In View
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field`),
+    AutoUpdateCategory: z.boolean().describe(`
+        * * Field Name: AutoUpdateCategory
+        * * Display Name: Auto Update Category
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -6928,6 +6946,17 @@ export const EntityRelationshipSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
+    AdditionalFieldsToInclude: z.string().nullable().describe(`
+        * * Field Name: AdditionalFieldsToInclude
+        * * Display Name: Additional Fields To Include
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])`),
+    AutoUpdateAdditionalFieldsToInclude: z.boolean().describe(`
+        * * Field Name: AutoUpdateAdditionalFieldsToInclude
+        * * Display Name: Auto Update Additional Fields To Include
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -8047,6 +8076,88 @@ export const AIAgentArtifactTypeSchema = z.object({
 });
 
 export type AIAgentArtifactTypeEntityType = z.infer<typeof AIAgentArtifactTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Configurations
+ */
+export const AIAgentConfigurationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary Key - Unique identifier for the agent configuration preset`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+        * * Description: Foreign Key - The agent this configuration preset belongs to`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Code-friendly name for the preset (e.g., HighPower, Fast, Balanced). Used in API calls and metadata references.`),
+    DisplayName: z.string().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: User-friendly display name shown in UI (e.g., "High Quality", "Quick Draft", "Maximum Detail")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description shown to users explaining what this configuration does (e.g., "Uses Claude Opus for highest quality results")`),
+    AIConfigurationID: z.string().nullable().describe(`
+        * * Field Name: AIConfigurationID
+        * * Display Name: AI Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Foreign Key - Optional AI Configuration to use for this preset. If NULL, uses default configuration (prompts with ConfigurationID IS NULL)`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this is the default preset for the agent. Should have exactly one default per agent.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Display order for UI. Lower numbers appear first. Typical values: 100 (Default), 200 (Fast), 300 (Balanced), 400 (High Quality)`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+        * * Description: Status of the preset: Pending (being configured), Active (available for use), Revoked (no longer available)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    AIConfiguration: z.string().nullable().describe(`
+        * * Field Name: AIConfiguration
+        * * Display Name: AI Configuration
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIAgentConfigurationEntityType = z.infer<typeof AIAgentConfigurationSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Data Sources
@@ -14918,6 +15029,10 @@ export const SchemaInfoSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
 });
 
 export type SchemaInfoEntityType = z.infer<typeof SchemaInfoSchema>;
@@ -33374,6 +33489,48 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: AutoUpdateIsNameField
+    * * Display Name: Auto Update Is Name Field
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field
+    */
+    get AutoUpdateIsNameField(): boolean {
+        return this.Get('AutoUpdateIsNameField');
+    }
+    set AutoUpdateIsNameField(value: boolean) {
+        this.Set('AutoUpdateIsNameField', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateDefaultInView
+    * * Display Name: Auto Update Default In View
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field
+    */
+    get AutoUpdateDefaultInView(): boolean {
+        return this.Get('AutoUpdateDefaultInView');
+    }
+    set AutoUpdateDefaultInView(value: boolean) {
+        this.Set('AutoUpdateDefaultInView', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateCategory
+    * * Display Name: Auto Update Category
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field
+    */
+    get AutoUpdateCategory(): boolean {
+        return this.Get('AutoUpdateCategory');
+    }
+    set AutoUpdateCategory(value: boolean) {
+        this.Set('AutoUpdateCategory', value);
+    }
+
+    /**
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -34392,6 +34549,33 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     }
     set AutoUpdateFromSchema(value: boolean) {
         this.Set('AutoUpdateFromSchema', value);
+    }
+
+    /**
+    * * Field Name: AdditionalFieldsToInclude
+    * * Display Name: Additional Fields To Include
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])
+    */
+    get AdditionalFieldsToInclude(): string | null {
+        return this.Get('AdditionalFieldsToInclude');
+    }
+    set AdditionalFieldsToInclude(value: string | null) {
+        this.Set('AdditionalFieldsToInclude', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateAdditionalFieldsToInclude
+    * * Display Name: Auto Update Additional Fields To Include
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field
+    */
+    get AutoUpdateAdditionalFieldsToInclude(): boolean {
+        return this.Get('AutoUpdateAdditionalFieldsToInclude');
+    }
+    set AutoUpdateAdditionalFieldsToInclude(value: boolean) {
+        this.Set('AutoUpdateAdditionalFieldsToInclude', value);
     }
 
     /**
@@ -37313,6 +37497,204 @@ export class AIAgentArtifactTypeEntity extends BaseEntity<AIAgentArtifactTypeEnt
     */
     get ArtifactType(): string {
         return this.Get('ArtifactType');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Configurations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentConfiguration
+ * * Base View: vwAIAgentConfigurations
+ * * @description Defines semantic configuration presets for agents, allowing users to select between different AI model configurations (e.g., Fast, Balanced, High Quality) when executing an agent. Each preset maps to an AI Configuration which controls model selection across all prompts.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Configurations')
+export class AIAgentConfigurationEntity extends BaseEntity<AIAgentConfigurationEntityType> {
+    /**
+    * Loads the MJ: AI Agent Configurations record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Configurations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentConfigurationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary Key - Unique identifier for the agent configuration preset
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Foreign Key - The agent this configuration preset belongs to
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Code-friendly name for the preset (e.g., HighPower, Fast, Balanced). Used in API calls and metadata references.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: User-friendly display name shown in UI (e.g., "High Quality", "Quick Draft", "Maximum Detail")
+    */
+    get DisplayName(): string {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description shown to users explaining what this configuration does (e.g., "Uses Claude Opus for highest quality results")
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: AIConfigurationID
+    * * Display Name: AI Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Foreign Key - Optional AI Configuration to use for this preset. If NULL, uses default configuration (prompts with ConfigurationID IS NULL)
+    */
+    get AIConfigurationID(): string | null {
+        return this.Get('AIConfigurationID');
+    }
+    set AIConfigurationID(value: string | null) {
+        this.Set('AIConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this is the default preset for the agent. Should have exactly one default per agent.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Display order for UI. Lower numbers appear first. Typical values: 100 (Default), 200 (Fast), 300 (Balanced), 400 (High Quality)
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+    * * Description: Status of the preset: Pending (being configured), Active (available for use), Revoked (no longer available)
+    */
+    get Status(): 'Active' | 'Pending' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: AIConfiguration
+    * * Display Name: AI Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AIConfiguration(): string | null {
+        return this.Get('AIConfiguration');
     }
 }
 
@@ -55560,6 +55942,18 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
     }
 }
 

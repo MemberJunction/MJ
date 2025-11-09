@@ -7,20 +7,15 @@
  * - Email: Templates, Email Sends, Clicks
  ******************************************************************************/
 
-PRINT '=================================================================';
-PRINT 'POPULATING MARKETING & EMAIL DATA';
-PRINT '=================================================================';
-PRINT '';
 
-:r 00_parameters.sql
+-- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
 -- MARKETING SEGMENTS (80 segments)
 -- ============================================================================
 
-PRINT 'Inserting Marketing Segments...';
 
-INSERT INTO [marketing].[Segment] (ID, Name, Description, SegmentType, MemberCount, IsActive)
+INSERT INTO [AssociationDemo].[Segment] (ID, Name, Description, SegmentType, MemberCount, IsActive)
 VALUES
     (@Segment_ActiveMembers, 'Active Members', 'All members with active status', 'Membership Status', 0, 1),
     (@Segment_Students, 'Student Members', 'All student membership holders', 'Membership Type', 0, 1),
@@ -33,16 +28,13 @@ VALUES
     (NEWID(), 'Healthcare Industry', 'Members in healthcare sector', 'Industry', 0, 1),
     (NEWID(), 'West Coast Region', 'Members in CA, WA, OR', 'Geography', 0, 1);
 
-PRINT '  Segments: 10 inserted (70 more would be added for full dataset)';
-PRINT '';
 
 -- ============================================================================
 -- MARKETING CAMPAIGNS (45 campaigns)
 -- ============================================================================
 
-PRINT 'Inserting Marketing Campaigns...';
 
-INSERT INTO [marketing].[Campaign] (ID, Name, CampaignType, Status, StartDate, EndDate, Budget, Description)
+INSERT INTO [AssociationDemo].[Campaign] (ID, Name, CampaignType, Status, StartDate, EndDate, Budget, Description)
 VALUES
     (@Campaign_Welcome, 'New Member Welcome Series 2024', 'Member Engagement', 'Active',
      DATEADD(YEAR, -1, @EndDate), @EndDate, 15000.00, 'Automated welcome campaign for new members'),
@@ -55,16 +47,13 @@ VALUES
     (NEWID(), 'Cybersecurity Month Campaign', 'Member Engagement', 'Completed',
      DATEADD(DAY, -300, @EndDate), DATEADD(DAY, -270, @EndDate), 8000.00, 'October cybersecurity awareness campaign');
 
-PRINT '  Campaigns: 5 inserted (40 more would be added for full dataset)';
-PRINT '';
 
 -- ============================================================================
 -- EMAIL TEMPLATES (30 templates)
 -- ============================================================================
 
-PRINT 'Inserting Email Templates...';
 
-INSERT INTO [email].[EmailTemplate] (ID, Name, Subject, FromName, FromEmail, Category, IsActive, PreviewText)
+INSERT INTO [AssociationDemo].[EmailTemplate] (ID, Name, Subject, FromName, FromEmail, Category, IsActive, PreviewText)
 VALUES
     (@Template_Welcome, 'Welcome Email - New Members', 'Welcome to the Technology Leadership Association!',
      'Technology Leadership Association', 'welcome@association.org', 'Welcome', 1, 'Thank you for joining our community of technology leaders'),
@@ -77,14 +66,11 @@ VALUES
     (@Template_Newsletter, 'Monthly Newsletter Template', 'Technology Leadership Monthly - [MONTH]',
      'Technology Leadership Association', 'newsletter@association.org', 'Newsletter', 1, 'Your monthly update on industry trends');
 
-PRINT '  Email Templates: 5 inserted (25 more would be added for full dataset)';
-PRINT '';
 
 -- ============================================================================
 -- EMAIL SENDS & CLICKS (Programmatically Generated)
 -- ============================================================================
 
-PRINT 'Generating Email Sends (this will take a moment)...';
 
 -- Generate email sends with realistic engagement rates
 DECLARE @TotalEmailSends INT = 0;
@@ -93,7 +79,7 @@ DECLARE @CurrentTemplateID UNIQUEIDENTIFIER;
 DECLARE @CurrentTemplateName NVARCHAR(255);
 DECLARE @SendsPerTemplate INT;
 
-SET @EmailCursor = CURSOR FOR SELECT ID, Name FROM [email].[EmailTemplate];
+SET @EmailCursor = CURSOR FOR SELECT ID, Name FROM [AssociationDemo].[EmailTemplate];
 OPEN @EmailCursor;
 FETCH NEXT FROM @EmailCursor INTO @CurrentTemplateID, @CurrentTemplateName;
 
@@ -108,24 +94,24 @@ BEGIN
     END;
 
     -- Generate sends
-    INSERT INTO [email].[EmailSend] (ID, TemplateID, MemberID, Subject, SentDate, DeliveredDate, OpenedDate, ClickedDate, Status, OpenCount, ClickCount)
+    INSERT INTO [AssociationDemo].[EmailSend] (ID, TemplateID, MemberID, Subject, SentDate, DeliveredDate, OpenedDate, ClickedDate, Status, OpenCount, ClickCount)
     SELECT TOP (@SendsPerTemplate)
         NEWID(),
         @CurrentTemplateID,
         m.ID,
         'Sample Subject for ' + @CurrentTemplateName,
-        DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate),
+        DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)),
         -- 97% delivery rate
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.97
-            THEN DATEADD(MINUTE, 2, DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(MINUTE, 2, DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         -- 25% open rate of delivered
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.25
-            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 48), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 48), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         -- 5% click rate of delivered
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.05
-            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 72), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), @EndDate))
+            THEN DATEADD(HOUR, ABS(CHECKSUM(NEWID()) % 72), DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), CAST(@EndDate AS DATETIME)))
         END,
         CASE
             WHEN RAND(CHECKSUM(NEWID())) < 0.05 THEN 'Clicked'
@@ -135,7 +121,7 @@ BEGIN
         END,
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.25 THEN 1 + ABS(CHECKSUM(NEWID()) % 3) ELSE 0 END,
         CASE WHEN RAND(CHECKSUM(NEWID())) < 0.05 THEN 1 + ABS(CHECKSUM(NEWID()) % 2) ELSE 0 END
-    FROM [membership].[Member] m
+    FROM [AssociationDemo].[Member] m
     ORDER BY NEWID();
 
     SET @TotalEmailSends = @TotalEmailSends + @@ROWCOUNT;
@@ -145,11 +131,9 @@ END;
 CLOSE @EmailCursor;
 DEALLOCATE @EmailCursor;
 
-PRINT '  Email Sends: ' + CAST(@TotalEmailSends AS VARCHAR) + ' generated';
-PRINT '';
 
 -- Generate email clicks for clicked emails
-INSERT INTO [email].[EmailClick] (ID, EmailSendID, ClickDate, URL, LinkName)
+INSERT INTO [AssociationDemo].[EmailClick] (ID, EmailSendID, ClickDate, URL, LinkName)
 SELECT
     NEWID(),
     es.ID,
@@ -164,14 +148,8 @@ SELECT
         WHEN 1 THEN 'Browse Courses'
         ELSE 'Renew Now'
     END
-FROM [email].[EmailSend] es
-WHERE es.Status = 'Clicked';
+FROM [AssociationDemo].[EmailSend] es
+WHERE es.Status = 'Clicked' AND es.ClickedDate IS NOT NULL;
 
-PRINT '  Email Clicks: ' + CAST(@@ROWCOUNT AS VARCHAR) + ' generated';
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'MARKETING & EMAIL DATA POPULATION COMPLETE';
-PRINT '=================================================================';
-PRINT '';
-GO
+-- Note: No GO statement here - variables must persist within transaction

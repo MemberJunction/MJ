@@ -11,7 +11,7 @@ export abstract class BaseLink {
             renderer.setAttribute(a, 'target', '_blank');
         renderer.insertBefore(parent, a, el.nativeElement);
         renderer.addClass(a, 'link-text');
-//        renderer.setStyle(a, 'font-size', '14px');
+        renderer.setStyle(a, 'font-size', '16px');
         renderer.appendChild(a, el.nativeElement);
     }
 }

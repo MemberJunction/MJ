@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
+## 2.117.0
+
+### Patch Changes
+
+- d21eadd: tweaking codegen for better and cleaner UX
+- Updated dependencies [8c092ec]
+  - @memberjunction/core@2.117.0
+  - @memberjunction/ng-ask-skip@2.117.0
+  - @memberjunction/ng-base-forms@2.117.0
+  - @memberjunction/ng-record-changes@2.117.0
+  - @memberjunction/ng-shared@2.117.0
+  - @memberjunction/ng-container-directives@2.117.0
+  - @memberjunction/global@2.117.0
+
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/ng-ask-skip@2.116.0
+  - @memberjunction/ng-base-forms@2.116.0
+  - @memberjunction/ng-record-changes@2.116.0
+  - @memberjunction/ng-shared@2.116.0
+  - @memberjunction/ng-container-directives@2.116.0
+
 ## 2.115.0
 
 ### Patch Changes

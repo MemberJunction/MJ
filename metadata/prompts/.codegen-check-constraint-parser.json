@@ -1,0 +1,64 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Check Constraint Parser",
+      "Description": "Parses SQL CHECK constraints and generates TypeScript validation methods with business-friendly descriptions",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/check-constraint-parser.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "OutputType": "object",
+      "OutputExample": "",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 3,
+      "RetryDelayMS": 1500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "FBA6EAF8-3481-4052-A0AF-D59880C4BAFF"
+          },
+          "sync": {
+            "lastModified": "2025-11-06T18:32:24.778Z",
+            "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "8FC26972-A24A-4363-A510-A32C121D3226"
+          },
+          "sync": {
+            "lastModified": "2025-11-06T18:32:24.789Z",
+            "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8B635038-60E9-4591-8B2C-7F33338D58DC"
+    },
+    "sync": {
+      "lastModified": "2025-11-06T19:27:57.727Z",
+      "checksum": "edda272652d0681c87886a890452e39b4f78859b2c698587a1bb7f9a94f9c68c"
+    }
+  }
+]

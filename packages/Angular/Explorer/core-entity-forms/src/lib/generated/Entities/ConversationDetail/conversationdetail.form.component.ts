@@ -2,19 +2,35 @@ import { Component } from '@angular/core';
 import { ConversationDetailEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadConversationDetailDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Conversation Details') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-conversationdetail-form',
-    templateUrl: './conversationdetail.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './conversationdetail.form.component.html'
 })
 export class ConversationDetailFormComponent extends BaseFormComponent {
     public record!: ConversationDetailEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'conversationLinksArtifacts', sectionName: 'Conversation Links & Artifacts', isExpanded: true },
+            { sectionKey: 'messageDetails', sectionName: 'Message Details', isExpanded: true },
+            { sectionKey: 'userFeedbackInsights', sectionName: 'User Feedback & Insights', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
+            { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'MJ: Conversation Detail Artifacts', isExpanded: false },
+            { sectionKey: 'mJConversationDetailRatings', sectionName: 'MJ: Conversation Detail Ratings', isExpanded: false },
+            { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false },
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
+            { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'MJ: Tasks', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadConversationDetailFormComponent() {
-    LoadConversationDetailDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

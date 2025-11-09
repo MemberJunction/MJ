@@ -21,6 +21,15 @@
     align-self: start; /* Align the label to the start (top) */
 }
 
+/* Enable wrapping and vertical scrolling for field values */
+.record-form-row > :nth-child(2) {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    min-width: 0;
+    max-width: 100%;
+}
+
 /*
   Eliminate the default margin and padding for the markdown elements
  */
@@ -35,7 +44,17 @@
 }
 
 markdown {
-  font-size: 1rem; /* Adjust this value to match your app's regular text size */
+  font-size: 14px; /* Match app standard text size (changed from 1rem) */
+}
+
+/* Search highlighting for field labels */
+.record-form-row label ::ng-deep .search-highlight {
+  background-color: #fef08a;
+  color: #854d0e;
+  padding: 0;
+  border-radius: 2px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px #fef08a;
 }
 
 

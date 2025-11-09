@@ -25,6 +25,7 @@ import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+import { AIEngine } from '@memberjunction/aiengine';
 
 LoadCoreEntitiesServerSubClasses(); // Load the core entities server subclasses to ensure they are registered and not tree shaken
 
@@ -138,6 +139,13 @@ export class RunCodeGenBase {
         process.exit(1);
       }
       succeedSpinner(`Loaded ${md.Entities.length} entities from metadata`);
+
+      // Initialize AIEngine for advanced generation features (needed for prompt metadata access)
+      if (configInfo.advancedGeneration?.enableAdvancedGeneration) {
+        startSpinner('Initializing AI Engine for advanced generation...');
+        await AIEngine.Instance.Config(false, currentUser);
+        succeedSpinner('AI Engine initialized');
+      }
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;

@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
+## 2.117.0
+
+### Patch Changes
+
+- Updated dependencies [8c092ec]
+  - @memberjunction/core@2.117.0
+  - @memberjunction/actions-base@2.117.0
+  - @memberjunction/ng-compare-records@2.117.0
+  - @memberjunction/ng-entity-form-dialog@2.117.0
+  - @memberjunction/ng-shared@2.117.0
+  - @memberjunction/ng-base-types@2.117.0
+  - @memberjunction/ng-container-directives@2.117.0
+  - @memberjunction/ng-entity-communications@2.117.0
+  - @memberjunction/communication-types@2.117.0
+  - @memberjunction/entity-communications-client@2.117.0
+  - @memberjunction/core-entities@2.117.0
+  - @memberjunction/templates-base-types@2.117.0
+  - @memberjunction/global@2.117.0
+
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [88f60e7]
+- Updated dependencies [a8d5592]
+- Updated dependencies [f294854]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/actions-base@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/communication-types@2.116.0
+  - @memberjunction/ng-compare-records@2.116.0
+  - @memberjunction/ng-entity-form-dialog@2.116.0
+  - @memberjunction/ng-shared@2.116.0
+  - @memberjunction/ng-base-types@2.116.0
+  - @memberjunction/ng-container-directives@2.116.0
+  - @memberjunction/ng-entity-communications@2.116.0
+  - @memberjunction/entity-communications-client@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/templates-base-types@2.116.0
+
 ## 2.115.0
 
 ### Patch Changes

@@ -1,73 +1,227 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Resource Types" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Workspace Items" [Visible]="record.IsSaved"> 
-                        Workspace Items
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Workspace Items')"
-                            [AllowLoad]="IsCurrentTab('Workspace Items')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Technical Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="technicalDetails"
+        sectionName="Technical Details"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
 
-                    <mj-tab Name="User Notifications" [Visible]="record.IsSaved"> 
-                        User Notifications
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('User Notifications')"
-                            [AllowLoad]="IsCurrentTab('User Notifications')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Resource Links" [Visible]="record.IsSaved"> 
-                        Resource Links
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Resource Links')"
-                            [AllowLoad]="IsCurrentTab('Resource Links')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Resource Type Definition Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="resourceTypeDefinition"
+        sectionName="Resource Type Definition"
+        icon="fa fa-tag"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayName"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="Resource Permissions" [Visible]="record.IsSaved"> 
-                        Resource Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"  
-                            [NewRecordValues]="NewRecordValues('Resource Permissions')"
-                            [AllowLoad]="IsCurrentTab('Resource Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
-    </form>
-</div>
+    </mj-collapsible-panel>
+
+    <!-- Entity Associations Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="entityAssociations"
+        sectionName="Entity Associations"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Dropdown"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CategoryEntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Dropdown"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="CategoryEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- Workspace Items Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="workspaceItems"
+        sectionName="Workspace Items"
+        icon="fa fa-th"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('workspaceItems')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"
+                [NewRecordValues]="NewRecordValues('Workspace Items')"
+                [AllowLoad]="IsSectionExpanded('workspaceItems')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('workspaceItems', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- User Notifications Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="userNotifications"
+        sectionName="User Notifications"
+        icon="fa fa-bell"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('userNotifications')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"
+                [NewRecordValues]="NewRecordValues('User Notifications')"
+                [AllowLoad]="IsSectionExpanded('userNotifications')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('userNotifications', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Resource Links Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resourceLinks"
+        sectionName="Resource Links"
+        icon="fa fa-link"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('resourceLinks')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"
+                [NewRecordValues]="NewRecordValues('Resource Links')"
+                [AllowLoad]="IsSectionExpanded('resourceLinks')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('resourceLinks', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Resource Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resourcePermissions"
+        sectionName="Resource Permissions"
+        icon="fa fa-lock"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('resourcePermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"
+                [NewRecordValues]="NewRecordValues('Resource Permissions')"
+                [AllowLoad]="IsSectionExpanded('resourcePermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

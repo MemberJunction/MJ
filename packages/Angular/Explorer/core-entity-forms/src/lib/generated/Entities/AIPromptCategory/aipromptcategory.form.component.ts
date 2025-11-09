@@ -2,19 +2,28 @@ import { Component } from '@angular/core';
 import { AIPromptCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIPromptCategoryDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'AI Prompt Categories') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aipromptcategory-form',
-    templateUrl: './aipromptcategory.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aipromptcategory.form.component.html'
 })
 export class AIPromptCategoryFormComponent extends BaseFormComponent {
     public record!: AIPromptCategoryEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'categoryIdentification', sectionName: 'Category Identification', isExpanded: true },
+            { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'aIPrompts', sectionName: 'AI Prompts', isExpanded: false },
+            { sectionKey: 'aIPromptCategories', sectionName: 'AI Prompt Categories', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadAIPromptCategoryFormComponent() {
-    LoadAIPromptCategoryDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

@@ -4,7 +4,6 @@
         @if (form.UserCanEdit) {
             <button kendoButton (click)="form.StartEditMode()" title="Edit this Record">
                 <span class="fa-solid fa-pen-to-square"></span>
-                <span class="button-text">Edit</span>
             </button> 
         }
         @if(form.UserCanDelete){
@@ -46,9 +45,8 @@
     }
     @if (form.EntityInfo?.TrackRecordChanges && !form.EditMode) {
         <button kendoButton (click)="form.handleHistoryDialog()" title="Show History">
-            <span class="fa-solid fa-business-time"></span>
-            <span class="button-text">History</span>
-        </button> 
+            <span class="fa-solid fa-clock-rotate-left"></span>
+        </button>
     }
     @if (ShowSkipChatButton && !form.EditMode) {
         <button kendoButton (click)="ShowSkipChat()" title="Discuss this record with Skip">
@@ -70,9 +68,13 @@
     }
     @if(!form.EditMode){
         <button kendoButton (click)="toggleListDialog(true)" title="Add this record to a list">
-            <span class="fa-solid fa-plus"></span>
-        </button> 
+            <span class="fa-solid fa-rectangle-list"></span>
+        </button>
     }
+
+    <!-- Slot for additional controls (section controls) - no separator needed with right-align -->
+    <ng-content select="[toolbar-additional-controls]"></ng-content>
+
     <kendo-dialog 
     [minWidth]="450"
     [width]="650"

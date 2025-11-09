@@ -8,20 +8,15 @@
  * - 650 Certificates (generated for completions)
  ******************************************************************************/
 
-PRINT '================================================================';
-PRINT 'POPULATING LEARNING DATA';
-PRINT '=================================================================';
-PRINT '';
 
-:r 00_parameters.sql
+-- Parameters are loaded by MASTER_BUILD script before this file
 
 -- ============================================================================
 -- COURSES (60 Courses across categories and levels)
 -- ============================================================================
 
-PRINT 'Inserting Courses...';
 
-INSERT INTO [learning].[Course] (ID, Code, Title, Description, Category, Level, DurationHours, CEUCredits, Price, MemberPrice, IsActive, PublishedDate, InstructorName)
+INSERT INTO [AssociationDemo].[Course] (ID, Code, Title, Description, Category, Level, DurationHours, CEUCredits, Price, MemberPrice, IsActive, PublishedDate, InstructorName)
 VALUES
     -- Cloud Architecture (8 courses)
     (@Course_CloudArchitect, 'CLD-301', 'Advanced Cloud Architecture Certification', 'Comprehensive cloud architecture patterns and best practices', 'Cloud', 'Advanced', 40.0, 12.0, 899.00, 699.00, 1, DATEADD(DAY, -900, @EndDate), 'Dr. Michael Chen'),
@@ -97,21 +92,18 @@ VALUES
     (NEWID(), 'BUS-203', 'Vendor Management and Procurement', 'Technology vendor relationships', 'Business', 'Intermediate', 16.0, 4.0, 449.00, 329.00, 1, DATEADD(DAY, -250, @EndDate), 'David Martinez'),
     (NEWID(), 'BUS-302', 'Technology Portfolio Management', 'Managing technology investments', 'Business', 'Advanced', 24.0, 6.0, 649.00, 479.00, 1, DATEADD(DAY, -180, @EndDate), 'Lisa Brown');
 
-PRINT '  Courses: 60 inserted';
-PRINT '';
 
 -- ============================================================================
 -- ENROLLMENTS (900 enrollments - Generated Programmatically)
 -- ============================================================================
 
-PRINT 'Generating Course Enrollments (900 records)...';
 
 -- Generate enrollments with realistic patterns
 DECLARE @TotalEnrollments INT = 0;
 DECLARE @CompletedEnrollments INT = 0;
 
 -- Insert enrollments for random member/course combinations
-INSERT INTO [learning].[Enrollment] (ID, CourseID, MemberID, EnrollmentDate, StartDate, CompletionDate, Status, ProgressPercentage, FinalScore, Passed, InvoiceID)
+INSERT INTO [AssociationDemo].[Enrollment] (ID, CourseID, MemberID, EnrollmentDate, StartDate, CompletionDate, Status, ProgressPercentage, FinalScore, Passed, InvoiceID)
 SELECT TOP 900
     NEWID(),
     c.ID,
@@ -140,49 +132,36 @@ SELECT TOP 900
         ELSE 0
     END,
     NULL -- Will link to invoices later
-FROM [learning].[Course] c
-CROSS JOIN [membership].[Member] m
+FROM [AssociationDemo].[Course] c
+CROSS JOIN [AssociationDemo].[Member] m
 WHERE m.JoinDate < DATEADD(DAY, -30, @EndDate)
 ORDER BY NEWID();
 
 SET @TotalEnrollments = @@ROWCOUNT;
 
-PRINT '  Enrollments: ' + CAST(@TotalEnrollments AS VARCHAR) + ' generated';
-PRINT '';
 
 -- ============================================================================
 -- CERTIFICATES (Generated for completed enrollments)
 -- ============================================================================
 
-PRINT 'Generating Certificates for Completed Enrollments...';
 
-INSERT INTO [learning].[Certificate] (ID, EnrollmentID, CertificateNumber, IssuedDate, ExpirationDate, CertificatePDFURL, VerificationCode)
+INSERT INTO [AssociationDemo].[Certificate] (ID, EnrollmentID, CertificateNumber, IssuedDate, ExpirationDate, CertificatePDFURL, VerificationCode)
 SELECT
     NEWID(),
     e.ID,
-    'CERT-' + FORMAT(YEAR(e.CompletionDate), '0000') + '-' + RIGHT('000000' + CAST(ROW_NUMBER() OVER (ORDER BY e.CompletionDate) AS VARCHAR), 6),
-    e.CompletionDate,
+    'CERT-' + FORMAT(YEAR(COALESCE(e.CompletionDate, GETDATE())), '0000') + '-' + RIGHT('000000' + CAST(ROW_NUMBER() OVER (ORDER BY COALESCE(e.CompletionDate, GETDATE())) AS VARCHAR), 6),
+    COALESCE(e.CompletionDate, GETDATE()),
     CASE
-        WHEN c.Category IN ('Security', 'Cloud') THEN DATEADD(YEAR, 3, e.CompletionDate)
+        WHEN c.Category IN ('Security', 'Cloud') THEN DATEADD(YEAR, 3, COALESCE(e.CompletionDate, GETDATE()))
         ELSE NULL
     END,
-    'https://certificates.association.org/' + CAST(NEWID() AS VARCHAR) + '.pdf',
-    UPPER(SUBSTRING(CAST(NEWID() AS VARCHAR), 1, 12))
-FROM [learning].[Enrollment] e
-INNER JOIN [learning].[Course] c ON e.CourseID = c.ID
-WHERE e.Status = 'Completed' AND e.Passed = 1;
+    'https://certificates.association.org/' + CAST(NEWID() AS VARCHAR(36)) + '.pdf',
+    UPPER(SUBSTRING(CAST(NEWID() AS VARCHAR(36)), 1, 12))
+FROM [AssociationDemo].[Enrollment] e
+INNER JOIN [AssociationDemo].[Course] c ON e.CourseID = c.ID
+WHERE e.Status = 'Completed' AND e.Passed = 1 AND e.CompletionDate IS NOT NULL;
 
 SET @CompletedEnrollments = @@ROWCOUNT;
 
-PRINT '  Certificates: ' + CAST(@CompletedEnrollments AS VARCHAR) + ' generated';
-PRINT '';
 
-PRINT '=================================================================';
-PRINT 'LEARNING DATA POPULATION COMPLETE';
-PRINT 'Summary:';
-PRINT '  - Courses: 60';
-PRINT '  - Enrollments: ' + CAST(@TotalEnrollments AS VARCHAR);
-PRINT '  - Certificates: ' + CAST(@CompletedEnrollments AS VARCHAR);
-PRINT '=================================================================';
-PRINT '';
-GO
+-- Note: No GO statement here - variables must persist within transaction

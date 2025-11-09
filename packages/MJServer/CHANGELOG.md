@@ -1,5 +1,106 @@
 # Change Log - @memberjunction/server
 
+## 2.117.0
+
+### Patch Changes
+
+- Updated dependencies [36db9d9]
+- Updated dependencies [8c092ec]
+  - @memberjunction/ai-agents@2.117.0
+  - @memberjunction/core@2.117.0
+  - @memberjunction/ai-agent-manager@2.117.0
+  - @memberjunction/core-actions@2.117.0
+  - @memberjunction/scheduling-engine@2.117.0
+  - @memberjunction/ai-agent-manager-actions@2.117.0
+  - @memberjunction/ai-core-plus@2.117.0
+  - @memberjunction/aiengine@2.117.0
+  - @memberjunction/ai-prompts@2.117.0
+  - @memberjunction/ai-vectors-pinecone@2.117.0
+  - @memberjunction/actions-apollo@2.117.0
+  - @memberjunction/actions-bizapps-accounting@2.117.0
+  - @memberjunction/actions-bizapps-crm@2.117.0
+  - @memberjunction/actions-bizapps-formbuilders@2.117.0
+  - @memberjunction/actions-bizapps-lms@2.117.0
+  - @memberjunction/actions-bizapps-social@2.117.0
+  - @memberjunction/actions@2.117.0
+  - @memberjunction/entity-communications-server@2.117.0
+  - @memberjunction/communication-ms-graph@2.117.0
+  - @memberjunction/communication-sendgrid@2.117.0
+  - @memberjunction/component-registry-client-sdk@2.117.0
+  - @memberjunction/doc-utils@2.117.0
+  - @memberjunction/external-change-detection@2.117.0
+  - @memberjunction/graphql-dataprovider@2.117.0
+  - @memberjunction/core-entities@2.117.0
+  - @memberjunction/core-entities-server@2.117.0
+  - @memberjunction/data-context@2.117.0
+  - @memberjunction/data-context-server@2.117.0
+  - @memberjunction/queue@2.117.0
+  - @memberjunction/storage@2.117.0
+  - @memberjunction/sqlserver-dataprovider@2.117.0
+  - @memberjunction/scheduling-actions@2.117.0
+  - @memberjunction/scheduling-engine-base@2.117.0
+  - @memberjunction/skip-types@2.117.0
+  - @memberjunction/templates@2.117.0
+  - @memberjunction/ai@2.117.0
+  - @memberjunction/ai-provider-bundle@2.117.0
+  - @memberjunction/global@2.117.0
+  - @memberjunction/scheduling-base-types@2.117.0
+
+## 2.116.0
+
+### Minor Changes
+
+- b80fe44: Migration
+
+### Patch Changes
+
+- a860a7d: fix(agents): Pass dataSource context to agent execution.
+
+  feat(codegen): Sync SchemaInfo from database schemas with extended properties. CodeGen now automatically synchronizes SchemaInfo records from database schemas, capturing MS_Description extended properties as schema descriptions. This includes a new Description column on SchemaInfo table, vwSQLSchemas view for querying schemas with extended properties, spUpdateSchemaInfoFromDatabase stored procedure for automatic sync, and integration into the CodeGen workflow to run on every execution.
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+- Updated dependencies [f294854]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/communication-ms-graph@2.116.0
+  - @memberjunction/ai-agent-manager-actions@2.116.0
+  - @memberjunction/ai-agent-manager@2.116.0
+  - @memberjunction/ai-agents@2.116.0
+  - @memberjunction/ai-core-plus@2.116.0
+  - @memberjunction/aiengine@2.116.0
+  - @memberjunction/ai-prompts@2.116.0
+  - @memberjunction/ai-vectors-pinecone@2.116.0
+  - @memberjunction/actions-apollo@2.116.0
+  - @memberjunction/actions-bizapps-accounting@2.116.0
+  - @memberjunction/actions-bizapps-crm@2.116.0
+  - @memberjunction/actions-bizapps-formbuilders@2.116.0
+  - @memberjunction/actions-bizapps-lms@2.116.0
+  - @memberjunction/actions-bizapps-social@2.116.0
+  - @memberjunction/core-actions@2.116.0
+  - @memberjunction/actions@2.116.0
+  - @memberjunction/entity-communications-server@2.116.0
+  - @memberjunction/communication-sendgrid@2.116.0
+  - @memberjunction/component-registry-client-sdk@2.116.0
+  - @memberjunction/doc-utils@2.116.0
+  - @memberjunction/external-change-detection@2.116.0
+  - @memberjunction/graphql-dataprovider@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/core-entities-server@2.116.0
+  - @memberjunction/data-context@2.116.0
+  - @memberjunction/data-context-server@2.116.0
+  - @memberjunction/queue@2.116.0
+  - @memberjunction/storage@2.116.0
+  - @memberjunction/sqlserver-dataprovider@2.116.0
+  - @memberjunction/scheduling-actions@2.116.0
+  - @memberjunction/scheduling-engine-base@2.116.0
+  - @memberjunction/scheduling-engine@2.116.0
+  - @memberjunction/skip-types@2.116.0
+  - @memberjunction/templates@2.116.0
+  - @memberjunction/ai@2.116.0
+  - @memberjunction/scheduling-base-types@2.116.0
+  - @memberjunction/ai-provider-bundle@2.116.0
+
 ## 2.115.0
 
 ### Patch Changes

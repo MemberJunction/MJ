@@ -1,5 +1,55 @@
 # @memberjunction/ai-agents
 
+## 2.117.0
+
+### Patch Changes
+
+- 36db9d9: Fix agent failure propagation and Flow agent error handling
+
+  **Flow Agent Improvements:**
+
+  - Handle 'Failed' steps in PreProcessNextStep to enable conditional failure path navigation
+  - Properly terminate when step fails with no recovery path
+  - Navigate to failure handler steps when recovery paths exist
+  - Add logging for failure recovery path evaluation
+
+  **Base Agent Improvements:**
+
+  - Capture error messages from child and related sub-agent failures
+  - Extract errorMessage from subAgentResult.agentRun.ErrorMessage
+  - Prioritize finalStep.errorMessage over finalStep.message in finalizeAgentRun
+  - Ensure error context propagates up the agent hierarchy
+
+  These changes enable Flow agents to detect sub-agent failures, evaluate
+
+- Updated dependencies [8c092ec]
+  - @memberjunction/core@2.117.0
+  - @memberjunction/ai-core-plus@2.117.0
+  - @memberjunction/aiengine@2.117.0
+  - @memberjunction/ai-prompts@2.117.0
+  - @memberjunction/actions-base@2.117.0
+  - @memberjunction/actions@2.117.0
+  - @memberjunction/core-entities@2.117.0
+  - @memberjunction/ai@2.117.0
+  - @memberjunction/global@2.117.0
+
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [88f60e7]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/actions-base@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/ai-core-plus@2.116.0
+  - @memberjunction/aiengine@2.116.0
+  - @memberjunction/ai-prompts@2.116.0
+  - @memberjunction/actions@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/ai@2.116.0
+
 ## 2.115.0
 
 ### Minor Changes

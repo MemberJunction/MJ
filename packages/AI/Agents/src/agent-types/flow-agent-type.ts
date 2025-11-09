@@ -14,12 +14,13 @@
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatus, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { PayloadManager } from '../PayloadManager';
+import { ConversationMessageResolver } from '../utils/ConversationMessageResolver';
 
 /**
  * Extended BaseAgentNextStep for Flow Agent Type with additional prompt step metadata
@@ -51,6 +52,13 @@ export class FlowExecutionState {
 
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];
+
+    /** Special fields from action output mappings (message, reasoning, confidence) */
+    specialFields?: {
+        message?: string;
+        reasoning?: string;
+        confidence?: number;
+    };
 
     constructor(agentId: string) {
         this.agentId = agentId;
@@ -417,23 +425,28 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
-     * Applies action output mapping to update the payload
+     * Applies action output mapping to update the payload and extract special fields.
+     *
+     * Special fields ($message, $reasoning, $confidence) are prefixed with $ and are not
+     * added to the payload. Instead, they are stored separately in FlowExecutionState
+     * for use in the final response.
      *
      * @private
+     * @returns Object with payloadChange and specialFields
      */
     private applyActionOutputMapping<P>(
         actionResult: Record<string, unknown>,
         _payload: P,
         mappingConfig: string
-    ): AgentPayloadChangeRequest<P> | null {
+    ): { payloadChange: AgentPayloadChangeRequest<P> | null; specialFields?: { message?: string; reasoning?: string; confidence?: number } } {
         try {
             const mapping: ActionOutputMapping = JSON.parse(mappingConfig);
             const updateObj: Record<string, unknown> = {};
-            
-            
+            const specialFields: { message?: string; reasoning?: string; confidence?: number } = {};
+
             for (const [outputParam, payloadPath] of Object.entries(mapping)) {
                 let value: unknown;
-                
+
                 if (outputParam === '*') {
                     value = actionResult;
                 } else if (outputParam.includes('.')) {
@@ -460,38 +473,56 @@ export class FlowAgentType extends BaseAgentType {
                     );
                     value = actualKey ? actionResult[actualKey] : undefined;
                 }
-                
+
                 if (value !== undefined) {
-                    // Parse the path and build nested object
-                    const pathParts = payloadPath.split('.');
-                    let current = updateObj;
-
-                    for (let i = 0; i < pathParts.length - 1; i++) {
-                        const part = pathParts[i];
-                        // Remove [] suffix for intermediate path parts
-                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
-                        if (!(cleanPart in current)) {
-                            current[cleanPart] = {};
+                    // Check if this is a special field mapping (starts with $)
+                    if (payloadPath.startsWith('$')) {
+                        const fieldName = payloadPath.substring(1).toLowerCase();
+                        // Store in special fields instead of payload
+                        if (fieldName === 'message' && typeof value === 'string') {
+                            specialFields.message = value;
+                        } else if (fieldName === 'reasoning' && typeof value === 'string') {
+                            specialFields.reasoning = value;
+                        } else if (fieldName === 'confidence' && typeof value === 'number') {
+                            specialFields.confidence = value;
                         }
-                        current = current[cleanPart] as Record<string, unknown>;
-                    }
+                        // Ignore unknown special fields with warning
+                        else {
+                            LogError(`Unknown special field in ActionOutputMapping: ${payloadPath}. Valid special fields are: $message, $reasoning, $confidence`);
+                        }
+                    } else {
+                        // Regular payload mapping
+                        // Parse the path and build nested object
+                        const pathParts = payloadPath.split('.');
+                        let current = updateObj;
 
-                    // Use helper to support array append on final path part
-                    this.setMappedValue(current, pathParts[pathParts.length - 1], value);
+                        for (let i = 0; i < pathParts.length - 1; i++) {
+                            const part = pathParts[i];
+                            // Remove [] suffix for intermediate path parts
+                            const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
+                            if (!(cleanPart in current)) {
+                                current[cleanPart] = {};
+                            }
+                            current = current[cleanPart] as Record<string, unknown>;
+                        }
+
+                        // Use helper to support array append on final path part
+                        this.setMappedValue(current, pathParts[pathParts.length - 1], value);
+                    }
                 }
             }
-            
-            if (Object.keys(updateObj).length === 0) {
-                return null;
-            }
-            
-            
+
+            const payloadChange = Object.keys(updateObj).length > 0
+                ? { updateElements: updateObj as Partial<P> }
+                : null;
+
             return {
-                updateElements: updateObj as Partial<P>
+                payloadChange,
+                specialFields: Object.keys(specialFields).length > 0 ? specialFields : undefined
             };
         } catch (error) {
             LogError(`Failed to parse ActionOutputMapping: ${error.message}`);
-            return null;
+            return { payloadChange: null };
         }
     }
     
@@ -658,8 +689,11 @@ export class FlowAgentType extends BaseAgentType {
         if (!outputMapping) {
             return null;
         }
-        
-        return this.applyActionOutputMapping(actionResult, currentPayload || {} as P, outputMapping);
+
+        const result = this.applyActionOutputMapping(actionResult, currentPayload || {} as P, outputMapping);
+        // Note: Special fields are ignored in this legacy method
+        // Use PostProcessActionStep for full special field support
+        return result.payloadChange;
     }
     
     /**
@@ -805,15 +839,18 @@ export class FlowAgentType extends BaseAgentType {
     
     /**
      * Recursively resolves payload and static references in nested objects
-     * 
+     *
      * @private
      */
     private resolveNestedValue(value: unknown, currentPayload: any, params?: ExecuteAgentParams): unknown {
         if (typeof value === 'string') {
-            // Handle string values with payload/static/data resolution (case-insensitive)
+            // Handle string values with payload/static/data/conversation resolution (case-insensitive)
             const trimmedValue = value.trim();
-            
-            if (trimmedValue.toLowerCase().startsWith('static:')) {
+
+            // Check for conversation message references
+            if (ConversationMessageResolver.isConversationReference(trimmedValue) && params?.conversationMessages) {
+                return ConversationMessageResolver.resolve(trimmedValue, params.conversationMessages);
+            } else if (trimmedValue.toLowerCase().startsWith('static:')) {
                 return value.substring(value.indexOf(':') + 1);
             } else if (trimmedValue.toLowerCase().startsWith('payload.')) {
                 const pathStart = value.indexOf('.') + 1;
@@ -894,13 +931,24 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         // Apply the mapping using our existing method
-        const payloadChange = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
-        
+        const result = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
+        const payloadChange = result.payloadChange;
+
+        // Store special fields in flow state for later use
+        const flowState = agentTypeState as FlowExecutionState;
+        if (result.specialFields) {
+            if (!flowState.specialFields) {
+                flowState.specialFields = {};
+            }
+            // Merge special fields (later values override earlier ones)
+            Object.assign(flowState.specialFields, result.specialFields);
+        }
+
         // Update flow state with the modified payload
         // This ensures the payload persists when DetermineNextStep is called again
         if (payloadChange && payloadChange.updateElements) {
             const existingPayload = currentPayload || {};
-            
+
             // Apply the payload change using PayloadManager's merge capabilities
             const mergeResult = this._payloadManager.applyAgentChangeRequest(
                 existingPayload,
@@ -909,14 +957,14 @@ export class FlowAgentType extends BaseAgentType {
                     logChanges: false,
                     verbose: IsVerboseLoggingEnabled()
                 }
-            ); 
-            
+            );
+
             // Log any warnings if present
             if (mergeResult.warnings && mergeResult.warnings.length > 0) {
                 LogError(`Warnings during payload merge in flow state: ${mergeResult.warnings.join(', ')}`);
             }
         }
-        
+
         return payloadChange;
     }
 
@@ -972,9 +1020,10 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
-        // we only want to do special processing for retry or success steps, other ones can use default logic in Base Agent
-        if (step.step !== 'Retry' && step.step !== 'Success') {
-            // Not a retry or success step, use default processing
+        // we only want to do special processing for retry, success, or failed steps
+        // Failed steps need to be evaluated for conditional failure paths
+        if (step.step !== 'Retry' && step.step !== 'Success' && step.step !== 'Failed') {
+            // Not a retry, success, or failed step - use default processing
             return null;
         }
 
@@ -1017,42 +1066,81 @@ export class FlowAgentType extends BaseAgentType {
 
         // Find valid paths from current step using updated payload
         const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
-        
+
         if (paths.length === 0) {
-            // No valid paths - flow is complete
-            return this.createSuccessStep({
-                message: 'Flow completed - no more paths to follow',
+            // No valid paths found
+            // If the previous step failed, propagate the failure with its error message
+            if (step.step === 'Failed') {
+                LogStatusEx({
+                    message: `⚠️ Flow Agent: Step failed with no recovery path. Error: ${step.errorMessage || 'No error message'}`,
+                    verboseOnly: false
+                });
+                return this.createNextStep('Failed', {
+                    errorMessage: step.errorMessage || 'Flow step failed with no recovery path',
+                    newPayload: currentPayload,
+                    previousPayload: currentPayload,
+                    terminate: true
+                });
+            }
+
+            // Otherwise, flow completed successfully
+            LogStatusEx({
+                message: '✅ Flow Agent: Flow completed successfully - no more paths to follow',
+                verboseOnly: true
+            });
+
+            // Include special fields from action output mappings if available
+            const successStep = this.createSuccessStep({
+                message: flowState.specialFields?.message || 'Flow completed - no more paths to follow',
+                reasoning: flowState.specialFields?.reasoning,
+                confidence: flowState.specialFields?.confidence,
                 newPayload: currentPayload,
                 previousPayload: currentPayload
             });
+
+            return successStep;
         }
         
         // Get the destination step for the highest priority path
         const nextStep = await this.getStepById(paths[0].DestinationStepID);
-        
+
         if (!nextStep) {
             return this.createNextStep('Failed', {
                 errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
             });
         }
-        
+
+        // Log when we're navigating to a recovery path after a failure
+        if (step.step === 'Failed') {
+            LogStatusEx({
+                message: `🔄 Flow Agent: Failure detected, navigating to recovery path: '${nextStep.Name}'`,
+                verboseOnly: false
+            });
+        }
+
         // Check if the step is active
         if (nextStep.Status !== 'Active') {
             // Try alternate paths
             for (let i = 1; i < paths.length; i++) {
                 const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                 if (alternateStep && alternateStep.Status === 'Active') {
+                    if (step.step === 'Failed') {
+                        LogStatusEx({
+                            message: `🔄 Flow Agent: Using alternate recovery path: '${alternateStep.Name}'`,
+                            verboseOnly: false
+                        });
+                    }
                     return await this.createStepForFlowNode(params, alternateStep, currentPayload, flowState);
                 }
             }
-            
+
             return this.createNextStep('Failed', {
                 errorMessage: `No active steps found. Step '${nextStep.Name}' has status: ${nextStep.Status}`,
                 newPayload: currentPayload,
                 previousPayload: currentPayload
             });
         }
-        
+
         // Create the next step based on the flow node
         return await this.createStepForFlowNode(params, nextStep, currentPayload, flowState);
     }
@@ -1367,17 +1455,20 @@ export class FlowAgentType extends BaseAgentType {
         );
 
         // Apply output mapping with resolved paths
-        const payloadChange = this.applyActionOutputMapping(
+        const result = this.applyActionOutputMapping(
             outputParams,
             iterationResult.currentPayload,
             resolvedOutputMapping
         );
 
-        if (payloadChange?.updateElements) {
+        // Note: Special fields are not supported in loop iterations
+        // They only apply to final flow steps
+
+        if (result.payloadChange?.updateElements) {
             // Deep merge to preserve existing payload structure
             return this._payloadManager.deepMerge(
                 iterationResult.currentPayload,
-                payloadChange.updateElements
+                result.payloadChange.updateElements
             );
         }
 

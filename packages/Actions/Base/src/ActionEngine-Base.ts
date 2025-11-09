@@ -1,4 +1,4 @@
-import { BaseEngine, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, IMetadataProvider, UserInfo, RunView } from "@memberjunction/core";
 import { ActionCategoryEntity, ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { ActionEntityExtended } from "./ActionEntity-Extended";
 
@@ -216,15 +216,15 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
          {
                EntityName: 'Actions',
                PropertyName: '_Actions'
-         }, 
+         },
          {
                EntityName: 'Action Categories',
                PropertyName: '_ActionCategories'
-         }, 
+         },
          {
                EntityName: 'Action Filters',
                PropertyName: '_Filters'
-         }, 
+         },
          {
                EntityName: 'Action Result Codes',
                PropertyName: '_ActionResultCodes'
@@ -239,6 +239,31 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
          }];
 
       await this.Load(config, provider, forceRefresh, contextUser);
+   }
+
+   /**
+    * Override to ensure all action metadata is loaded without MaxRows limits.
+    * Action Params can have many records (1000+), so we need to ignore the entity's UserViewMaxRows setting.
+    */
+   protected override async LoadMultipleEntityConfigs(configs: any[], contextUser: any): Promise<void> {
+      if (configs && configs.length > 0) {
+         const p = this.RunViewProviderToUse;
+         const rv = new RunView(p);
+         const viewConfigs = configs.map(c => {
+            return {
+               EntityName: c.EntityName,
+               ResultType: 'entity_object' as const,
+               ExtraFilter: c.Filter,
+               OrderBy: c.OrderBy,
+               IgnoreMaxRows: true  // CRITICAL: Ignore UserViewMaxRows to load all records
+            };
+         });
+         const results = await rv.RunViews(viewConfigs, contextUser);
+         // now loop through the results and process them
+         for (let i = 0; i < configs.length; i++) {
+            this.HandleSingleViewResult(configs[i], results[i]);
+         }
+      }
    }
 
     public get Actions(): ActionEntityExtended[] {

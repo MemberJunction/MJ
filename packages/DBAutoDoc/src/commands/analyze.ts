@@ -1,86 +1,87 @@
+/**
+ * Analyze command - Thin CLI wrapper around AnalysisOrchestrator
+ */
+
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora';
 import chalk from 'chalk';
-import * as dotenv from 'dotenv';
-import { DatabaseConnection } from '../database/connection';
-import { StateManager } from '../state/state-manager';
-import { SimpleAIClient as AIClient } from '../ai/simple-ai-client';
-import { DatabaseAnalyzer } from '../analyzers/analyzer';
-
-dotenv.config();
+import { ConfigLoader } from '../utils/config-loader.js';
+import { AnalysisOrchestrator } from '../core/AnalysisOrchestrator.js';
 
 export default class Analyze extends Command {
   static description = 'Analyze database and generate documentation';
 
   static examples = [
-    '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --interactive',
-    '<%= config.bin %> <%= command.id %> --schemas dbo,sales',
+    '$ db-auto-doc analyze',
+    '$ db-auto-doc analyze --resume ./output/run-6/state.json',
+    '$ db-auto-doc analyze --config ./my-config.json'
   ];
 
   static flags = {
-    interactive: Flags.boolean({
-      description: 'Interactive mode',
-      default: false,
+    resume: Flags.string({
+      char: 'r',
+      description: 'Resume from an existing state file',
+      required: false
     }),
-    incremental: Flags.boolean({
-      description: 'Only process new tables',
-      default: false,
-    }),
-    schemas: Flags.string({
-      description: 'Comma-separated schema list',
-    }),
-    batch: Flags.boolean({
-      description: 'Non-interactive batch mode',
-      default: false,
-    }),
+    config: Flags.string({
+      char: 'c',
+      description: 'Path to config file',
+      default: './config.json'
+    })
   };
+
+  static args = {};
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Analyze);
-
-    this.log(chalk.blue.bold('\n📊 Analyzing Database\n'));
+    const spinner = ora();
 
     try {
-      // Check API key
-      if (!process.env.AI_API_KEY || process.env.AI_API_KEY === 'your-api-key-here') {
-        this.error('AI_API_KEY not set in .env file');
-      }
+      // Load configuration
+      spinner.start('Loading configuration');
+      const config = await ConfigLoader.load(flags.config);
+      spinner.succeed('Configuration loaded');
 
-      const connection = DatabaseConnection.fromEnv();
-      const stateManager = new StateManager();
-
-      // Test connection
-      const connected = await connection.test();
-      if (!connected) {
-        this.error('Cannot connect to database');
-      }
-
-      // Load state
-      const state = await stateManager.load(
-        process.env.DB_SERVER || 'localhost',
-        process.env.DB_DATABASE || 'master'
-      );
-
-      const aiClient = new AIClient();
-      const analyzer = new DatabaseAnalyzer(connection, stateManager, aiClient);
-
-      const schemas = flags.schemas ? flags.schemas.split(',') : undefined;
-
-      await analyzer.analyze({
-        schemas,
-        incremental: flags.incremental,
-        interactive: flags.interactive,
+      // Create orchestrator
+      const orchestrator = new AnalysisOrchestrator({
+        config,
+        resumeFromState: flags.resume,
+        onProgress: (message, data) => {
+          if (data) {
+            spinner.succeed(`${message}: ${JSON.stringify(data)}`);
+          } else {
+            spinner.text = message;
+          }
+        }
       });
 
-      await connection.close();
+      // Execute analysis
+      spinner.start('Starting analysis');
+      const result = await orchestrator.execute();
 
-      this.log(chalk.green('\n✅ Analysis complete!'));
-      this.log('\nNext steps:');
-      this.log('  - Review: db-auto-doc review');
-      this.log('  - Export: db-auto-doc export');
-    } catch (error: any) {
-      this.error(error.message);
+      if (result.success) {
+        spinner.succeed('Analysis complete!');
+        this.log(chalk.green('\n✓ Analysis complete!'));
+        this.log(`  Iterations: ${result.run.iterationsPerformed}`);
+        this.log(`  Tokens used: ${result.run.totalTokensUsed?.toLocaleString() || 0}`);
+        this.log(`  Estimated cost: $${result.run.estimatedCost?.toFixed(2) || '0.00'}`);
+        this.log(`  Output folder: ${result.outputFolder}`);
+        this.log(`  Files:`);
+        this.log(`    - state.json`);
+        this.log(`    - extended-props.sql`);
+        this.log(`    - summary.md`);
+
+        if (flags.resume) {
+          this.log(chalk.blue(`\n  Resumed from: ${flags.resume}`));
+        }
+      } else {
+        spinner.fail('Analysis failed');
+        this.error(result.message || 'Unknown error');
+      }
+
+    } catch (error) {
+      spinner.fail('Analysis failed');
+      this.error((error as Error).message);
     }
   }
 }

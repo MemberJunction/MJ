@@ -2,19 +2,27 @@ import { Component } from '@angular/core';
 import { ContentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadContentTypeDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Content Types') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-contenttype-form',
-    templateUrl: './contenttype.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './contenttype.form.component.html'
 })
 export class ContentTypeFormComponent extends BaseFormComponent {
     public record!: ContentTypeEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'aIModelSettings', sectionName: 'AI Model Settings', isExpanded: true },
+            { sectionKey: 'contentSources', sectionName: 'Content Sources', isExpanded: false },
+            { sectionKey: 'contentItems', sectionName: 'Content Items', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadContentTypeFormComponent() {
-    LoadContentTypeDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

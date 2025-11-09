@@ -1,5 +1,48 @@
 # @memberjunction/ai-cli
 
+## 2.117.0
+
+### Patch Changes
+
+- Updated dependencies [36db9d9]
+- Updated dependencies [8c092ec]
+  - @memberjunction/ai-agents@2.117.0
+  - @memberjunction/core@2.117.0
+  - @memberjunction/core-actions@2.117.0
+  - @memberjunction/ai-prompts@2.117.0
+  - @memberjunction/actions@2.117.0
+  - @memberjunction/core-entities@2.117.0
+  - @memberjunction/core-entities-server@2.117.0
+  - @memberjunction/sqlserver-dataprovider@2.117.0
+  - @memberjunction/ai@2.117.0
+  - @memberjunction/ai-anthropic@2.117.0
+  - @memberjunction/ai-betty-bot@2.117.0
+  - @memberjunction/ai-cerebras@2.117.0
+  - @memberjunction/ai-groq@2.117.0
+  - @memberjunction/ai-mistral@2.117.0
+  - @memberjunction/ai-openai@2.117.0
+
+## 2.116.0
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/ai-agents@2.116.0
+  - @memberjunction/ai-prompts@2.116.0
+  - @memberjunction/core-actions@2.116.0
+  - @memberjunction/actions@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/core-entities-server@2.116.0
+  - @memberjunction/sqlserver-dataprovider@2.116.0
+  - @memberjunction/ai@2.116.0
+  - @memberjunction/ai-anthropic@2.116.0
+  - @memberjunction/ai-betty-bot@2.116.0
+  - @memberjunction/ai-cerebras@2.116.0
+  - @memberjunction/ai-groq@2.116.0
+  - @memberjunction/ai-mistral@2.116.0
+  - @memberjunction/ai-openai@2.116.0
+
 ## 2.115.0
 
 ### Patch Changes

@@ -44,6 +44,7 @@ import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
+import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
 
@@ -211,6 +212,45 @@ export class BaseAgent {
      */
     public get AgentRun(): AIAgentRunEntityExtended | null {
         return this._agentRun;
+    }
+
+    /**
+     * Gets the available configuration presets for an agent.
+     * Returns semantic presets like "Fast", "Balanced", "High Quality" that users can choose from.
+     * These are actual presets stored in the database with specific AIConfiguration references.
+     *
+     * @param agentId - The ID of the agent to get presets for
+     * @returns Array of configuration presets sorted by Priority, or empty array if none configured
+     *
+     * @example
+     * ```typescript
+     * const agent = new ResearchAgent();
+     * const presets = agent.GetConfigurationPresets('agent-uuid-here');
+     * // Returns presets defined in database: [
+     * //   { Name: 'Fast', DisplayName: 'Quick Draft', AIConfigurationID: 'fast-config-uuid', IsDefault: true },
+     * //   { Name: 'HighQuality', DisplayName: 'Maximum Detail', AIConfigurationID: 'frontier-uuid', IsDefault: false }
+     * // ]
+     * // Note: If no presets configured, returns empty array - agent will use default behavior
+     * ```
+     */
+    public GetConfigurationPresets(agentId: string) {
+        if (!agentId) {
+            return [];
+        }
+        return AIEngine.Instance.GetAgentConfigurationPresets(agentId);
+    }
+
+    /**
+     * Gets the default configuration preset for an agent.
+     *
+     * @param agentId - The ID of the agent to get the default preset for
+     * @returns The default preset, or undefined if none configured
+     */
+    public GetDefaultConfigurationPreset(agentId: string) {
+        if (!agentId) {
+            return undefined;
+        }
+        return AIEngine.Instance.GetDefaultAgentConfigurationPreset(agentId);
     }
 
     /**
@@ -4623,9 +4663,11 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
-            return { 
-                ...subAgentResult, 
-                step: subAgentResult.success ? 'Success' : 'Failed', 
+            return {
+                ...subAgentResult,
+                step: subAgentResult.success ? 'Success' : 'Failed',
+                // Capture error message from sub-agent run for proper error propagation
+                errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload
@@ -4824,7 +4866,8 @@ The context is now within limits. Please retry your request with the recovered c
 
             const contextMessage = this.prepareRelatedSubAgentContextMessage(
                 previousDecision.newPayload as unknown as Record<string, unknown>,
-                contextPaths
+                contextPaths,
+                params
             );
 
             if (contextMessage && (params.verbose === true || IsVerboseLoggingEnabled())) {
@@ -4943,6 +4986,8 @@ The context is now within limits. Please retry your request with the recovered c
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
+                // Capture error message from sub-agent run for proper error propagation
+                errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload
@@ -5118,17 +5163,23 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Prepares a context message containing parent payload data for related sub-agent.
-     * Extracts specified paths from parent payload and formats them as a user message
-     * to provide LLM context to the sub-agent.
+     * Extracts specified paths from parent payload or conversation messages and formats
+     * them as a user message to provide LLM context to the sub-agent.
+     *
+     * Supports both payload paths and conversation message paths:
+     * - Payload paths: "fieldName", "nested.field", etc.
+     * - Conversation paths: "conversation.all", "conversation.user.last", "conversation.all.last[5]", etc.
      *
      * @param parentPayload - Parent agent's current payload
      * @param contextPaths - Array of paths to extract, or ["*"] for entire payload
+     * @param params - Execution parameters with conversation messages
      * @returns ChatMessage with formatted context, or null if no paths specified or no data found
      * @private
      */
     private prepareRelatedSubAgentContextMessage(
         parentPayload: Record<string, unknown>,
-        contextPaths: string[]
+        contextPaths: string[],
+        params?: ExecuteAgentParams
     ): ChatMessage | null {
         if (!contextPaths || contextPaths.length === 0) {
             return null;
@@ -5142,11 +5193,20 @@ The context is now within limits. Please retry your request with the recovered c
             };
         }
 
-        // Extract specific paths
+        // Extract specific paths (supports both payload paths and conversation paths)
         const contextData: Record<string, unknown> = {};
 
         for (const path of contextPaths) {
-            const value = this.getValueFromPath(parentPayload, path);
+            let value: unknown;
+
+            // Check if this is a conversation reference
+            if (ConversationMessageResolver.isConversationReference(path) && params?.conversationMessages) {
+                value = ConversationMessageResolver.resolve(path, params.conversationMessages);
+            } else {
+                // Regular payload path
+                value = this.getValueFromPath(parentPayload, path);
+            }
+
             if (value !== undefined) {
                 contextData[path] = value;
             }
@@ -6315,10 +6375,13 @@ The context is now within limits. Please retry your request with the recovered c
         if (this._agentRun) {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
-            if (!this._agentRun.Success && finalStep.message) {
-                // grab the message from the finalStep.message if it exists and append to any existing
-                // error messagge thjat might already be there
-                this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + finalStep.message;
+            if (!this._agentRun.Success) {
+                // Capture error message from either errorMessage or message field
+                const errorText = finalStep.errorMessage || finalStep.message;
+                if (errorText) {
+                    // Append to any existing error message
+                    this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + errorText;
+                }
             }
             if (!this._agentRun.Success) {
                 // set status to Failed

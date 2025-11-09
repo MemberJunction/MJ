@@ -2,19 +2,28 @@ import { Component } from '@angular/core';
 import { ActionParamEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadActionParamDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Action Params') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-actionparam-form',
-    templateUrl: './actionparam.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './actionparam.form.component.html'
 })
 export class ActionParamFormComponent extends BaseFormComponent {
     public record!: ActionParamEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'actionAssociation', sectionName: 'Action Association', isExpanded: true },
+            { sectionKey: 'parameterDefinition', sectionName: 'Parameter Definition', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'entityActionParams', sectionName: 'Entity Action Params', isExpanded: false },
+            { sectionKey: 'scheduledActionParams', sectionName: 'Scheduled Action Params', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadActionParamFormComponent() {
-    LoadActionParamDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

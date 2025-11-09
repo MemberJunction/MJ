@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadUserNotificationDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'User Notifications') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-usernotification-form',
-    templateUrl: './usernotification.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './usernotification.form.component.html'
 })
 export class UserNotificationFormComponent extends BaseFormComponent {
     public record!: UserNotificationEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'notificationOverview', sectionName: 'Notification Overview', isExpanded: true },
+            { sectionKey: 'relatedResource', sectionName: 'Related Resource', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadUserNotificationFormComponent() {
-    LoadUserNotificationDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }
