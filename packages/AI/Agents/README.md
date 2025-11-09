@@ -54,10 +54,12 @@ Deterministic workflow agent type that:
   - Support for Action, Sub-Agent, and Prompt loop bodies
 
 ### AgentRunner
-Simple orchestrator that:
+Orchestrator that provides multiple execution modes:
 - Loads agent metadata from database
 - Instantiates correct agent class using ClassFactory
 - Executes agents with provided context
+- **RunAgent**: Core execution method for direct agent invocation
+- **RunAgentInConversation**: Integrated execution with conversation and artifact management
 
 ### PayloadManager
 Advanced payload access control for hierarchical agent execution:
@@ -105,6 +107,181 @@ const followUpResult = await runner.RunAgent({
     lastRunId: result.agentRun.ID,
     autoPopulateLastRunPayload: true // Automatically use previous run's final payload
 });
+```
+
+### RunAgentInConversation - Integrated Conversation & Artifact Management
+
+The `RunAgentInConversation` method provides a complete workflow for executing agents within a conversation context, automatically handling conversation creation, artifact generation, and linking:
+
+```typescript
+import { AgentRunner } from '@memberjunction/ai-agents';
+import { UserInfo } from '@memberjunction/core';
+
+const runner = new AgentRunner();
+
+// Execute agent with automatic conversation and artifact management
+const result = await runner.RunAgentInConversation({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user
+}, {
+    // Optional: Use existing conversation
+    conversationId: 'existing-conversation-id',
+
+    // Optional: Use existing conversation detail (skips creation)
+    conversationDetailId: 'existing-detail-id',
+
+    // Required if conversationDetailId not provided
+    userMessage: 'Analyze the sales data for Q4',
+
+    // Optional: Control artifact creation (default: true)
+    createArtifacts: true,
+
+    // Optional: Source artifact for versioning (continuity/refinement)
+    sourceArtifactId: 'base-artifact-id',
+
+    // Optional: Custom conversation name
+    conversationName: 'Q4 Sales Analysis'
+});
+
+// Result includes everything you need
+console.log('Agent result:', result.agentResult);
+console.log('Conversation ID:', result.conversationId);
+console.log('Detail ID:', result.conversationDetailId);
+if (result.artifactInfo) {
+    console.log('Artifact created:', result.artifactInfo.artifactId);
+    console.log('Version:', result.artifactInfo.versionNumber);
+}
+```
+
+#### What RunAgentInConversation Does
+
+The method provides a complete workflow:
+
+1. **Conversation Management**
+   - Creates new conversation if not provided
+   - Uses existing conversation if `conversationId` provided
+   - Skips creation entirely if `conversationDetailId` provided
+
+2. **Conversation Detail Creation**
+   - Creates conversation detail record for user message
+   - Automatically handles message ordering via `__mj_CreatedAt`
+   - Skipped if `conversationDetailId` already provided
+
+3. **Agent Execution**
+   - Runs agent with conversation context
+   - Links agent run to conversation detail
+   - Passes through all execution parameters (callbacks, data, context, etc.)
+
+4. **Artifact Processing** (if `createArtifacts !== false`)
+   - Creates artifacts from agent payload
+   - Handles intelligent versioning:
+     - Uses `sourceArtifactId` if provided (explicit continuity)
+     - Otherwise checks for previous artifacts on this conversation detail
+     - Creates new artifact version or entirely new artifact as appropriate
+   - Respects agent's `ArtifactCreationMode` configuration
+   - Links artifacts to conversation details via junction table
+   - Extracts artifact names from payload attributes
+
+#### Artifact Versioning Logic
+
+The method implements smart artifact versioning:
+
+```typescript
+// Priority 1: Explicit source artifact (agent continuity/refinement)
+{
+    sourceArtifactId: 'artifact-to-refine'
+    // Creates version 2, 3, 4, etc. of the specified artifact
+}
+
+// Priority 2: Previous artifact on this conversation detail (fallback)
+// Automatically finds last artifact linked to the conversation detail
+// Creates next version of that artifact
+
+// Priority 3: No previous artifact
+// Creates entirely new artifact with version 1
+```
+
+#### Respecting Agent Configuration
+
+The method honors agent-level settings:
+
+- **`ArtifactCreationMode === 'Never'`**: Skips artifact creation entirely
+- **`ArtifactCreationMode === 'System Only'`**: Creates artifact with `Visibility='System Only'`
+- **`DefaultArtifactTypeID`**: Uses agent's preferred artifact type (defaults to JSON type)
+
+#### Use Cases
+
+**GraphQL Resolvers** - Simplify agent execution endpoints:
+```typescript
+// Before: Manually manage conversations, artifacts, notifications
+// After: One method call handles everything
+const result = await runner.RunAgentInConversation({...}, {
+    conversationDetailId: args.conversationDetailId,
+    createArtifacts: args.createArtifacts,
+    sourceArtifactId: args.sourceArtifactId
+});
+```
+
+**Interactive Chat Interfaces** - Maintain conversation context:
+```typescript
+// First message - creates conversation
+const firstResult = await runner.RunAgentInConversation({...}, {
+    userMessage: 'Analyze sales data',
+    createArtifacts: true
+});
+
+// Follow-up message - uses existing conversation
+const followUp = await runner.RunAgentInConversation({...}, {
+    conversationId: firstResult.conversationId,
+    userMessage: 'Show me the trends',
+    createArtifacts: true
+});
+```
+
+**Agent Refinement Workflows** - Iterate on artifacts:
+```typescript
+// Initial generation
+const initial = await runner.RunAgentInConversation({...}, {
+    userMessage: 'Create a report',
+    createArtifacts: true
+});
+
+// Refinement - creates version 2 of same artifact
+const refined = await runner.RunAgentInConversation({...}, {
+    userMessage: 'Make it more concise',
+    createArtifacts: true,
+    sourceArtifactId: initial.artifactInfo.artifactId
+});
+```
+
+#### Benefits
+
+- **Single Responsibility**: One method handles entire workflow
+- **Flexible**: Works with new or existing conversations
+- **Intelligent**: Smart artifact versioning without manual tracking
+- **Clean Code**: Moves business logic out of transport layers (GraphQL, REST)
+- **Type Safe**: Full TypeScript typing for results
+- **Auditable**: All artifacts linked to conversation details
+
+#### Helper Methods
+
+`RunAgentInConversation` uses these public helper methods (available for custom workflows):
+
+```typescript
+// Get maximum version number for an artifact
+const maxVersion = await runner.GetMaxVersionForArtifact(artifactId, user);
+
+// Find previous artifact for a conversation detail
+const previousArtifact = await runner.FindPreviousArtifactForMessage(detailId, user);
+
+// Process agent artifacts manually
+const artifactInfo = await runner.ProcessAgentArtifacts(
+    agentResult,
+    conversationDetailId,
+    sourceArtifactId,
+    user
+);
 ```
 
 ## Iterative Operations (v2.112+)
