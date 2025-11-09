@@ -123,7 +123,7 @@ export class PKDetector {
       namingScore,
       dataTypeScore,
       warnings: []
-    });
+    }, tableName, column.name);
 
     // Build evidence
     const evidence: PKEvidence = {
@@ -292,7 +292,7 @@ export class PKDetector {
   /**
    * Calculate overall PK confidence score (0-100)
    */
-  private calculatePKConfidence(evidence: PKEvidence): number {
+  private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string): number {
     let score = 0;
 
     // Uniqueness is critical (50% weight)
@@ -314,12 +314,59 @@ export class PKDetector {
     }[evidence.dataPattern];
     score += patternScore;
 
+    // FK-pattern detection: penalize columns that look like foreign keys
+    const fkLikelihood = this.detectFKPattern(tableName, columnName);
+    if (fkLikelihood > 0.5) {
+      // Reduce score significantly if column looks like an FK
+      score *= (1 - (fkLikelihood * 0.6)); // Up to 60% penalty for strong FK patterns
+    }
+
     // Penalties
     if (evidence.nullCount > 0) {
       score *= 0.7; // 30% penalty for nulls
     }
 
     return Math.round(Math.min(score, 100));
+  }
+
+  /**
+   * Detect if a column name looks like a foreign key rather than a primary key
+   * Returns a score from 0-1 (0 = not FK-like, 1 = very FK-like)
+   */
+  private detectFKPattern(tableName: string, columnName: string): number {
+    const colLower = columnName.toLowerCase();
+    const tableLower = tableName.toLowerCase();
+
+    // Pattern 1: Column ends with _id but doesn't start with table name
+    // e.g., cst_id in ord table (FK-like), vs cst_id in cst table (PK-like)
+    if (colLower.endsWith('_id') || colLower.endsWith('id')) {
+      const prefix = colLower.replace(/_?id$/, '');
+
+      // If column is just "id", it's likely a PK
+      if (prefix === '') {
+        return 0;
+      }
+
+      // If prefix matches table name, likely a PK
+      if (tableLower.includes(prefix) || prefix.includes(tableLower)) {
+        return 0.1; // Slight FK likelihood (could be self-reference)
+      }
+
+      // If prefix doesn't match table name, very likely an FK
+      return 0.9;
+    }
+
+    // Pattern 2: Column ends with _key or _fk
+    if (colLower.endsWith('_key') || colLower.endsWith('_fk')) {
+      const prefix = colLower.replace(/_(?:key|fk)$/, '');
+      if (tableLower.includes(prefix) || prefix.includes(tableLower)) {
+        return 0.2;
+      }
+      return 0.95;
+    }
+
+    // No FK pattern detected
+    return 0;
   }
 
   /**

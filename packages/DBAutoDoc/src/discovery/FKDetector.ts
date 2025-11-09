@@ -27,6 +27,9 @@ export class FKDetector {
   ): Promise<FKCandidate[]> {
     const candidates: FKCandidate[] = [];
 
+    console.log(`[FKDetector] Analyzing table ${sourceSchema}.${sourceTable.name} with ${sourceTable.columns.length} columns`);
+    console.log(`[FKDetector] Available PKs: ${discoveredPKs.length}`);
+
     // For each column in source table
     for (const sourceColumn of sourceTable.columns) {
       // Skip if column is a discovered PK
@@ -37,6 +40,7 @@ export class FKDetector {
       );
 
       if (isPK) {
+        console.log(`[FKDetector]   Skip ${sourceColumn.name} - is a PK`);
         continue;
       }
 
@@ -48,6 +52,11 @@ export class FKDetector {
         sourceColumn,
         discoveredPKs
       );
+
+      console.log(`[FKDetector]   Column ${sourceColumn.name}: Found ${potentialTargets.length} potential targets`);
+      if (potentialTargets.length > 0) {
+        console.log(`[FKDetector]     Targets: ${potentialTargets.map(t => `${t.schemaName}.${t.tableName}.${t.columnName}`).join(', ')}`);
+      }
 
       // Analyze each potential target
       for (const target of potentialTargets) {
@@ -62,11 +71,18 @@ export class FKDetector {
           iteration
         );
 
+        if (candidate) {
+          console.log(`[FKDetector]     Candidate confidence: ${candidate.confidence} (min: ${this.config.confidence.foreignKeyMinimum * 100})`);
+        }
+
         if (candidate && candidate.confidence >= this.config.confidence.foreignKeyMinimum * 100) {
           candidates.push(candidate);
+          console.log(`[FKDetector]     ✓ Added FK candidate: ${sourceColumn.name} -> ${target.tableName}.${target.columnName}`);
         }
       }
     }
+
+    console.log(`[FKDetector] Table ${sourceSchema}.${sourceTable.name}: Found ${candidates.length} FK candidates`);
 
     // Sort by confidence descending
     return candidates.sort((a, b) => b.confidence - a.confidence);

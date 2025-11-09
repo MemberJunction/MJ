@@ -7,28 +7,35 @@ import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 
 export interface DatabaseDocumentation {
   version: string;
+  summary: AnalysisSummary; // Now includes timing and iteration counts
   database: DatabaseInfo;
-  summary: AnalysisSummary;
   seedContext?: SeedContext;
-  columnStatistics?: ColumnStatisticsCache; // Pre-computed stats for all columns
-  relationshipDiscoveryPhase?: RelationshipDiscoveryPhase; // Pre-analysis key discovery
-  schemas: SchemaDefinition[];
-  analysisRuns: AnalysisRun[];
-  createdAt: string;
-  lastModified: string;
-  totalIterations: number;
+  phases: AnalysisPhases; // Multi-phase workflow organization
+  schemas: SchemaDefinition[]; // Includes merged column statistics
   resumedFromFile?: string; // Path to the state file this analysis resumed from
 }
 
+/**
+ * Summary of analysis with timing and high-level metrics
+ * Moved timing fields from top-level DatabaseDocumentation here
+ */
 export interface AnalysisSummary {
+  // Timing and versioning
+  createdAt: string;
+  lastModified: string;
+  totalIterations: number;
+
+  // Token and cost metrics
   totalPromptsRun: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
+  estimatedCost: number;
+
+  // Schema metrics
   totalSchemas: number;
   totalTables: number;
   totalColumns: number;
-  estimatedCost: number;
 }
 
 export interface DatabaseInfo {
@@ -42,6 +49,15 @@ export interface SeedContext {
   businessDomains?: string[];
   customInstructions?: string;
   industryContext?: string;
+}
+
+/**
+ * Multi-phase workflow organization
+ * Each phase is optional and tracked separately
+ */
+export interface AnalysisPhases {
+  keyDetection?: RelationshipDiscoveryPhase; // Primary key and foreign key detection
+  descriptionGeneration: AnalysisRun[]; // Table and column description analysis
 }
 
 export interface SchemaDefinition {
@@ -89,14 +105,30 @@ export interface ForeignKeyReference {
   referencedColumn: string;
 }
 
+/**
+ * Column statistics merged from both discovery cache and description analysis
+ * Replaces separate ColumnStatisticsCache - now embedded in column definitions
+ */
 export interface ColumnStatistics {
+  // Core statistics (from discovery cache)
+  totalRows: number;
   distinctCount: number;
-  uniquenessRatio: number;
+  uniquenessRatio: number; // distinctCount / totalRows
   nullCount: number;
   nullPercentage: number;
+
+  // Data patterns (from discovery cache)
+  dataPattern?: 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown';
   sampleValues: any[];
+  valueDistribution?: Array<{ value: string | number; frequency: number }>;
+
+  // Data ranges
   min?: any;
   max?: any;
+  minValue?: string | number; // Alias for min
+  maxValue?: string | number; // Alias for max
+
+  // Numeric statistics
   avg?: number;
   stdDev?: number;
   median?: number;
@@ -106,14 +138,22 @@ export interface ColumnStatistics {
     p75: number;
     p95: number;
   };
+
+  // String statistics
   avgLength?: number;
   maxLength?: number;
   minLength?: number;
   commonPrefixes?: string[];
+
+  // Pattern detection
   formatPattern?: string;
   containsUrls?: boolean;
   containsEmails?: boolean;
   containsPhones?: boolean;
+
+  // Cache metadata
+  computedAt?: string;
+  queryTimeMs?: number;
 }
 
 export interface DescriptionIteration {
@@ -190,8 +230,9 @@ export interface SanityCheckRecord {
 }
 
 /**
- * Top-level column statistics cache stored in state JSON
- * Pre-computed during discovery phase and reused in description phase
+ * DEPRECATED: ColumnStatisticsCache is no longer used
+ * Statistics are now embedded directly in ColumnDefinition.statistics
+ * This type remains for backward compatibility with old state files
  */
 export interface ColumnStatisticsCache {
   computedAt: string;
@@ -201,6 +242,10 @@ export interface ColumnStatisticsCache {
   tables: Record<string, TableStatisticsEntry>; // Key: "schema.table"
 }
 
+/**
+ * DEPRECATED: TableStatisticsEntry is no longer used
+ * This type remains for backward compatibility with old state files
+ */
 export interface TableStatisticsEntry {
   schemaName: string;
   tableName: string;

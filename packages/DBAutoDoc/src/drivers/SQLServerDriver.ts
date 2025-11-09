@@ -318,6 +318,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     sampleSize: number
   ): Promise<AutoDocColumnStatistics> {
     const stats: AutoDocColumnStatistics = {
+      totalRows: 0,
       distinctCount: 0,
       uniquenessRatio: 0,
       nullCount: 0,

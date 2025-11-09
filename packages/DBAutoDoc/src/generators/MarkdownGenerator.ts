@@ -16,12 +16,12 @@ export class MarkdownGenerator {
     lines.push('');
     lines.push(`**Server**: ${state.database.server}`);
     lines.push(`**Generated**: ${new Date().toISOString()}`);
-    lines.push(`**Total Iterations**: ${state.totalIterations}`);
+    lines.push(`**Total Iterations**: ${state.summary.totalIterations}`);
     lines.push('');
 
     // Analysis summary
-    if (state.analysisRuns.length > 0) {
-      const lastRun = state.analysisRuns[state.analysisRuns.length - 1];
+    if (state.phases.descriptionGeneration.length > 0) {
+      const lastRun = state.phases.descriptionGeneration[state.phases.descriptionGeneration.length - 1];
       lines.push('## Analysis Summary');
       lines.push('');
       lines.push(`- **Status**: ${lastRun.status}`);

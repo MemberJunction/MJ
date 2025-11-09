@@ -27,7 +27,7 @@ export default class Status extends Command {
       this.log(chalk.blue(`\nDatabase Documentation Status\n`));
       this.log(`Database: ${state.database.name}`);
       this.log(`Server: ${state.database.server}`);
-      this.log(`Last Modified: ${state.lastModified}\n`);
+      this.log(`Last Modified: ${state.summary.lastModified}\n`);
 
       // Schemas
       this.log(`Schemas: ${state.schemas.length}`);
@@ -35,8 +35,8 @@ export default class Status extends Command {
       this.log(`Tables: ${tableCount}\n`);
 
       // Latest run
-      if (state.analysisRuns.length > 0) {
-        const lastRun = state.analysisRuns[state.analysisRuns.length - 1];
+      if (state.phases.descriptionGeneration.length > 0) {
+        const lastRun = state.phases.descriptionGeneration[state.phases.descriptionGeneration.length - 1];
 
         this.log(chalk.blue('Latest Analysis Run:'));
         this.log(`  Status: ${lastRun.status}`);

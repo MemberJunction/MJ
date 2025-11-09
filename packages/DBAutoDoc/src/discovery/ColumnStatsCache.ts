@@ -251,4 +251,41 @@ export class ColumnStatsCache {
       });
     }
   }
+
+  /**
+   * Merge cached stats into schema column definitions
+   * Replaces separate columnStatistics cache with embedded stats
+   */
+  public mergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
+    for (const schema of schemas) {
+      for (const table of schema.tables) {
+        const cacheKey = `${schema.name}.${table.name}`;
+        const tableStats = this.tableCache.get(cacheKey);
+
+        if (!tableStats) continue;
+
+        for (const column of table.columns) {
+          const cachedStats = tableStats.columns.get(column.name);
+          if (!cachedStats) continue;
+
+          // Merge cached stats into column.statistics
+          column.statistics = {
+            totalRows: cachedStats.totalRows,
+            distinctCount: cachedStats.distinctCount,
+            uniquenessRatio: cachedStats.uniqueness,
+            nullCount: cachedStats.nullCount,
+            nullPercentage: cachedStats.nullPercentage,
+            dataPattern: cachedStats.dataPattern,
+            sampleValues: cachedStats.sampleValues,
+            valueDistribution: cachedStats.valueDistribution,
+            minValue: cachedStats.minValue,
+            maxValue: cachedStats.maxValue,
+            avgLength: cachedStats.avgLength,
+            computedAt: cachedStats.computedAt,
+            queryTimeMs: cachedStats.queryTimeMs
+          };
+        }
+      }
+    }
+  }
 }

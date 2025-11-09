@@ -192,6 +192,7 @@ export class DataSampler {
 
       // Convert AutoDocColumnStatistics to ColumnStatistics
       column.statistics = {
+        totalRows: stats.totalRows,
         distinctCount: stats.distinctCount,
         uniquenessRatio: stats.uniquenessRatio,
         nullCount: stats.nullCount,

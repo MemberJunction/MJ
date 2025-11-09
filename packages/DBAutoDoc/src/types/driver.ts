@@ -64,6 +64,7 @@ export interface AutoDocPrimaryKey {
  * Database-agnostic column statistics
  */
 export interface AutoDocColumnStatistics {
+  totalRows: number;
   distinctCount: number;
   uniquenessRatio: number;
   nullCount: number;

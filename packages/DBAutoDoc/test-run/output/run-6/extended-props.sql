@@ -1,5 +1,5 @@
 -- Database Documentation Script
--- Generated: 2025-11-09T00:21:15.277Z
+-- Generated: 2025-11-09T01:55:35.892Z
 -- Database: LousyDB
 -- Server: localhost
 
@@ -29,7 +29,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'This table records inventory adjustments, capturing each change in stock levels for a specific product at a particular warehouse, the date of the adjustment, quantity added or removed, the reason for the change, the user who performed it, and optional notes.',
+    @value = N'This table records inventory adjustments, capturing when, where, and why stock levels for specific products were changed, along with the responsible user and optional notes.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -59,7 +59,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Surrogate primary key uniquely identifying each inventory adjustment record',
+    @value = N'Unique identifier for each inventory adjustment record',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -183,7 +183,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Quantity change; positive values add stock, negative values remove stock',
+    @value = N'Quantity change applied to the product stock (positive for addition, negative for subtraction)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -214,7 +214,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reason code for the adjustment (STL=stolen, EXP=expired, DAM=damaged, COR=correction)',
+    @value = N'Reason code for the adjustment (e.g., STL=stock transfer, EXP=expired, DAM=damaged, COR=correction)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -245,7 +245,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'User who performed the adjustment, stored as free‑text name',
+    @value = N'User who performed the adjustment',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -276,7 +276,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Optional free‑text comment describing the adjustment context',
+    @value = N'Free‑form text providing additional context for the adjustment',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -306,7 +306,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'A hierarchical lookup table that defines office‑supply product categories and sub‑categories, providing IDs, names, descriptions, parent relationships, level depth and display order for use in inventory or procurement systems.',
+    @value = N'Stores hierarchical categories for office supplies and equipment, defining each category''s ID, optional parent category, name, description, hierarchy level, and display order.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -336,7 +336,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each category record',
+    @value = N'Primary key that uniquely identifies each category',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -367,7 +367,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the parent category; null for root categories',
+    @value = N'Optional reference to the parent category''s cat_id, enabling a hierarchy',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -429,7 +429,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Longer description of the category’s contents',
+    @value = N'Longer description of the category''s contents',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -460,7 +460,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Depth level in the hierarchy (1 = top level, 2 = sub‑category)',
+    @value = N'Hierarchy level (1 = top level, 2 = sub‑category)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -491,7 +491,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Display order of the category within its parent level',
+    @value = N'Display order of categories within the same level',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -521,7 +521,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores inventory count records for each product at each warehouse on a specific date, capturing the expected system quantity, the actual counted quantity, the variance, and the user who performed the count.',
+    @value = N'Stores inventory count records, capturing expected vs actual quantities of products per warehouse on specific dates, along with the user who performed the count.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -551,7 +551,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each inventory count record.',
+    @value = N'Unique identifier for each inventory count entry',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -582,7 +582,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the warehouse where the count was performed.',
+    @value = N'Identifier of the warehouse where the count was taken',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -613,7 +613,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date on which the inventory count took place.',
+    @value = N'Date on which the inventory count was performed',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -644,7 +644,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the product being counted.',
+    @value = N'Identifier of the product being counted',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -675,7 +675,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'System‑recorded expected quantity for the product at the warehouse on the count date.',
+    @value = N'System‑recorded expected quantity for the product at that warehouse and date',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -706,7 +706,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Actual quantity counted by the user.',
+    @value = N'Actual quantity observed during the physical count',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -737,7 +737,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Variance between actual and expected quantities (act_qty - exp_qty).',
+    @value = N'Variance between expected and actual quantities (act‑exp)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -768,7 +768,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Name of the employee who performed the inventory count.',
+    @value = N'Name of the employee who performed the count',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -798,7 +798,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores purchase order header records, capturing each order placed with a supplier, its dates, status, total amount, shipping charge, and optional notes.',
+    @value = N'This table stores purchase order records, capturing each order placed with a supplier, including order dates, expected delivery dates, status, total amount, shipping charges, and optional notes such as expedited shipping requests.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -828,7 +828,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique purchase order identifier.',
+    @value = N'Unique purchase‑order identifier for each record',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -859,7 +859,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the supplier to which the order is sent.',
+    @value = N'Identifier of the supplier to which the order is sent',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -890,7 +890,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the purchase order was created.',
+    @value = N'Date the purchase order was created/issued',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -921,7 +921,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Expected delivery date for the order.',
+    @value = N'Expected delivery or receipt date for the order',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -952,7 +952,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current status of the purchase order (e.g., X=Cancelled, S=Submitted, R=Received, P=Pending, A=Approved).',
+    @value = N'Current status of the purchase order (e.g., X=Cancelled, S=Submitted, R=Received, P=Pending, A=Approved)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -983,7 +983,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Total monetary amount of the purchase order.',
+    @value = N'Total monetary amount of the purchase order',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1014,7 +1014,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Shipping charge applied to the order; 150 indicates expedited shipping, 0 indicates standard.',
+    @value = N'Shipping charge applied to the order (150 for expedited shipping, 0 otherwise)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1045,7 +1045,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Optional free‑text notes; when present, indicates expedited shipping request.',
+    @value = N'Optional free‑text notes; most rows are null, non‑null rows contain "Expedited shipping requested"',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1075,7 +1075,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores line‑item details for purchase orders, linking each order (po_id) to a product (prd_id) with the ordered quantity, unit price, and quantity received.',
+    @value = N'This table stores the line‑item details of purchase orders, capturing which product is ordered on each purchase order, the sequence of the line, the quantity ordered, the unit price, and the quantity actually received.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1105,7 +1105,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the purchase order this line belongs to',
+    @value = N'Identifier of the purchase order to which the line belongs',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1136,7 +1136,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Line sequence number within the purchase order',
+    @value = N'Sequence number of the line within the purchase order',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1198,7 +1198,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Quantity ordered for the product',
+    @value = N'Quantity ordered for the product on this line',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1229,7 +1229,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unit price of the product at the time of ordering',
+    @value = N'Unit price of the product for this line',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1260,7 +1260,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Quantity of the product that has been received against the order line',
+    @value = N'Quantity of the product actually received against the order line',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1290,7 +1290,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores detailed information about each product offered, including identifiers, categorization, supplier, SKU, name, description, pricing, cost, status, weight and unit of measure. Serves as the master product catalog for sales and inventory management.',
+    @value = N'A product master table that stores detailed information about each item sold, including identifiers, categorization, supplier, SKU, name, description, pricing, cost, status, weight and unit of measure.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1351,7 +1351,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the product category (likely foreign key to a Category lookup table).',
+    @value = N'Foreign key to a product category lookup table.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1382,7 +1382,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the supplier providing the product (likely foreign key to a Supplier table).',
+    @value = N'Foreign key to a supplier (vendor) lookup table.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1444,7 +1444,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Product name or title, often including model and variant information.',
+    @value = N'Product name or title.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1475,7 +1475,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Short textual description of the product.',
+    @value = N'Short product description or marketing copy.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1537,7 +1537,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Cost to acquire or produce the product (used for margin calculations).',
+    @value = N'Cost to acquire or produce the product.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1568,7 +1568,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current status of the product (e.g., A=Active, O=Out of stock, D=Discontinued).',
+    @value = N'Product status flag (e.g., A=Active, O=Out of stock, D=Discontinued).',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1599,7 +1599,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Weight of the product in pounds or kilograms, depending on business units.',
+    @value = N'Weight of the product, used for shipping calculations.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1630,7 +1630,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unit of measure for inventory transactions (EA=Each, BX=Box, CS=Case).',
+    @value = N'Unit of measure for inventory (EA=Each, BX=Box, CS=Case).',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1660,7 +1660,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores records of goods received against purchase orders, capturing when and where each receipt occurred and any related notes such as partial shipments.',
+    @value = N'Stores records of goods received against purchase orders, capturing which warehouse received the items, the receipt date, and any notes such as partial shipments.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1752,7 +1752,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the goods were received',
+    @value = N'Date the goods were received in the warehouse',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1783,7 +1783,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Warehouse where the receipt was recorded',
+    @value = N'Identifier of the warehouse where the receipt was recorded',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1814,7 +1814,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Optional free‑text comment about the receipt, commonly indicating partial shipments',
+    @value = N'Optional free‑text comments about the receipt, commonly indicating partial shipments',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1844,7 +1844,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores inventory levels for each product at each warehouse, including on‑hand quantity, reserved quantity, reorder thresholds, and the dates of the last physical count and last receipt.',
+    @value = N'Stores inventory status for each product at each warehouse, including on‑hand quantity, reserved quantity, reorder thresholds, and dates of the last physical count and last receipt.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1874,7 +1874,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier of the product (SKU) stored in the inventory system',
+    @value = N'Identifier of the product stored in the inventory; links to the product master table.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1905,7 +1905,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the warehouse or storage location',
+    @value = N'Identifier of the warehouse/location where the product is stocked; links to a warehouse master table.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1936,7 +1936,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current on‑hand quantity of the product at the warehouse',
+    @value = N'Current on‑hand quantity of the product at the given warehouse.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1967,7 +1967,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Quantity of the product that is reserved for pending orders',
+    @value = N'Quantity of the product that is reserved for pending orders and not available for new sales.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -1998,7 +1998,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Minimum stock level threshold that triggers a reorder',
+    @value = N'Minimum desired stock level (reorder point) for the product at this warehouse.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2029,7 +2029,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Maximum desired stock level for the product at the warehouse',
+    @value = N'Maximum allowable stock level (capacity) for the product at this warehouse.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2060,7 +2060,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date of the most recent physical inventory count for this product‑warehouse pair',
+    @value = N'Date of the most recent physical inventory count for this product‑warehouse pair.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2091,7 +2091,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the product was last received (replenished) at the warehouse',
+    @value = N'Date when the product was last received into this warehouse.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2121,7 +2121,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'This table is a Supplier master list that stores core information about each supplier, including a unique supplier ID, supplier name, operational status, payment terms, rating, and primary contact details (name, phone, email). It supports procurement and supply‑chain processes by providing a reference for supplier selection, evaluation, and communication.',
+    @value = N'Master table storing supplier (vendor) information for the organization, including identification, name, status, payment terms, rating, and primary contact details used in procurement and accounts payable processes.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2151,7 +2151,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each supplier (primary key).',
+    @value = N'Unique identifier for each supplier record',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2182,7 +2182,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Supplier or vendor name.',
+    @value = N'Legal or trade name of the supplier',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2213,7 +2213,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current status of the supplier (e.g., Active, Terminated, Suspended, Inactive).',
+    @value = N'Current status of the supplier (e.g., Active, Inactive, Suspended, Pending)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2244,7 +2244,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Standard payment terms agreed with the supplier (e.g., Net 30, Net 45, COD).',
+    @value = N'Standard payment terms offered by the supplier (e.g., Net 30, Net 60, COD)',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2275,7 +2275,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Supplier rating on a scale of 1 to 5.',
+    @value = N'Supplier rating or score (1‑5) used for evaluating performance',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2306,7 +2306,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Name of the primary contact person for the supplier.',
+    @value = N'Name of the primary contact person at the supplier',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2337,7 +2337,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Phone number of the primary contact.',
+    @value = N'Phone number of the primary contact',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2368,7 +2368,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Email address of the primary contact.',
+    @value = N'Email address of the primary contact',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2398,7 +2398,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'A reference table that defines each warehouse or distribution center in the company''s logistics network, including its identifier, code, full name, location (city and state), type, capacity, and operational status.',
+    @value = N'A reference table that defines each warehouse or distribution center in the company''s logistics network, including its identifier, code, name, location, type, capacity, and operational status.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2428,7 +2428,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique integer identifier for each warehouse record.',
+    @value = N'Unique numeric identifier for each warehouse or distribution center.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2459,7 +2459,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Short alphanumeric code representing the warehouse location (e.g., SEA for Seattle).',
+    @value = N'Short alphanumeric code representing the facility, usually derived from the city name.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2521,7 +2521,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'City where the warehouse is located.',
+    @value = N'City where the facility is located.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2552,7 +2552,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Two‑letter state abbreviation for the warehouse location.',
+    @value = N'Two‑letter state abbreviation for the facility''s location.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2583,7 +2583,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Warehouse type/category (e.g., R = Regional, M = Main, D = Distribution).',
+    @value = N'Category of the facility: R = Regional hub, M = Main hub, D = Distribution center.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2614,7 +2614,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Maximum storage capacity of the warehouse (units unspecified, likely square feet or pallets).',
+    @value = N'Maximum storage capacity of the facility, expressed in units (e.g., square feet or pallets).',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2645,7 +2645,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Operational status of the warehouse (A = Active, M = Maintenance/Closed).',
+    @value = N'Operational status of the facility: A = Active, M = Maintenance/Closed.',
     @level0type = N'SCHEMA',
     @level0name = N'inv',
     @level1type = N'TABLE',
@@ -2678,7 +2678,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores individual mailing addresses associated with customers, including street details, city, state, zip, country, address type (shipping, billing, office) and a flag for the default address for each customer.',
+    @value = N'Stores mailing and location information for customers, including multiple address lines, city, state, ZIP, country, address type (e.g., shipping, billing, office) and a flag indicating the default address for each customer.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -2708,7 +2708,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Surrogate primary key uniquely identifying each address record',
+    @value = N'Unique identifier for each address record',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -2739,7 +2739,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the customer to whom the address belongs',
+    @value = N'Identifier of the customer to which the address belongs',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -2770,7 +2770,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Type of address: S=Shipping, O=Office, B=Billing',
+    @value = N'Type of address – likely Shipping (S), Billing (B), or Office (O)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -2925,7 +2925,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'5‑digit postal code',
+    @value = N'5‑digit ZIP code for the address',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -2956,7 +2956,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Country code, fixed to ''US''',
+    @value = N'Country code, always US',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -2987,7 +2987,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Boolean flag indicating whether this address is the customer''s default',
+    @value = N'Boolean flag indicating whether this is the customer''s default address',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3017,7 +3017,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores master information for each customer, including identification, contact name, status, acquisition date, source channel, assigned sales representative, market segment, rating, financial balance, credit limit, and date of last order. It serves as the central customer profile used by sales and finance processes.',
+    @value = N'This table is a Customer master record that captures each customer’s identity, contact name, status, acquisition date, acquisition source, assigned sales representative, market segment, rating, current balance, credit limit, and the date of their most recent order. It serves as a central reference for sales and credit management processes.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3047,7 +3047,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique customer identifier (primary key).',
+    @value = N'Unique identifier for each customer record',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3078,7 +3078,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Customer name or business name.',
+    @value = N'Customer or contact name',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3109,7 +3109,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current status of the customer (e.g., A=Active, S=Suspended, I=Inactive, T=Terminated).',
+    @value = N'Current status of the customer (e.g., Active, Suspended, Inactive, Terminated)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3140,7 +3140,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the customer record was created or the account opened.',
+    @value = N'Date the customer was created or first recorded in the system',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3171,7 +3171,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Acquisition source/channel (e.g., WB=Web, ST=Store, RF=Referral, PH=Phone).',
+    @value = N'Acquisition source of the customer (e.g., Web, Store, Referral, Phone)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3202,7 +3202,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the sales representative assigned to the customer.',
+    @value = N'Identifier of the sales representative assigned to the customer',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3233,7 +3233,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Market segment classification (W=Wholesale, R=Retail, E=Enterprise).',
+    @value = N'Market segment classification (e.g., Wholesale, Retail, Enterprise)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3264,7 +3264,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Customer rating or satisfaction score ranging from 1 (lowest) to 5 (highest).',
+    @value = N'Customer rating or score from 1 (lowest) to 5 (highest)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3295,7 +3295,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current account balance owed by the customer.',
+    @value = N'Current monetary balance owed by the customer',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3326,7 +3326,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Credit limit approved for the customer.',
+    @value = N'Approved credit limit for the customer',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3357,7 +3357,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date of the most recent order placed by the customer.',
+    @value = N'Date of the most recent order placed by the customer (nullable)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3387,7 +3387,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores individual interaction notes for customers, capturing when, how, and by whom each contact occurred, along with a brief standardized description of the discussion.',
+    @value = N'A table that records interaction notes for individual customers, capturing when the note was made, who recorded it, the content of the communication and its type (meeting, email, call, etc.). It serves as a CRM log to track customer‑facing activities.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3448,7 +3448,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the customer associated with the note; links the interaction to a customer record.',
+    @value = N'Identifier of the customer the note pertains to; likely a foreign key to a Customer table.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3541,7 +3541,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Standardized text describing the interaction; limited to four recurring templates.',
+    @value = N'Free‑form text describing the interaction (meeting summary, email content, follow‑up details).',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3572,7 +3572,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'One‑character code representing the interaction type (e.g., M=Meeting, E=Email, O=Other, C=Call).',
+    @value = N'Single‑character code indicating the interaction type: M=Meeting, E=Email, O=Other, C=Call.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3602,7 +3602,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores email address records for customers, including address, type, verification status, and default flag.',
+    @value = N'Stores each customer''s email addresses, including type, verification status, and default flag, linking emails to customers.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3632,7 +3632,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Primary key for each email record.',
+    @value = N'Surrogate primary key for each email record',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3663,7 +3663,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the customer to which the email belongs.',
+    @value = N'Identifier of the customer to which the email belongs',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3694,7 +3694,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Category of the email address (W=Work, P=Personal, O=Other).',
+    @value = N'Category of the email address (W=Work, P=Personal, O=Other)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3725,7 +3725,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'The email address string.',
+    @value = N'The email address string',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3756,7 +3756,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether the email address has been verified.',
+    @value = N'Flag indicating whether the email address has been verified',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3787,7 +3787,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Flag indicating whether this email is the default contact for the customer.',
+    @value = N'Flag indicating if this email is the default/primary address for the customer',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3817,7 +3817,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores each line item of a customer order, linking an order to the purchased product and capturing quantity, price, discount and tax details.',
+    @value = N'Stores each line item of a customer order, capturing the product, quantity, price, discount, tax and line sequence within the order.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3878,7 +3878,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the parent order this line belongs to',
+    @value = N'Identifier of the parent order (foreign key)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3909,7 +3909,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the product being sold in this line',
+    @value = N'Identifier of the product being sold (foreign key)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3940,7 +3940,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Quantity of the product ordered',
+    @value = N'Quantity of the product ordered on this line',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -3971,7 +3971,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unit price of the product at the time of the order',
+    @value = N'Unit price of the product before discounts',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4002,7 +4002,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Discount amount applied to this line (could be zero)',
+    @value = N'Discount amount applied to this line',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4094,7 +4094,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'This table records individual sales orders, capturing the order identifier, customer reference, dates of order and shipment, status, monetary totals, taxes, shipping charges, discount information, payment terms, and optional notes such as expedited shipping requests.',
+    @value = N'Stores sales order header information, capturing each order''s identifier, customer, dates, status, financial totals, shipping costs, discounts, payment terms, and optional notes.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4124,7 +4124,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each order (primary key).',
+    @value = N'Unique identifier for each order (order primary key).',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4186,7 +4186,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the order was placed.',
+    @value = N'Date the order was created or entered into the system.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4217,7 +4217,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the order was shipped; null when not yet shipped.',
+    @value = N'Date the order was shipped; may be null for pending orders.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4248,7 +4248,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current status of the order using single‑letter codes (e.g., D=Draft, C=Cancelled, S=Shipped, P=Pending, X=Cancelled/Expired).',
+    @value = N'Current status of the order (e.g., D=Deleted, C=Completed, S=Shipped, P=Pending, X=Cancelled).',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4279,7 +4279,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Total amount of the order before tax and discounts.',
+    @value = N'Total amount of the order before tax and shipping.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4341,7 +4341,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Shipping charge applied; limited to 0, 15, or 25.',
+    @value = N'Shipping charge for the order (0, 15, or 25).',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4403,7 +4403,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Payment terms code (N30 = Net 30 days, N45, N60, COD = Cash on Delivery).',
+    @value = N'Payment terms for the order (e.g., Net 30, Net 45, Net 60, Cash on Delivery).',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4434,7 +4434,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Optional free‑text note, primarily used for rush‑order indication.',
+    @value = N'Optional free‑form comment about the order, often used for special handling instructions.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4464,7 +4464,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores phone contact information for customers, including multiple numbers per customer, their type (work, mobile, home, fax), optional extension, and a flag indicating the default contact number.',
+    @value = N'Stores contact phone information for customers, including phone number, type, optional extension, and a flag indicating the default number for each customer.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4494,7 +4494,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each phone record (primary key).',
+    @value = N'Surrogate primary key uniquely identifying each phone record',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4525,7 +4525,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the customer to whom the phone number belongs (likely foreign key to a Customer table).',
+    @value = N'Identifier of the customer to whom the phone belongs (foreign key to a Customer table)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4556,7 +4556,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Phone type code: W=Work, M=Mobile, H=Home, F=Fax.',
+    @value = N'Phone type code: W=Work, M=Mobile, H=Home, F=Fax',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4587,7 +4587,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'The phone number string, stored in various formats (with parentheses, hyphens, or plain digits).',
+    @value = N'The phone number string, stored as free‑form text (digits with optional formatting)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4618,7 +4618,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Extension number for work phones; nullable for non‑work numbers.',
+    @value = N'Phone extension number, applicable mainly to work phones; optional (95% null)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4649,7 +4649,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Boolean flag indicating whether this number is the customer''s default contact number.',
+    @value = N'Boolean flag indicating whether this phone is the default contact for the customer',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4679,7 +4679,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores individual payment transactions linking customers to their orders, capturing when, how much, and the status of each payment along with a unique reference code.',
+    @value = N'This table records individual payment transactions made by customers for orders, capturing the payment amount, date, method, status, reference code and optional notes.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4740,7 +4740,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the order associated with the payment (likely foreign key to Orders)',
+    @value = N'Identifier of the order associated with the payment',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4771,7 +4771,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the customer who made the payment (likely foreign key to Customers)',
+    @value = N'Identifier of the customer who made the payment',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4864,7 +4864,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Payment method code (WR=Wire, CA=Cash, CK=Check, CC=Credit Card)',
+    @value = N'Payment method code (e.g., WR=Wire, CA=Cash, CK=Check, CC=Credit Card)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4895,7 +4895,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current status of the payment (A=Approved, F=Failed, P=Pending, R=Refunded)',
+    @value = N'Current status of the payment (A=Approved, F=Failed, P=Pending, R=Reversed)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4926,7 +4926,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'System‑generated reference string for the payment, formatted like PMT‑YYYY‑#####',
+    @value = N'External reference number for the payment, formatted as PMT‑YYYY‑#####',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4957,7 +4957,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Optional free‑text notes about the payment, often indicating credit application',
+    @value = N'Optional free‑text note, primarily used for credit applications',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -4987,7 +4987,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'This table records customer product returns, linking each return to the original order and specific order line item, capturing when the return occurred, the reason, quantity, refund amount, status, and any explanatory notes.',
+    @value = N'Records of product returns, linking each return to the original order and line item, and capturing return date, reason, quantity, refund amount, status, and optional notes.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5017,7 +5017,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each return transaction',
+    @value = N'Unique identifier for each return transaction.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5048,7 +5048,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the original order associated with the return',
+    @value = N'Identifier of the original order associated with the return.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5079,7 +5079,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the specific order line item being returned',
+    @value = N'Identifier of the specific order line item being returned.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5110,7 +5110,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the return was processed or received',
+    @value = N'Date the return was recorded or processed.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5141,7 +5141,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Reason code for the return (WRG=Wrong item, DOA=Dead on arrival, DMG=Damaged, CHG=Change of mind)',
+    @value = N'Reason code for the return (e.g., Wrong item, Dead on Arrival, Damaged, Changed mind).',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5172,7 +5172,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Quantity of items returned for the line item',
+    @value = N'Quantity of items returned for the line item.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5203,7 +5203,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Monetary amount refunded or credited for the return',
+    @value = N'Monetary amount refunded for the returned items.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5234,7 +5234,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current status of the return (A=Approved, R=Rejected, P=Pending, C=Closed)',
+    @value = N'Current status of the return process (A=Approved, R=Rejected, P=Pending, C=Closed).',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5265,7 +5265,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Free‑text comment providing additional context for the return',
+    @value = N'Optional free‑text comment providing additional detail about the return.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5295,7 +5295,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Stores detailed shipment records linking orders to their physical dispatches, including warehouse origin, carrier, tracking number, dates, weight and shipping cost.',
+    @value = N'This table records shipment information for individual orders, linking each order to a specific shipment, warehouse, carrier, tracking number, dates, weight and shipping cost.',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5325,7 +5325,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique identifier for each shipment record.',
+    @value = N'Unique identifier for each shipment record',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5356,7 +5356,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Identifier of the order associated with the shipment.',
+    @value = N'Identifier of the order that is being shipped',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5387,7 +5387,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Warehouse code where the shipment originated.',
+    @value = N'Identifier of the warehouse from which the shipment originated',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5418,7 +5418,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Date the goods were shipped.',
+    @value = N'Date the shipment left the warehouse',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5449,7 +5449,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Expected or actual delivery date; may be null if not yet delivered.',
+    @value = N'Date the shipment was delivered (nullable)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5480,7 +5480,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Carrier used for the shipment (e.g., USPS Priority, DHL Express).',
+    @value = N'Carrier used for the shipment (e.g., USPS, DHL, FedEx, UPS)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5511,7 +5511,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Tracking number assigned by the carrier.',
+    @value = N'Tracking number assigned by the carrier',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5542,7 +5542,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Current shipment status code (D=Delivered, N=Not shipped, S=Shipped, P=Pending).',
+    @value = N'Current status of the shipment (D=Delivered, N=In Transit, S=Shipped, P=Pending)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5573,7 +5573,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Weight of the shipment (units likely pounds or kilograms).',
+    @value = N'Weight of the shipment in pounds (or kilograms)',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',
@@ -5604,7 +5604,7 @@ END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Shipping cost tier for the shipment.',
+    @value = N'Shipping cost charged for the shipment',
     @level0type = N'SCHEMA',
     @level0name = N'sales',
     @level1type = N'TABLE',

@@ -315,7 +315,7 @@ export class DiscoveryEngine {
 
     // Phase 1: PK Detection
     iterationResult.phase = 'pk_detection';
-    const newPKs = await this.detectPrimaryKeys(iteration, phase);
+    let newPKs = await this.detectPrimaryKeys(iteration, phase);
     iterationResult.discoveries.newPKs = newPKs;
 
     this.onProgress(`Detected ${newPKs.length} PK candidates`, {
@@ -326,17 +326,53 @@ export class DiscoveryEngine {
     // Phase 2: FK Detection
     iterationResult.phase = 'fk_detection';
     const allPKs = [...phase.discovered.primaryKeys, ...newPKs];
-    const newFKs = await this.detectForeignKeys(iteration, phase, allPKs);
-    iterationResult.discoveries.newFKs = newFKs;
+    let newFKs = await this.detectForeignKeys(iteration, phase, allPKs);
 
-    this.onProgress(`Detected ${newFKs.length} FK candidates`, {
+    this.onProgress(`Detected ${newFKs.length} FK candidates (pre-LLM)`, {
       iteration,
       candidates: newFKs.map(fk =>
         `${fk.schemaName}.${fk.sourceTable}.${fk.sourceColumn} -> ${fk.targetSchema}.${fk.targetTable}.${fk.targetColumn}`
       ).slice(0, 5)
     });
 
-    // Phase 3: Backpropagation check
+    // Phase 3: LLM Validation (if enabled and we have candidates or need validation)
+    if (this.llmValidator && (newPKs.length > 0 || newFKs.length > 0)) {
+      iterationResult.phase = 'llm_validation';
+
+      this.onProgress('Starting LLM validation', {
+        pkCandidates: newPKs.length,
+        fkCandidates: newFKs.length,
+        tokensRemaining: remainingTokens - iterationResult.tokensUsed
+      });
+
+      const validationResults = await this.performLLMValidation(
+        newPKs,
+        newFKs,
+        allPKs,
+        iterationResult,
+        remainingTokens - iterationResult.tokensUsed
+      );
+
+      // Update candidates based on LLM feedback
+      newPKs = validationResults.updatedPKs;
+      newFKs = validationResults.updatedFKs;
+      iterationResult.tokensUsed += validationResults.tokensUsed;
+
+      this.onProgress(`LLM validation complete`, {
+        tokensUsed: validationResults.tokensUsed,
+        validated: validationResults.validated.length,
+        rejected: validationResults.rejected.length,
+        finalPKs: newPKs.length,
+        finalFKs: newFKs.length
+      });
+
+      iterationResult.discoveries.validated = validationResults.validated;
+      iterationResult.discoveries.rejected = validationResults.rejected;
+      iterationResult.discoveries.newPKs = newPKs;
+      iterationResult.discoveries.newFKs = newFKs;
+    }
+
+    // Phase 4: Backpropagation check
     iterationResult.phase = 'backprop';
     const backpropCheck = this.shouldTriggerBackprop(iterationResult, phase);
     iterationResult.backpropTriggered = backpropCheck.shouldTrigger;
@@ -435,6 +471,160 @@ export class DiscoveryEngine {
     }
 
     return allFKs;
+  }
+
+  /**
+   * Perform LLM validation on PK/FK candidates
+   */
+  private async performLLMValidation(
+    pkCandidates: PKCandidate[],
+    fkCandidates: FKCandidate[],
+    allPKs: PKCandidate[],
+    iteration: RelationshipDiscoveryIteration,
+    remainingTokens: number
+  ): Promise<{
+    updatedPKs: PKCandidate[];
+    updatedFKs: FKCandidate[];
+    validated: string[];
+    rejected: string[];
+    tokensUsed: number;
+  }> {
+    if (!this.llmValidator) {
+      return {
+        updatedPKs: pkCandidates,
+        updatedFKs: fkCandidates,
+        validated: [],
+        rejected: [],
+        tokensUsed: 0
+      };
+    }
+
+    const updatedPKs = [...pkCandidates];
+    const updatedFKs = [...fkCandidates];
+    const validated: string[] = [];
+    const rejected: string[] = [];
+    let tokensUsed = 0;
+
+    // Group candidates by table for efficient validation
+    const tableMap = new Map<string, { pks: PKCandidate[]; fks: FKCandidate[] }>();
+
+    for (const pk of pkCandidates) {
+      const key = `${pk.schemaName}.${pk.tableName}`;
+      if (!tableMap.has(key)) {
+        tableMap.set(key, { pks: [], fks: [] });
+      }
+      tableMap.get(key)!.pks.push(pk);
+    }
+
+    for (const fk of fkCandidates) {
+      const key = `${fk.schemaName}.${fk.sourceTable}`;
+      if (!tableMap.has(key)) {
+        tableMap.set(key, { pks: [], fks: [] });
+      }
+      tableMap.get(key)!.fks.push(fk);
+    }
+
+    // Validate each table's candidates
+    for (const [tableKey, candidates] of tableMap.entries()) {
+      if (tokensUsed >= remainingTokens) {
+        this.onProgress('Token budget exhausted during LLM validation');
+        break;
+      }
+
+      const [schemaName, tableName] = tableKey.split('.');
+      this.onProgress(`Validating ${tableKey}`, {
+        pks: candidates.pks.length,
+        fks: candidates.fks.length
+      });
+
+      try {
+        const result = await this.llmValidator.validateTableRelationships(
+          schemaName,
+          tableName,
+          candidates.pks,
+          candidates.fks
+        );
+
+        tokensUsed += result.tokensUsed;
+
+        if (!result.validated) {
+          this.onProgress(`LLM validation failed for ${tableKey}: ${result.reasoning}`);
+          continue;
+        }
+
+        // Process LLM recommendations
+        for (const rec of result.recommendations) {
+          const recId = `${rec.target}:${rec.schemaName}.${rec.tableName}.${rec.columnName}`;
+
+          if (rec.type === 'confirm') {
+            validated.push(recId);
+
+            // Mark as validated and potentially boost confidence
+            if (rec.target === 'pk') {
+              const pk = updatedPKs.find(p =>
+                p.schemaName === rec.schemaName &&
+                p.tableName === rec.tableName &&
+                p.columnNames.includes(rec.columnName!)
+              );
+              if (pk) {
+                pk.validatedByLLM = true;
+                pk.confidence = Math.min(pk.confidence + 15, 100); // Boost confidence
+              }
+            } else if (rec.target === 'fk') {
+              const fk = updatedFKs.find(f =>
+                f.schemaName === rec.schemaName &&
+                f.sourceTable === rec.tableName &&
+                f.sourceColumn === rec.columnName!
+              );
+              if (fk) {
+                fk.validatedByLLM = true;
+                fk.confidence = Math.min(fk.confidence + 20, 100); // Bigger boost for FKs
+              }
+            }
+          } else if (rec.type === 'reject') {
+            rejected.push(recId);
+
+            // Remove or downgrade confidence
+            if (rec.target === 'pk') {
+              const pkIndex = updatedPKs.findIndex(p =>
+                p.schemaName === rec.schemaName &&
+                p.tableName === rec.tableName &&
+                p.columnNames.includes(rec.columnName!)
+              );
+              if (pkIndex >= 0) {
+                updatedPKs[pkIndex].status = 'rejected';
+                updatedPKs.splice(pkIndex, 1); // Remove rejected
+              }
+            } else if (rec.target === 'fk') {
+              const fkIndex = updatedFKs.findIndex(f =>
+                f.schemaName === rec.schemaName &&
+                f.sourceTable === rec.tableName &&
+                f.sourceColumn === rec.columnName!
+              );
+              if (fkIndex >= 0) {
+                updatedFKs[fkIndex].status = 'rejected';
+                updatedFKs.splice(fkIndex, 1); // Remove rejected
+              }
+            }
+          }
+        }
+
+        this.onProgress(`Validated ${tableKey}`, {
+          reasoning: result.reasoning.substring(0, 100) + '...'
+        });
+
+      } catch (error) {
+        this.onProgress(`Error validating ${tableKey}: ${(error as Error).message}`);
+      }
+    }
+
+    return {
+      updatedPKs,
+      updatedFKs,
+      validated,
+      rejected,
+      tokensUsed
+    };
   }
 
   /**
@@ -729,7 +919,7 @@ export class DiscoveryEngine {
       }
     }
 
-    // Store discovery phase in state
-    state.relationshipDiscoveryPhase = phase;
+    // Store discovery phase in state (new phases structure)
+    state.phases.keyDetection = phase;
   }
 }

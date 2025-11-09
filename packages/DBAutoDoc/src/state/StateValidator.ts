@@ -40,9 +40,9 @@ export class StateValidator {
       errors.push('schemas must be an array');
     }
 
-    if (!state.analysisRuns) {
+    if (!state.phases.descriptionGeneration) {
       errors.push('Missing analysisRuns array');
-    } else if (!Array.isArray(state.analysisRuns)) {
+    } else if (!Array.isArray(state.phases.descriptionGeneration)) {
       errors.push('analysisRuns must be an array');
     }
 
@@ -91,9 +91,9 @@ export class StateValidator {
     }
 
     // Validate analysis runs
-    if (Array.isArray(state.analysisRuns)) {
-      for (let i = 0; i < state.analysisRuns.length; i++) {
-        const run = state.analysisRuns[i];
+    if (Array.isArray(state.phases.descriptionGeneration)) {
+      for (let i = 0; i < state.phases.descriptionGeneration.length; i++) {
+        const run = state.phases.descriptionGeneration[i];
 
         if (!run.runId) {
           errors.push(`Analysis run at index ${i} missing runId`);
@@ -145,8 +145,8 @@ export class StateValidator {
     const result = this.validate(state);
 
     // Attempt simple repairs
-    if (!state.analysisRuns) {
-      state.analysisRuns = [];
+    if (!state.phases.descriptionGeneration) {
+      state.phases.descriptionGeneration = [];
       result.warnings.push('Repaired: Created missing analysisRuns array');
     }
 

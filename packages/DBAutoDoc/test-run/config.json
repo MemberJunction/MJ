@@ -38,7 +38,7 @@
       "crossSchema": true
     },
     "guardrails": {
-      "maxTokensPerRun": 50000,
+      "maxTokensPerRun": 100000,
       "maxDurationSeconds": 2700,
       "warnThresholds": {
         "tokenPercentage": 80,

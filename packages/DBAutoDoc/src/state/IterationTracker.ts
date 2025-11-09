@@ -9,10 +9,10 @@ export class IterationTracker {
    * Get the current (latest) analysis run
    */
   public getCurrentRun(state: DatabaseDocumentation): AnalysisRun | null {
-    if (state.analysisRuns.length === 0) {
+    if (state.phases.descriptionGeneration.length === 0) {
       return null;
     }
-    return state.analysisRuns[state.analysisRuns.length - 1];
+    return state.phases.descriptionGeneration[state.phases.descriptionGeneration.length - 1];
   }
 
   /**
@@ -152,7 +152,7 @@ export class IterationTracker {
    */
   public incrementIteration(state: DatabaseDocumentation, run: AnalysisRun): void {
     run.iterationsPerformed++;
-    state.totalIterations++;
+    state.summary.totalIterations++;
   }
 
   /**

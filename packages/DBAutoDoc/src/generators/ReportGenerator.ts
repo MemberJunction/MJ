@@ -28,13 +28,13 @@ export class ReportGenerator {
     lines.push(`- **Schemas**: ${stats.schemaCount}`);
     lines.push(`- **Tables**: ${stats.tableCount}`);
     lines.push(`- **Columns**: ${stats.columnCount}`);
-    lines.push(`- **Total Iterations**: ${state.totalIterations}`);
-    lines.push(`- **Analysis Runs**: ${state.analysisRuns.length}`);
+    lines.push(`- **Total Iterations**: ${state.summary.totalIterations}`);
+    lines.push(`- **Analysis Runs**: ${state.phases.descriptionGeneration.length}`);
     lines.push('');
 
     // Latest run details
-    if (state.analysisRuns.length > 0) {
-      const lastRun = state.analysisRuns[state.analysisRuns.length - 1];
+    if (state.phases.descriptionGeneration.length > 0) {
+      const lastRun = state.phases.descriptionGeneration[state.phases.descriptionGeneration.length - 1];
 
       lines.push('## Latest Analysis Run');
       lines.push('');
@@ -122,13 +122,13 @@ export class ReportGenerator {
     }
 
     // Iteration history
-    if (state.analysisRuns.length > 1) {
+    if (state.phases.descriptionGeneration.length > 1) {
       lines.push('## Iteration History');
       lines.push('');
       lines.push('| Run | Status | Iterations | Tokens | Cost | Converged |');
       lines.push('|-----|--------|------------|--------|------|-----------|');
 
-      for (const run of state.analysisRuns) {
+      for (const run of state.phases.descriptionGeneration) {
         lines.push(
           `| ${run.runId} | ${run.status} | ${run.iterationsPerformed} | ${run.totalTokensUsed.toLocaleString()} | $${run.estimatedCost.toFixed(2)} | ${run.converged ? 'Yes' : 'No'} |`
         );

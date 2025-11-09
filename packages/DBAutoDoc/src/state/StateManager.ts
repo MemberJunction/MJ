@@ -30,9 +30,22 @@ export class StateManager {
       const content = await fs.readFile(this.stateFilePath, 'utf-8');
       const state = JSON.parse(content) as DatabaseDocumentation;
 
+      // Migrate old structure to new phases structure (backward compatibility)
+      if (!state.phases) {
+        state.phases = {
+          descriptionGeneration: (state as any).analysisRuns || []
+        };
+        if ((state as any).relationshipDiscoveryPhase) {
+          state.phases.keyDetection = (state as any).relationshipDiscoveryPhase;
+        }
+      }
+
       // Initialize summary if it doesn't exist (backward compatibility)
       if (!state.summary) {
         state.summary = {
+          createdAt: (state as any).createdAt || new Date().toISOString(),
+          lastModified: (state as any).lastModified || new Date().toISOString(),
+          totalIterations: (state as any).totalIterations || 0,
           totalPromptsRun: 0,
           totalInputTokens: 0,
           totalOutputTokens: 0,
@@ -43,6 +56,17 @@ export class StateManager {
           estimatedCost: 0
         };
         this.updateSummary(state);
+      } else {
+        // Migrate timing fields into summary if they exist at top level
+        if ((state as any).createdAt && !state.summary.createdAt) {
+          state.summary.createdAt = (state as any).createdAt;
+        }
+        if ((state as any).lastModified && !state.summary.lastModified) {
+          state.summary.lastModified = (state as any).lastModified;
+        }
+        if ((state as any).totalIterations !== undefined && !state.summary.totalIterations) {
+          state.summary.totalIterations = (state as any).totalIterations;
+        }
       }
 
       return state;
@@ -56,8 +80,8 @@ export class StateManager {
    */
   public async save(state: DatabaseDocumentation): Promise<void> {
     try {
-      // Update lastModified timestamp
-      state.lastModified = new Date().toISOString();
+      // Update lastModified timestamp in summary
+      state.summary.lastModified = new Date().toISOString();
 
       // Ensure output directory exists
       const dir = path.dirname(this.stateFilePath);
@@ -78,14 +102,13 @@ export class StateManager {
     databaseName: string,
     serverName: string
   ): DatabaseDocumentation {
+    const now = new Date().toISOString();
     return {
       version: '1.0.0',
-      database: {
-        name: databaseName,
-        server: serverName,
-        analyzedAt: new Date().toISOString()
-      },
       summary: {
+        createdAt: now,
+        lastModified: now,
+        totalIterations: 0,
         totalPromptsRun: 0,
         totalInputTokens: 0,
         totalOutputTokens: 0,
@@ -95,11 +118,15 @@ export class StateManager {
         totalColumns: 0,
         estimatedCost: 0
       },
-      schemas: [],
-      analysisRuns: [],
-      createdAt: new Date().toISOString(),
-      lastModified: new Date().toISOString(),
-      totalIterations: 0
+      database: {
+        name: databaseName,
+        server: serverName,
+        analyzedAt: now
+      },
+      phases: {
+        descriptionGeneration: []
+      },
+      schemas: []
     };
   }
 
@@ -136,7 +163,7 @@ export class StateManager {
       sanityChecks: []
     };
 
-    state.analysisRuns.push(run);
+    state.phases.descriptionGeneration.push(run);
     return run;
   }
 
@@ -334,7 +361,7 @@ export class StateManager {
     let totalTokens = 0;
     let estimatedCost = 0;
 
-    for (const run of state.analysisRuns) {
+    for (const run of state.phases.descriptionGeneration) {
       // Count prompts from processing log
       totalPromptsRun += run.processingLog.filter(
         log => log.tokensUsed && log.tokensUsed > 0
@@ -345,8 +372,9 @@ export class StateManager {
       estimatedCost += run.estimatedCost;
     }
 
-    // Update summary
+    // Update summary (preserve timing fields)
     state.summary = {
+      ...state.summary,
       totalPromptsRun,
       totalInputTokens: 0,  // TODO: Will need to track separately when available
       totalOutputTokens: 0, // TODO: Will need to track separately when available

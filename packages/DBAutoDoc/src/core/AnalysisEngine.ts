@@ -3,7 +3,7 @@
  * Coordinates the entire documentation generation workflow
  */
 
-import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition } from '../types/state.js';
+import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { TableNode, BackpropagationTrigger, TableAnalysisContext } from '../types/analysis.js';
 import {
   TableAnalysisPromptResult,
@@ -186,6 +186,16 @@ export class AnalysisEngine {
         }
       }
 
+      // Extract FK insights from column descriptions and feed back to discovery phase
+      if (state.phases.keyDetection) {
+        this.extractAndFeedbackFKInsights(
+          state,
+          tableNode.schema,
+          tableNode.table,
+          result.result.columnDescriptions || []
+        );
+      }
+
       // Update inferred business domain
       if (result.result.inferredBusinessDomain) {
         // Could store this in table metadata if needed
@@ -301,16 +311,13 @@ export class AnalysisEngine {
       ? table.descriptionIterations[table.descriptionIterations.length - 1]
       : null;
 
-    // If no previous iteration, it's definitely changed (new)
+    // If no previous iteration, it's initial generation - don't waste tokens on comparison
+    // Return minimal result with no column changes (they'll all be logged as "initial" anyway)
     if (!previousIteration) {
       return {
         tableMateriallyChanged: true,
-        tableChangeReasoning: 'Initial description generation',
-        columnChanges: newResult.columnDescriptions.map(col => ({
-          columnName: col.columnName,
-          materiallyChanged: true,
-          changeReasoning: 'Initial description generation'
-        }))
+        tableChangeReasoning: 'Initial generation (skipped semantic comparison)',
+        columnChanges: [] // Don't log individual column changes for initial generation
       };
     }
 
@@ -739,5 +746,134 @@ export class AnalysisEngine {
       canContinue: true,
       warning
     };
+  }
+
+  /**
+   * Extract FK insights from column descriptions and create feedback to discovery phase
+   * Example: "prd_id" described as "likely FK to a product master table" should:
+   * 1. Create feedback that prd_id is an FK, not a PK
+   * 2. Mark any PK candidate for prd_id as rejected
+   */
+  private extractAndFeedbackFKInsights(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string,
+    columnDescriptions: import('../types/prompts.js').ColumnDescriptionPromptResult[]
+  ): void {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return;
+
+    // FK-related patterns in descriptions
+    const fkPatterns = [
+      /(?:likely\s+)?(?:foreign\s+)?key?\s+(?:to|for|of|referencing)\s+(?:a\s+|the\s+)?(\w+)/i,
+      /references?\s+(?:a\s+|the\s+)?(\w+)/i,
+      /links?\s+to\s+(?:a\s+|the\s+)?(\w+)/i,
+      /(?:identifier|ID)\s+(?:of|for)\s+(?:a\s+|the\s+)?(\w+)/i,
+      /FK\s+to\s+(\w+)/i
+    ];
+
+    for (const colDesc of columnDescriptions) {
+      const description = colDesc.description.toLowerCase();
+
+      // Check if description mentions FK relationship
+      let targetTableHint: string | null = null;
+      for (const pattern of fkPatterns) {
+        const match = description.match(pattern);
+        if (match) {
+          targetTableHint = match[1];
+          break;
+        }
+      }
+
+      if (!targetTableHint) continue;
+
+      // Found FK hint - create feedback
+      const feedback: import('../types/discovery.js').AnalysisToDiscoveryFeedback = {
+        type: 'fk_invalidated',
+        evidence: `Analysis phase description: "${colDesc.description}"`,
+        tableName,
+        columnName: colDesc.columnName,
+        affectedCandidates: [],
+        recommendation: 'remove',
+        newRelationship: {
+          targetTable: targetTableHint,
+          targetColumn: 'id' // Common assumption
+        }
+      };
+
+      // Check if this column was marked as a PK - if so, reject it
+      const falsePK = discoveryPhase.discovered.primaryKeys.find(pk =>
+        pk.schemaName === schemaName &&
+        pk.tableName === tableName &&
+        pk.columnNames.includes(colDesc.columnName)
+      );
+
+      if (falsePK) {
+        falsePK.status = 'rejected';
+        feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${colDesc.columnName}`);
+
+        // Update schema metadata: mark as NOT a primary key
+        const column = this.findColumnInState(state, schemaName, tableName, colDesc.columnName);
+        if (column) {
+          column.isPrimaryKey = false;
+          console.log(`[AnalysisEngine] Updated schema: ${schemaName}.${tableName}.${colDesc.columnName} isPrimaryKey = false`);
+        }
+
+        console.log(`[AnalysisEngine] FK insight from LLM: ${schemaName}.${tableName}.${colDesc.columnName} is FK to ${targetTableHint}, rejecting as PK`);
+      }
+
+      // Check if we already have this as an FK candidate - if so, boost confidence
+      const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>
+        fk.schemaName === schemaName &&
+        fk.sourceTable === tableName &&
+        fk.sourceColumn === colDesc.columnName
+      );
+
+      if (existingFK && existingFK.status === 'candidate') {
+        existingFK.validatedByLLM = true;
+        existingFK.status = 'confirmed';
+        existingFK.confidence = Math.min(existingFK.confidence + 20, 100);
+        feedback.type = 'confidence_change';
+        feedback.recommendation = 'upgrade_confidence';
+        feedback.newConfidence = existingFK.confidence;
+        feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${colDesc.columnName}`);
+
+        // Update schema metadata: mark as foreign key and set reference
+        const column = this.findColumnInState(state, schemaName, tableName, colDesc.columnName);
+        if (column) {
+          column.isForeignKey = true;
+          column.foreignKeyReferences = {
+            schema: existingFK.targetSchema,
+            table: existingFK.targetTable,
+            column: existingFK.targetColumn,
+            referencedColumn: existingFK.targetColumn
+          };
+          console.log(`[AnalysisEngine] Updated schema: ${schemaName}.${tableName}.${colDesc.columnName} isForeignKey = true -> ${existingFK.targetTable}.${existingFK.targetColumn}`);
+        }
+
+        console.log(`[AnalysisEngine] FK insight from LLM: Confirmed ${schemaName}.${tableName}.${colDesc.columnName} -> ${existingFK.targetTable}.${existingFK.targetColumn}, boosting confidence to ${existingFK.confidence}`);
+      }
+
+      // Add feedback to discovery phase
+      discoveryPhase.feedbackFromAnalysis.push(feedback);
+    }
+  }
+
+  /**
+   * Find a column in the state schemas
+   */
+  private findColumnInState(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string,
+    columnName: string
+  ): ColumnDefinition | null {
+    const schema = state.schemas.find(s => s.name === schemaName);
+    if (!schema) return null;
+
+    const table = schema.tables.find(t => t.name === tableName);
+    if (!table) return null;
+
+    return table.columns.find(c => c.name === columnName) || null;
   }
 }

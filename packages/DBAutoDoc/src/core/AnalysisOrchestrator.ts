@@ -152,20 +152,22 @@ export class AnalysisOrchestrator {
               : this.config.analysis.relationshipDiscovery.tokenBudget?.maxTokens || 50000;
 
             const discoveryResult = await discoveryEngine.discover(discoveryTokenBudget, triggerAnalysis);
-            state.relationshipDiscoveryPhase = discoveryResult.phase;
 
-            // Save column statistics cache to state
-            state.columnStatistics = discoveryResult.statsCache.toStateJSON();
+            // Save to new phases structure
+            state.phases.keyDetection = discoveryResult.phase;
 
             // Apply discovered relationships to schema
             discoveryEngine.applyDiscoveriesToState(state, discoveryResult.phase);
+
+            // Merge column statistics into schema columns
+            discoveryResult.statsCache.mergeIntoSchemas(state.schemas);
 
             this.onProgress('Relationship discovery complete', {
               primaryKeysDiscovered: discoveryResult.phase.discovered.primaryKeys.length,
               foreignKeysDiscovered: discoveryResult.phase.discovered.foreignKeys.length,
               tokensUsed: discoveryResult.phase.tokenBudget.used,
               guardrailsReached: discoveryResult.guardrailsReached,
-              columnStatsCached: Object.keys(state.columnStatistics.tables).length
+              totalSchemas: state.schemas.length
             });
 
             // Save state with discovery results and stats cache
