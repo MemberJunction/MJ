@@ -871,6 +871,10 @@ export class AnalysisEngine {
             referencedColumn: referencesColumn
           };
         }
+
+        // Update table-level dependsOn and dependents arrays for ERD generation
+        this.updateTableDependencies(state, schemaName, tableName, referencesSchema, referencesTable, columnName, referencesColumn);
+
         console.log(`[AnalysisEngine] Confirmed FK: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}, confidence: ${existingFK.confidence}`);
       } else {
         // Create new FK from LLM insight
@@ -911,6 +915,10 @@ export class AnalysisEngine {
             referencedColumn: referencesColumn
           };
         }
+
+        // Update table-level dependsOn and dependents arrays for ERD generation
+        this.updateTableDependencies(state, schemaName, tableName, referencesSchema, referencesTable, columnName, referencesColumn);
+
         console.log(`[AnalysisEngine] Created FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}`);
       }
 
@@ -934,6 +942,68 @@ export class AnalysisEngine {
     if (!table) return null;
 
     return table.columns.find(c => c.name === columnName) || null;
+  }
+
+  /**
+   * Update table-level dependsOn and dependents arrays when creating FK relationships
+   * This is required for ERD diagram generation
+   */
+  private updateTableDependencies(
+    state: DatabaseDocumentation,
+    sourceSchemaName: string,
+    sourceTableName: string,
+    targetSchemaName: string,
+    targetTableName: string,
+    sourceColumnName: string,
+    targetColumnName: string
+  ): void {
+    // Find source table and add to its dependsOn array
+    const sourceSchema = state.schemas.find(s => s.name === sourceSchemaName);
+    if (sourceSchema) {
+      const sourceTable = sourceSchema.tables.find(t => t.name === sourceTableName);
+      if (sourceTable) {
+        // Check if this dependency already exists
+        const existingDep = sourceTable.dependsOn.find(
+          dep => dep.schema === targetSchemaName &&
+                 dep.table === targetTableName &&
+                 dep.column === sourceColumnName
+        );
+
+        if (!existingDep) {
+          sourceTable.dependsOn.push({
+            schema: targetSchemaName,
+            table: targetTableName,
+            column: sourceColumnName,
+            referencedColumn: targetColumnName
+          });
+          console.log(`[AnalysisEngine] Updated dependsOn for ${sourceSchemaName}.${sourceTableName} -> ${targetSchemaName}.${targetTableName}`);
+        }
+      }
+    }
+
+    // Find target table and add to its dependents array
+    const targetSchema = state.schemas.find(s => s.name === targetSchemaName);
+    if (targetSchema) {
+      const targetTable = targetSchema.tables.find(t => t.name === targetTableName);
+      if (targetTable) {
+        // Check if this dependent already exists
+        const existingDep = targetTable.dependents.find(
+          dep => dep.schema === sourceSchemaName &&
+                 dep.table === sourceTableName &&
+                 dep.column === sourceColumnName
+        );
+
+        if (!existingDep) {
+          targetTable.dependents.push({
+            schema: sourceSchemaName,
+            table: sourceTableName,
+            column: sourceColumnName,
+            referencedColumn: targetColumnName
+          });
+          console.log(`[AnalysisEngine] Updated dependents for ${targetSchemaName}.${targetTableName} <- ${sourceSchemaName}.${sourceTableName}`);
+        }
+      }
+    }
   }
 
   /**
