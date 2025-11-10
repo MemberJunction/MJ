@@ -1,0 +1,4 @@
+- You must only commit and push the files that were staged by the user. The user likely has other sessions going with WIP, so **do not modify** what was staged by the user.
+- Commit and push the staged files only
+- Do NOT modify staging
+- Do NOT commit again until asked
