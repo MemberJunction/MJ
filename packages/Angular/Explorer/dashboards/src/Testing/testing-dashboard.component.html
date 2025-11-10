@@ -16,6 +16,19 @@
 
   @if (!isLoading) {
     <div class="dashboard-content-wrapper">
+      <div class="testing-dashboard-nav">
+        @for (navItem of navigationConfig; track $index) {
+          <div
+            class="nav-item"
+            [class.active]="navItem.selected"
+            (click)="onTabChange(navigationItems[$index])"
+          >
+            <i [class]="navItem.icon"></i>
+            <span>{{ navItem.text }}</span>
+          </div>
+        }
+      </div>
+
       <div class="dashboard-content">
         @if (activeTab === 'overview' && hasVisited('overview')) {
           <app-testing-overview
@@ -50,19 +63,6 @@
             [initialState]="feedbackState"
             (stateChange)="onFeedbackStateChange($event)"
           ></app-testing-feedback>
-        }
-      </div>
-
-      <div class="testing-dashboard-nav">
-        @for (navItem of navigationConfig; track $index) {
-          <div
-            class="nav-item"
-            [class.active]="navItem.selected"
-            (click)="onTabChange(navigationItems[$index])"
-          >
-            <i [class]="navItem.icon"></i>
-            <span>{{ navItem.text }}</span>
-          </div>
         }
       </div>
     </div>

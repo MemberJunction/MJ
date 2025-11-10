@@ -78,6 +78,7 @@ import { CostDisplayComponent } from './Testing/components/widgets/cost-display.
 import { SuiteTreeComponent, SuiteTreeNodeComponent } from './Testing/components/widgets/suite-tree.component';
 import { OracleBreakdownTableComponent } from './Testing/components/widgets/oracle-breakdown-table.component';
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
+import { TestRunDialogComponent } from './Testing/components/widgets/test-run-dialog.component';
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 @NgModule({
   declarations: [
@@ -138,7 +139,8 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     SuiteTreeComponent,
     SuiteTreeNodeComponent,
     OracleBreakdownTableComponent,
-    TestRunDetailPanelComponent
+    TestRunDetailPanelComponent,
+    TestRunDialogComponent
   ],
   imports: [
     CommonModule,

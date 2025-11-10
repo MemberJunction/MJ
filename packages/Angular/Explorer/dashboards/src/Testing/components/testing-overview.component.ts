@@ -3,7 +3,7 @@ import { Observable, Subject } from 'rxjs';
 import { takeUntil, debounceTime, map } from 'rxjs/operators';
 import { TestingInstrumentationService, TestingDashboardKPIs, TestRunSummary, SuiteHierarchyNode } from '../services/testing-instrumentation.service';
 import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
-import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 @Component({
   selector: 'app-testing-overview',
@@ -63,16 +63,6 @@ import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graph
                     <app-test-status-badge [status]="run.status" [showIcon]="false"></app-test-status-badge>
                     <app-score-indicator [score]="run.score" [showBar]="false" [showIcon]="false"></app-score-indicator>
                   </div>
-                  <button
-                    class="rerun-btn"
-                    [disabled]="isTestRunning(run.testId)"
-                    (click)="rerunTest(run.testId, run.testName); $event.stopPropagation()"
-                    title="Re-run test">
-                    <i class="fa-solid"
-                       [class.fa-rotate-right]="!isTestRunning(run.testId)"
-                       [class.fa-spinner]="isTestRunning(run.testId)"
-                       [class.fa-spin]="isTestRunning(run.testId)"></i>
-                  </button>
                 </div>
               </div>
             } @empty {
@@ -355,8 +345,6 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
   @Output() stateChange = new EventEmitter<any>();
 
   private destroy$ = new Subject<void>();
-  private testingClient!: GraphQLTestingClient;
-  private runningTests = new Set<string>();
 
   isLoading = false;
   selectedSuiteId: string | null = null;
@@ -368,8 +356,7 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
 
   constructor(
     private instrumentationService: TestingInstrumentationService,
-    private cdr: ChangeDetectorRef,
-    private dataProvider: GraphQLDataProvider
+    private cdr: ChangeDetectorRef
   ) {
     this.kpis$ = this.instrumentationService.kpis$;
     this.suiteHierarchy$ = this.instrumentationService.suiteHierarchy$;
@@ -386,15 +373,18 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
       this.isLoading = loading;
       this.cdr.markForCheck();
     });
-
-    // Initialize testing client
-    this.testingClient = new GraphQLTestingClient(this.dataProvider);
   }
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     if (this.initialState) {
       this.selectedSuiteId = this.initialState.selectedSuiteId || null;
     }
+
+    // Initialize TestEngineBase with false for verbose logging
+    // This will load and cache all test metadata (Tests, Test Suites, Test Types, etc.)
+    const engine = TestEngineBase.Instance;
+    await engine.Config(false);
+
     this.refreshData();
   }
 
@@ -416,45 +406,6 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
   viewRunDetail(run: TestRunSummary): void {
     // Could navigate or open detail panel
     console.log('View run detail:', run);
-  }
-
-  async rerunTest(testId: string, testName: string): Promise<void> {
-    if (this.runningTests.has(testId)) {
-      console.warn('Test is already running');
-      return;
-    }
-
-    try {
-      this.runningTests.add(testId);
-      this.cdr.markForCheck();
-
-      console.log(`Starting test: ${testName}`);
-
-      const result = await this.testingClient.RunTest({
-        testId,
-        verbose: true
-      });
-
-      if (result.success) {
-        console.log('Test completed:', result.result);
-        // Refresh the dashboard to show new results
-        this.instrumentationService.refresh();
-      } else {
-        console.error('Test failed:', result.errorMessage);
-        alert(`Test failed: ${result.errorMessage}`);
-      }
-
-    } catch (error) {
-      console.error('Error running test:', error);
-      alert(`Error: ${(error as Error).message}`);
-    } finally {
-      this.runningTests.delete(testId);
-      this.cdr.markForCheck();
-    }
-  }
-
-  isTestRunning(testId: string): boolean {
-    return this.runningTests.has(testId);
   }
 
   formatDuration(milliseconds: number): string {

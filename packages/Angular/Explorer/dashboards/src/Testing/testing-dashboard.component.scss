@@ -78,25 +78,27 @@
 
 .testing-dashboard-nav {
   display: flex;
-  justify-content: space-around;
+  justify-content: flex-start;
+  gap: 4px;
   background: white;
-  border-top: 1px solid #e0e0e0;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
-  padding: 8px 0;
+  border-bottom: 1px solid #e0e0e0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 0;
 }
 
 .nav-item {
-  flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  padding: 12px 8px;
+  gap: 8px;
+  padding: 14px 20px;
   cursor: pointer;
   color: #666;
   transition: all 0.2s ease;
-  border-bottom: 3px solid transparent;
-  min-width: 80px;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  position: relative;
 }
 
 .nav-item:hover {
@@ -107,19 +109,16 @@
 .nav-item.active {
   color: #2196f3;
   border-bottom-color: #2196f3;
-  background: rgba(33, 150, 243, 0.05);
+  background: rgba(33, 150, 243, 0.08);
 }
 
 .nav-item i {
-  font-size: 20px;
-  margin-bottom: 4px;
+  font-size: 16px;
 }
 
 .nav-item span {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {

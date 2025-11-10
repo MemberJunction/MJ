@@ -10,6 +10,7 @@ import {
   TestEntity,
   TestTypeEntity
 } from '@memberjunction/core-entities';
+import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 export interface TestingDashboardKPIs {
   totalTestsActive: number;
@@ -206,26 +207,25 @@ export class TestingInstrumentationService {
     const { start, end } = this._dateRange$.value;
     const rv = new RunView();
 
-    const [testRunsResult, testsResult, suiteRunsResult] = await rv.RunViews([
+    // Get Tests from TestEngineBase cache instead of querying DB
+    const engine = TestEngineBase.Instance;
+    const activeTests = engine.Tests.filter(t => t.Status === 'Active');
+
+    // Only load runs via RunView (not cached in engine)
+    const [testRunsResult, suiteRunsResult] = await rv.RunViews([
       {
-        EntityName: 'Test Runs',
+        EntityName: 'MJ: Test Runs',
         ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
         ResultType: 'entity_object'
       },
       {
-        EntityName: 'Tests',
-        ExtraFilter: `Status = 'Active'`,
-        ResultType: 'entity_object'
-      },
-      {
-        EntityName: 'Test Suite Runs',
+        EntityName: 'MJ: Test Suite Runs',
         ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
         ResultType: 'entity_object'
       }
     ]);
 
     const testRuns = testRunsResult.Results as TestRunEntity[];
-    const activeTests = testsResult.Results as TestEntity[];
     const suiteRuns = suiteRunsResult.Results as TestSuiteRunEntity[];
 
     // Calculate KPIs
@@ -257,7 +257,7 @@ export class TestingInstrumentationService {
     const previousEnd = new Date(start.getTime());
 
     const previousRunsResult = await rv.RunView<TestRunEntity>({
-      EntityName: 'Test Runs',
+      EntityName: 'MJ: Test Runs',
       ExtraFilter: `StartedAt >= '${previousStart.toISOString()}' AND StartedAt < '${previousEnd.toISOString()}'`,
       ResultType: 'entity_object'
     });
@@ -289,7 +289,7 @@ export class TestingInstrumentationService {
     const testRunIDs = testRuns.map(r => r.ID).join("','");
 
     const feedbackResult = await rv.RunView<TestRunFeedbackEntity>({
-      EntityName: 'Test Run Feedback',
+      EntityName: 'MJ: Test Run Feedbacks',
       ExtraFilter: `TestRunID IN ('${testRunIDs}')`,
       ResultType: 'entity_object'
     });
@@ -317,7 +317,7 @@ export class TestingInstrumentationService {
 
     const rv = new RunView();
     const result = await rv.RunView<TestRunEntity>({
-      EntityName: 'Test Runs',
+      EntityName: 'MJ: Test Runs',
       ExtraFilter: filter,
       OrderBy: 'StartedAt DESC',
       MaxRows: 1000,
@@ -348,23 +348,18 @@ export class TestingInstrumentationService {
     const { start, end } = this._dateRange$.value;
     const rv = new RunView();
 
-    // Load all suites and test runs
-    const [suitesResult, testRunsResult] = await rv.RunViews([
-      {
-        EntityName: 'Test Suites',
-        ExtraFilter: `Status = 'Active'`,
-        OrderBy: 'Name',
-        ResultType: 'entity_object'
-      },
-      {
-        EntityName: 'Test Runs',
-        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
-      }
-    ]);
+    // Get Test Suites from TestEngineBase cache instead of querying DB
+    const engine = TestEngineBase.Instance;
+    const suites = engine.TestSuites.filter(s => s.Status === 'Active');
 
-    const suites = suitesResult.Results as TestSuiteEntity[];
-    const testRuns = testRunsResult.Results as TestRunEntity[];
+    // Only load test runs via RunView (not cached in engine)
+    const testRunsResult = await rv.RunView<TestRunEntity>({
+      EntityName: 'MJ: Test Runs',
+      ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
+      ResultType: 'entity_object'
+    });
+
+    const testRuns = testRunsResult.Results || [];
 
     // Build hierarchy
     const nodes: SuiteHierarchyNode[] = suites.map(suite => ({
@@ -436,7 +431,7 @@ export class TestingInstrumentationService {
 
     // Load all test runs for the period
     const result = await rv.RunView<TestRunEntity>({
-      EntityName: 'Test Runs',
+      EntityName: 'MJ: Test Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
       OrderBy: 'StartedAt',
       ResultType: 'entity_object'
@@ -494,7 +489,7 @@ export class TestingInstrumentationService {
     const rv = new RunView();
 
     const result = await rv.RunView<TestRunEntity>({
-      EntityName: 'Test Runs',
+      EntityName: 'MJ: Test Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
       ResultType: 'entity_object'
     });
@@ -611,12 +606,12 @@ export class TestingInstrumentationService {
 
     const [testRunsResult, feedbackResult] = await rv.RunViews([
       {
-        EntityName: 'Test Runs',
+        EntityName: 'MJ: Test Runs',
         ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
         ResultType: 'entity_object'
       },
       {
-        EntityName: 'Test Run Feedback',
+        EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `CreatedAt >= '${start.toISOString()}'`,
         ResultType: 'entity_object'
       }
@@ -676,7 +671,7 @@ export class TestingInstrumentationService {
 
     // Load all feedback for the period
     const feedbackResult = await rv.RunView<TestRunFeedbackEntity>({
-      EntityName: 'Test Run Feedback',
+      EntityName: 'MJ: Test Run Feedbacks',
       ExtraFilter: `CreatedAt >= '${start.toISOString()}' AND CreatedAt <= '${end.toISOString()}'`,
       ResultType: 'entity_object'
     });
@@ -720,7 +715,7 @@ export class TestingInstrumentationService {
 
   async submitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
     try {
-      const feedback = await this.metadata.GetEntityObject<TestRunFeedbackEntity>('Test Run Feedback');
+      const feedback = await this.metadata.GetEntityObject<TestRunFeedbackEntity>('MJ: Test Run Feedbacks');
       feedback.TestRunID = testRunID;
       feedback.Rating = rating;
       feedback.IsCorrect = isCorrect;
@@ -742,7 +737,7 @@ export class TestingInstrumentationService {
     const rv = new RunView();
 
     const result = await rv.RunView<TestSuiteRunEntity>({
-      EntityName: 'Test Suite Runs',
+      EntityName: 'MJ: Test Suite Runs',
       ExtraFilter: '',
       OrderBy: 'StartedAt DESC',
       MaxRows: 100,

@@ -1,7 +1,9 @@
 import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Observable, Subject, combineLatest } from 'rxjs';
 import { takeUntil, map } from 'rxjs/operators';
+import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { TestingInstrumentationService, TestRunSummary } from '../services/testing-instrumentation.service';
+import { TestRunDialogComponent } from './widgets/test-run-dialog.component';
 
 interface ExecutionListItem {
   id: string;
@@ -625,6 +627,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
 
   constructor(
     private instrumentationService: TestingInstrumentationService,
+    private dialogService: DialogService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -779,7 +782,21 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   }
 
   startNewTest(): void {
-    console.log('Start new test');
+    const dialogRef: DialogRef = this.dialogService.open({
+      content: TestRunDialogComponent,
+      width: 900,
+      height: 700,
+      title: 'Run Test',
+      actions: []
+    });
+
+    const dialogInstance = dialogRef.content.instance as TestRunDialogComponent;
+
+    dialogRef.result.subscribe((result) => {
+      if (result && typeof result === 'object' && 'testExecuted' in result && result.testExecuted) {
+        this.refresh();
+      }
+    });
   }
 
   viewDetails(execution: ExecutionListItem): void {
