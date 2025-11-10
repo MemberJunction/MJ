@@ -188,6 +188,9 @@
 .chat-messages-pane:not(.full-width) {
     flex: 1;
 }
+.chat-messages-pane.hidden {
+    display: none;
+}
 .resize-handle {
     width: 4px;
     background: transparent;
@@ -214,6 +217,9 @@
     background: #FAFAFA;
     overflow: hidden;
     flex-shrink: 0;
+}
+.chat-artifact-pane.maximized {
+    width: 100% !important;
 }
 .chat-artifact-pane > mj-artifact-viewer-panel {
     display: flex;

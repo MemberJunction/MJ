@@ -58,6 +58,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
+  public isArtifactPaneMaximized: boolean = false; // Track maximize state
+  private artifactPaneWidthBeforeMaximize: number = 40; // Store width before maximizing
   public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
@@ -1366,6 +1368,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Clear permissions
     this.canShareSelectedArtifact = false;
     this.canEditSelectedArtifact = false;
+    // Reset maximize state when closing
+    this.isArtifactPaneMaximized = false;
+  }
+
+  toggleMaximizeArtifactPane(): void {
+    if (this.isArtifactPaneMaximized) {
+      // Restore to previous width
+      this.artifactPaneWidth = this.artifactPaneWidthBeforeMaximize;
+      this.isArtifactPaneMaximized = false;
+    } else {
+      // Maximize - store current width and set to 100%
+      this.artifactPaneWidthBeforeMaximize = this.artifactPaneWidth;
+      this.artifactPaneWidth = 100;
+      this.isArtifactPaneMaximized = true;
+    }
   }
 
   onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
