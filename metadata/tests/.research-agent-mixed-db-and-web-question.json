@@ -7,7 +7,7 @@
       "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
       "prompt": "Compare our user engagement metrics over the past quarter with industry benchmarks. Specifically, I want to understand how our daily active user rate, session duration, and feature adoption compare to similar B2B SaaS platforms. Are we above or below average in these areas?"
     },
-    "Configuration": {
+    "ExpectedOutcomes": {
       "oracles": [
         {
           "type": "trace-no-errors",
@@ -50,13 +50,14 @@
       "passingScore": 0.75,
       "costBudget": 1
     },
+    "Configuration": null,
     "Status": "Active"
   },
   "primaryKey": {
     "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
   },
   "sync": {
-    "lastModified": "2025-11-10T00:29:07.830Z",
-    "checksum": "b484ed639210d3265306165202908ac42fd2fa6663fda51492b027bd69affe6c"
+    "lastModified": "2025-11-10T02:30:40.240Z",
+    "checksum": "75ee434238aa2e82b615d63f4a313a3c17112030493bd35b678bae6994fe5a95"
   }
 }
