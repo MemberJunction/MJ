@@ -1,0 +1,12 @@
+{
+  "entity": "MJ: Tests",
+  "filePattern": ".*.json",
+  "pull": {
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: Test Types",
+        "field": "Name"
+      }
+    }
+  }
+}

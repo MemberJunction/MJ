@@ -3476,7 +3476,12 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.Data = JSON.stringify(params.data);
         }
         this._agentRun.Verbose = params.verbose || false;
-        
+
+        // Set TestRunID if provided
+        if (params.testRunId) {
+            this._agentRun.TestRunID = params.testRunId;
+        }
+
         // Save the agent run
         if (!await this._agentRun.Save()) {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));

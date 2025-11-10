@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { AIAgentEntityExtended, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, ConversationDetailEntity, UserNotificationEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { AIAgentEntityExtended, ConversationDetailEntity, UserNotificationEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -354,14 +354,14 @@ export class RunAIAgentResolver extends ResolverBase {
             // for multi-user server environments like this one
             // Create AI agent runner
             const agentRunner = new AgentRunner();
-            
+
             // Track agent run for streaming (use ref to update later)
             const agentRunRef = { current: null as any };
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
-            // Execute the agent with streaming callbacks
-            const result = await agentRunner.RunAgent({
+            // Execute the agent in conversation context - handles conversation, artifacts, etc.
+            const conversationResult = await agentRunner.RunAgentInConversation({
                 agent: agentEntity,
                 conversationMessages: parsedMessages,
                 payload: payload ? SafeJSONParse(payload) : undefined,
@@ -372,11 +372,19 @@ export class RunAIAgentResolver extends ResolverBase {
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
                 data: parsedData,
-                conversationDetailId: conversationDetailId,
                 context: {
                     dataSource: dataSource
                 }
+            }, {
+                conversationDetailId: conversationDetailId, // Use existing if provided
+                createArtifacts: createArtifacts || false,
+                sourceArtifactId: sourceArtifactId
             });
+
+            const result = conversationResult.agentResult;
+            // Use agent response detail ID if available, otherwise fall back to user message detail ID
+            const finalConversationDetailId = conversationResult.agentResponseDetailId || conversationResult.userMessageDetailId;
+            const artifactInfo = conversationResult.artifactInfo;
 
             // Update agent run ref once available
             if (result.agentRun) {
@@ -388,35 +396,20 @@ export class RunAIAgentResolver extends ResolverBase {
             // Publish final events
             this.publishFinalEvents(pubSub, sessionId, userPayload, result);
 
-            // Process completion for artifacts and notifications (if enabled)
-            if (result.success && conversationDetailId && result.payload) {
-                const currentUser = this.GetUserFromPayload(userPayload);
-
-                if (createArtifacts) {
-                    const artifactInfo = await this.processAgentCompletionForArtifacts(
-                        result.agentRun,
-                        result.payload,
-                        currentUser,
-                        conversationDetailId,
-                        sourceArtifactId
-                    );
-
-                    // Create notification if enabled and artifact was created successfully
-                    if (createNotification && artifactInfo.artifactId && artifactInfo.versionId && artifactInfo.versionNumber) {
-                        await this.createCompletionNotification(
-                            result.agentRun,
-                            {
-                                artifactId: artifactInfo.artifactId,
-                                versionId: artifactInfo.versionId,
-                                versionNumber: artifactInfo.versionNumber
-                            },
-                            conversationDetailId,
-                            currentUser,
-                            pubSub,
-                            userPayload
-                        );
-                    }
-                }
+            // Create notification if enabled and artifact was created successfully
+            if (createNotification && result.success && artifactInfo && artifactInfo.artifactId && artifactInfo.versionId && artifactInfo.versionNumber) {
+                await this.createCompletionNotification(
+                    result.agentRun,
+                    {
+                        artifactId: artifactInfo.artifactId,
+                        versionId: artifactInfo.versionId,
+                        versionNumber: artifactInfo.versionNumber
+                    },
+                    finalConversationDetailId,
+                    currentUser,
+                    pubSub,
+                    userPayload
+                );
             }
 
             // Create sanitized payload for JSON serialization
@@ -586,259 +579,6 @@ export class RunAIAgentResolver extends ResolverBase {
             sourceArtifactId,
             sourceArtifactVersionId
         );
-    }
-
-    /**
-     * Get the maximum version number for an artifact
-     * Used when creating new version of an explicitly specified artifact
-     */
-    private async getMaxVersionForArtifact(
-        artifactId: string,
-        contextUser: UserInfo
-    ): Promise<number> {
-        try {
-            const rv = new RunView();
-
-            // Query all versions for this artifact to find max version number
-            const result = await rv.RunView<ArtifactVersionEntity>({
-                EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID='${artifactId}'`,
-                OrderBy: 'VersionNumber DESC',
-                MaxRows: 1,
-                ResultType: 'entity_object'
-            }, contextUser);
-
-            if (result.Success && result.Results && result.Results.length > 0) {
-                return result.Results[0].VersionNumber || 0;
-            }
-
-            return 0; // No versions found, will create version 1
-        } catch (error) {
-            LogError(`Error getting max version for artifact: ${(error as Error).message}`);
-            return 0;
-        }
-    }
-
-    /**
-     * Find the most recent artifact for a conversation detail to determine versioning
-     * Returns artifact info if exists, null if this is first artifact
-     */
-    private async findPreviousArtifactForMessage(
-        conversationDetailId: string,
-        contextUser: UserInfo
-    ): Promise<{ artifactId: string; versionNumber: number } | null> {
-        try {
-            const rv = new RunView();
-
-            // Query junction table to find artifacts for this message
-            const result = await rv.RunView<ConversationDetailArtifactEntity>({
-                EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
-                OrderBy: '__mj_CreatedAt DESC',
-                MaxRows: 1,
-                ResultType: 'entity_object'
-            }, contextUser);
-
-            if (!result.Success || !result.Results || result.Results.length === 0) {
-                return null;
-            }
-
-            const junction = result.Results[0];
-
-            // Load the artifact version to get version number and artifact ID
-            const md = new Metadata();
-            const version = await md.GetEntityObject<ArtifactVersionEntity>(
-                'MJ: Artifact Versions',
-                contextUser
-            );
-
-            if (!(await version.Load(junction.ArtifactVersionID))) {
-                return null;
-            }
-
-            return {
-                artifactId: version.ArtifactID,
-                versionNumber: version.VersionNumber
-            };
-        } catch (error) {
-            LogError(`Error finding previous artifact: ${(error as Error).message}`);
-            return null;
-        }
-    }
-
-    /**
-     * Process agent completion to create artifacts from payload
-     * Called after agent run completes successfully
-     */
-    private async processAgentCompletionForArtifacts(
-        agentRun: AIAgentRunEntityExtended,
-        payload: any,
-        contextUser: UserInfo,
-        conversationDetailId?: string,
-        sourceArtifactId?: string
-    ): Promise<{ artifactId?: string; versionId?: string; versionNumber?: number }> {
-        // Validate inputs
-        if (!payload || Object.keys(payload).length === 0) {
-            LogStatus('No payload to create artifact from');
-            return {};
-        }
-
-        if (!conversationDetailId) {
-            LogStatus('Skipping artifact creation - no conversationDetailId provided');
-            return {};
-        }
-
-        // Check agent's ArtifactCreationMode
-        await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
-        const creationMode = agent?.ArtifactCreationMode;
-
-        if (creationMode === 'Never') {
-            LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);
-            return {};
-        }
-
-        try {
-            const md = new Metadata();
-            const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
-
-            // 1. Determine if creating new artifact or new version
-            let artifactId: string;
-            let newVersionNumber: number;
-            let isNewArtifact = false;
-
-            // Priority 1: Use explicit source artifact if provided (agent continuity/refinement)
-            if (sourceArtifactId) {
-                const maxVersion = await this.getMaxVersionForArtifact(sourceArtifactId, contextUser);
-                artifactId = sourceArtifactId;
-                newVersionNumber = maxVersion + 1;
-                LogStatus(`Creating version ${newVersionNumber} of source artifact ${artifactId} (explicit source)`);
-            }
-            // Priority 2: Try to find previous artifact for this message (fallback)
-            else {
-                const previousArtifact = await this.findPreviousArtifactForMessage(
-                    conversationDetailId,
-                    contextUser
-                );
-
-                if (previousArtifact) {
-                    // Create new version of existing artifact
-                    artifactId = previousArtifact.artifactId;
-                    newVersionNumber = previousArtifact.versionNumber + 1;
-                    LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
-                } else {
-                    // Create new artifact header
-                    const artifact = await md.GetEntityObject<ArtifactEntity>(
-                    'MJ: Artifacts',
-                    contextUser
-                );
-
-                // Get agent info for naming and visibility control
-                await AIEngine.Instance.Config(false, contextUser);
-                const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
-                const agentName = agent?.Name || 'Agent';
-
-                artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
-                artifact.Description = `Payload returned by ${agentName}`;
-
-                // Use agent's DefaultArtifactTypeID if available, otherwise JSON
-                const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
-                artifact.TypeID = defaultArtifactTypeId || JSON_ARTIFACT_TYPE_ID;
-
-                artifact.UserID = contextUser.ID;
-                artifact.EnvironmentID = (contextUser as any).EnvironmentID ||
-                                        'F51358F3-9447-4176-B313-BF8025FD8D09';
-
-                // Set visibility based on agent's ArtifactCreationMode
-                // Will compile after CodeGen adds the new fields
-                const creationMode = agent.ArtifactCreationMode;
-                if (creationMode === 'System Only') {
-                    artifact.Visibility = 'System Only';
-                    LogStatus(`Artifact marked as "System Only" per agent configuration`);
-                } else {
-                    artifact.Visibility = 'Always';
-                }
-
-                if (!(await artifact.Save())) {
-                    throw new Error('Failed to save artifact');
-                }
-
-                    artifactId = artifact.ID;
-                    newVersionNumber = 1;
-                    isNewArtifact = true;
-                    LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})`);
-                }
-            }
-
-            // 2. Create artifact version with content
-            const version = await md.GetEntityObject<ArtifactVersionEntity>(
-                'MJ: Artifact Versions',
-                contextUser
-            );
-            version.ArtifactID = artifactId;
-            version.VersionNumber = newVersionNumber;
-            version.Content = JSON.stringify(payload, null, 2);
-            version.UserID = contextUser.ID;
-
-            if (!(await version.Save())) {
-                throw new Error('Failed to save artifact version');
-            }
-
-            LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
-
-            // If this is the first version of a new artifact, check for extracted Name attribute and update artifact
-            if (isNewArtifact && newVersionNumber === 1) {
-                const nameAttr = (version as any).Attributes?.find((attr: any) =>
-                    attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
-                );
-
-                // Check for valid name value (not null, not empty, not string "null")
-                let extractedName = nameAttr?.Value?.trim();
-                if (extractedName && extractedName.toLowerCase() !== 'null') {
-                    // Strip surrounding quotes (double or single) from start and end
-                    extractedName = extractedName.replace(/^["']|["']$/g, '');
-
-                    // Load artifact to update with extracted name
-                    const artifact = await md.GetEntityObject<ArtifactEntity>(
-                        'MJ: Artifacts',
-                        contextUser
-                    );
-
-                    if (!(await artifact.Load(artifactId))) {
-                        LogError('Failed to reload artifact for name update');
-                    } else {
-                        artifact.Name = extractedName;
-                        if (await artifact.Save()) {
-                            LogStatus(`✨ Updated artifact name to: ${artifact.Name}`);
-                        }
-                    }
-                }
-            }
-
-            // 3. Create junction record linking artifact to conversation detail
-            const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
-                'MJ: Conversation Detail Artifacts',
-                contextUser
-            );
-            junction.ConversationDetailID = conversationDetailId;
-            junction.ArtifactVersionID = version.ID;
-            junction.Direction = 'Output';
-
-            if (!(await junction.Save())) {
-                throw new Error('Failed to create artifact-message association');
-            }
-
-            LogStatus(`Linked artifact to conversation detail ${conversationDetailId}`);
-
-            return {
-                artifactId,
-                versionId: version.ID,
-                versionNumber: newVersionNumber
-            };
-        } catch (error) {
-            LogError(`Failed to process agent completion for artifacts: ${(error as Error).message}`);
-            return {};
-        }
     }
 
     /**

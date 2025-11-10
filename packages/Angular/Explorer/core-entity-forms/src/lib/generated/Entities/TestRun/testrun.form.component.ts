@@ -1,0 +1,30 @@
+import { Component } from '@angular/core';
+import { TestRunEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-user-view-grid"
+
+@RegisterClass(BaseFormComponent, 'MJ: Test Runs') // Tell MemberJunction about this class
+@Component({
+    selector: 'gen-testrun-form',
+    templateUrl: './testrun.form.component.html'
+})
+export class TestRunFormComponent extends BaseFormComponent {
+    public record!: TestRunEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'mJTestRunFeedbacks', sectionName: 'MJ: Test Run Feedbacks', isExpanded: false },
+            { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
+            { sectionKey: 'conversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false }
+        ]);
+    }
+}
+
+export function LoadTestRunFormComponent() {
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
+}

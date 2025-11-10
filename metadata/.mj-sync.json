@@ -3,7 +3,7 @@
   "push": {
     "autoCreateMissingRecords": true
   },
-  "directoryOrder": [ 
+  "directoryOrder": [
     "ai-configurations",
     "artifact-types",
     "action-categories",
@@ -17,7 +17,12 @@
     "queries",
     "component-registries",
     "component-libraries",
-    "components"
+    "components",
+    "applications",
+    "dashboards",
+    "test-types",
+    "tests",
+    "test-suites"
   ],
   "sqlLogging": {
     "enabled": true,
