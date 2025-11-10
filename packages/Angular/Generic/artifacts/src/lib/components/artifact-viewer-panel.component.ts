@@ -27,10 +27,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() contextCollectionId?: string; // If viewing in collection, which collection
   @Input() canShare?: boolean; // Whether user can share this artifact
   @Input() canEdit?: boolean; // Whether user can edit this artifact
+  @Input() isMaximized: boolean = false; // Whether the panel is currently maximized
   @Output() closed = new EventEmitter<void>();
   @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
   @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
+  @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -826,6 +828,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   onShare(): void {
     this.shareRequested.emit(this.artifactId);
+  }
+
+  onMaximizeToggle(): void {
+    this.maximizeToggled.emit();
   }
 
   /**

@@ -4,6 +4,12 @@
 export type CollectionViewMode = 'grid' | 'list';
 
 /**
+ * Sort options for collections view
+ */
+export type CollectionSortBy = 'name' | 'date' | 'type';
+export type CollectionSortOrder = 'asc' | 'desc';
+
+/**
  * Unified item type for displaying both collections and artifacts together
  */
 export interface CollectionViewItem {
@@ -12,6 +18,7 @@ export interface CollectionViewItem {
   name: string;
   description?: string;
   icon: string;
+  selected?: boolean; // For multi-select
 
   // Folder-specific
   itemCount?: number;

@@ -126,6 +126,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Resize state - Artifact Panel
   public artifactPanelWidth: number = 40; // Default 40% width
+  public isArtifactPanelMaximized: boolean = false;
+  private artifactPanelWidthBeforeMaximize: number = 40; // Store width before maximizing
   private isArtifactPanelResizing: boolean = false;
   private artifactPanelResizeStartX: number = 0;
   private artifactPanelResizeStartWidth: number = 0;
@@ -661,6 +663,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       localStorage.setItem(this.ARTIFACT_PANEL_WIDTH_KEY, this.artifactPanelWidth.toString());
     } catch (error) {
       console.warn('Failed to save artifact panel width to localStorage:', error);
+    }
+  }
+
+  /**
+   * Toggle maximize/restore state for artifact panel
+   */
+  toggleMaximizeArtifactPanel(): void {
+    if (this.isArtifactPanelMaximized) {
+      // Restore to previous width
+      this.artifactPanelWidth = this.artifactPanelWidthBeforeMaximize;
+      this.isArtifactPanelMaximized = false;
+    } else {
+      // Maximize - store current width and set to 100%
+      this.artifactPanelWidthBeforeMaximize = this.artifactPanelWidth;
+      this.artifactPanelWidth = 100;
+      this.isArtifactPanelMaximized = true;
     }
   }
 

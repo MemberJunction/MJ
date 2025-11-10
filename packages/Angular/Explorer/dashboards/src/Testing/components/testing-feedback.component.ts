@@ -1,6 +1,8 @@
 import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { takeUntil, map } from 'rxjs/operators';
+import { CompositeKey } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared';
 import { TestingInstrumentationService, FeedbackPending, FeedbackStats } from '../services/testing-instrumentation.service';
 import { TestStatus } from './widgets/test-status-badge.component';
 
@@ -1085,7 +1087,7 @@ export class TestingFeedbackComponent implements OnInit, OnDestroy {
   }
 
   viewFullDetails(item: any): void {
-    console.log('View full details:', item);
+    SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(item.testRunID));
   }
 
   refresh(): void {
