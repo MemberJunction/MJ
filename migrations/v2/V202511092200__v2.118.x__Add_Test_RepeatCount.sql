@@ -596,7 +596,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
 /* Insert FieldCategoryIcons setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES (NEWID(), '1F949AD0-8C72-4846-8A0B-0B3D9F644231', 'FieldCategoryIcons', '{"Test Definition":"fa fa-file-alt","Test Logic":"fa fa-code","Execution Settings":"fa fa-sliders-h","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+               VALUES ('0F57B63C-C7F2-431A-AB59-67B2143A2D35', '1F949AD0-8C72-4846-8A0B-0B3D9F644231', 'FieldCategoryIcons', '{"Test Definition":"fa fa-file-alt","Test Logic":"fa fa-code","Execution Settings":"fa fa-sliders-h","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
             
 
 /* Generated Validation Functions for MJ: Test Run Feedbacks */
