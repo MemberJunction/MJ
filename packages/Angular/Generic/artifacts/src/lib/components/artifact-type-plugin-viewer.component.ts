@@ -9,7 +9,7 @@ import {
   ComponentRef,
   Type
 } from '@angular/core';
-import { ArtifactVersionEntity, ArtifactTypeEntity } from '@memberjunction/core-entities';
+import { ArtifactVersionEntity, ArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { Metadata, LogError, RunView } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
@@ -200,22 +200,13 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Get the artifact type entity for the current artifact
+   * Get the artifact type entity for the current artifact using the cached ArtifactMetadataEngine
    */
   private async getArtifactType(): Promise<ArtifactTypeEntity | null> {
     try {
-      const rv = new RunView();
-      const result = await rv.RunView<ArtifactTypeEntity>({
-        EntityName: 'MJ: Artifact Types',
-        ExtraFilter: `Name='${this.artifactTypeName}'`,
-        ResultType: 'entity_object'
-      });
-
-      if (result.Success && result.Results && result.Results.length > 0) {
-        return result.Results[0];
-      }
-
-      return null;
+      // Use the cached metadata engine instead of querying the database
+      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(this.artifactTypeName);
+      return artifactType || null;
     } catch (err) {
       console.error('Error loading artifact type:', err);
       return null;

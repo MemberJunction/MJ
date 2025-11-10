@@ -2,7 +2,7 @@
   <div class="panel-header">
     <div class="panel-header-left">
       <h3>
-        <i class="fas fa-cube"></i>
+        <i class="fas" [ngClass]="getArtifactIcon()"></i>
         {{ displayName }}
       </h3>
       @if (displayDescription) {

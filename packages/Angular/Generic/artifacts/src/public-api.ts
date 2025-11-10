@@ -5,6 +5,9 @@
 // Module
 export * from './lib/artifacts.module';
 
+// Services
+export * from './lib/services/artifact-icon.service';
+
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
 

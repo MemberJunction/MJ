@@ -23,14 +23,14 @@
       "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
       "ContentType": "application/json",
       "ExtractRules": "@file:extract-rules/research-content.json",
-      "Icon": "fa-solid fa-flask"
+      "Icon": "fa-solid fa-magnifying-glass-chart"
     },
     "primaryKey": {
       "ID": "A7B8C9D0-E1F2-3A4B-5C6D-7E8F9A0B1C2D"
     },
     "sync": {
-      "lastModified": "2025-11-10T17:44:39.672Z",
-      "checksum": "56dec75257443a430b10c6fb83319775549a8f257a1e632a99b4e24c9d5eb070"
+      "lastModified": "2025-11-10T17:55:53.335Z",
+      "checksum": "0d7fd28d144d627d0f653d2e3c194b986cfbbc3b7b2c8b172997966abd087beb"
     }
   },
   {

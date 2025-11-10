@@ -9,6 +9,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 import { ArtifactViewerTab } from './base-artifact-viewer.component';
 import { marked } from 'marked';
+import { ArtifactIconService } from '../services/artifact-icon.service';
 
 @Component({
   selector: 'mj-artifact-viewer-panel',
@@ -126,7 +127,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   constructor(
     private notificationService: MJNotificationService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private artifactIconService: ArtifactIconService
   ) {}
 
   async ngOnInit() {
@@ -978,5 +980,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     } catch (error) {
       console.error('Error tracking artifact usage:', error);
     }
+  }
+
+  /**
+   * Get the icon for this artifact using the centralized icon service.
+   * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
+   */
+  public getArtifactIcon(): string {
+    if (!this.artifact) return 'fa-file';
+    return this.artifactIconService.getArtifactIcon(this.artifact);
   }
 }

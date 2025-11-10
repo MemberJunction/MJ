@@ -5,6 +5,7 @@ import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
+import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { Subject, takeUntil } from 'rxjs';
 
 /**
@@ -111,7 +112,7 @@ import { Subject, takeUntil } from 'rxjs';
                 <div class="artifact-card"
                      (click)="viewArtifact(item)">
                   <div class="card-icon artifact-icon">
-                    <i class="fas fa-file-alt"></i>
+                    <i class="fas" [ngClass]="getArtifactIcon(item.artifact)"></i>
                   </div>
                   <div class="card-content">
                     <div class="card-name">{{ item.artifact.Name }}</div>
@@ -564,7 +565,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     private dialogService: DialogService,
     private artifactState: ArtifactStateService,
     private collectionState: CollectionStateService,
-    private permissionService: CollectionPermissionService
+    private permissionService: CollectionPermissionService,
+    private artifactIconService: ArtifactIconService
   ) {}
 
   ngOnInit() {
@@ -1139,5 +1141,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   onShareModalCancelled(): void {
     this.isShareModalOpen = false;
     this.sharingCollection = null;
+  }
+
+  /**
+   * Get the icon for an artifact using the centralized icon service.
+   * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
+   */
+  public getArtifactIcon(artifact: ArtifactEntity): string {
+    return this.artifactIconService.getArtifactIcon(artifact);
   }
 }
