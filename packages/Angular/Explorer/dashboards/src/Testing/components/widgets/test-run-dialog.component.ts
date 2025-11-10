@@ -460,7 +460,8 @@ interface ProgressUpdate {
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s ease;
-      min-height: 70px;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .item:hover {
