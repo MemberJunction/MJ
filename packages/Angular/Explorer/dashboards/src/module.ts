@@ -65,6 +65,20 @@ import { SchedulingHistoryComponent } from './Scheduling/components/scheduling-h
 import { SchedulingTypesComponent } from './Scheduling/components/scheduling-types.component';
 import { SchedulingHealthComponent } from './Scheduling/components/scheduling-health.component';
 import { SchedulingInstrumentationService } from './Scheduling/services/scheduling-instrumentation.service';
+// Testing Dashboard Components
+import { TestingDashboardComponent } from './Testing/testing-dashboard.component';
+import { TestingOverviewComponent } from './Testing/components/testing-overview.component';
+import { TestingExecutionComponent } from './Testing/components/testing-execution.component';
+import { TestingAnalyticsComponent } from './Testing/components/testing-analytics.component';
+import { TestingVersionComparisonComponent } from './Testing/components/testing-version-comparison.component';
+import { TestingFeedbackComponent } from './Testing/components/testing-feedback.component';
+import { TestStatusBadgeComponent } from './Testing/components/widgets/test-status-badge.component';
+import { ScoreIndicatorComponent } from './Testing/components/widgets/score-indicator.component';
+import { CostDisplayComponent } from './Testing/components/widgets/cost-display.component';
+import { SuiteTreeComponent, SuiteTreeNodeComponent } from './Testing/components/widgets/suite-tree.component';
+import { OracleBreakdownTableComponent } from './Testing/components/widgets/oracle-breakdown-table.component';
+import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
+import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -110,7 +124,21 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     SchedulingJobsComponent,
     SchedulingHistoryComponent,
     SchedulingTypesComponent,
-    SchedulingHealthComponent
+    SchedulingHealthComponent,
+    // Testing Dashboard Components
+    TestingDashboardComponent,
+    TestingOverviewComponent,
+    TestingExecutionComponent,
+    TestingAnalyticsComponent,
+    TestingVersionComparisonComponent,
+    TestingFeedbackComponent,
+    TestStatusBadgeComponent,
+    ScoreIndicatorComponent,
+    CostDisplayComponent,
+    SuiteTreeComponent,
+    SuiteTreeNodeComponent,
+    OracleBreakdownTableComponent,
+    TestRunDetailPanelComponent
   ],
   imports: [
     CommonModule,
@@ -139,14 +167,16 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
   ],
   providers: [
     AIInstrumentationService,
-    SchedulingInstrumentationService
+    SchedulingInstrumentationService,
+    TestingInstrumentationService
   ],
   exports: [
     EntityAdminDashboardComponent,
     AIDashboardComponent,
     ActionsManagementDashboardComponent,
     ComponentStudioDashboardComponent,
-    SchedulingDashboardComponent
+    SchedulingDashboardComponent,
+    TestingDashboardComponent
   ]
 })
 export class DashboardsModule { }

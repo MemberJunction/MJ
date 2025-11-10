@@ -20,7 +20,8 @@
     "packages/Angular/Generic/*",
     "packages/AngularElements/*",
     "packages/React/*",
-    "packages/Scheduling/*"
+    "packages/Scheduling/*",
+    "packages/TestingFramework/*"
   ],
   "scripts": {
     "build": "npm run build:stream",
