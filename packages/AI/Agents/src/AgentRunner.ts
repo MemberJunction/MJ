@@ -321,6 +321,7 @@ export class AgentRunner {
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
+                data: {...params.data, conversationId}, // ensure we pass along OUR conversationId
                 conversationDetailId: agentResponseDetailId,
                 onProgress: wrappedOnProgress
             };
