@@ -25,6 +25,7 @@ export interface TestingDashboardKPIs {
 
 export interface TestRunSummary {
   id: string;
+  testId: string;
   testName: string;
   suiteName: string;
   testType: string;
@@ -327,6 +328,7 @@ export class TestingInstrumentationService {
 
     return testRuns.map(run => ({
       id: run.ID,
+      testId: run.TestID || '',
       testName: run.Test || 'Unknown Test',
       suiteName: '', // Will be populated from join
       testType: run.Test || 'Unknown',

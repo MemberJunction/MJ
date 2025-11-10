@@ -3,6 +3,7 @@ import { Observable, Subject } from 'rxjs';
 import { takeUntil, debounceTime, map } from 'rxjs/operators';
 import { TestingInstrumentationService, TestingDashboardKPIs, TestRunSummary, SuiteHierarchyNode } from '../services/testing-instrumentation.service';
 import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
+import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 @Component({
   selector: 'app-testing-overview',
@@ -50,16 +51,28 @@ import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
           </div>
           <div class="runs-list">
             @for (run of (recentRuns$ | async) ?? []; track run.id) {
-              <div class="run-item" (click)="viewRunDetail(run)">
-                <div class="run-info">
+              <div class="run-item">
+                <div class="run-info" (click)="viewRunDetail(run)">
                   <div class="run-name">{{ run.testName }}</div>
                   <div class="run-meta">
                     {{ run.runDateTime | date:'short' }} • {{ run.testType }}
                   </div>
                 </div>
-                <div class="run-metrics">
-                  <app-test-status-badge [status]="run.status" [showIcon]="false"></app-test-status-badge>
-                  <app-score-indicator [score]="run.score" [showBar]="false" [showIcon]="false"></app-score-indicator>
+                <div class="run-actions">
+                  <div class="run-metrics">
+                    <app-test-status-badge [status]="run.status" [showIcon]="false"></app-test-status-badge>
+                    <app-score-indicator [score]="run.score" [showBar]="false" [showIcon]="false"></app-score-indicator>
+                  </div>
+                  <button
+                    class="rerun-btn"
+                    [disabled]="isTestRunning(run.testId)"
+                    (click)="rerunTest(run.testId, run.testName); $event.stopPropagation()"
+                    title="Re-run test">
+                    <i class="fa-solid"
+                       [class.fa-rotate-right]="!isTestRunning(run.testId)"
+                       [class.fa-spinner]="isTestRunning(run.testId)"
+                       [class.fa-spin]="isTestRunning(run.testId)"></i>
+                  </button>
                 </div>
               </div>
             } @empty {
@@ -211,7 +224,6 @@ import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
     .run-item {
       padding: 16px;
       border-bottom: 1px solid #f0f0f0;
-      cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -224,6 +236,7 @@ import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
 
     .run-info {
       flex: 1;
+      cursor: pointer;
     }
 
     .run-name {
@@ -238,10 +251,45 @@ import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
       color: #666;
     }
 
+    .run-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
     .run-metrics {
       display: flex;
       gap: 12px;
       align-items: center;
+    }
+
+    .rerun-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid #2196f3;
+      border-radius: 4px;
+      background: white;
+      color: #2196f3;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+
+    .rerun-btn:hover:not(:disabled) {
+      background: #2196f3;
+      color: white;
+    }
+
+    .rerun-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .rerun-btn i {
+      font-size: 14px;
     }
 
     .stats-content {
@@ -307,6 +355,9 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
   @Output() stateChange = new EventEmitter<any>();
 
   private destroy$ = new Subject<void>();
+  private testingClient!: GraphQLTestingClient;
+  private runningTests = new Set<string>();
+
   isLoading = false;
   selectedSuiteId: string | null = null;
 
@@ -317,7 +368,8 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
 
   constructor(
     private instrumentationService: TestingInstrumentationService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private dataProvider: GraphQLDataProvider
   ) {
     this.kpis$ = this.instrumentationService.kpis$;
     this.suiteHierarchy$ = this.instrumentationService.suiteHierarchy$;
@@ -334,6 +386,9 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
       this.isLoading = loading;
       this.cdr.markForCheck();
     });
+
+    // Initialize testing client
+    this.testingClient = new GraphQLTestingClient(this.dataProvider);
   }
 
   ngOnInit(): void {
@@ -361,6 +416,45 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
   viewRunDetail(run: TestRunSummary): void {
     // Could navigate or open detail panel
     console.log('View run detail:', run);
+  }
+
+  async rerunTest(testId: string, testName: string): Promise<void> {
+    if (this.runningTests.has(testId)) {
+      console.warn('Test is already running');
+      return;
+    }
+
+    try {
+      this.runningTests.add(testId);
+      this.cdr.markForCheck();
+
+      console.log(`Starting test: ${testName}`);
+
+      const result = await this.testingClient.RunTest({
+        testId,
+        verbose: true
+      });
+
+      if (result.success) {
+        console.log('Test completed:', result.result);
+        // Refresh the dashboard to show new results
+        this.instrumentationService.refresh();
+      } else {
+        console.error('Test failed:', result.errorMessage);
+        alert(`Test failed: ${result.errorMessage}`);
+      }
+
+    } catch (error) {
+      console.error('Error running test:', error);
+      alert(`Error: ${(error as Error).message}`);
+    } finally {
+      this.runningTests.delete(testId);
+      this.cdr.markForCheck();
+    }
+  }
+
+  isTestRunning(testId: string): boolean {
+    return this.runningTests.has(testId);
   }
 
   formatDuration(milliseconds: number): string {

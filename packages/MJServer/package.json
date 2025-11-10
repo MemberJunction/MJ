@@ -61,6 +61,7 @@
     "@memberjunction/sqlserver-dataprovider": "2.117.0",
     "@memberjunction/storage": "2.117.0",
     "@memberjunction/templates": "2.117.0",
+    "@memberjunction/testing-engine": "2.117.0",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.13",
     "@types/jsonwebtoken": "9.0.6",
