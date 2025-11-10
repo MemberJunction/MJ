@@ -218,6 +218,24 @@ export class PushService {
         const shouldProceed = await this.promptForConfirmation(deletionAudit, callbacks);
         if (!shouldProceed) {
           callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
+
+          // Clean up SQL logging session and file if it was created
+          if (sqlLoggingSession) {
+            const sqlLogPath = sqlLoggingSession.filePath;
+            try {
+              await sqlLoggingSession.dispose();
+              // Delete the empty SQL log file since no operations occurred
+              if (await fs.pathExists(sqlLogPath)) {
+                await fs.remove(sqlLogPath);
+                if (options.verbose) {
+                  callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
+                }
+              }
+            } catch (cleanupError) {
+              callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
+            }
+          }
+
           return {
             created: 0,
             updated: 0,
