@@ -77,7 +77,18 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 - **Push**: Upload local file changes to database
   - Process embedded collections automatically
   - Verbose mode (`-v`) for detailed output
+  - Directory filtering with `--include` and `--exclude` options
 - **Status**: Show what would change without making modifications
+  - Directory filtering with `--include` and `--exclude` options
+
+### Directory Filtering
+- **Selective Processing**: Use `--include` or `--exclude` to filter which entity directories are processed
+- **Pattern Support**: Supports glob patterns like `ai-*`, `*-test`, etc.
+- **Mutually Exclusive**: Cannot use both `--include` and `--exclude` together
+- **Use Cases**:
+  - Speed up development by excluding large/slow directories
+  - Focus on specific entities during debugging
+  - Create specialized sync workflows for different teams
 
 ### Development Workflow Integration
 - Watch mode for automatic syncing during development
@@ -1362,6 +1373,19 @@ mj sync push --dry-run
 
 # Push with parallel processing
 mj sync push --parallel-batch-size=20  # Process 20 records in parallel (default: 10, max: 50)
+
+# Directory filtering - exclude specific directories
+mj sync push --exclude="actions"                    # Exclude single directory
+mj sync push --exclude="actions,templates"          # Exclude multiple directories (comma-separated)
+mj sync push --exclude="*-test,*-old"              # Exclude using glob patterns
+
+# Directory filtering - include only specific directories
+mj sync push --include="prompts,agent-types"        # Include only these directories
+mj sync push --include="ai-*"                       # Include using glob patterns
+
+# Filtering works with other options
+mj sync push --dir="metadata" --exclude="actions" --dry-run
+mj sync status --exclude="actions,templates"
 
 # Show status of local vs database
 mj sync status

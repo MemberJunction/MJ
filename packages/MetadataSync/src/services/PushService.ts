@@ -11,6 +11,7 @@ import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
+import { findEntityDirectories } from '../lib/provider-utils';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 // Configuration for parallel processing
@@ -23,6 +24,8 @@ export interface PushOptions {
   verbose?: boolean;
   noValidate?: boolean;
   parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
+  include?: string[]; // Only process these directories (whitelist, supports patterns)
+  exclude?: string[]; // Skip these directories (blacklist, supports patterns)
 }
 
 export interface PushCallbacks {
@@ -67,7 +70,12 @@ export class PushService {
   
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
-    
+
+    // Validate that include and exclude are not used together
+    if (options.include && options.exclude) {
+      throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
+    }
+
     const fileBackupManager = new FileBackupManager();
     
     // Load sync config for SQL logging settings and autoCreateMissingRecords flag
@@ -149,7 +157,14 @@ export class PushService {
       // Find entity directories to process
       // Note: If options.dir is specified, configDir already points to that directory
       // So we don't need to pass it as specificDir
-      const entityDirs = this.findEntityDirectories(configDir, undefined, this.syncConfig?.directoryOrder);
+      const entityDirs = findEntityDirectories(
+        configDir,
+        undefined,
+        this.syncConfig?.directoryOrder,
+        this.syncConfig?.ignoreDirectories,
+        options.include,
+        options.exclude
+      );
       
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
@@ -1079,87 +1094,5 @@ export class PushService {
     }
     
     return keyParts.join('|');
-  }
-  
-  private findEntityDirectories(baseDir: string, specificDir?: string, directoryOrder?: string[]): string[] {
-    const dirs: string[] = [];
-    
-    if (specificDir) {
-      // Process specific directory
-      const fullPath = path.resolve(baseDir, specificDir);
-      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-        // Check if this directory has an entity configuration
-        const configPath = path.join(fullPath, '.mj-sync.json');
-        if (fs.existsSync(configPath)) {
-          try {
-            const config = fs.readJsonSync(configPath);
-            if (config.entity) {
-              // It's an entity directory, add it
-              dirs.push(fullPath);
-            } else {
-              // It's a container directory, search its subdirectories
-              this.findEntityDirectoriesRecursive(fullPath, dirs);
-            }
-          } catch {
-            // Invalid config, skip
-          }
-        }
-      }
-    } else {
-      // Find all entity directories
-      this.findEntityDirectoriesRecursive(baseDir, dirs);
-    }
-    
-    // Apply directory ordering if specified
-    if (directoryOrder && directoryOrder.length > 0 && !specificDir) {
-      // Create a map of directory name to order index
-      const orderMap = new Map<string, number>();
-      directoryOrder.forEach((dir, index) => {
-        orderMap.set(dir, index);
-      });
-      
-      // Sort directories based on the order map
-      dirs.sort((a, b) => {
-        const nameA = path.basename(a);
-        const nameB = path.basename(b);
-        const orderA = orderMap.get(nameA) ?? Number.MAX_SAFE_INTEGER;
-        const orderB = orderMap.get(nameB) ?? Number.MAX_SAFE_INTEGER;
-        
-        // If both have specified orders, use them
-        if (orderA !== Number.MAX_SAFE_INTEGER || orderB !== Number.MAX_SAFE_INTEGER) {
-          return orderA - orderB;
-        }
-        
-        // Otherwise, maintain original order (stable sort)
-        return 0;
-      });
-    }
-    
-    return dirs;
-  }
-
-  private findEntityDirectoriesRecursive(dir: string, dirs: string[]): void {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-        const fullPath = path.join(dir, entry.name);
-        const configPath = path.join(fullPath, '.mj-sync.json');
-        
-        if (fs.existsSync(configPath)) {
-          try {
-            const config = fs.readJsonSync(configPath);
-            if (config.entity) {
-              dirs.push(fullPath);
-            }
-          } catch {
-            // Skip invalid config files
-          }
-        } else {
-          // Recurse into subdirectories
-          this.findEntityDirectoriesRecursive(fullPath, dirs);
-        }
-      }
-    }
   }
 }
