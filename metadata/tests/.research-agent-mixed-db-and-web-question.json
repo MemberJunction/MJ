@@ -4,20 +4,28 @@
     "Name": "Research Agent - Mixed DB and Web Question",
     "Description": "Tests the Research Agent's ability to orchestrate both Database Research Agent and Web Research Agent to answer questions requiring internal data analysis combined with external benchmarking. Validates proper sub-agent coordination.",
     "InputDefinition": {
-      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
-      "prompt": "Compare our user engagement metrics over the past quarter with industry benchmarks. Specifically, I want to understand how our daily active user rate, session duration, and feature adoption compare to similar B2B SaaS platforms. Are we above or below average in these areas?"
+      "userMessage": "Compare our user engagement metrics over the past quarter with industry benchmarks. Specifically, I want to understand how our daily active user rate, session duration, and feature adoption compare to similar B2B SaaS platforms. Are we above or below average in these areas?"
     },
     "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes actual internal metrics (DAU rate, session duration, feature adoption)",
+        "Response includes external industry benchmarks for comparison",
+        "Clear comparison is made between internal metrics and industry standards",
+        "Response identifies whether company is above/below average in each area",
+        "Findings show evidence of both database analysis and web research",
+        "Comparisons section effectively synthesizes internal and external data"
+      ]
+    },
+    "Configuration": {
+      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
       "oracles": [
         {
           "type": "trace-no-errors",
-          "weight": 0.15,
-          "description": "Verifies agent execution completed without errors"
+          "weight": 0.15
         },
         {
           "type": "schema-validate",
-          "weight": 0.15,
-          "description": "Validates output matches Research Agent schema"
+          "weight": 0.15
         },
         {
           "type": "trace-validate-sub-agents",
@@ -28,8 +36,7 @@
               "Web Research Agent"
             ],
             "minIterations": 1
-          },
-          "description": "Ensures both Database Research Agent and Web Research Agent are invoked"
+          }
         },
         {
           "type": "llm-judge",
@@ -43,21 +50,23 @@
               "Findings show evidence of both database analysis and web research",
               "Comparisons section effectively synthesizes internal and external data"
             ]
-          },
-          "description": "LLM evaluates whether response successfully combines internal and external research"
+          }
         }
       ],
-      "passingScore": 0.75,
-      "costBudget": 1
+      "scoringWeights": {
+        "trace-no-errors": 0.15,
+        "schema-validate": 0.15,
+        "trace-validate-sub-agents": 0.3,
+        "llm-judge": 0.4
+      }
     },
-    "Configuration": null,
     "Status": "Active"
   },
   "primaryKey": {
     "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
   },
   "sync": {
-    "lastModified": "2025-11-10T02:30:40.240Z",
-    "checksum": "75ee434238aa2e82b615d63f4a313a3c17112030493bd35b678bae6994fe5a95"
+    "lastModified": "2025-11-10T02:38:25.771Z",
+    "checksum": "66b0935ccb7cd8f731ef2b46da0983f72c6dc74d131ad260685a846eef402854"
   }
 }

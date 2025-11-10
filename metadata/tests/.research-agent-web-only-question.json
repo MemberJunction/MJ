@@ -4,20 +4,27 @@
     "Name": "Research Agent - Web Only Question",
     "Description": "Tests the Research Agent's ability to answer questions using only web research, without requiring database access. Validates that the Web Research Agent is invoked appropriately and Database Research Agent is not used unnecessarily.",
     "InputDefinition": {
-      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
-      "prompt": "What are the latest developments in quantum computing announced in the past month? Please provide a comprehensive overview of recent breakthroughs, companies involved, and potential applications."
+      "userMessage": "What are the latest developments in quantum computing announced in the past month? Please provide a comprehensive overview of recent breakthroughs, companies involved, and potential applications."
     },
     "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes recent (last month) developments in quantum computing",
+        "Multiple sources or companies are referenced",
+        "Potential applications are discussed",
+        "Information appears current and factual",
+        "Response is well-structured with clear findings"
+      ]
+    },
+    "Configuration": {
+      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
       "oracles": [
         {
           "type": "trace-no-errors",
-          "weight": 0.2,
-          "description": "Verifies agent execution completed without errors"
+          "weight": 0.2
         },
         {
           "type": "schema-validate",
-          "weight": 0.15,
-          "description": "Validates output matches Research Agent schema (metadata, plan, findings, etc.)"
+          "weight": 0.15
         },
         {
           "type": "trace-validate-sub-agents",
@@ -30,8 +37,7 @@
               "Database Research Agent"
             ],
             "minIterations": 1
-          },
-          "description": "Ensures Web Research Agent is used and Database Research Agent is not invoked"
+          }
         },
         {
           "type": "llm-judge",
@@ -44,21 +50,23 @@
               "Information appears current and factual",
               "Response is well-structured with clear findings"
             ]
-          },
-          "description": "LLM evaluates response quality and relevance"
+          }
         }
       ],
-      "passingScore": 0.7,
-      "costBudget": 0.5
+      "scoringWeights": {
+        "trace-no-errors": 0.2,
+        "schema-validate": 0.15,
+        "trace-validate-sub-agents": 0.25,
+        "llm-judge": 0.4
+      }
     },
-    "Configuration": null,
     "Status": "Active"
   },
   "primaryKey": {
     "ID": "A5189586-8248-4641-98ED-BC1B3B2969B2"
   },
   "sync": {
-    "lastModified": "2025-11-10T02:30:40.261Z",
-    "checksum": "2ade5782bda0003cc9121f29905b237dc77e7ecd2c53723914b45a44735f1fd8"
+    "lastModified": "2025-11-10T02:38:25.792Z",
+    "checksum": "d465e86cef040b5d983d5efb4f2734f0a174379e6a7081708ca4a404e6984afe"
   }
 }
