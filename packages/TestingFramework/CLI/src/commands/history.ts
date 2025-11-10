@@ -19,9 +19,9 @@ export class HistoryCommand {
      *
      * @param testId - Optional test ID to show history for
      * @param flags - Command flags
-     * @param contextUser - User context
+     * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(testId: string | undefined, flags: HistoryFlags, contextUser: UserInfo): Promise<void> {
+    async execute(testId: string | undefined, flags: HistoryFlags, contextUser?: UserInfo): Promise<void> {
         try {
             console.log(OutputFormatter.formatInfo('History command not yet implemented'));
             console.log('\nPlanned features:');

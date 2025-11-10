@@ -18,6 +18,7 @@ export { CompareCommand } from './commands/compare';
 export { OutputFormatter } from './utils/output-formatter';
 export { loadCLIConfig } from './utils/config-loader';
 export { SpinnerManager } from './utils/spinner-manager';
+export { getContextUser } from './lib/mj-provider';
 
 // Types
 export * from './types';

@@ -12,8 +12,7 @@ import {
 } from '@memberjunction/core';
 import {
     TestEntity,
-    TestRunEntity,
-    TestTypeEntity
+    TestRunEntity
 } from '@memberjunction/core-entities';
 import {
     DriverExecutionContext,
@@ -286,23 +285,6 @@ export abstract class BaseTestDriver {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Invalid ExpectedOutcomes JSON: ${errorMessage}`);
         }
-    }
-
-    /**
-     * Get the test type entity for this driver.
-     *
-     * @param test - The test
-     * @param contextUser - User context
-     * @returns Promise resolving to the test type entity
-     * @protected
-     */
-    protected async getTestType(
-        test: TestEntity,
-        contextUser: UserInfo
-    ): Promise<TestTypeEntity> {
-        const testType = await this._metadata.GetEntityObject<TestTypeEntity>('Test Types', contextUser);
-        await testType.Load(test.TypeID);
-        return testType;
     }
 
     /**

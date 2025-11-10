@@ -1,6 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
 import { RunCommand } from '@memberjunction/testing-cli';
-import { UserInfo } from '@memberjunction/core';
 
 export default class TestRun extends Command {
   static description = 'Execute a single test by ID or name';
@@ -54,10 +53,8 @@ export default class TestRun extends Command {
     const { args, flags } = await this.parse(TestRun);
 
     try {
-      // Get context user
-      const contextUser = new UserInfo();
-
       // Create RunCommand instance and execute
+      // Context user will be fetched internally after MJ provider initialization
       const runCommand = new RunCommand();
       await runCommand.execute(args.testId, {
         name: flags.name,
@@ -66,7 +63,7 @@ export default class TestRun extends Command {
         output: flags.output,
         dryRun: flags['dry-run'],
         verbose: flags.verbose,
-      }, contextUser);
+      });
 
     } catch (error) {
       this.error(error as Error);

@@ -24,11 +24,15 @@
     "@memberjunction/core": "2.117.0",
     "@memberjunction/core-entities": "2.117.0",
     "@memberjunction/testing-engine": "2.117.0",
+    "@memberjunction/sqlserver-dataprovider": "2.117.0",
     "@oclif/core": "^3.26.5",
     "ora-classic": "^5.4.2",
     "chalk": "^4.1.2",
     "rxjs": "^7.8.1",
-    "debug": "^4.4.0"
+    "debug": "^4.4.0",
+    "cosmiconfig": "9.0.0",
+    "dotenv": "16.4.5",
+    "mssql": "^11.0.1"
   },
   "repository": {
     "type": "git",

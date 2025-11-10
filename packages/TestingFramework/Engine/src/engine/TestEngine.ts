@@ -8,8 +8,7 @@ import {
     Metadata,
     LogError,
     LogStatusEx,
-    IsVerboseLoggingEnabled,
-    RunView
+    IsVerboseLoggingEnabled
 } from '@memberjunction/core';
 import {
     TestEntity,
@@ -105,8 +104,16 @@ export class TestEngine extends TestEngineBase {
         this.log(`Starting test execution: ${testId}`, options.verbose);
 
         try {
-            // Load test entity
-            const test = await this.loadTest(testId, contextUser);
+            // Progress: Loading test
+            options.progressCallback?.({
+                step: 'loading_test',
+                percentage: 10,
+                message: 'Loading test configuration',
+                metadata: { testId }
+            });
+
+            // Load test entity from cache
+            const test = await this.loadTest(testId);
             if (!test) {
                 throw new Error(`Test not found: ${testId}`);
             }
@@ -117,11 +124,34 @@ export class TestEngine extends TestEngineBase {
                 throw new Error(`Test type not found: ${test.TypeID}`);
             }
 
+            // Progress: Initializing driver
+            options.progressCallback?.({
+                step: 'initializing_driver',
+                percentage: 20,
+                message: `Initializing ${testType.DriverClass} driver`,
+                metadata: {
+                    testName: test.Name,
+                    driverType: testType.DriverClass
+                }
+            });
+
             // Get or create driver
             const driver = await this.getDriver(testType, contextUser);
 
             // Create TestRun entity
             const testRun = await this.createTestRun(test, contextUser);
+
+            // Progress: Executing test
+            options.progressCallback?.({
+                step: 'executing_test',
+                percentage: 40,
+                message: 'Running test driver',
+                metadata: {
+                    testName: test.Name,
+                    testRun,
+                    driverType: testType.DriverClass
+                }
+            });
 
             // Execute test via driver
             this.log(`Executing test via ${testType.DriverClass}`, options.verbose);
@@ -131,6 +161,18 @@ export class TestEngine extends TestEngineBase {
                 contextUser,
                 options,
                 oracleRegistry: this._oracleRegistry
+            });
+
+            // Progress: Evaluating oracles
+            const oracleCount = driverResult.oracleResults?.length || 0;
+            options.progressCallback?.({
+                step: 'evaluating_oracles',
+                percentage: 70,
+                message: `Evaluated ${oracleCount} oracle${oracleCount !== 1 ? 's' : ''}`,
+                metadata: {
+                    testName: test.Name,
+                    testRun
+                }
             });
 
             // Update TestRun entity with results
@@ -154,6 +196,17 @@ export class TestEngine extends TestEngineBase {
                 startedAt: testRun.StartedAt!,
                 completedAt: testRun.CompletedAt!
             };
+
+            // Progress: Complete
+            options.progressCallback?.({
+                step: 'complete',
+                percentage: 100,
+                message: `Test ${result.status}`,
+                metadata: {
+                    testName: test.Name,
+                    testRun
+                }
+            });
 
             this.log(`Test completed: ${result.status} (Score: ${result.score})`, options.verbose);
             return result;
@@ -181,14 +234,14 @@ export class TestEngine extends TestEngineBase {
         this.log(`Starting test suite execution: ${suiteId}`, options.verbose);
 
         try {
-            // Load suite entity
-            const suite = await this.loadSuite(suiteId, contextUser);
+            // Load suite entity from cache
+            const suite = await this.loadSuite(suiteId);
             if (!suite) {
                 throw new Error(`Test suite not found: ${suiteId}`);
             }
 
-            // Load suite tests
-            const tests = await this.loadSuiteTests(suiteId, contextUser);
+            // Load suite tests from cache
+            const tests = await this.loadSuiteTests(suiteId);
             if (tests.length === 0) {
                 throw new Error(`No tests found in suite: ${suiteId}`);
             }
@@ -313,54 +366,38 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
-     * Load test entity.
+     * Get test entity from cache.
      * @private
      */
-    private async loadTest(testId: string, contextUser: UserInfo): Promise<TestEntity> {
-        const md = new Metadata();
-        const test = await md.GetEntityObject<TestEntity>('Tests', contextUser);
-        await test.Load(testId);
+    private async loadTest(testId: string): Promise<TestEntity> {
+        // Use cached test instead of loading from DB
+        const test = this.GetTestByID(testId);
+        if (!test) {
+            throw new Error(`Test not found in cache: ${testId}`);
+        }
         return test;
     }
 
     /**
-     * Load suite entity.
+     * Get suite entity from cache.
      * @private
      */
-    private async loadSuite(suiteId: string, contextUser: UserInfo): Promise<TestSuiteEntity> {
-        const md = new Metadata();
-        const suite = await md.GetEntityObject<TestSuiteEntity>('Test Suites', contextUser);
-        await suite.Load(suiteId);
+    private async loadSuite(suiteId: string): Promise<TestSuiteEntity> {
+        // Use cached suite instead of loading from DB
+        const suite = this.GetTestSuiteByID(suiteId);
+        if (!suite) {
+            throw new Error(`Test suite not found in cache: ${suiteId}`);
+        }
         return suite;
     }
 
     /**
-     * Load tests for a suite using TestSuiteTest join table.
+     * Get tests for a suite from cache (sorted by sequence).
      * @private
      */
-    private async loadSuiteTests(suiteId: string, contextUser: UserInfo): Promise<TestEntity[]> {
-        // Load join table records
-        const rv = new RunView();
-        const joinResult = await rv.RunView({
-            EntityName: 'Test Suite Tests',
-            ExtraFilter: `SuiteID='${suiteId}'`,
-            OrderBy: 'Order',
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (!joinResult.Success) {
-            throw new Error(`Failed to load suite tests: ${joinResult.ErrorMessage}`);
-        }
-
-        // Load actual test entities
-        const tests: TestEntity[] = [];
-        for (const join of (joinResult.Results || [])) {
-            const testId = join.Get('TestID');
-            const test = await this.loadTest(testId, contextUser);
-            tests.push(test);
-        }
-
-        return tests;
+    private async loadSuiteTests(suiteId: string): Promise<TestEntity[]> {
+        // Use cached test suite tests and tests instead of querying DB
+        return this.GetTestsForSuite(suiteId);
     }
 
     /**
@@ -369,15 +406,17 @@ export class TestEngine extends TestEngineBase {
      */
     private async createTestRun(test: TestEntity, contextUser: UserInfo): Promise<TestRunEntity> {
         const md = new Metadata();
-        const testRun = await md.GetEntityObject<TestRunEntity>('Test Runs', contextUser);
+        const testRun = await md.GetEntityObject<TestRunEntity>('MJ: Test Runs', contextUser);
         testRun.NewRecord();
         testRun.TestID = test.ID;
+        testRun.RunByUserID = contextUser.ID;
         testRun.Status = 'Running';
         testRun.StartedAt = new Date();
 
         const saved = await testRun.Save();
         if (!saved) {
-            throw new Error('Failed to create TestRun entity');
+            const errorMsg = testRun.LatestResult?.Message || 'Unknown error';
+            throw new Error(`Failed to create TestRun entity: ${errorMsg}`);
         }
 
         return testRun;
@@ -393,17 +432,19 @@ export class TestEngine extends TestEngineBase {
     ): Promise<TestSuiteRunEntity> {
         const md = new Metadata();
         const suiteRun = await md.GetEntityObject<TestSuiteRunEntity>(
-            'Test Suite Runs',
+            'MJ: Test Suite Runs',
             contextUser
         );
         suiteRun.NewRecord();
         suiteRun.SuiteID = suite.ID;
+        suiteRun.RunByUserID = contextUser.ID;
         suiteRun.Status = 'Running';
         suiteRun.StartedAt = new Date();
 
         const saved = await suiteRun.Save();
         if (!saved) {
-            throw new Error('Failed to create TestSuiteRun entity');
+            const errorMsg = suiteRun.LatestResult?.Message || 'Unknown error';
+            throw new Error(`Failed to create TestSuiteRun entity: ${errorMsg}`);
         }
 
         return suiteRun;

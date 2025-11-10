@@ -9,6 +9,7 @@ import { RunFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { loadCLIConfig } from '../utils/config-loader';
+import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 
 /**
  * Run command - Execute a single test or filtered set of tests
@@ -21,10 +22,18 @@ export class RunCommand {
      *
      * @param testId - Optional test ID to run
      * @param flags - Command flags
-     * @param contextUser - User context
+     * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(testId: string | undefined, flags: RunFlags, contextUser: UserInfo): Promise<void> {
+    async execute(testId: string | undefined, flags: RunFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            // Initialize MJ provider (database connection and metadata)
+            await initializeMJProvider();
+
+            // Get context user after initialization if not provided
+            if (!contextUser) {
+                contextUser = await getContextUser();
+            }
+
             const config = loadCLIConfig();
             const format = flags.format || config.defaultFormat;
             const environment = flags.environment || config.defaultEnvironment;
@@ -91,12 +100,23 @@ export class RunCommand {
             // Write to file if requested
             OutputFormatter.writeToFile(output, flags.output);
 
+            // Clean up resources
+            await closeMJProvider();
+
             // Exit with appropriate code
             process.exit(result.status === 'Passed' ? 0 : 1);
 
         } catch (error) {
             this.spinner.fail();
             console.error(OutputFormatter.formatError('Failed to run test', error as Error));
+
+            // Clean up resources before exit
+            try {
+                await closeMJProvider();
+            } catch {
+                // Ignore cleanup errors
+            }
+
             process.exit(1);
         }
     }

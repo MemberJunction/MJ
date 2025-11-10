@@ -1,6 +1,5 @@
 import { Command, Flags } from '@oclif/core';
 import { ListCommand } from '@memberjunction/testing-cli';
-import { UserInfo } from '@memberjunction/core';
 
 export default class TestList extends Command {
   static description = 'List available tests, suites, and types';
@@ -55,10 +54,8 @@ export default class TestList extends Command {
     const { flags } = await this.parse(TestList);
 
     try {
-      // Get context user
-      const contextUser = new UserInfo();
-
       // Create ListCommand instance and execute
+      // Context user will be fetched internally after MJ provider initialization
       const listCommand = new ListCommand();
       await listCommand.execute({
         suites: flags.suites,
@@ -69,7 +66,7 @@ export default class TestList extends Command {
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
-      }, contextUser);
+      });
 
     } catch (error) {
       this.error(error as Error);

@@ -18,6 +18,14 @@ export interface CLIConfig {
     parallel?: boolean;
     maxParallelTests?: number;
     timeout?: number;
+    database?: {
+        host?: string;
+        name?: string;
+        port?: number;
+        username?: string;
+        password?: string;
+        schema?: string;
+    };
 }
 
 /**

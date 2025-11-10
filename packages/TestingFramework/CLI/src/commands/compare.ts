@@ -20,13 +20,13 @@ export class CompareCommand {
      * @param runId1 - First run ID (optional)
      * @param runId2 - Second run ID (optional)
      * @param flags - Command flags
-     * @param contextUser - User context
+     * @param contextUser - Optional user context (will be fetched if not provided)
      */
     async execute(
         runId1: string | undefined,
         runId2: string | undefined,
         flags: CompareFlags,
-        contextUser: UserInfo
+        contextUser?: UserInfo
     ): Promise<void> {
         try {
             console.log(OutputFormatter.formatInfo('Compare command not yet implemented'));

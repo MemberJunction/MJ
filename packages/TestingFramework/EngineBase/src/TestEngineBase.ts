@@ -12,7 +12,8 @@ import {
     TestTypeEntity,
     TestEntity,
     TestSuiteEntity,
-    TestRubricEntity
+    TestRubricEntity,
+    TestSuiteTestEntity
 } from '@memberjunction/core-entities';
 
 /**
@@ -36,6 +37,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
     private _testTypes: TestTypeEntity[] = [];
     private _tests: TestEntity[] = [];
     private _testSuites: TestSuiteEntity[] = [];
+    private _testSuiteTests: TestSuiteTestEntity[] = [];
     private _testRubrics: TestRubricEntity[] = [];
 
     /**
@@ -64,6 +66,13 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      */
     public get TestSuites(): TestSuiteEntity[] {
         return this._testSuites;
+    }
+
+    /**
+     * All loaded test suite tests
+     */
+    public get TestSuiteTests(): TestSuiteTestEntity[] {
+        return this._testSuiteTests;
     }
 
     /**
@@ -97,6 +106,10 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
             {
                 PropertyName: '_testRubrics',
                 EntityName: 'MJ: Test Rubrics'
+            },
+            {
+                PropertyName: '_testSuiteTests',
+                EntityName: 'MJ: Test Suite Tests'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -177,6 +190,30 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
             } catch {
                 return false;
             }
+        });
+    }
+
+    /**
+     * Returns all of the tests associated with a given test suite, sorted by their sequence.
+     * @param suiteId 
+     * @returns 
+     */
+    public GetTestsForSuite(suiteId: string): TestEntity[] {
+        const suiteTests = this._testSuiteTests.filter(t => t.SuiteID === suiteId);
+        const tests: TestEntity[] = [];
+        for (const st of suiteTests) {
+            const test = this.GetTestByID(st.TestID);
+            if (test) {
+                tests.push(test);
+            }
+        }
+        return tests.sort((a, b) => {
+            const aSuiteTest = suiteTests.find(st => st.TestID === a.ID);
+            const bSuiteTest = suiteTests.find(st => st.TestID === b.ID);
+            if (aSuiteTest && bSuiteTest) {
+                return aSuiteTest.Sequence - bSuiteTest.Sequence;
+            }
+            return 0;
         });
     }
 

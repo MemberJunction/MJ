@@ -1,6 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
 import { CompareCommand } from '@memberjunction/testing-cli';
-import { UserInfo } from '@memberjunction/core';
 
 export default class TestCompare extends Command {
   static description = 'Compare test runs for regression detection';
@@ -58,10 +57,8 @@ export default class TestCompare extends Command {
     const { args, flags } = await this.parse(TestCompare);
 
     try {
-      // Get context user
-      const contextUser = new UserInfo();
-
       // Create CompareCommand instance and execute
+      // Context user will be fetched internally after MJ provider initialization
       const compareCommand = new CompareCommand();
       await compareCommand.execute(args.runId1, args.runId2, {
         version: flags.version,
@@ -70,7 +67,7 @@ export default class TestCompare extends Command {
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
-      }, contextUser);
+      });
 
     } catch (error) {
       this.error(error as Error);

@@ -9,6 +9,7 @@ import { TestEntity } from '@memberjunction/core-entities';
 import { ValidateFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
+import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import chalk from 'chalk';
 import * as fs from 'fs';
 
@@ -34,10 +35,18 @@ export class ValidateCommand {
      *
      * @param testId - Optional test ID to validate
      * @param flags - Command flags
-     * @param contextUser - User context
+     * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(testId: string | undefined, flags: ValidateFlags, contextUser: UserInfo): Promise<void> {
+    async execute(testId: string | undefined, flags: ValidateFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            // Initialize MJ provider (database connection and metadata)
+            await initializeMJProvider();
+
+            // Get context user after initialization if not provided
+            if (!contextUser) {
+                contextUser = await getContextUser();
+            }
+
             const engine = TestEngine.Instance;
             await engine.Config(false, contextUser);
 
@@ -83,6 +92,9 @@ export class ValidateCommand {
                 this.saveReport(results, reportPath);
             }
 
+            // Clean up resources
+            await closeMJProvider();
+
             // Exit with appropriate code
             const hasErrors = results.some(r => !r.valid);
             process.exit(hasErrors ? 1 : 0);
@@ -90,6 +102,14 @@ export class ValidateCommand {
         } catch (error) {
             this.spinner.fail();
             console.error(OutputFormatter.formatError('Failed to validate tests', error as Error));
+
+            // Clean up resources before exit
+            try {
+                await closeMJProvider();
+            } catch {
+                // Ignore cleanup errors
+            }
+
             process.exit(1);
         }
     }

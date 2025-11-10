@@ -14,6 +14,37 @@ import {
 import { IOracle } from './oracles/IOracle';
 
 /**
+ * Progress callback for test execution
+ */
+export interface TestProgress {
+  /**
+   * Current execution step
+   */
+  step: string;
+
+  /**
+   * Progress percentage (0-100)
+   */
+  percentage: number;
+
+  /**
+   * Human-readable message
+   */
+  message: string;
+
+  /**
+   * Additional metadata
+   */
+  metadata?: {
+    testName?: string;
+    testRun?: any;
+    driverType?: string;
+    oracleType?: string;
+    [key: string]: any;
+  };
+}
+
+/**
  * Options for running a single test
  */
 export interface TestRunOptions {
@@ -46,6 +77,11 @@ export interface TestRunOptions {
    * Override test configuration
    */
   configOverride?: Record<string, unknown>;
+
+  /**
+   * Progress callback for real-time updates
+   */
+  progressCallback?: (progress: TestProgress) => void;
 }
 
 /**

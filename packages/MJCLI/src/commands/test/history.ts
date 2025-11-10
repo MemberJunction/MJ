@@ -1,6 +1,5 @@
 import { Command, Flags } from '@oclif/core';
 import { HistoryCommand } from '@memberjunction/testing-cli';
-import { UserInfo } from '@memberjunction/core';
 
 export default class TestHistory extends Command {
   static description = 'View test execution history';
@@ -50,10 +49,8 @@ export default class TestHistory extends Command {
     const { flags } = await this.parse(TestHistory);
 
     try {
-      // Get context user
-      const contextUser = new UserInfo();
-
       // Create HistoryCommand instance and execute
+      // Context user will be fetched internally after MJ provider initialization
       const historyCommand = new HistoryCommand();
       await historyCommand.execute(flags.test, {
         recent: flags.recent,
@@ -62,7 +59,7 @@ export default class TestHistory extends Command {
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
-      }, contextUser);
+      });
 
     } catch (error) {
       this.error(error as Error);

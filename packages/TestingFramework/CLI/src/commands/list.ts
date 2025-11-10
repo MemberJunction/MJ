@@ -8,6 +8,7 @@ import { UserInfo } from '@memberjunction/core';
 import { TestEntity, TestSuiteEntity, TestTypeEntity } from '@memberjunction/core-entities';
 import { ListFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
+import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import chalk from 'chalk';
 
 /**
@@ -18,10 +19,18 @@ export class ListCommand {
      * Execute the list command
      *
      * @param flags - Command flags
-     * @param contextUser - User context
+     * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(flags: ListFlags, contextUser: UserInfo): Promise<void> {
+    async execute(flags: ListFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            // Initialize MJ provider (database connection and metadata)
+            await initializeMJProvider();
+
+            // Get context user after initialization if not provided
+            if (!contextUser) {
+                contextUser = await getContextUser();
+            }
+
             const engine = TestEngine.Instance;
             await engine.Config(false, contextUser);
 
@@ -33,8 +42,19 @@ export class ListCommand {
                 this.listTests(engine, flags);
             }
 
+            // Clean up resources
+            await closeMJProvider();
+
         } catch (error) {
             console.error(OutputFormatter.formatError('Failed to list tests', error as Error));
+
+            // Clean up resources before exit
+            try {
+                await closeMJProvider();
+            } catch {
+                // Ignore cleanup errors
+            }
+
             process.exit(1);
         }
     }

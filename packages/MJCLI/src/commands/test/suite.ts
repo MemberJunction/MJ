@@ -1,6 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
 import { SuiteCommand } from '@memberjunction/testing-cli';
-import { UserInfo } from '@memberjunction/core';
 
 export default class TestSuite extends Command {
   static description = 'Execute a test suite';
@@ -45,17 +44,15 @@ export default class TestSuite extends Command {
     const { args, flags } = await this.parse(TestSuite);
 
     try {
-      // Get context user
-      const contextUser = new UserInfo();
-
       // Create SuiteCommand instance and execute
+      // Context user will be fetched internally after MJ provider initialization
       const suiteCommand = new SuiteCommand();
       await suiteCommand.execute(args.suiteId, {
         name: flags.name,
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
-      }, contextUser);
+      });
 
     } catch (error) {
       this.error(error as Error);

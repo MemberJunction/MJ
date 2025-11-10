@@ -1,6 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
 import { ValidateCommand } from '@memberjunction/testing-cli';
-import { UserInfo } from '@memberjunction/core';
 
 export default class TestValidate extends Command {
   static description = 'Validate test definitions without executing';
@@ -55,10 +54,8 @@ export default class TestValidate extends Command {
     const { args, flags } = await this.parse(TestValidate);
 
     try {
-      // Get context user
-      const contextUser = new UserInfo();
-
       // Create ValidateCommand instance and execute
+      // Context user will be fetched internally after MJ provider initialization
       const validateCommand = new ValidateCommand();
       await validateCommand.execute(args.testId, {
         all: flags.all,
@@ -67,7 +64,7 @@ export default class TestValidate extends Command {
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
-      }, contextUser);
+      });
 
     } catch (error) {
       this.error(error as Error);
