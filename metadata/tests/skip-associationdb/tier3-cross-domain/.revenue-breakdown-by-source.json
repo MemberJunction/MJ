@@ -4,7 +4,7 @@
     "Name": "Skip AssociationDB - Revenue Breakdown by Source",
     "Description": "Tests Skip's ability to categorize revenue by source (memberships, events, courses) and show percentage distribution.",
     "InputDefinition": {
-      "userMessage": "What percentage of our revenue comes from memberships, events, and courses? Show this as a pie chart with the breakdown."
+      "userMessage": "What percentage of our revenue comes from memberships, events, and courses? Show this as a pie chart with the breakdown. When I click on a slice, show me a table of the actual transactions in that category."
     },
     "ExpectedOutcomes": {
       "judgeValidationCriteria": [
@@ -12,7 +12,9 @@
         "Three main categories are shown: memberships, events, courses",
         "Percentages add up to 100% (or close to it)",
         "Each segment is clearly labeled with category and percentage/amount",
-        "Chart makes it easy to see which source generates most revenue"
+        "Chart makes it easy to see which source generates most revenue",
+        "Clicking pie slice shows transaction/invoice list for that category",
+        "Transaction table allows opening individual invoice records"
       ]
     },
     "Configuration": {
@@ -32,7 +34,7 @@
     "ID": "E1E769E2-522E-4853-9101-E39BFD11E7CB"
   },
   "sync": {
-    "lastModified": "2025-11-10T15:33:14.076Z",
-    "checksum": "25eeded8cf7427e419fdd8b68abd1ee74556eddb0cf309ea3f8d540384d19103"
+    "lastModified": "2025-11-10T18:37:02.759Z",
+    "checksum": "3702b65065cd27e4104506605d9951a170933f8eeb4a671caa2aba62ac064f7e"
   }
 }

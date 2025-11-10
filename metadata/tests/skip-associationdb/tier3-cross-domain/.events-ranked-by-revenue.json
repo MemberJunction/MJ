@@ -4,7 +4,7 @@
     "Name": "Skip AssociationDB - Events Ranked by Revenue",
     "Description": "Tests Skip's ability to link events through registrations to invoices and calculate total revenue per event.",
     "InputDefinition": {
-      "userMessage": "Show me all events from the past year ranked by total revenue generated, including the number of registrations for each event. Display as a table."
+      "userMessage": "Show me all events from the past year ranked by total revenue generated, including the number of registrations for each event. Display as a table. Let me click on an event to see who registered for it."
     },
     "ExpectedOutcomes": {
       "judgeValidationCriteria": [
@@ -12,7 +12,9 @@
         "Revenue amounts are properly calculated and formatted",
         "Registration counts are included for each event",
         "Only events from past year are included",
-        "Events are sorted in descending order by revenue"
+        "Events are sorted in descending order by revenue",
+        "Clicking event shows registration list with member details",
+        "Registration table allows opening individual member records"
       ]
     },
     "Configuration": {
@@ -32,7 +34,7 @@
     "ID": "DC57C216-FE46-4700-8A7F-3076426D5200"
   },
   "sync": {
-    "lastModified": "2025-11-10T15:33:14.011Z",
-    "checksum": "7309c88376f58764787f8f31a72048025be151c2d0628ec5e43a5fc5219ae30e"
+    "lastModified": "2025-11-10T18:37:02.695Z",
+    "checksum": "4056da7e7442b0cf1798ea2ce9545614d7a6b9652f0197cba0df3ed82ab357af"
   }
 }

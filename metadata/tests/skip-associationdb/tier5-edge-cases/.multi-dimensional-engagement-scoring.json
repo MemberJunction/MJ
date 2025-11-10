@@ -4,16 +4,15 @@
     "Name": "Skip AssociationDB - Multi-Dimensional Engagement Scoring",
     "Description": "Tests Skip's ability to calculate complex weighted scores across multiple dimensions and provide drill-down details.",
     "InputDefinition": {
-      "userMessage": "Create an engagement score for all active members using these weighted factors: event attendance (30%), course completion (25%), chapter leadership (20%), committee participation (15%), and years as member (10%). Show the top 20 members in a table with their scores and include a breakdown chart showing how the scoring factors contribute to the top member's score."
+      "userMessage": "Create an engagement score for all active members using these weighted factors: event attendance (30%), course completion (25%), chapter leadership (20%), committee participation (15%), and years as member (10%). Show the top 20 members in a ranked table. When I click on a member, show me a breakdown chart (pie or bar) of how each factor contributed to their score. Then let me click on any factor in that chart to see the actual underlying activities or data for that dimension."
     },
     "ExpectedOutcomes": {
       "judgeValidationCriteria": [
-        "Response includes engagement scores calculated with specified weights",
-        "Top 20 members are shown in a ranked table",
-        "Scoring formula is correctly applied across all dimensions",
-        "Individual factor values are shown for transparency",
-        "Drill-down visualization shows score composition for top member",
-        "All active members are included in the analysis"
+        "Response includes ranked table of top 20 members with calculated scores",
+        "Clicking member shows visual breakdown of their score by factor",
+        "Clicking score factor shows detailed activity table for that dimension",
+        "Multi-level drill-down maintains context throughout",
+        "Activity tables allow opening the actual activity records"
       ]
     },
     "Configuration": {
@@ -33,7 +32,7 @@
     "ID": "793BA56D-CFD0-4600-B3F5-B442C5B8F606"
   },
   "sync": {
-    "lastModified": "2025-11-10T15:33:14.205Z",
-    "checksum": "20c6a74c65f7a3c00abc3a5777d7621d68af69ef04ffffccba9c856f861687be"
+    "lastModified": "2025-11-10T18:37:02.676Z",
+    "checksum": "e83fb029f29dd09554b12338913b2cc310ef8856fec1f3dfc3bd0b5ba0cdaee4"
   }
 }

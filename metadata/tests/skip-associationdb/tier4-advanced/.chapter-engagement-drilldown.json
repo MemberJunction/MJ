@@ -4,15 +4,15 @@
     "Name": "Skip AssociationDB - Chapter Engagement with Drill-Down",
     "Description": "Tests Skip's ability to create a master-detail report showing chapter-level engagement summary followed by top members within the most engaged chapter.",
     "InputDefinition": {
-      "userMessage": "Create a chapter engagement report showing each chapter's member count, event participation, and average member tenure. Then show me the top 5 most active members in the chapter with the highest engagement."
+      "userMessage": "Create a chapter engagement report showing each chapter's member count, event participation, and average member tenure in a chart. Let me click on any chapter to see a breakdown of their top 5 most active members. Then from that member list, I want to click on a member to see their detailed activity."
     },
     "ExpectedOutcomes": {
       "judgeValidationCriteria": [
-        "Response includes two parts: summary and drill-down",
-        "Summary shows all chapters with engagement metrics",
-        "Drill-down identifies the most engaged chapter and shows its top 5 members",
-        "Both tables/visualizations are clearly presented",
-        "Engagement metrics are properly calculated"
+        "Response includes a chart showing chapter engagement metrics",
+        "Chart supports drill-down to show top 5 members for selected chapter",
+        "Member drill-down includes engagement details",
+        "Multi-level navigation is clear and intuitive",
+        "Final member table allows opening individual member records"
       ]
     },
     "Configuration": {
@@ -32,7 +32,7 @@
     "ID": "5988E8AE-D8E2-496C-8940-7521DAF36C18"
   },
   "sync": {
-    "lastModified": "2025-11-10T15:33:14.119Z",
-    "checksum": "168769d69a9cc5a0353defa9f68ab0d7f2b3abcc14a9db31af474a4f35f023f0"
+    "lastModified": "2025-11-10T18:37:02.592Z",
+    "checksum": "62e89308af1d4e3466b4a20947730d7bd5229154e51bcbb9a817ab0fd5d48753"
   }
 }
