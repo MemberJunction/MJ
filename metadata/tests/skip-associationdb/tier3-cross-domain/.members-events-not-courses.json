@@ -1,0 +1,40 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Members with Events but No Courses",
+    "Description": "Tests Skip's ability to find members based on existence in one domain but not another (set logic).",
+    "InputDefinition": {
+      "userMessage": "Find all members who have attended at least one event but have never enrolled in a course. Show me a table with their names and the number of events they've attended. I want to click on a member to see which specific events they attended."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a table of members matching the criteria",
+        "Only members with event attendance are shown",
+        "No members in the list have any course enrollments",
+        "Member names are displayed",
+        "Event attendance count is shown for each member",
+        "Clicking member shows list of events they attended",
+        "Event table allows opening individual event records"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 90000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "3264FD84-DAFC-480D-BABF-E9276AF4FA3A"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T18:37:02.717Z",
+    "checksum": "72c699e437931dc50a87eeb399bab1071522f52bfad414251f642df2ee511129"
+  }
+}

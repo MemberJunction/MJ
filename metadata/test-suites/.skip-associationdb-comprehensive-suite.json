@@ -1,0 +1,318 @@
+{
+  "fields": {
+    "Name": "Skip AssociationDB Comprehensive Evaluation Suite",
+    "Description": "Comprehensive evaluation of Skip's analytics capabilities on the AssociationDB sample database. Tests 20 scenarios across 5 complexity tiers from simple queries to advanced multi-dimensional analytics. Covers all major business domains including membership, events, learning, finance, marketing, chapters, and governance.",
+    "Status": "Active"
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Active Members by Type",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CF070DB4-23BD-4458-8E76-B76128358581"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.361Z",
+          "checksum": "56f8db8d0511f9bc78aed9bef79602a106e02969aac2d0a4a9dd77820ecfb44c"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - YTD Revenue by Month",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "18DEC616-76D1-4627-AD14-830C323361A6"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.371Z",
+          "checksum": "c8f99b928dc843d451699b8f31f4b853690d908d04d729a1d158bdfc9ee40009"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Upcoming Events List",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0E0E11CC-A1A9-4200-9F23-E9C6AAC8728C"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.382Z",
+          "checksum": "f118eeb48c83ecb160d87d385a9cacd9d3be2aa476c0a15856394e3b8430eac1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Course Catalog by Category",
+          "Sequence": 4,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "7F1AF2A1-14E8-4E36-AC77-BE8241A9677B"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.395Z",
+          "checksum": "a9a77b23489ec5a25aa694d2e6ecd1963daa824a109e9213ec6b8c8bd5a17af5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Chapter Membership Distribution",
+          "Sequence": 5,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "00A0F376-C389-4F7D-9B03-5724643E85C3"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.406Z",
+          "checksum": "1d515149c7cfeb5e5c4749c42bd3500073d3d2dccac214225da6d8962fcec590"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Membership Growth 5 Years",
+          "Sequence": 6,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A594065A-142A-4016-BA50-EAEBA14DE99E"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.417Z",
+          "checksum": "4cf851848ec841b9eed657ddd5bfc292c57662f9ab71720d508177700849856a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Event Attendance by Quarter",
+          "Sequence": 7,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9F9AE269-9093-48AC-AD4D-F47C05492655"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.430Z",
+          "checksum": "36115872ab563539d837fd6120d9786836ec6faca8a0d7b65191c7b28dd86750"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Monthly Course Completion Rates",
+          "Sequence": 8,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4F5689AC-459A-4369-92CA-8152F45ED2E7"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.441Z",
+          "checksum": "fbf130e90302ecd8954ec5f216e033ed23d08da88176438500490e78533f6229"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Email Engagement Trends",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "85232716-A74D-4491-8357-30EA96A3ABD4"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.453Z",
+          "checksum": "0370906a75cd7ed4b42ae4fe3eb50dfe5f3f7408a8040b4b144a6ac6a763c9d2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Revenue Year-over-Year Comparison",
+          "Sequence": 10,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "ED25FEFA-0313-4460-A359-7116C6C14B25"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.465Z",
+          "checksum": "800c2e302886719fb9a3148e7a65d4a856c871b345732b8780b1d5458890f6c5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Top 10 Most Engaged Members",
+          "Sequence": 11,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "612629FF-ED8A-4382-A9FF-3EC5745221C6"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.561Z",
+          "checksum": "c73e4a3321b6abd8e75aaeda6e86e8ed22ab40355c962e7dcff51ec8950184c0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Events Ranked by Revenue",
+          "Sequence": 12,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "46C59641-59C8-4B4F-A205-A0A012212634"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.571Z",
+          "checksum": "ca8764e056e0064444a0d16634f6758b23f613c92d4cda6a711b510f5a985e1c"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Revenue Breakdown by Source",
+          "Sequence": 13,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "90EEDA78-2AAD-43D8-B474-2B3083AA54DB"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.581Z",
+          "checksum": "2a31201d50f10aacfc1340b3744c31821fe62f55014d85ca1c5ac8b88b023914"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Members with Events but No Courses",
+          "Sequence": 14,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "EBD07481-0AB2-432C-B79B-E763D25D8A99"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.593Z",
+          "checksum": "8ddaeae09b1e30eed9f2283f12d05996f0483bdfe3163532c968bb2e9e98951f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Organization Member Activity Summary",
+          "Sequence": 15,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A42EB443-D6C3-4AA8-89D9-BF8E41633F55"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.602Z",
+          "checksum": "84171ad94eae57bc1be19e14a477bb74a152f82f6c6d0c2914ea0778bcd9cb51"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Chapter Engagement with Drill-Down",
+          "Sequence": 16,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C029BD9F-9147-4827-B8AA-1783B75C9F3E"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.611Z",
+          "checksum": "c2f542dc7bd6a042cf913e77eebb1849c1a39353732189dde921cb0df249977f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Member Lifetime Value by Join Year",
+          "Sequence": 17,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "68AF39AF-6B07-40E2-88E0-3D6987884BB8"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.620Z",
+          "checksum": "a9b9df4107cd1f92dbdcac79ad6ef152bee6051e2ee917dbc40e60d94f4d7a1a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Course Performance with Enrollment Cohorts",
+          "Sequence": 18,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8BB9F1AC-45FA-455B-9EC7-1585C9762236"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.629Z",
+          "checksum": "fee91c6fd0e902a5e12121fd8d99c6eec2ae7637adb3e35186c6ad1f7bae8704"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Complete Member Journey Timeline",
+          "Sequence": 19,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F45BA3BC-7551-4684-8016-AD83D7DC5D08"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.638Z",
+          "checksum": "2465361856df3f9ac0064ff114518aede26150448b1eeb681b06e5184e496128"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Multi-Dimensional Engagement Scoring",
+          "Sequence": 20,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "EE29595F-0A44-4485-A55E-DE2244A110B2"
+        },
+        "sync": {
+          "lastModified": "2025-11-10T15:33:14.647Z",
+          "checksum": "93520c9942dfead4d43abecc3aab8fa4b0f6ba0e86d74ed7efbb1f6d34df458a"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "D78536E4-FAFE-4E90-A5E3-514DD25E3A08"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:14.256Z",
+    "checksum": "568b409d72b2b4193b9b2c6bc5ed5d26f6bd94b739a4233c713a0c82a5ed26ec"
+  }
+}

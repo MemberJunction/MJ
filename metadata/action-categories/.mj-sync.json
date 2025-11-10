@@ -1,6 +1,6 @@
 {
   "entity": "Action Categories",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {
   },
   "pull": {

@@ -1,6 +1,6 @@
 {
   "entity": "MJ: Test Suites",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "pull": {
     "lookupFields": {
       "TypeID": {

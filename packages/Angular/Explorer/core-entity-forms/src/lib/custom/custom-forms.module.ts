@@ -61,6 +61,12 @@ import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-age
 import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
 import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
 import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-integrated-flow-editor.component";
+import { TestRunFormComponentExtended, LoadTestRunFormComponentExtended } from "./Tests/test-run-form.component";
+import { TestFormComponentExtended, LoadTestFormComponentExtended } from "./Tests/test-form.component";
+import { TestSuiteRunFormComponentExtended, LoadTestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
+import { TestSuiteFormComponentExtended, LoadTestSuiteFormComponentExtended } from "./Tests/test-suite-form.component";
+import { TestRunFeedbackFormComponentExtended, LoadTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedback-form.component";
+import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
 
 @NgModule({
     declarations: [
@@ -102,6 +108,12 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
         FlowAgentFormSectionComponent,
         StepInfoControlComponent,
         FlowAgentDiagramComponent,
+        TestRunFormComponentExtended,
+        TestFormComponentExtended,
+        TestSuiteRunFormComponentExtended,
+        TestSuiteFormComponentExtended,
+        TestRunFeedbackFormComponentExtended,
+        TestRubricFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -164,7 +176,13 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
         FlowAgentFormSectionComponent,
         StepInfoControlComponent,
         FlowAgentDiagramComponent,
-        MJIntegratedFlowEditorComponent
+        MJIntegratedFlowEditorComponent,
+        TestRunFormComponentExtended,
+        TestFormComponentExtended,
+        TestSuiteRunFormComponentExtended,
+        TestSuiteFormComponentExtended,
+        TestRunFeedbackFormComponentExtended,
+        TestRubricFormComponentExtended
     ],
     providers: [
         NewAgentDialogService,
@@ -183,4 +201,10 @@ export function LoadCoreCustomForms() {
     LoadActionFormComponentExtended();
     LoadAIAgentRunFormComponent();
     LoadQueryFormExtendedComponent();
+    LoadTestRunFormComponentExtended();
+    LoadTestFormComponentExtended();
+    LoadTestSuiteRunFormComponentExtended();
+    LoadTestSuiteFormComponentExtended();
+    LoadTestRunFeedbackFormComponentExtended();
+    LoadTestRubricFormComponentExtended();
 }

@@ -93,13 +93,15 @@ export class TestEngine extends TestEngineBase {
      * @param testId - ID of the test to run
      * @param options - Test execution options
      * @param contextUser - User context
-     * @returns Test run result
+     * @param suiteRunId - Optional suite run ID if part of a suite
+     * @returns Test run result (or array of results if RepeatCount > 1)
      */
     public async RunTest(
         testId: string,
         options: TestRunOptions,
-        contextUser: UserInfo
-    ): Promise<TestRunResult> {
+        contextUser: UserInfo,
+        suiteRunId?: string | null
+    ): Promise<TestRunResult | TestRunResult[]> {
         const startTime = Date.now();
         this.log(`Starting test execution: ${testId}`, options.verbose);
 
@@ -118,98 +120,13 @@ export class TestEngine extends TestEngineBase {
                 throw new Error(`Test not found: ${testId}`);
             }
 
-            // Get test type
-            const testType = this.GetTestTypeByID(test.TypeID);
-            if (!testType) {
-                throw new Error(`Test type not found: ${test.TypeID}`);
+            // Check RepeatCount and branch to repeated execution if needed
+            if (test.RepeatCount && test.RepeatCount > 1) {
+                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, startTime);
             }
 
-            // Progress: Initializing driver
-            options.progressCallback?.({
-                step: 'initializing_driver',
-                percentage: 20,
-                message: `Initializing ${testType.DriverClass} driver`,
-                metadata: {
-                    testName: test.Name,
-                    driverType: testType.DriverClass
-                }
-            });
-
-            // Get or create driver
-            const driver = await this.getDriver(testType, contextUser);
-
-            // Create TestRun entity
-            const testRun = await this.createTestRun(test, contextUser);
-
-            // Progress: Executing test
-            options.progressCallback?.({
-                step: 'executing_test',
-                percentage: 40,
-                message: 'Running test driver',
-                metadata: {
-                    testName: test.Name,
-                    testRun,
-                    driverType: testType.DriverClass
-                }
-            });
-
-            // Execute test via driver
-            this.log(`Executing test via ${testType.DriverClass}`, options.verbose);
-            const driverResult = await driver.Execute({
-                test,
-                testRun,
-                contextUser,
-                options,
-                oracleRegistry: this._oracleRegistry
-            });
-
-            // Progress: Evaluating oracles
-            const oracleCount = driverResult.oracleResults?.length || 0;
-            options.progressCallback?.({
-                step: 'evaluating_oracles',
-                percentage: 70,
-                message: `Evaluated ${oracleCount} oracle${oracleCount !== 1 ? 's' : ''}`,
-                metadata: {
-                    testName: test.Name,
-                    testRun
-                }
-            });
-
-            // Update TestRun entity with results
-            await this.updateTestRun(testRun, driverResult, startTime);
-
-            // Convert to TestRunResult
-            const result: TestRunResult = {
-                testRunId: testRun.ID,
-                testId: test.ID,
-                testName: test.Name,
-                status: driverResult.status,
-                score: driverResult.score,
-                passedChecks: driverResult.passedChecks,
-                failedChecks: driverResult.failedChecks,
-                totalChecks: driverResult.totalChecks,
-                oracleResults: driverResult.oracleResults,
-                targetType: driverResult.targetType,
-                targetLogId: driverResult.targetLogId,
-                durationMs: Date.now() - startTime,
-                totalCost: driverResult.totalCost || 0,
-                startedAt: testRun.StartedAt!,
-                completedAt: testRun.CompletedAt!
-            };
-
-            // Progress: Complete
-            options.progressCallback?.({
-                step: 'complete',
-                percentage: 100,
-                message: `Test ${result.status}`,
-                metadata: {
-                    testName: test.Name,
-                    testRun
-                }
-            });
-
-            this.log(`Test completed: ${result.status} (Score: ${result.score})`, options.verbose);
-            return result;
+            // Single execution - delegate to helper method
+            return await this.runSingleTestIteration(test, suiteRunId, null, options, contextUser, startTime);
 
         } catch (error) {
             this.logError(`Test execution failed: ${testId}`, error as Error);
@@ -253,8 +170,14 @@ export class TestEngine extends TestEngineBase {
             const testResults: TestRunResult[] = [];
             for (const test of tests) {
                 try {
-                    const result = await this.RunTest(test.ID, options, contextUser);
-                    testResults.push(result);
+                    const result = await this.RunTest(test.ID, options, contextUser, suiteRun.ID);
+
+                    // Handle both single result and array of results (if RepeatCount > 1)
+                    if (Array.isArray(result)) {
+                        testResults.push(...result);
+                    } else {
+                        testResults.push(result);
+                    }
                 } catch (error) {
                     this.logError(`Test failed in suite: ${test.Name}`, error as Error);
                     // Continue with remaining tests
@@ -404,7 +327,12 @@ export class TestEngine extends TestEngineBase {
      * Create TestRun entity.
      * @private
      */
-    private async createTestRun(test: TestEntity, contextUser: UserInfo): Promise<TestRunEntity> {
+    private async createTestRun(
+        test: TestEntity,
+        contextUser: UserInfo,
+        suiteRunId?: string | null,
+        sequence?: number | null
+    ): Promise<TestRunEntity> {
         const md = new Metadata();
         const testRun = await md.GetEntityObject<TestRunEntity>('MJ: Test Runs', contextUser);
         testRun.NewRecord();
@@ -412,6 +340,16 @@ export class TestEngine extends TestEngineBase {
         testRun.RunByUserID = contextUser.ID;
         testRun.Status = 'Running';
         testRun.StartedAt = new Date();
+
+        // Set suite run ID if part of a suite
+        if (suiteRunId) {
+            testRun.TestSuiteRunID = suiteRunId;
+        }
+
+        // Set sequence for repeat iterations
+        if (sequence && sequence > 1) {
+            testRun.Sequence = sequence;
+        }
 
         const saved = await testRun.Save();
         if (!saved) {
@@ -504,6 +442,157 @@ export class TestEngine extends TestEngineBase {
         if (!saved) {
             this.logError('Failed to update TestSuiteRun entity', new Error(suiteRun.LatestResult?.Message));
         }
+    }
+
+    /**
+     * Run a test multiple times for statistical analysis.
+     * @private
+     */
+    private async runRepeatedTest(
+        test: TestEntity,
+        repeatCount: number,
+        options: TestRunOptions,
+        contextUser: UserInfo,
+        suiteRunId: string | null | undefined,
+        startTime: number
+    ): Promise<TestRunResult[]> {
+        const results: TestRunResult[] = [];
+
+        this.log(`Running test ${repeatCount} times for statistical analysis`, options.verbose);
+
+        for (let iteration = 1; iteration <= repeatCount; iteration++) {
+            this.log(`Running iteration ${iteration} of ${repeatCount}`, options.verbose);
+
+            const result = await this.runSingleTestIteration(
+                test,
+                suiteRunId,
+                iteration,
+                options,
+                contextUser,
+                Date.now() // Each iteration gets its own start time
+            );
+
+            results.push(result);
+
+            // Small delay between iterations to avoid rate limiting
+            if (iteration < repeatCount) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+
+        this.log(`Completed ${repeatCount} iterations`, options.verbose);
+        return results;
+    }
+
+    /**
+     * Run a single test iteration (extracted from RunTest for reuse).
+     * @private
+     */
+    private async runSingleTestIteration(
+        test: TestEntity,
+        suiteRunId: string | null | undefined,
+        sequence: number | null,
+        options: TestRunOptions,
+        contextUser: UserInfo,
+        startTime: number
+    ): Promise<TestRunResult> {
+        // Get test type
+        const testType = this.GetTestTypeByID(test.TypeID);
+        if (!testType) {
+            throw new Error(`Test type not found: ${test.TypeID}`);
+        }
+
+        // Progress: Initializing driver
+        options.progressCallback?.({
+            step: 'initializing_driver',
+            percentage: 20,
+            message: `Initializing ${testType.DriverClass} driver`,
+            metadata: {
+                testName: test.Name,
+                driverType: testType.DriverClass
+            }
+        });
+
+        // Get or create driver
+        const driver = await this.getDriver(testType, contextUser);
+
+        // Create TestRun entity
+        const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence);
+
+        // Progress: Executing test
+        options.progressCallback?.({
+            step: 'executing_test',
+            percentage: 40,
+            message: 'Running test driver',
+            metadata: {
+                testName: test.Name,
+                testRun,
+                driverType: testType.DriverClass
+            }
+        });
+
+        // Execute test via driver
+        this.log(`Executing test via ${testType.DriverClass}`, options.verbose);
+        const driverResult = await driver.Execute({
+            test,
+            testRun,
+            contextUser,
+            options,
+            oracleRegistry: this._oracleRegistry
+        });
+
+        // Progress: Evaluating oracles
+        const oracleCount = driverResult.oracleResults?.length || 0;
+        options.progressCallback?.({
+            step: 'evaluating_oracles',
+            percentage: 70,
+            message: `Evaluated ${oracleCount} oracle${oracleCount !== 1 ? 's' : ''}`,
+            metadata: {
+                testName: test.Name,
+                testRun
+            }
+        });
+
+        // Update TestRun entity with results
+        await this.updateTestRun(testRun, driverResult, startTime);
+
+        // Convert to TestRunResult
+        const result: TestRunResult = {
+            testRunId: testRun.ID,
+            testId: test.ID,
+            testName: test.Name,
+            status: driverResult.status,
+            score: driverResult.score,
+            passedChecks: driverResult.passedChecks,
+            failedChecks: driverResult.failedChecks,
+            totalChecks: driverResult.totalChecks,
+            oracleResults: driverResult.oracleResults,
+            targetType: driverResult.targetType,
+            targetLogId: driverResult.targetLogId,
+            durationMs: Date.now() - startTime,
+            totalCost: driverResult.totalCost || 0,
+            startedAt: testRun.StartedAt!,
+            completedAt: testRun.CompletedAt!
+        };
+
+        // Add sequence if this is a repeated test iteration
+        if (sequence && sequence > 1) {
+            result.sequence = sequence;
+        }
+
+        // Progress: Complete
+        options.progressCallback?.({
+            step: 'complete',
+            percentage: 100,
+            message: `Test ${result.status}`,
+            metadata: {
+                testName: test.Name,
+                testRun
+            }
+        });
+
+        this.log(`Test completed: ${result.status} (Score: ${result.score})`, options.verbose);
+        return result;
     }
 
     /**

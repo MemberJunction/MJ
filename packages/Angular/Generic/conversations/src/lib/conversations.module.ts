@@ -18,6 +18,7 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
+import { TestingModule } from '@memberjunction/ng-testing';
 
 // Markdown module
 import { MarkdownModule } from 'ngx-markdown';
@@ -136,6 +137,7 @@ const COMPONENTS = [
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,
+    TestingModule,
     MarkdownModule.forRoot(),
     // Standalone components
     TasksFullViewComponent,

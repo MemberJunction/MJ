@@ -11,6 +11,8 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
+import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
+import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
 
 @Component({
@@ -56,6 +58,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
+  public isArtifactPaneMaximized: boolean = false; // Track maximize state
+  private artifactPaneWidthBeforeMaximize: number = 40; // Store width before maximizing
   public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
@@ -140,7 +144,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
     private mentionAutocompleteService: MentionAutocompleteService,
-    private artifactPermissionService: ArtifactPermissionService
+    private artifactPermissionService: ArtifactPermissionService,
+    private dialogService: DialogService
   ) {}
 
   async ngOnInit() {
@@ -1363,6 +1368,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Clear permissions
     this.canShareSelectedArtifact = false;
     this.canEditSelectedArtifact = false;
+    // Reset maximize state when closing
+    this.isArtifactPaneMaximized = false;
+  }
+
+  toggleMaximizeArtifactPane(): void {
+    if (this.isArtifactPaneMaximized) {
+      // Restore to previous width
+      this.artifactPaneWidth = this.artifactPaneWidthBeforeMaximize;
+      this.isArtifactPaneMaximized = false;
+    } else {
+      // Maximize - store current width and set to 100%
+      this.artifactPaneWidthBeforeMaximize = this.artifactPaneWidth;
+      this.artifactPaneWidth = 100;
+      this.isArtifactPaneMaximized = true;
+    }
   }
 
   onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
@@ -1569,6 +1589,48 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (workspace or explorer wrapper)
     this.openEntityRecord.emit(event);
+  }
+
+  viewTestRun(testRunId: string): void {
+    // Open the test run record in the entity viewer
+    const compositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: testRunId });
+    this.openEntityRecord.emit({
+      entityName: 'MJ: Test Runs',
+      compositeKey
+    });
+  }
+
+  onTestFeedbackMessage(message: ConversationDetailEntity): void {
+    if (!message.TestRunID) {
+      console.error('Cannot provide test feedback: message has no TestRunID');
+      return;
+    }
+
+    const dialogData: TestFeedbackDialogData = {
+      testRunId: message.TestRunID,
+      conversationDetailId: message.ID,
+      currentUser: this.currentUser
+    };
+
+    const dialogRef = this.dialogService.open({
+      content: TestFeedbackDialogComponent,
+      width: 600,
+      height: 680
+    });
+
+    const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
+    dialogInstance.data = dialogData;
+
+    dialogRef.result.subscribe((result) => {
+      if (result && typeof result === 'object' && 'success' in result) {
+        const feedbackResult = result as {success: boolean; feedbackId?: string};
+        if (feedbackResult.success) {
+          console.log('Test feedback saved successfully:', feedbackResult.feedbackId);
+          // TODO: Optionally show success notification
+        }
+      }
+    });
   }
 
   onTaskClicked(task: TaskEntity): void {

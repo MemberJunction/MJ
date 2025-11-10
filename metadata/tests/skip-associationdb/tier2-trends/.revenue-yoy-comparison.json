@@ -1,0 +1,40 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Revenue Year-over-Year Comparison",
+    "Description": "Tests Skip's ability to compare two time periods side-by-side in a visualization.",
+    "InputDefinition": {
+      "userMessage": "Compare our revenue this year versus last year, broken down by month. Show both years on the same chart so I can see the comparison. Let me click on any data point to see the invoices for that specific month and year."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a chart comparing two years of revenue data",
+        "Two distinct series for current year and previous year",
+        "Months are aligned for easy comparison",
+        "Revenue values are properly formatted",
+        "Chart makes it easy to see year-over-year changes",
+        "Chart supports drill-down to show invoice list for selected month/year combination",
+        "Invoice table allows opening individual invoice records"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "32CB25F2-FF7E-44D0-89BA-41F4A1098898"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T18:37:02.572Z",
+    "checksum": "9014a1dc464ede52af6efeb09f3087d8d74fc860e198f7ac23ebc4b315fee4ba"
+  }
+}

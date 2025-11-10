@@ -104,8 +104,8 @@ export function LoadGeneratedActions() {
      * @returns 
      */
     public async generateSingleAction(action: ActionEntity, directory: string): Promise<string> {
-        if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved') {
-            //logMessage(`    Skipping action ${action.Name} because Status <> Active and/or CodeApprovalStatus <> Approved --- Status: ${action.Status}, Code Approval Status: ${action.CodeApprovalStatus}`, SeverityType.Warning, false);
+        if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved' || action.Type !== 'Generated') {
+            // either the action is not active, not approved, or is NOT a Generated action, so skip it
             return "";
         }
 

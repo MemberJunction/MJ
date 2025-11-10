@@ -1,0 +1,40 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Events Ranked by Revenue",
+    "Description": "Tests Skip's ability to link events through registrations to invoices and calculate total revenue per event.",
+    "InputDefinition": {
+      "userMessage": "Show me all events from the past year ranked by total revenue generated, including the number of registrations for each event. Display as a table. Let me click on an event to see who registered for it."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a table of events ranked by revenue",
+        "Revenue amounts are properly calculated and formatted",
+        "Registration counts are included for each event",
+        "Only events from past year are included",
+        "Events are sorted in descending order by revenue",
+        "Clicking event shows registration list with member details",
+        "Registration table allows opening individual member records"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 90000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "DC57C216-FE46-4700-8A7F-3076426D5200"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T18:37:02.695Z",
+    "checksum": "4056da7e7442b0cf1798ea2ce9545614d7a6b9652f0197cba0df3ed82ab357af"
+  }
+}

@@ -13,6 +13,7 @@ import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { minimatch } from 'minimatch';
 
 /** Global ConnectionPool instance for connection lifecycle management */
 let globalPool: sql.ConnectionPool | null = null;
@@ -178,30 +179,45 @@ export function getDataProvider(): DatabaseProviderBase | null {
 
 /**
  * Find entity directories at the immediate level only
- * 
+ *
  * Searches for directories containing .mj-sync.json files, which indicate
  * entity data directories. Only searches immediate subdirectories, not recursive.
  * If a specific directory is provided, only checks that directory.
- * 
+ *
  * @param dir - Base directory to search from
  * @param specificDir - Optional specific subdirectory name to check
  * @param directoryOrder - Optional array specifying the order directories should be processed
  * @param ignoreDirectories - Optional array of directory patterns to ignore
+ * @param includeFilter - Optional array of directory patterns to include (whitelist)
+ * @param excludeFilter - Optional array of directory patterns to exclude (blacklist)
  * @returns Array of absolute directory paths containing .mj-sync.json files, ordered according to directoryOrder
- * 
+ *
  * @example
  * ```typescript
  * // Find all entity directories
  * const dirs = findEntityDirectories(process.cwd());
- * 
+ *
  * // Check specific directory
  * const dirs = findEntityDirectories(process.cwd(), 'ai-prompts');
- * 
+ *
  * // Find directories with custom ordering
  * const dirs = findEntityDirectories(process.cwd(), undefined, ['prompts', 'agent-types']);
+ *
+ * // Filter with include patterns
+ * const dirs = findEntityDirectories(process.cwd(), undefined, undefined, undefined, ['prompts', 'agent-*']);
+ *
+ * // Filter with exclude patterns
+ * const dirs = findEntityDirectories(process.cwd(), undefined, undefined, undefined, undefined, ['*-test', 'temp']);
  * ```
  */
-export function findEntityDirectories(dir: string, specificDir?: string, directoryOrder?: string[], ignoreDirectories?: string[]): string[] {
+export function findEntityDirectories(
+  dir: string,
+  specificDir?: string,
+  directoryOrder?: string[],
+  ignoreDirectories?: string[],
+  includeFilter?: string[],
+  excludeFilter?: string[]
+): string[] {
   const results: string[] = [];
   
   // If specific directory is provided, check if it's an entity directory or root config directory
@@ -229,7 +245,14 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
               ...(ignoreDirectories || []),
               ...(config.ignoreDirectories || [])
             ];
-            return findEntityDirectories(targetDir, undefined, config.directoryOrder, mergedIgnoreDirectories);
+            return findEntityDirectories(
+              targetDir,
+              undefined,
+              config.directoryOrder,
+              mergedIgnoreDirectories,
+              includeFilter,
+              excludeFilter
+            );
           }
         } catch (error) {
           // If we can't parse the config, treat it as a regular directory
@@ -237,7 +260,7 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
       }
       
       // Fallback: look for entity subdirectories in the target directory
-      return findEntityDirectories(targetDir, undefined, directoryOrder, ignoreDirectories);
+      return findEntityDirectories(targetDir, undefined, directoryOrder, ignoreDirectories, includeFilter, excludeFilter);
     }
     return results;
   }
@@ -290,10 +313,50 @@ export function findEntityDirectories(dir: string, specificDir?: string, directo
     
     // Sort unordered directories alphabetically
     unorderedDirs.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
-    
-    return [...orderedDirs, ...unorderedDirs];
+
+    const allDirs = [...orderedDirs, ...unorderedDirs];
+    return applyDirectoryFilters(allDirs, includeFilter, excludeFilter);
   }
-  
+
   // No ordering specified, return in alphabetical order (existing behavior)
-  return foundDirectories.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
+  const sortedDirs = foundDirectories.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
+  return applyDirectoryFilters(sortedDirs, includeFilter, excludeFilter);
+}
+
+/**
+ * Apply include/exclude filters to a list of directories
+ *
+ * @param directories - Array of directory paths to filter
+ * @param includeFilter - Optional array of patterns to include (whitelist)
+ * @param excludeFilter - Optional array of patterns to exclude (blacklist)
+ * @returns Filtered array of directory paths
+ */
+function applyDirectoryFilters(
+  directories: string[],
+  includeFilter?: string[],
+  excludeFilter?: string[]
+): string[] {
+  let filteredDirs = directories;
+
+  // Apply include filter (whitelist)
+  if (includeFilter && includeFilter.length > 0) {
+    filteredDirs = directories.filter(dir => {
+      const dirName = path.basename(dir);
+      return includeFilter.some(pattern =>
+        minimatch(dirName, pattern, { nocase: true })
+      );
+    });
+  }
+
+  // Apply exclude filter (blacklist)
+  if (excludeFilter && excludeFilter.length > 0) {
+    filteredDirs = filteredDirs.filter(dir => {
+      const dirName = path.basename(dir);
+      return !excludeFilter.some(pattern =>
+        minimatch(dirName, pattern, { nocase: true })
+      );
+    });
+  }
+
+  return filteredDirs;
 }

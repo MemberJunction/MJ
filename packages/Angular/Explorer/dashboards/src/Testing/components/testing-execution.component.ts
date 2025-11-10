@@ -2,6 +2,8 @@ import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetect
 import { Observable, Subject, combineLatest } from 'rxjs';
 import { takeUntil, map } from 'rxjs/operators';
 import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
+import { CompositeKey } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared';
 import { TestingInstrumentationService, TestRunSummary } from '../services/testing-instrumentation.service';
 import { TestRunDialogComponent } from './widgets/test-run-dialog.component';
 
@@ -798,7 +800,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   }
 
   viewDetails(execution: ExecutionListItem): void {
-    console.log('View details:', execution);
+    SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(execution.id));
   }
 
   cancelExecution(execution: ExecutionListItem): void {

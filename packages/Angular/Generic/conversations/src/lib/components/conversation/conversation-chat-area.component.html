@@ -7,6 +7,10 @@
         <i class="fas fa-folder"></i>
         <span>{{ conversation.Project || 'Project' }}</span>
         </button>
+        <button class="test-indicator" (click)="viewTestRun(conversation.TestRunID)" title="View Test Run" *ngIf="conversation.TestRunID">
+        <i class="fas fa-flask"></i>
+        <span>Test</span>
+        </button>
         <mj-active-agent-indicator
         [conversationId]="conversationState.activeConversation.ID"
         [currentUser]="currentUser"
@@ -48,7 +52,9 @@
     <!-- Messages and Artifact Split Layout -->
     <div class="chat-content-area">
     <!-- Messages Pane -->
-    <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
+    <div class="chat-messages-pane"
+         [class.full-width]="!showArtifactPanel"
+         [class.hidden]="isArtifactPaneMaximized">
         @if (!conversationState.activeConversation || conversationState.isNewUnsavedConversation) {
           <!-- Empty State - No conversation selected OR new unsaved conversation -->
           <mj-conversation-empty-state
@@ -80,6 +86,7 @@
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
               (retryMessage)="onRetryMessage($event)"
+              (testFeedbackMessage)="onTestFeedbackMessage($event)"
               (artifactClicked)="onArtifactClicked($event)"
               (messageEdited)="onMessageEdited($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
@@ -141,8 +148,12 @@
 
     <!-- Artifact Viewer Pane -->
     @if (showArtifactPanel && selectedArtifactId) {
-        <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
-        <div class="chat-artifact-pane" [style.width.%]="artifactPaneWidth">
+        @if (!isArtifactPaneMaximized) {
+            <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
+        }
+        <div class="chat-artifact-pane"
+             [style.width.%]="artifactPaneWidth"
+             [class.maximized]="isArtifactPaneMaximized">
         <mj-artifact-viewer-panel
             [artifactId]="selectedArtifactId"
             [currentUser]="currentUser"
@@ -151,11 +162,13 @@
             [viewContext]="'conversation'"
             [canShare]="canShareSelectedArtifact"
             [canEdit]="canEditSelectedArtifact"
+            [isMaximized]="isArtifactPaneMaximized"
             [refreshTrigger]="artifactViewerRefresh$"
             (closed)="onCloseArtifactPanel()"
             (saveToCollectionRequested)="onSaveToCollectionRequested($event)"
             (navigateToLink)="onArtifactLinkNavigation($event)"
-            (shareRequested)="onArtifactShareRequested($event)">
+            (shareRequested)="onArtifactShareRequested($event)"
+            (maximizeToggled)="toggleMaximizeArtifactPane()">
         </mj-artifact-viewer-panel>
         </div>
     }

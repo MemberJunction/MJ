@@ -2455,6 +2455,9 @@ export class MJTest_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.`}) 
+    RepeatCount?: number;
+        
     @Field() 
     @MaxLength(200)
     Type: string;
@@ -2507,6 +2510,9 @@ export class CreateMJTestInput {
 
     @Field(() => Float, { nullable: true })
     EstimatedCostUSD: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RepeatCount: number | null;
 }
     
 
@@ -2550,6 +2556,9 @@ export class UpdateMJTestInput {
 
     @Field(() => Float, { nullable: true })
     EstimatedCostUSD?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RepeatCount?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43850,6 +43859,10 @@ export class MJArtifactType_ {
     @MaxLength(510)
     DriverClass?: string;
         
+    @Field({nullable: true, description: `Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)`}) 
+    @MaxLength(510)
+    Icon?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
@@ -43903,6 +43916,9 @@ export class CreateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
 }
     
 
@@ -43934,6 +43950,9 @@ export class UpdateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

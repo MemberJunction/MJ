@@ -32,11 +32,19 @@ export default class Push extends Command {
     ci: Flags.boolean({ description: 'CI mode - no prompts, fail on issues' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level output' }),
     'no-validate': Flags.boolean({ description: 'Skip validation before push' }),
-    'parallel-batch-size': Flags.integer({ 
-      description: 'Number of records to process in parallel (default: 10)', 
+    'parallel-batch-size': Flags.integer({
+      description: 'Number of records to process in parallel (default: 10)',
       default: 10,
       min: 1,
-      max: 50 
+      max: 50
+    }),
+    include: Flags.string({
+      description: 'Only process these directories (comma-separated, supports patterns)',
+      multiple: false
+    }),
+    exclude: Flags.string({
+      description: 'Skip these directories (comma-separated, supports patterns)',
+      multiple: false
     }),
   };
 
@@ -73,10 +81,18 @@ export default class Push extends Command {
         spinner.stop();
       }
 
+      // Parse include/exclude filters
+      const includeFilter = flags.include ? flags.include.split(',').map(s => s.trim()) : undefined;
+      const excludeFilter = flags.exclude ? flags.exclude.split(',').map(s => s.trim()) : undefined;
+
       // Run validation unless disabled
       if (!flags['no-validate']) {
         spinner.start('Validating metadata...');
-        const validator = new ValidationService({ verbose: flags.verbose });
+        const validator = new ValidationService({
+          verbose: flags.verbose,
+          include: includeFilter,
+          exclude: excludeFilter
+        });
         const formatter = new FormattingService();
 
         const targetDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
@@ -120,6 +136,8 @@ export default class Push extends Command {
           verbose: flags.verbose,
           noValidate: flags['no-validate'],
           parallelBatchSize: flags['parallel-batch-size'],
+          include: includeFilter,
+          exclude: excludeFilter,
         },
         {
           onProgress: (message) => {

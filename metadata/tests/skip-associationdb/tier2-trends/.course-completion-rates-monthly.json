@@ -1,0 +1,40 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Monthly Course Completion Rates",
+    "Description": "Tests Skip's ability to calculate percentage metrics over time and visualize completion rate trends.",
+    "InputDefinition": {
+      "userMessage": "Show me monthly course completion rates for the past year in a line chart. When I click on a month, show me which courses had enrollments and their completion details."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a line chart showing completion rates by month",
+        "Completion rate is calculated as percentage (completed/enrolled)",
+        "Covers 12 months of data",
+        "Percentages are properly formatted",
+        "Chart shows trend in completion rates over time",
+        "Chart supports drill-down to show courses with completion stats for selected month",
+        "Course table allows opening individual course records"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "E34071A4-B831-4DB8-8518-4E0D787D32B2"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T18:37:02.485Z",
+    "checksum": "ffca9014cc1dfd471a591f88f1679ce12770110e89293675d5305878af4e6d88"
+  }
+}

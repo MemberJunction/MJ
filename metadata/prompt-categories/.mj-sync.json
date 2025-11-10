@@ -1,6 +1,6 @@
 {
   "entity": "AI Prompt Categories",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,

@@ -142,6 +142,8 @@ export class AgentRunner {
             sourceArtifactId?: string;
             /** Optional conversation name (only used when creating new conversation) */
             conversationName?: string;
+            /** Optional test run ID to link conversation and details to (for test execution traceability) */
+            testRunId?: string;
         }
     ): Promise<{
         /** The agent execution result */
@@ -232,6 +234,11 @@ export class AgentRunner {
                     conversation.Status = 'Available';
                     conversation.DataContextID = null; // Can be set by caller if needed
 
+                    // Link to test run if provided (for test execution traceability)
+                    if (options.testRunId) {
+                        conversation.TestRunID = options.testRunId;
+                    }
+
                     if (!(await conversation.Save())) {
                         throw new Error('Failed to create conversation');
                     }
@@ -253,6 +260,11 @@ export class AgentRunner {
                 userMessageDetail.UserID = contextUser.ID;
                 userMessageDetail.HiddenToUser = false;
 
+                // Link to test run if provided (for test execution traceability)
+                if (options.testRunId) {
+                    userMessageDetail.TestRunID = options.testRunId;
+                }
+
                 if (!(await userMessageDetail.Save())) {
                     throw new Error('Failed to create user message conversation detail');
                 }
@@ -273,6 +285,11 @@ export class AgentRunner {
                 agentResponseDetail.Status = 'In-Progress';
                 agentResponseDetail.HiddenToUser = false;
                 agentResponseDetail.AgentID = params.agent.ID;
+
+                // Link to test run if provided (for test execution traceability)
+                if (options.testRunId) {
+                    agentResponseDetail.TestRunID = options.testRunId;
+                }
 
                 if (!(await agentResponseDetail.Save())) {
                     throw new Error('Failed to create agent response conversation detail');
@@ -304,6 +321,7 @@ export class AgentRunner {
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
+                data: {...params.data, conversationId}, // ensure we pass along OUR conversationId
                 conversationDetailId: agentResponseDetailId,
                 onProgress: wrappedOnProgress
             };

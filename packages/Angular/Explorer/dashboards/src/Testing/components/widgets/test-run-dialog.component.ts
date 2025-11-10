@@ -503,16 +503,17 @@ interface ProgressUpdate {
       font-weight: 600;
       color: #333;
       line-height: 1.3;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .item-meta {
       font-size: 13px;
       color: #666;
       line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
     }
 
     .item-check {

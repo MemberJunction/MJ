@@ -93,18 +93,45 @@ export class RunCommand {
 
             this.spinner.stop();
 
-            // Format and display result
-            const output = OutputFormatter.formatTestResult(result, format);
-            console.log(output);
+            // Handle both single result and array of results (RepeatCount > 1)
+            if (Array.isArray(result)) {
+                // Multiple iterations - display summary and all results
+                console.log(OutputFormatter.formatInfo(`Ran ${result.length} iterations`));
 
-            // Write to file if requested
-            OutputFormatter.writeToFile(output, flags.output);
+                let allPassed = true;
+                for (const iterationResult of result) {
+                    const output = OutputFormatter.formatTestResult(iterationResult, format);
+                    console.log(output);
 
-            // Clean up resources
-            await closeMJProvider();
+                    if (iterationResult.status !== 'Passed') {
+                        allPassed = false;
+                    }
+                }
 
-            // Exit with appropriate code
-            process.exit(result.status === 'Passed' ? 0 : 1);
+                // Write to file if requested (write all results as JSON array)
+                if (flags.output) {
+                    OutputFormatter.writeToFile(JSON.stringify(result, null, 2), flags.output);
+                }
+
+                // Clean up resources
+                await closeMJProvider();
+
+                // Exit with appropriate code (pass only if all iterations passed)
+                process.exit(allPassed ? 0 : 1);
+            } else {
+                // Single result
+                const output = OutputFormatter.formatTestResult(result, format);
+                console.log(output);
+
+                // Write to file if requested
+                OutputFormatter.writeToFile(output, flags.output);
+
+                // Clean up resources
+                await closeMJProvider();
+
+                // Exit with appropriate code
+                process.exit(result.status === 'Passed' ? 0 : 1);
+            }
 
         } catch (error) {
             this.spinner.fail();

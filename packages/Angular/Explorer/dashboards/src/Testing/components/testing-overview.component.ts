@@ -1,6 +1,8 @@
 import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { takeUntil, debounceTime, map } from 'rxjs/operators';
+import { CompositeKey } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared';
 import { TestingInstrumentationService, TestingDashboardKPIs, TestRunSummary, SuiteHierarchyNode } from '../services/testing-instrumentation.service';
 import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
@@ -401,11 +403,13 @@ export class TestingOverviewComponent implements OnInit, OnDestroy {
     this.selectedSuiteId = suiteId;
     this.instrumentationService.setSuiteFilter(suiteId);
     this.emitStateChange();
+
+    // Open the Test Suite entity record
+    SharedService.Instance.OpenEntityRecord('MJ: Test Suites', CompositeKey.FromID(suiteId));
   }
 
   viewRunDetail(run: TestRunSummary): void {
-    // Could navigate or open detail panel
-    console.log('View run detail:', run);
+    SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(run.id));
   }
 
   formatDuration(milliseconds: number): string {

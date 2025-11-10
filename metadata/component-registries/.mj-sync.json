@@ -1,6 +1,6 @@
 {
   "entity": "MJ: Component Registries",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
