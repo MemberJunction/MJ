@@ -149,7 +149,9 @@ export class AgentRunner {
         /** The conversation ID (created or existing) */
         conversationId: string;
         /** The conversation detail ID for the user message */
-        conversationDetailId: string;
+        userMessageDetailId: string;
+        /** The conversation detail ID for the agent response (only present if server created it) */
+        agentResponseDetailId?: string;
         /** Artifact information if created */
         artifactInfo?: {
             artifactId: string;
@@ -166,25 +168,30 @@ export class AgentRunner {
 
         try {
             let conversationId: string;
-            let conversationDetailId: string;
+            let userMessageDetailId: string;
+            let agentResponseDetailId: string | undefined;
+            let agentResponseDetail: ConversationDetailEntity | undefined;
+            let serverCreatedAgentResponse = false;
 
-            // If conversationDetailId is provided, use it (skip conversation/detail creation)
+            // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
-                conversationDetailId = options.conversationDetailId;
+                agentResponseDetailId = options.conversationDetailId;
 
                 // Load the conversation detail to get the conversation ID
                 const detail = await md.GetEntityObject<ConversationDetailEntity>(
                     'Conversation Details',
                     contextUser
                 );
-                if (await detail.Load(conversationDetailId)) {
+                if (await detail.Load(agentResponseDetailId)) {
                     conversationId = detail.ConversationID;
-                    LogStatus(`Using existing conversation ${conversationId} and detail ${conversationDetailId}`);
+                    LogStatus(`Using existing conversation ${conversationId} and agent response detail ${agentResponseDetailId}`);
+                    // Note: In this case, we don't know the user message detail ID
+                    userMessageDetailId = agentResponseDetailId; // For backward compatibility
                 } else {
-                    throw new Error(`Failed to load conversation detail ${conversationDetailId}`);
+                    throw new Error(`Failed to load conversation detail ${agentResponseDetailId}`);
                 }
             } else {
-                // Create conversation and detail
+                // Server creates BOTH user message and agent response details
                 if (!options.userMessage) {
                     throw new Error('userMessage is required when conversationDetailId is not provided');
                 }
@@ -199,7 +206,28 @@ export class AgentRunner {
                         contextUser
                     );
 
-                    conversation.Name = options.conversationName || `Conversation with ${params.agent.Name}`;
+                    // Smart conversation naming:
+                    // 1. Use provided name if given
+                    // 2. Otherwise, use AI prompt to generate a good name from user message
+                    // 3. Fallback to "Chat with [AgentName]"
+                    let conversationName = options.conversationName;
+                    let conversationDescription: string | null = null;
+
+                    if (!conversationName && options.userMessage) {
+                        // Try to generate a name using the "Name Conversation" prompt (same as UI)
+                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser);
+                        if (nameResult) {
+                            conversationName = nameResult.name;
+                            conversationDescription = nameResult.description;
+                        }
+                    }
+
+                    if (!conversationName) {
+                        conversationName = `Chat with ${params.agent.Name}`;
+                    }
+
+                    conversation.Name = conversationName;
+                    conversation.Description = conversationDescription || ''; // Set description too (like UI does)
                     conversation.UserID = contextUser.ID;
                     conversation.Status = 'Available';
                     conversation.DataContextID = null; // Can be set by caller if needed
@@ -209,46 +237,108 @@ export class AgentRunner {
                     }
 
                     conversationId = conversation.ID;
-                    LogStatus(`Created conversation ${conversationId}`);
+                    LogStatus(`Created conversation ${conversationId}: ${conversationName}`);
                 }
 
                 // Step 2: Create conversation detail for user message
                 LogStatus('Creating conversation detail for user message');
-                const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>(
+                const userMessageDetail = await md.GetEntityObject<ConversationDetailEntity>(
                     'Conversation Details',
                     contextUser
                 );
 
-                conversationDetail.ConversationID = conversationId;
-                conversationDetail.Message = options.userMessage;
-                conversationDetail.Role = 'User';
-                conversationDetail.HiddenToUser = false;
+                userMessageDetail.ConversationID = conversationId;
+                userMessageDetail.Message = options.userMessage;
+                userMessageDetail.Role = 'User';
+                userMessageDetail.UserID = contextUser.ID;
+                userMessageDetail.HiddenToUser = false;
 
-                if (!(await conversationDetail.Save())) {
-                    throw new Error('Failed to create conversation detail');
+                if (!(await userMessageDetail.Save())) {
+                    throw new Error('Failed to create user message conversation detail');
                 }
 
-                conversationDetailId = conversationDetail.ID;
-                LogStatus(`Created conversation detail ${conversationDetailId}`);
+                userMessageDetailId = userMessageDetail.ID;
+                LogStatus(`Created user message detail ${userMessageDetailId}`);
+
+                // Step 3: Create conversation detail for agent response (like UI does)
+                LogStatus('Creating conversation detail for agent response');
+                agentResponseDetail = await md.GetEntityObject<ConversationDetailEntity>(
+                    'Conversation Details',
+                    contextUser
+                );
+
+                agentResponseDetail.ConversationID = conversationId;
+                agentResponseDetail.Message = '⏳ Starting...';
+                agentResponseDetail.Role = 'AI';
+                agentResponseDetail.Status = 'In-Progress';
+                agentResponseDetail.HiddenToUser = false;
+                agentResponseDetail.AgentID = params.agent.ID;
+
+                if (!(await agentResponseDetail.Save())) {
+                    throw new Error('Failed to create agent response conversation detail');
+                }
+
+                agentResponseDetailId = agentResponseDetail.ID;
+                serverCreatedAgentResponse = true;
+                LogStatus(`Created agent response detail ${agentResponseDetailId}`);
             }
 
-            // Step 3: Execute the agent with conversation context
+            // Step 4: Execute the agent with conversation context
             LogStatus(`Executing agent ${params.agent.Name} in conversation context`);
+
+            // Wrap progress callback to update agent response detail (only if we created it)
+            const originalOnProgress = params.onProgress;
+            const wrappedOnProgress = serverCreatedAgentResponse && agentResponseDetail
+                ? async (progress: any) => {
+                    // Update the agent response detail with progress message
+                    if (agentResponseDetail && progress.message) {
+                        agentResponseDetail.Message = progress.message;
+                        await agentResponseDetail.Save();
+                    }
+                    // Call original callback if provided
+                    if (originalOnProgress) {
+                        await originalOnProgress(progress);
+                    }
+                }
+                : originalOnProgress;
+
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
-                conversationDetailId
+                conversationDetailId: agentResponseDetailId,
+                onProgress: wrappedOnProgress
             };
 
             const agentResult = await this.RunAgent<C, R>(modifiedParams);
 
-            // Step 4: Process artifacts if requested and agent succeeded
+            // Step 5: Update agent response detail with final result (only if we created it)
+            if (serverCreatedAgentResponse && agentResponseDetail && agentResponseDetailId) {
+                LogStatus('Updating agent response detail with final result');
+
+                // Reload to get any updates from agent execution
+                await agentResponseDetail.Load(agentResponseDetailId);
+
+                agentResponseDetail.Message = agentResult.agentRun?.Message ||
+                                             (agentResult.success ? '✅ Completed' : '❌ Failed');
+                agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
+
+                // Set suggested responses if present
+                if (agentResult.suggestedResponses) {
+                    agentResponseDetail.SuggestedResponses = JSON.stringify(agentResult.suggestedResponses);
+                }
+
+                await agentResponseDetail.Save();
+                LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
+            }
+
+            // Step 6: Process artifacts if requested and agent succeeded
             let artifactInfo: { artifactId: string; versionId: string; versionNumber: number } | undefined;
 
             const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
             if (shouldCreateArtifacts && agentResult.success && agentResult.payload) {
+                // Artifacts link to agent response detail ID
                 artifactInfo = await this.ProcessAgentArtifacts(
                     agentResult,
-                    conversationDetailId,
+                    agentResponseDetailId!,
                     options.sourceArtifactId,
                     contextUser
                 );
@@ -257,7 +347,8 @@ export class AgentRunner {
             return {
                 agentResult,
                 conversationId,
-                conversationDetailId,
+                userMessageDetailId,
+                agentResponseDetailId,
                 artifactInfo
             };
 
@@ -548,6 +639,68 @@ export class AgentRunner {
         } catch (error) {
             LogError(`Failed to process agent artifacts: ${(error as Error).message}`);
             return undefined;
+        }
+    }
+
+    /**
+     * Generates a conversation name and description using the "Name Conversation" AI prompt.
+     * Same approach as UI - uses AI to create a meaningful title and description from the first user message.
+     * Falls back to null if prompt not found or execution fails (caller will use fallback).
+     *
+     * @param userMessage - The first user message to base the name on
+     * @param contextUser - User context for prompt execution
+     * @returns Generated conversation name and description, or null if generation failed
+     * @private
+     */
+    private async GenerateConversationName(
+        userMessage: string,
+        contextUser: UserInfo
+    ): Promise<{ name: string; description: string } | null> {
+        try {
+            // Import AIPromptRunner, AIPromptParams, and AIEngine
+            const { AIPromptRunner } = await import('@memberjunction/ai-prompts');
+            const { AIPromptParams } = await import('@memberjunction/ai-core-plus');
+            const { AIEngine } = await import('@memberjunction/aiengine');
+
+            // Ensure AIEngine is configured
+            await AIEngine.Instance.Config(false, contextUser);
+
+            // Find the "Name Conversation" prompt (same as UI)
+            const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Name Conversation');
+            if (!prompt) {
+                LogStatus('Name Conversation prompt not found - using fallback naming');
+                return null;
+            }
+
+            // Execute the prompt using AIPromptRunner
+            const promptParams = new AIPromptParams();
+            promptParams.prompt = prompt;
+            promptParams.contextUser = contextUser;
+            promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
+
+            const runner = new AIPromptRunner();
+            const result = await runner.ExecutePrompt(promptParams);
+
+            if (result && result.success && result.result) {
+                // Try to parse the result as JSON to extract name and description
+                const parsed = typeof result.result === 'string'
+                    ? JSON.parse(result.result)
+                    : result.result;
+
+                const { name, description } = parsed;
+                if (name) {
+                    LogStatus(`Generated conversation name via AI: "${name}" with description: "${description || ''}"`);
+                    return {
+                        name,
+                        description: description || ''
+                    };
+                }
+            }
+
+            return null;
+        } catch (error) {
+            LogError(`Error generating conversation name: ${(error as Error).message}`);
+            return null;
         }
     }
 }

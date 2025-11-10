@@ -382,7 +382,8 @@ export class RunAIAgentResolver extends ResolverBase {
             });
 
             const result = conversationResult.agentResult;
-            const finalConversationDetailId = conversationResult.conversationDetailId;
+            // Use agent response detail ID if available, otherwise fall back to user message detail ID
+            const finalConversationDetailId = conversationResult.agentResponseDetailId || conversationResult.userMessageDetailId;
             const artifactInfo = conversationResult.artifactInfo;
 
             // Update agent run ref once available
