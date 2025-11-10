@@ -1,0 +1,13 @@
+{
+  "fields": {
+    "Name": "Testing",
+    "Description": "Testing framework for evaluating AI agents, workflows, and system components through automated test suites with multi-oracle evaluation"
+  },
+  "primaryKey": {
+    "ID": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T01:58:10.566Z",
+    "checksum": "686dc524da1a07904ec69ffc373e35fb02a654868e4afe9b22dc51ed48b25f16"
+  }
+}

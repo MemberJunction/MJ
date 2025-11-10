@@ -1,0 +1,30 @@
+{
+  "entity": "Dashboards",
+  "filePattern": ".*.json",
+  "pull": {
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "Dashboard Categories",
+        "field": "Name"
+      },
+      "UserID": {
+        "entity": "Users",
+        "field": "Name"
+      },
+      "ApplicationID": {
+        "entity": "Applications",
+        "field": "Name"
+      },
+      "EnvironmentID": {
+        "entity": "MJ: Environments",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Dashboard User Preferences": {
+        "entity": "MJ: Dashboard User Preferences",
+        "foreignKey": "DashboardID"
+      }
+    }
+  }
+}
