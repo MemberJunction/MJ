@@ -112,6 +112,7 @@
       "ParentID": null,
       "ContentType": "application/vnd.mj.component",
       "DriverClass": "ComponentArtifactViewerPlugin",
+      "ExtractRules": "@file:extract-rules/component-artifact.json",
       "IsEnabled": true,
       "Icon": "fa-brands fa-codepen"
     },
@@ -119,8 +120,8 @@
       "ID": "E8BA10A3-019F-4C51-A8AA-397AB124F212"
     },
     "sync": {
-      "lastModified": "2025-11-10T17:41:39.208Z",
-      "checksum": "d3cf44376374de347948608c5e3d272f58f48c1fc448e9391047be82fc7a8750"
+      "lastModified": "2025-11-10T19:44:36.010Z",
+      "checksum": "0aaac7a36fe2ce49e39d4bbc0c97184124be7f14a1873f6c87c86a7a475494f4"
     }
   },
   {

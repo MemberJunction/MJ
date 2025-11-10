@@ -1,0 +1,16 @@
+[
+    {
+        "name": "name",
+        "description": "Extracts the component name",
+        "type": "string",
+        "standardProperty": "name",
+        "extractor": "@file:component-artifact/component-name.js"
+    },
+    {
+        "name": "description",
+        "description": "Extracts the component summary/description",
+        "type": "string",
+        "standardProperty": "description",
+        "extractor": "@file:component-artifact/component-description.js"
+    } 
+]
