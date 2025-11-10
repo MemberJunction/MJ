@@ -18,6 +18,7 @@ export class ReportFormComponent extends BaseFormComponent {
         reportDetails: true,
         dataContextRelationships: true,
         outputScheduling: false,
+        details: false,
         systemMetadata: false,
         reportSnapshots: false,
         mJReportVersions: false,

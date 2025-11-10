@@ -50,6 +50,9 @@ LoadSchedulingEngine(); // This also loads drivers
 import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
 LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
 
+import { LoadRunAutotagAction } from '@memberjunction/actions-content-autotag';
+LoadRunAutotagAction(); // prevent tree shaking for this dynamic module
+
 import { GetTypeformResponsesAction } from '@memberjunction/actions-bizapps-formbuilders';
 const x = GetTypeformResponsesAction; // prevent tree shaking for this dynamic module
 

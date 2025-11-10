@@ -20,6 +20,7 @@ export class AIPromptRunFormComponent extends BaseFormComponent {
         performanceCostMetrics: false,
         modelParametersSettings: false,
         validationRetryDetails: false,
+        details: false,
         systemMetadata: false,
         mJAIPromptRuns: false,
         aIResultCache: false

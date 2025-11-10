@@ -18,6 +18,7 @@ export class TaskFormComponent extends BaseFormComponent {
         relationshipsOwnership: true,
         taskDetails: true,
         timelineMilestones: false,
+        details: false,
         systemMetadata: false,
         mJTaskDependencies: false,
         mJTaskDependencies1: false,

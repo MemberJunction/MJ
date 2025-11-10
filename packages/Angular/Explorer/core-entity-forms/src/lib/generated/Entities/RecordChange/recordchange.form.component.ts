@@ -17,6 +17,7 @@ export class RecordChangeFormComponent extends BaseFormComponent {
         recordContext: true,
         changeSummary: true,
         changeContent: false,
+        details: false,
         systemMetadata: false
     };
 

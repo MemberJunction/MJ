@@ -18,6 +18,7 @@ export class ConversationDetailFormComponent extends BaseFormComponent {
         conversationLinksArtifacts: true,
         messageDetails: true,
         userFeedbackInsights: false,
+        details: false,
         systemMetadata: false,
         reports: false,
         mJConversationDetailArtifacts: false,

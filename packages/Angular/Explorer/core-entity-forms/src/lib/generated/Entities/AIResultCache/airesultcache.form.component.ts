@@ -18,6 +18,7 @@ export class AIResultCacheFormComponent extends BaseFormComponent {
         executionDetails: true,
         resultInformation: false,
         stakeholderLinks: false,
+        details: false,
         systemMetadata: false
     };
 

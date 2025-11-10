@@ -17,6 +17,7 @@ export class ErrorLogFormComponent extends BaseFormComponent {
         technicalInformation: true,
         errorClassification: true,
         errorContent: false,
+        details: false,
         systemMetadata: false
     };
 

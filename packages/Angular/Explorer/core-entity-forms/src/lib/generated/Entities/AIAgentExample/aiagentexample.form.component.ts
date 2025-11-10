@@ -18,6 +18,7 @@ export class AIAgentExampleFormComponent extends BaseFormComponent {
         exampleDetails: true,
         sourceProvenance: false,
         semanticIndexing: false,
+        details: false,
         systemMetadata: false
     };
 

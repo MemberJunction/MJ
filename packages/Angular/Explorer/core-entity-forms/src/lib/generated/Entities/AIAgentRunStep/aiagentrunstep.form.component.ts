@@ -19,6 +19,7 @@ export class AIAgentRunStepFormComponent extends BaseFormComponent {
         executionStatusValidation: true,
         dataPayload: false,
         notesSystemMetadata: false,
+        details: false,
         systemMetadata: false,
         mJAIAgentRunSteps: false
     };

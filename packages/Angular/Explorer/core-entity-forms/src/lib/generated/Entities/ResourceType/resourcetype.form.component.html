@@ -17,7 +17,7 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 8 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 9 expanded
             </span>
         </div>
         <div class="form-panels-container">
@@ -86,7 +86,7 @@
         </div>
 
         <!-- Entity Associations Section -->
-        <div class="form-card collapsible-card" data-section-name="entity associations" data-field-names="entityid entity id categoryentityid category entity id entity categoryentity category entity">
+        <div class="form-card collapsible-card" data-section-name="entity associations" data-field-names="entityid entity id categoryentityid category entity id entity">
             <div class="collapsible-header" (click)="toggleSection('entityAssociations')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-link"></i>
@@ -123,9 +123,27 @@
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="categoryentity category entity">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
+                <div class="collapsible-title">
+                    <i class="fa fa-align-left"></i>
+                    <h3><span class="section-name">Details</span></h3>
+                </div>
+                <div class="collapse-icon">
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                </div>
+            </div>
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
+                <div class="form-body">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="CategoryEntity"
             Type="textbox"
             [EditMode]="EditMode"

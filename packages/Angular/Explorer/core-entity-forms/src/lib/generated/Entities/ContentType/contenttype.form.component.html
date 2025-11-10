@@ -17,22 +17,22 @@
                    (input)="filterSections($event)"
                    #sectionSearch>
             <span class="section-count">
-                <span class="section-count-badge">{{getExpandedCount()}}</span> of 5 expanded
+                <span class="section-count-badge">{{getExpandedCount()}}</span> of 4 expanded
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Content Type Specification Section -->
-        <div class="form-card collapsible-card" data-section-name="content type specification" data-field-names="name description mintags min tags maxtags max tags">
-            <div class="collapsible-header" (click)="toggleSection('contentTypeSpecification')" role="button" tabindex="0">
+<!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name description aimodelid aimodel id mintags min tags maxtags max tags __mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-tag"></i>
-                    <h3><span class="section-name">Content Type Specification</span></h3>
+                    <i class="fa fa-align-left"></i>
+                    <h3><span class="section-name">Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.contentTypeSpecification ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentTypeSpecification">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -51,6 +51,15 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="AIModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="MinTags"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -62,13 +71,27 @@
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
                 </div>
             </div>
         </div>
 
         <!-- AI Model Settings Section -->
-        <div class="form-card collapsible-card" data-section-name="ai model settings" data-field-names="aimodelid aimodel id aimodel">
+        <div class="form-card collapsible-card" data-section-name="ai model settings" data-field-names="aimodel">
             <div class="collapsible-header" (click)="toggleSection('aIModelSettings')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-robot"></i>
@@ -82,49 +105,8 @@
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
-            FieldName="AIModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="AIModel"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-
-                </div>
-            </div>
-        </div>
-
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

@@ -48,7 +48,7 @@ export class RunAutotagAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Extract required parameters
-            const endpoint = '';
+            const endpoint = 'https://prod-23.northcentralus.logic.azure.com:443/workflows/da9035f82c94422a97e6bd482aa73a89/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=5H089x_8y-QALoztq0uv_wn0nIx5M9F5vEOjwGKMP38';
 
             // Build request configuration
             const config: AxiosRequestConfig = {

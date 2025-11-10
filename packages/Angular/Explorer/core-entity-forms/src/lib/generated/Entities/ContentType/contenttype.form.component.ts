@@ -15,9 +15,8 @@ export class ContentTypeFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        contentTypeSpecification: true,
+        details: true,
         aIModelSettings: true,
-        systemMetadata: false,
         contentSources: false,
         contentItems: false
     };

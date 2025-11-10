@@ -9,7 +9,7 @@ import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
 import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
 import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
 import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
-import { LoadAutotagAndVectorizeContentAction } from '@memberjunction/actions-content-autotag';
+import { LoadAutotagAndVectorizeContentAction, LoadRunAutotagAction } from '@memberjunction/actions-content-autotag';
 
 
 LoadMistralEmbedding();
@@ -18,6 +18,7 @@ LoadPineconeVectorDB();
 LoadApolloAccountsEnrichmentAction();
 LoadApolloContactsEnrichmentAction();
 LoadAutotagAndVectorizeContentAction();
+LoadRunAutotagAction();
 
 const app = express();
 

@@ -21,18 +21,18 @@
             </span>
         </div>
         <div class="form-panels-container">
-<!-- Connection Details Section -->
-        <div class="form-card collapsible-card" data-section-name="connection details" data-field-names="name contentsourcetypeid content source type id url contentsourcetype content source type">
-            <div class="collapsible-header" (click)="toggleSection('connectionDetails')" role="button" tabindex="0">
+<!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="name contenttypeid content type id contentsourcetypeid content source type id contentfiletypeid content file type id url __mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-plug"></i>
-                    <h3><span class="section-name">Connection Details</span></h3>
+                    <i class="fa fa-align-left"></i>
+                    <h3><span class="section-name">Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.connectionDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.connectionDetails">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -44,7 +44,25 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ContentTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="ContentSourceTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentFileTypeID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -60,7 +78,14 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ContentSourceType"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -70,7 +95,7 @@
         </div>
 
         <!-- Content Classification Section -->
-        <div class="form-card collapsible-card" data-section-name="content classification" data-field-names="contenttypeid content type id contentfiletypeid content file type id contenttype content type contentfiletype content file type">
+        <div class="form-card collapsible-card" data-section-name="content classification" data-field-names="contenttype content type contentfiletype content file type">
             <div class="collapsible-header" (click)="toggleSection('contentClassification')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-tags"></i>
@@ -82,24 +107,6 @@
             </div>
             <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.contentClassification">
                 <div class="form-body">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentTypeID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentFileTypeID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -119,30 +126,23 @@
             </div>
         </div>
 
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
+        <!-- Connection Details Section -->
+        <div class="form-card collapsible-card" data-section-name="connection details" data-field-names="contentsourcetype content source type">
+            <div class="collapsible-header" (click)="toggleSection('connectionDetails')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
+                    <i class="fa fa-plug"></i>
+                    <h3><span class="section-name">Connection Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.connectionDetails ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.connectionDetails">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
+            [ShowLabel]="false"
+            FieldName="ContentSourceType"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

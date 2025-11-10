@@ -20,6 +20,7 @@ export class AIAgentRunFormComponent extends BaseFormComponent {
         contextualRelationships: false,
         resourceUsageCost: false,
         configurationOverrides: false,
+        details: false,
         systemMetadata: false,
         aIAgentNotes: false,
         mJAIAgentExamples: false,

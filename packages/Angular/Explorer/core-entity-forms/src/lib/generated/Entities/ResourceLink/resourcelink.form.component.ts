@@ -14,9 +14,7 @@ export class ResourceLinkFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        linkDetails: true,
-        associations: true,
-        systemMetadata: false
+        details: true
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

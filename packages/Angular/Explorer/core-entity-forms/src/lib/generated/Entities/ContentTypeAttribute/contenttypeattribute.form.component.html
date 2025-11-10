@@ -3,18 +3,18 @@
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
         <div class="form-panels-container">
-<!-- Attribute Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="attribute metadata" data-field-names="contenttypeid content type id name description">
-            <div class="collapsible-header" (click)="toggleSection('attributeMetadata')" role="button" tabindex="0">
+<!-- Details Section -->
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="contenttypeid content type id name prompt description __mj_createdat created at __mj_updatedat updated at">
+            <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
-                    <i class="fa fa-tag"></i>
-                    <h3><span class="section-name">Attribute Metadata</span></h3>
+                    <i class="fa fa-align-left"></i>
+                    <h3><span class="section-name">Details</span></h3>
                 </div>
                 <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.attributeMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+                    <i [class]="sectionsExpanded.details ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
                 </div>
             </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.attributeMetadata">
+            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.details">
                 <div class="form-body">
         <mj-form-field 
             [record]="record"
@@ -33,53 +33,17 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-
-                </div>
-            </div>
-        </div>
-
-        <!-- Extraction Prompt Section -->
-        <div class="form-card collapsible-card" data-section-name="extraction prompt" data-field-names="prompt">
-            <div class="collapsible-header" (click)="toggleSection('extractionPrompt')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-keyboard"></i>
-                    <h3><span class="section-name">Extraction Prompt</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.extractionPrompt ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.extractionPrompt">
-                <div class="form-body">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="false"
             FieldName="Prompt"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-
-                </div>
-            </div>
-        </div>
-
-        <!-- System Metadata Section -->
-        <div class="form-card collapsible-card" data-section-name="system metadata" data-field-names="__mj_createdat created at __mj_updatedat updated at">
-            <div class="collapsible-header" (click)="toggleSection('systemMetadata')" role="button" tabindex="0">
-                <div class="collapsible-title">
-                    <i class="fa fa-cog"></i>
-                    <h3><span class="section-name">System Metadata</span></h3>
-                </div>
-                <div class="collapse-icon">
-                    <i [class]="sectionsExpanded.systemMetadata ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-                </div>
-            </div>
-            <div class="collapsible-body" [class.collapsed]="!sectionsExpanded.systemMetadata">
-                <div class="form-body">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"

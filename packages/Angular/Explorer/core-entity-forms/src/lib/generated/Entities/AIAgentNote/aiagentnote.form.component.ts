@@ -17,6 +17,7 @@ export class AIAgentNoteFormComponent extends BaseFormComponent {
         scopeReferences: true,
         noteDetails: true,
         embeddingAIData: false,
+        details: false,
         systemMetadata: false
     };
 

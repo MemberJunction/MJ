@@ -15,6 +15,7 @@ export class EmployeeSkillFormComponent extends BaseFormComponent {
     // Collapsible section state
     public sectionsExpanded = {
         skillAssignment: true,
+        details: true,
         systemMetadata: false
     };
 

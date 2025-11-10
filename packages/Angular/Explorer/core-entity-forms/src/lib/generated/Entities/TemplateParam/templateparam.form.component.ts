@@ -17,6 +17,7 @@ export class TemplateParamFormComponent extends BaseFormComponent {
         templateAssociation: true,
         parameterSpecification: true,
         dynamicLinkingFilters: false,
+        details: false,
         systemMetadata: false
     };
 

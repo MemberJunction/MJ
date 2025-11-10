@@ -14,10 +14,10 @@ export class ResourcePermissionFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        resourceReference: true,
+        details: true,
         recipientAccessScope: true,
         sharingScheduleStatus: false,
-        systemMetadata: false
+        resourceReference: false
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

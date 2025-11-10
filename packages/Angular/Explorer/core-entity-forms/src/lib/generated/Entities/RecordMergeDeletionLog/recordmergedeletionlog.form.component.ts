@@ -15,6 +15,7 @@ export class RecordMergeDeletionLogFormComponent extends BaseFormComponent {
     // Collapsible section state
     public sectionsExpanded = {
         deletionAudit: true,
+        details: true,
         systemMetadata: false
     };
 

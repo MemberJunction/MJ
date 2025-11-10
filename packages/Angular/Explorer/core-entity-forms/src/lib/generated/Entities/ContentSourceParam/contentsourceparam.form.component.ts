@@ -14,9 +14,8 @@ export class ContentSourceParamFormComponent extends BaseFormComponent {
 
     // Collapsible section state
     public sectionsExpanded = {
-        identifierKeys: true,
-        parameterSettings: true,
-        systemMetadata: false
+        details: true,
+        parameterSettings: true
     };
 
     public toggleSection(section: keyof typeof this.sectionsExpanded): void {

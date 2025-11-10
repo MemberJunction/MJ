@@ -17,6 +17,7 @@ export class DuplicateRunDetailFormComponent extends BaseFormComponent {
     public sectionsExpanded = {
         runIdentification: true,
         processingOutcomes: true,
+        details: false,
         systemMetadata: false,
         duplicateRunDetailMatches: false
     };

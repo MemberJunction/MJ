@@ -18,6 +18,7 @@ export class ResourceTypeFormComponent extends BaseFormComponent {
         technicalDetails: true,
         resourceTypeDefinition: true,
         entityAssociations: false,
+        details: false,
         systemMetadata: false,
         workspaceItems: false,
         userNotifications: false,
