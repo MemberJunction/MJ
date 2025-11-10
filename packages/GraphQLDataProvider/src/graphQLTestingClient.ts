@@ -10,6 +10,7 @@ export interface RunTestParams {
     testId: string;
     verbose?: boolean;
     environment?: string;
+    onProgress?: (progress: TestExecutionProgress) => void;
 }
 
 /**
@@ -30,6 +31,7 @@ export interface RunTestSuiteParams {
     verbose?: boolean;
     environment?: string;
     parallel?: boolean;
+    onProgress?: (progress: TestExecutionProgress) => void;
 }
 
 /**
@@ -92,6 +94,8 @@ export class GraphQLTestingClient {
      * Run a single test with the specified parameters.
      *
      * This method invokes a test on the server through GraphQL and returns the result.
+     * If a progress callback is provided in params.onProgress, this method will subscribe
+     * to real-time progress updates from the GraphQL server and forward them to the callback.
      *
      * @param params The parameters for running the test
      * @returns A Promise that resolves to a RunTestResult object
@@ -101,7 +105,10 @@ export class GraphQLTestingClient {
      * const result = await testingClient.RunTest({
      *   testId: "test-uuid",
      *   verbose: true,
-     *   environment: "staging"
+     *   environment: "staging",
+     *   onProgress: (progress) => {
+     *     console.log(`${progress.currentStep}: ${progress.message} (${progress.percentage}%)`);
+     *   }
      * });
      *
      * if (result.success) {
@@ -112,7 +119,31 @@ export class GraphQLTestingClient {
      * ```
      */
     public async RunTest(params: RunTestParams): Promise<RunTestResult> {
+        let subscription: any;
+
         try {
+            // Subscribe to progress updates if callback provided
+            if (params.onProgress) {
+                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
+                    .subscribe((message: string) => {
+                        try {
+                            const parsed = JSON.parse(message);
+
+                            // Filter for TestExecutionProgress messages from RunTestResolver
+                            if (parsed.resolver === 'RunTestResolver' &&
+                                parsed.type === 'TestExecutionProgress' &&
+                                parsed.status === 'ok' &&
+                                parsed.data?.progress) {
+
+                                // Forward progress to callback
+                                params.onProgress!(parsed.data.progress);
+                            }
+                        } catch (e) {
+                            console.error('[GraphQLTestingClient] Failed to parse progress message:', e);
+                        }
+                    });
+            }
+
             const mutation = gql`
                 mutation RunTest(
                     $testId: String!,
@@ -143,11 +174,19 @@ export class GraphQLTestingClient {
 
         } catch (e) {
             return this.handleError(e, 'RunTest');
+        } finally {
+            // Always clean up subscription
+            if (subscription) {
+                subscription.unsubscribe();
+            }
         }
     }
 
     /**
      * Run a test suite with the specified parameters.
+     *
+     * If a progress callback is provided in params.onProgress, this method will subscribe
+     * to real-time progress updates from the GraphQL server and forward them to the callback.
      *
      * @param params The parameters for running the test suite
      * @returns A Promise that resolves to a RunTestSuiteResult object
@@ -157,7 +196,10 @@ export class GraphQLTestingClient {
      * const result = await testingClient.RunTestSuite({
      *   suiteId: "suite-uuid",
      *   parallel: true,
-     *   verbose: false
+     *   verbose: false,
+     *   onProgress: (progress) => {
+     *     console.log(`Progress: ${progress.message} (${progress.percentage}%)`);
+     *   }
      * });
      *
      * console.log(`Suite: ${result.result.totalTests} tests run`);
@@ -165,7 +207,31 @@ export class GraphQLTestingClient {
      * ```
      */
     public async RunTestSuite(params: RunTestSuiteParams): Promise<RunTestSuiteResult> {
+        let subscription: any;
+
         try {
+            // Subscribe to progress updates if callback provided
+            if (params.onProgress) {
+                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
+                    .subscribe((message: string) => {
+                        try {
+                            const parsed = JSON.parse(message);
+
+                            // Filter for TestExecutionProgress messages from RunTestResolver
+                            if (parsed.resolver === 'RunTestResolver' &&
+                                parsed.type === 'TestExecutionProgress' &&
+                                parsed.status === 'ok' &&
+                                parsed.data?.progress) {
+
+                                // Forward progress to callback
+                                params.onProgress!(parsed.data.progress);
+                            }
+                        } catch (e) {
+                            console.error('[GraphQLTestingClient] Failed to parse progress message:', e);
+                        }
+                    });
+            }
+
             const mutation = gql`
                 mutation RunTestSuite(
                     $suiteId: String!,
@@ -199,6 +265,11 @@ export class GraphQLTestingClient {
 
         } catch (e) {
             return this.handleError(e, 'RunTestSuite');
+        } finally {
+            // Always clean up subscription
+            if (subscription) {
+                subscription.unsubscribe();
+            }
         }
     }
 

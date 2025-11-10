@@ -1036,7 +1036,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     try {
       const result = await this.testingClient.RunTest({
         testId: this.selectedTestId!,
-        verbose: this.verbose
+        verbose: this.verbose,
+        onProgress: (progress) => {
+          // Update progress percentage
+          this.progress = progress.percentage;
+
+          // Update progress steps based on current step
+          this.updateProgressStep(progress.currentStep);
+
+          // Add log entry for this progress update
+          this.addLogEntry(progress.message, 'info');
+
+          // Trigger change detection
+          this.cdr.markForCheck();
+        }
       });
 
       this.result = result;
@@ -1072,7 +1085,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       const result = await this.testingClient.RunTestSuite({
         suiteId: this.selectedSuiteId!,
         verbose: this.verbose,
-        parallel: this.parallel
+        parallel: this.parallel,
+        onProgress: (progress) => {
+          // Update progress percentage
+          this.progress = progress.percentage;
+
+          // Update progress steps based on current step
+          this.updateProgressStep(progress.currentStep);
+
+          // Add log entry for this progress update
+          this.addLogEntry(progress.message, 'info');
+
+          // Trigger change detection
+          this.cdr.markForCheck();
+        }
       });
 
       this.result = result;
@@ -1122,6 +1148,32 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
     this.addLogEntry(update.message, 'info');
     this.cdr.markForCheck();
+  }
+
+  private updateProgressStep(currentStep: string): void {
+    // Map test engine steps to our UI steps
+    const stepMapping: Record<string, string> = {
+      'loading_test': 'loading_test',
+      'initializing': 'initializing_driver',
+      'executing': 'executing_test',
+      'evaluating': 'evaluating_oracles',
+      'complete': 'complete'
+    };
+
+    const mappedStep = stepMapping[currentStep] || currentStep;
+    const stepIndex = this.progressSteps.findIndex(s => s.step === mappedStep);
+
+    if (stepIndex >= 0) {
+      // Mark previous steps as completed
+      for (let i = 0; i < stepIndex; i++) {
+        this.progressSteps[i].completed = true;
+        this.progressSteps[i].active = false;
+      }
+
+      // Mark current step as active
+      this.progressSteps[stepIndex].active = true;
+      this.progressSteps[stepIndex].completed = false;
+    }
   }
 
   private resetProgressSteps(): void {
