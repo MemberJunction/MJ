@@ -1,0 +1,62 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Research Agent - Mixed DB and Web Question",
+    "Description": "Tests the Research Agent's ability to orchestrate both Database Research Agent and Web Research Agent to answer questions requiring internal data analysis combined with external benchmarking. Validates proper sub-agent coordination.",
+    "InputDefinition": {
+      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
+      "prompt": "Compare our user engagement metrics over the past quarter with industry benchmarks. Specifically, I want to understand how our daily active user rate, session duration, and feature adoption compare to similar B2B SaaS platforms. Are we above or below average in these areas?"
+    },
+    "Configuration": {
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 0.15,
+          "description": "Verifies agent execution completed without errors"
+        },
+        {
+          "type": "schema-validate",
+          "weight": 0.15,
+          "description": "Validates output matches Research Agent schema"
+        },
+        {
+          "type": "trace-validate-sub-agents",
+          "weight": 0.3,
+          "config": {
+            "requiredAgents": [
+              "Database Research Agent",
+              "Web Research Agent"
+            ],
+            "minIterations": 1
+          },
+          "description": "Ensures both Database Research Agent and Web Research Agent are invoked"
+        },
+        {
+          "type": "llm-judge",
+          "weight": 0.4,
+          "config": {
+            "criteria": [
+              "Response includes actual internal metrics (DAU rate, session duration, feature adoption)",
+              "Response includes external industry benchmarks for comparison",
+              "Clear comparison is made between internal metrics and industry standards",
+              "Response identifies whether company is above/below average in each area",
+              "Findings show evidence of both database analysis and web research",
+              "Comparisons section effectively synthesizes internal and external data"
+            ]
+          },
+          "description": "LLM evaluates whether response successfully combines internal and external research"
+        }
+      ],
+      "passingScore": 0.75,
+      "costBudget": 1
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T00:29:07.830Z",
+    "checksum": "b484ed639210d3265306165202908ac42fd2fa6663fda51492b027bd69affe6c"
+  }
+}

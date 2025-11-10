@@ -1,0 +1,18 @@
+{
+  "entity": "MJ: Test Suites",
+  "filePattern": ".*.json",
+  "pull": {
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: Test Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": {
+        "entity": "MJ: Test Suite Tests",
+        "foreignKey": "TestSuiteID"
+      }
+    }
+  }
+}

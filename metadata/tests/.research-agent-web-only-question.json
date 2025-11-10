@@ -1,0 +1,63 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Research Agent - Web Only Question",
+    "Description": "Tests the Research Agent's ability to answer questions using only web research, without requiring database access. Validates that the Web Research Agent is invoked appropriately and Database Research Agent is not used unnecessarily.",
+    "InputDefinition": {
+      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
+      "prompt": "What are the latest developments in quantum computing announced in the past month? Please provide a comprehensive overview of recent breakthroughs, companies involved, and potential applications."
+    },
+    "Configuration": {
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 0.2,
+          "description": "Verifies agent execution completed without errors"
+        },
+        {
+          "type": "schema-validate",
+          "weight": 0.15,
+          "description": "Validates output matches Research Agent schema (metadata, plan, findings, etc.)"
+        },
+        {
+          "type": "trace-validate-sub-agents",
+          "weight": 0.25,
+          "config": {
+            "requiredAgents": [
+              "Web Research Agent"
+            ],
+            "forbiddenAgents": [
+              "Database Research Agent"
+            ],
+            "minIterations": 1
+          },
+          "description": "Ensures Web Research Agent is used and Database Research Agent is not invoked"
+        },
+        {
+          "type": "llm-judge",
+          "weight": 0.4,
+          "config": {
+            "criteria": [
+              "Response includes recent (last month) developments in quantum computing",
+              "Multiple sources or companies are referenced",
+              "Potential applications are discussed",
+              "Information appears current and factual",
+              "Response is well-structured with clear findings"
+            ]
+          },
+          "description": "LLM evaluates response quality and relevance"
+        }
+      ],
+      "passingScore": 0.7,
+      "costBudget": 0.5
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A5189586-8248-4641-98ED-BC1B3B2969B2"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T00:29:07.846Z",
+    "checksum": "e72120d5d727ef0cb933a8847c7a24defd8f7dfb1c6c8b1befa60808d71678c4"
+  }
+}
