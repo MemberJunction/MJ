@@ -19,12 +19,6 @@ interface ProgressUpdate {
   selector: 'app-test-run-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <kendo-dialog
-      [title]="dialogTitle"
-      [width]="700"
-      [height]="600"
-      (close)="onClose()"
-    >
       <div class="test-run-dialog">
         @if (!isRunning && !hasCompleted) {
           <!-- Selection Mode -->
@@ -255,48 +249,95 @@ interface ProgressUpdate {
             }
           </div>
         }
-      </div>
 
-      <kendo-dialog-actions>
-        @if (!isRunning && !hasCompleted) {
-          <button kendoButton (click)="onClose()">Cancel</button>
-          <button kendoButton
-                  [primary]="true"
-                  [disabled]="!canRun()"
-                  (click)="runTest()">
-            <i class="fa-solid fa-play"></i>
-            Run {{ runMode === 'test' ? 'Test' : 'Suite' }}
-          </button>
-        } @else if (hasCompleted) {
-          <button kendoButton (click)="onClose()">Close</button>
-          <button kendoButton [primary]="true" (click)="resetDialog()">
-            <i class="fa-solid fa-redo"></i>
-            Run Another
-          </button>
-        } @else {
-          <button kendoButton [disabled]="true">
-            <i class="fa-solid fa-spinner fa-spin"></i>
-            Running...
-          </button>
-        }
-      </kendo-dialog-actions>
-    </kendo-dialog>
+        <!-- Dialog Actions -->
+        <div class="dialog-actions">
+          @if (!isRunning && !hasCompleted) {
+            <button class="action-btn cancel-btn" (click)="onClose()">Cancel</button>
+            <button class="action-btn run-btn"
+                    [disabled]="!canRun()"
+                    (click)="runTest()">
+              <i class="fa-solid fa-play"></i>
+              Run {{ runMode === 'test' ? 'Test' : 'Suite' }}
+            </button>
+          } @else if (hasCompleted) {
+            <button class="action-btn cancel-btn" (click)="onClose()">Close</button>
+            <button class="action-btn run-btn" (click)="resetDialog()">
+              <i class="fa-solid fa-redo"></i>
+              Run Another
+            </button>
+          } @else {
+            <button class="action-btn run-btn" [disabled]="true">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Running...
+            </button>
+          }
+        </div>
+      </div>
   `,
   styles: [`
     .test-run-dialog {
       display: flex;
       flex-direction: column;
       height: 100%;
-      padding: 20px;
       background: #f8f9fa;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 20px;
+      background: white;
+      border-top: 1px solid #e0e0e0;
+      margin-top: auto;
+    }
+
+    .action-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cancel-btn {
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .cancel-btn:hover {
+      background: #e0e0e0;
+    }
+
+    .run-btn {
+      background: #2196f3;
+      color: white;
+    }
+
+    .run-btn:hover:not(:disabled) {
+      background: #1976d2;
+    }
+
+    .run-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
 
     /* Selection Mode */
     .selection-mode {
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      height: 100%;
+      gap: 16px;
+      flex: 1;
+      overflow: hidden;
+      padding: 20px;
     }
 
     .mode-tabs {
@@ -306,6 +347,7 @@ interface ProgressUpdate {
       padding: 8px;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      flex-shrink: 0;
     }
 
     .mode-tab {
@@ -404,19 +446,21 @@ interface ProgressUpdate {
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+      min-height: 0;
     }
 
     .item {
       display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 16px;
       background: #f8f9fa;
       border: 2px solid transparent;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s ease;
+      min-height: 70px;
     }
 
     .item:hover {
@@ -430,8 +474,8 @@ interface ProgressUpdate {
     }
 
     .item-icon {
-      width: 40px;
-      height: 40px;
+      width: 42px;
+      height: 42px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -439,6 +483,7 @@ interface ProgressUpdate {
       color: white;
       border-radius: 8px;
       font-size: 18px;
+      flex-shrink: 0;
     }
 
     .item-icon.suite {
@@ -448,24 +493,26 @@ interface ProgressUpdate {
     .item-content {
       flex: 1;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
     .item-name {
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
       color: #333;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.3;
     }
 
     .item-meta {
-      font-size: 12px;
+      font-size: 13px;
       color: #666;
-      white-space: nowrap;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .item-check {
@@ -528,8 +575,10 @@ interface ProgressUpdate {
     .execution-mode {
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      height: 100%;
+      gap: 16px;
+      flex: 1;
+      overflow: hidden;
+      padding: 20px;
     }
 
     .execution-header {
@@ -624,13 +673,14 @@ interface ProgressUpdate {
     .progress-steps {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
       padding: 16px;
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      max-height: 200px;
+      max-height: 150px;
       overflow-y: auto;
+      flex-shrink: 0;
     }
 
     .step {
@@ -692,7 +742,8 @@ interface ProgressUpdate {
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      max-height: 200px;
+      flex: 1;
+      min-height: 0;
     }
 
     .log-header {
@@ -716,7 +767,9 @@ interface ProgressUpdate {
       overflow-y: auto;
       padding: 12px 16px;
       font-family: 'Courier New', monospace;
-      font-size: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 0;
     }
 
     .log-entry {
@@ -812,17 +865,25 @@ interface ProgressUpdate {
 
     .error-message {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 12px;
-      padding: 12px;
-      background: rgba(255,255,255,0.5);
-      border-radius: 4px;
+      padding: 14px;
+      background: rgba(255,255,255,0.7);
+      border-radius: 6px;
       color: #c62828;
       font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
     }
 
     .error-message i {
       font-size: 20px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .error-message span {
+      flex: 1;
     }
   `]
 })

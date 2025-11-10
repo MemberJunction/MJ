@@ -784,13 +784,11 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   startNewTest(): void {
     const dialogRef: DialogRef = this.dialogService.open({
       content: TestRunDialogComponent,
-      width: 900,
-      height: 700,
+      width: 1000,
+      height: 750,
       title: 'Run Test',
       actions: []
     });
-
-    const dialogInstance = dialogRef.content.instance as TestRunDialogComponent;
 
     dialogRef.result.subscribe((result) => {
       if (result && typeof result === 'object' && 'testExecuted' in result && result.testExecuted) {
