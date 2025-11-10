@@ -1,0 +1,192 @@
+<div class="test-suite-run-form">
+  <!-- Header Section -->
+  <div class="suite-run-header">
+    <div class="breadcrumb" *ngIf="testSuite">
+      <a href="javascript:void(0)" (click)="openTestSuite()">
+        <i class="fas fa-folder"></i> {{ testSuite.Name }}
+      </a>
+      <i class="fas fa-chevron-right"></i>
+      <span>Run #{{ record.ID.substring(0, 8) }}</span>
+    </div>
+
+    <div class="header-content">
+      <div class="header-left">
+        <div class="suite-run-icon" [style.background-color]="getStatusColor()">
+          <i class="fas fa-layer-group"></i>
+        </div>
+        <div class="suite-run-info">
+          <h1>Test Suite Run</h1>
+          <div class="suite-run-meta">
+            <span class="status-badge" [style.background-color]="getStatusColor()">
+              <i class="fas" [ngClass]="getStatusIcon()"></i>
+              {{ record.Status }}
+            </span>
+            <span class="environment" *ngIf="record.Environment">{{ record.Environment }}</span>
+            <span class="trigger" *ngIf="record.TriggerType">{{ record.TriggerType }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button kendoButton (click)="refresh()" icon="sync">
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Metrics Bar -->
+    <div class="metrics-bar">
+      <div class="metric-card">
+        <div class="metric-label">Started</div>
+        <div class="metric-value">{{ record.StartedAt | date:'short' }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Completed</div>
+        <div class="metric-value">{{ record.CompletedAt | date:'short' }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Duration</div>
+        <div class="metric-value">{{ calculateDuration() }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Pass Rate</div>
+        <div class="metric-value">{{ getPassRate().toFixed(1) }}%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Cost</div>
+        <div class="metric-value">{{ formatCost(record.TotalCostUSD) }}</div>
+      </div>
+    </div>
+
+    <!-- Test Results Summary -->
+    <div class="results-summary">
+      <div class="result-item passed">
+        <i class="fas fa-check-circle"></i>
+        <span class="count">{{ record.PassedTests || 0 }}</span>
+        <span class="label">Passed</span>
+      </div>
+      <div class="result-item failed">
+        <i class="fas fa-times-circle"></i>
+        <span class="count">{{ record.FailedTests || 0 }}</span>
+        <span class="label">Failed</span>
+      </div>
+      <div class="result-item skipped">
+        <i class="fas fa-forward"></i>
+        <span class="count">{{ record.SkippedTests || 0 }}</span>
+        <span class="label">Skipped</span>
+      </div>
+      <div class="result-item error">
+        <i class="fas fa-exclamation-circle"></i>
+        <span class="count">{{ record.ErrorTests || 0 }}</span>
+        <span class="label">Errors</span>
+      </div>
+      <div class="result-item total">
+        <i class="fas fa-list"></i>
+        <span class="count">{{ record.TotalTests || 0 }}</span>
+        <span class="label">Total</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-container">
+    <div class="tabs">
+      <button class="tab" [class.active]="activeTab === 'overview'" (click)="changeTab('overview')">
+        <i class="fas fa-th-large"></i>
+        <span>Overview</span>
+      </button>
+      <button class="tab" [class.active]="activeTab === 'runs'" (click)="changeTab('runs')">
+        <i class="fas fa-list"></i>
+        <span>Test Runs</span>
+        <span class="tab-badge" *ngIf="testRunsLoaded">{{ testRuns.length }}</span>
+      </button>
+      <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')">
+        <i class="fas fa-info-circle"></i>
+        <span>Details</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="tab-content">
+    <!-- Overview Tab -->
+    <div class="overview-tab" *ngIf="activeTab === 'overview'">
+      <!-- Result Hero -->
+      <div class="result-hero" [class.passed]="record.Status === 'Completed' && getPassRate() >= 90" [class.failed]="record.Status === 'Failed'">
+        <div class="result-icon">
+          <i class="fas" [ngClass]="getStatusIcon()"></i>
+        </div>
+        <div class="result-text">
+          <h2>SUITE {{ record.Status.toUpperCase() }}</h2>
+          <div class="result-stats">Pass Rate: {{ getPassRate().toFixed(1) }}%</div>
+          <div class="result-counts">{{ record.PassedTests }} of {{ record.TotalTests }} tests passed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test Runs Tab -->
+    <div class="runs-tab" *ngIf="activeTab === 'runs'">
+      <div class="test-runs-list" *ngIf="testRuns.length > 0">
+        <div class="test-run-item" *ngFor="let run of testRuns" (click)="openTestRun(run.ID)">
+          <div class="run-sequence">{{ run.Sequence }}</div>
+          <div class="run-icon" [style.background-color]="run.Status === 'Passed' ? '#4caf50' : run.Status === 'Failed' ? '#f44336' : '#ff9800'">
+            <i class="fas" [class.fa-check]="run.Status === 'Passed'" [class.fa-times]="run.Status === 'Failed'" [class.fa-exclamation]="run.Status === 'Error'"></i>
+          </div>
+          <div class="run-content">
+            <div class="run-name">{{ run.Test }}</div>
+            <div class="run-meta">
+              <span class="status" [style.color]="run.Status === 'Passed' ? '#4caf50' : run.Status === 'Failed' ? '#f44336' : '#ff9800'">{{ run.Status }}</span>
+              <span *ngIf="run.Score != null">Score: {{ run.Score.toFixed(4) }}</span>
+              <span *ngIf="run.DurationSeconds">{{ run.DurationSeconds.toFixed(1) }}s</span>
+            </div>
+          </div>
+          <i class="fas fa-chevron-right"></i>
+        </div>
+      </div>
+
+      <div class="no-data" *ngIf="testRunsLoaded && testRuns.length === 0">
+        <i class="fas fa-inbox"></i>
+        <p>No test runs found for this suite execution</p>
+      </div>
+    </div>
+
+    <!-- Details Tab -->
+    <div class="details-tab" *ngIf="activeTab === 'details'">
+      <div class="details-grid">
+        <div class="detail-item">
+          <div class="detail-label">Run ID</div>
+          <div class="detail-value">{{ record.ID }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Test Suite</div>
+          <div class="detail-value">
+            <a href="javascript:void(0)" (click)="openTestSuite()" *ngIf="testSuite">{{ testSuite.Name }}</a>
+          </div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Status</div>
+          <div class="detail-value">{{ record.Status }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Run By</div>
+          <div class="detail-value">{{ record.RunByUser }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Environment</div>
+          <div class="detail-value">{{ record.Environment || 'N/A' }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Trigger Type</div>
+          <div class="detail-value">{{ record.TriggerType || 'N/A' }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Git Commit</div>
+          <div class="detail-value">{{ record.GitCommit || 'N/A' }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Agent Version</div>
+          <div class="detail-value">{{ record.AgentVersion || 'N/A' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

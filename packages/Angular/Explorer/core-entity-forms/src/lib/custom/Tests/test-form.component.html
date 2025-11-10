@@ -1,0 +1,243 @@
+<div class="test-form">
+  <!-- Header Section -->
+  <div class="test-header">
+    <div class="header-content">
+      <div class="header-left">
+        <div class="test-icon" [style.background-color]="getStatusColor()">
+          <i class="fas fa-flask"></i>
+        </div>
+        <div class="test-info">
+          <h1>{{ record.Name }}</h1>
+          <div class="test-meta">
+            <span class="status-badge" [style.background-color]="getStatusColor()">
+              <i class="fas" [ngClass]="getStatusIcon()"></i>
+              {{ record.Status }}
+            </span>
+            <span class="test-type">{{ record.Type }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button kendoButton (click)="runTest()" icon="play">
+          Run Test
+        </button>
+        <button kendoButton (click)="refresh()" icon="sync">
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Test Description -->
+    <div class="test-description" *ngIf="record.Description">
+      <p>{{ record.Description }}</p>
+    </div>
+
+    <!-- Metrics Bar -->
+    <div class="metrics-bar" *ngIf="testRunsLoaded && testRuns.length > 0">
+      <div class="metric-card">
+        <div class="metric-label">Total Runs</div>
+        <div class="metric-value">{{ testRuns.length }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Pass Rate</div>
+        <div class="metric-value">{{ getPassRate().toFixed(1) }}%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Cost</div>
+        <div class="metric-value">{{ formatCost(getAverageCost()) }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Duration</div>
+        <div class="metric-value">{{ formatDuration(getAverageDuration()) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-container">
+    <div class="tabs">
+      <button class="tab" [class.active]="activeTab === 'overview'" (click)="changeTab('overview')">
+        <i class="fas fa-th-large"></i>
+        <span>Overview</span>
+      </button>
+      <button class="tab" [class.active]="activeTab === 'config'" (click)="changeTab('config')">
+        <i class="fas fa-sliders-h"></i>
+        <span>Configuration</span>
+      </button>
+      <button class="tab" [class.active]="activeTab === 'runs'" (click)="changeTab('runs')">
+        <i class="fas fa-list"></i>
+        <span>Test Runs</span>
+        <span class="tab-badge" *ngIf="testRunsLoaded">{{ testRuns.length }}</span>
+      </button>
+      <button class="tab" [class.active]="activeTab === 'suites'" (click)="changeTab('suites')">
+        <i class="fas fa-layer-group"></i>
+        <span>Test Suites</span>
+        <span class="tab-badge" *ngIf="suiteTestsLoaded">{{ suiteTests.length }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="tab-content">
+    <!-- Overview Tab -->
+    <div class="overview-tab" *ngIf="activeTab === 'overview'">
+      <!-- Basic Information -->
+      <div class="info-section">
+        <h3>Test Information</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Name</div>
+            <div class="info-value">{{ record.Name }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Type</div>
+            <div class="info-value">{{ record.Type }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Status</div>
+            <div class="info-value">{{ record.Status }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Priority</div>
+            <div class="info-value">{{ record.Priority || 'N/A' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Estimated Duration</div>
+            <div class="info-value">{{ record.EstimatedDurationSeconds ? formatDuration(record.EstimatedDurationSeconds) : 'N/A' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Estimated Cost</div>
+            <div class="info-value">{{ record.EstimatedCostUSD ? formatCost(record.EstimatedCostUSD) : 'N/A' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Repeat Count</div>
+            <div class="info-value">{{ record.RepeatCount || 1 }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Created</div>
+            <div class="info-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- JSON Data Views -->
+      <div class="json-section">
+        <h3>Test Definition</h3>
+        <div class="json-tabs">
+          <button class="json-tab" [class.active]="activeJsonView === 'input'" (click)="setJsonView('input')">
+            Input Definition
+          </button>
+          <button class="json-tab" [class.active]="activeJsonView === 'expected'" (click)="setJsonView('expected')">
+            Expected Outcomes
+          </button>
+          <button class="json-tab" [class.active]="activeJsonView === 'config'" (click)="setJsonView('config')">
+            Configuration
+          </button>
+          <button class="json-tab" [class.active]="activeJsonView === 'tags'" (click)="setJsonView('tags')">
+            Tags
+          </button>
+        </div>
+        <div class="json-content">
+          <pre>{{ getJsonData() | json }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Configuration Tab -->
+    <div class="config-tab" *ngIf="activeTab === 'config'">
+      <div class="config-section">
+        <h3>Execution Settings</h3>
+        <div class="config-grid">
+          <div class="config-item">
+            <label>Priority</label>
+            <input type="number" [(ngModel)]="record.Priority" class="config-input" />
+          </div>
+          <div class="config-item">
+            <label>Repeat Count</label>
+            <input type="number" [(ngModel)]="record.RepeatCount" class="config-input" />
+          </div>
+          <div class="config-item">
+            <label>Estimated Duration (seconds)</label>
+            <input type="number" [(ngModel)]="record.EstimatedDurationSeconds" class="config-input" />
+          </div>
+          <div class="config-item">
+            <label>Estimated Cost (USD)</label>
+            <input type="number" step="0.000001" [(ngModel)]="record.EstimatedCostUSD" class="config-input" />
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>Input Definition (JSON)</h3>
+        <textarea class="json-editor" [(ngModel)]="record.InputDefinition" rows="10"></textarea>
+      </div>
+
+      <div class="config-section">
+        <h3>Expected Outcomes (JSON)</h3>
+        <textarea class="json-editor" [(ngModel)]="record.ExpectedOutcomes" rows="10"></textarea>
+      </div>
+
+      <div class="config-section">
+        <h3>Configuration (JSON)</h3>
+        <textarea class="json-editor" [(ngModel)]="record.Configuration" rows="10"></textarea>
+      </div>
+
+      <div class="config-section">
+        <h3>Tags (JSON Array)</h3>
+        <textarea class="json-editor" [(ngModel)]="record.Tags" rows="5"></textarea>
+      </div>
+    </div>
+
+    <!-- Test Runs Tab -->
+    <div class="runs-tab" *ngIf="activeTab === 'runs'">
+      <div class="runs-list" *ngIf="testRuns.length > 0">
+        <div class="run-item" *ngFor="let run of testRuns" (click)="openTestRun(run.ID)">
+          <div class="run-icon" [style.background-color]="run.Status === 'Passed' ? '#4caf50' : run.Status === 'Failed' ? '#f44336' : '#ff9800'">
+            <i class="fas" [class.fa-check]="run.Status === 'Passed'" [class.fa-times]="run.Status === 'Failed'" [class.fa-exclamation]="run.Status === 'Error'"></i>
+          </div>
+          <div class="run-content">
+            <div class="run-header">
+              <span class="run-id">Run #{{ run.ID.substring(0, 8) }}</span>
+              <span class="run-status" [style.color]="run.Status === 'Passed' ? '#4caf50' : run.Status === 'Failed' ? '#f44336' : '#ff9800'">{{ run.Status }}</span>
+            </div>
+            <div class="run-meta">
+              <span>{{ run.StartedAt | date:'short' }}</span>
+              <span *ngIf="run.DurationSeconds">{{ formatDuration(run.DurationSeconds) }}</span>
+              <span *ngIf="run.CostUSD">{{ formatCost(run.CostUSD) }}</span>
+              <span *ngIf="run.Score != null">Score: {{ run.Score.toFixed(4) }}</span>
+            </div>
+          </div>
+          <i class="fas fa-chevron-right"></i>
+        </div>
+      </div>
+
+      <div class="no-data" *ngIf="testRunsLoaded && testRuns.length === 0">
+        <i class="fas fa-inbox"></i>
+        <p>No test runs found for this test</p>
+      </div>
+    </div>
+
+    <!-- Test Suites Tab -->
+    <div class="suites-tab" *ngIf="activeTab === 'suites'">
+      <div class="suites-list" *ngIf="suiteTests.length > 0">
+        <div class="suite-item" *ngFor="let suiteTest of suiteTests" (click)="openTestSuite(suiteTest.SuiteID)">
+          <div class="suite-icon">
+            <i class="fas fa-folder"></i>
+          </div>
+          <div class="suite-content">
+            <div class="suite-name">{{ suiteTest.Suite }}</div>
+            <div class="suite-meta">
+              <span>Sequence: {{ suiteTest.Sequence }}</span>
+            </div>
+          </div>
+          <i class="fas fa-chevron-right"></i>
+        </div>
+      </div>
+
+      <div class="no-data" *ngIf="suiteTestsLoaded && suiteTests.length === 0">
+        <i class="fas fa-inbox"></i>
+        <p>This test is not part of any test suite</p>
+      </div>
+    </div>
+  </div>
+</div>
