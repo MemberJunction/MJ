@@ -13784,6 +13784,11 @@ export const TestSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RepeatCount: z.number().nullable().describe(`
+        * * Field Name: RepeatCount
+        * * Display Name: Repeat Count
+        * * SQL Data Type: int
+        * * Description: Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.`),
     Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
@@ -51741,6 +51746,38 @@ export class TestRunFeedbackEntity extends BaseEntity<TestRunFeedbackEntityType>
     }
 
     /**
+    * Validate() method override for MJ: Test Run Feedbacks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rating: When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRatingRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRatingRange(result: ValidationResult) {
+    	if (this.Rating != null && (this.Rating < 1 || this.Rating > 10)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rating",
+    			"Rating must be between 1 and 10.",
+    			this.Rating,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -53052,6 +53089,39 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Tests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RepeatCount: If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRepeatCountPositive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRepeatCountPositive(result: ValidationResult) {
+    	// If a repeat count is set, it must be greater than zero
+    	if (this.RepeatCount != null && this.RepeatCount <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RepeatCount",
+    			"Repeat count must be greater than zero if provided.",
+    			this.RepeatCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -53233,6 +53303,19 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RepeatCount
+    * * Display Name: Repeat Count
+    * * SQL Data Type: int
+    * * Description: Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.
+    */
+    get RepeatCount(): number | null {
+        return this.Get('RepeatCount');
+    }
+    set RepeatCount(value: number | null) {
+        this.Set('RepeatCount', value);
     }
 
     /**

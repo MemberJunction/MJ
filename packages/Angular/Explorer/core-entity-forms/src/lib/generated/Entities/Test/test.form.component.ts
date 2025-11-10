@@ -15,7 +15,10 @@ export class TestFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'testDefinition', sectionName: 'Test Definition', isExpanded: true },
+            { sectionKey: 'testLogic', sectionName: 'Test Logic', isExpanded: true },
+            { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'MJ: Test Runs', isExpanded: false },
             { sectionKey: 'mJTestSuiteTests', sectionName: 'MJ: Test Suite Tests', isExpanded: false }
         ]);
