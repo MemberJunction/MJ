@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Artifact Definition Section -->
+    <!-- Artifact Type Definition Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="artifactDefinition"
-        sectionName="Artifact Definition"
-        icon="fa fa-file-alt"
+        sectionKey="artifactTypeDefinition"
+        sectionName="Artifact Type Definition"
+        icon="fa fa-wrench"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -34,16 +34,6 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Availability & Rendering Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="availabilityRendering"
-        sectionName="Availability & Rendering"
-        icon="fa fa-sliders-h"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -55,7 +45,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ExtractRules"
+            FieldName="DriverClass"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -63,7 +53,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DriverClass"
+            FieldName="Icon"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -71,10 +61,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Hierarchy Relationships Section -->
+    <!-- Hierarchy & Inheritance Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="hierarchyRelationships"
-        sectionName="Hierarchy Relationships"
+        sectionKey="hierarchyInheritance"
+        sectionName="Hierarchy & Inheritance"
         icon="fa fa-sitemap"
         [form]="this"
         [formContext]="formContext">
@@ -87,6 +77,14 @@
             [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExtractRules"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -111,7 +109,7 @@
     <mj-collapsible-panel slot="field-panels"
         sectionKey="systemMetadata"
         sectionName="System Metadata"
-        icon="fa fa-cog"
+        icon="fa fa-database"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 

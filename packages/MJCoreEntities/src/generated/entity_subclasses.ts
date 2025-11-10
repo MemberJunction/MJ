@@ -10798,6 +10798,11 @@ export const ArtifactTypeSchema = z.object({
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: Driver class name for the artifact viewer plugin. References Angular component registered with @RegisterClass decorator.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -45471,6 +45476,19 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     }
     set DriverClass(value: string | null) {
         this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
     }
 
     /**

@@ -43859,6 +43859,10 @@ export class MJArtifactType_ {
     @MaxLength(510)
     DriverClass?: string;
         
+    @Field({nullable: true, description: `Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)`}) 
+    @MaxLength(510)
+    Icon?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
@@ -43912,6 +43916,9 @@ export class CreateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
 }
     
 
@@ -43943,6 +43950,9 @@ export class UpdateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
