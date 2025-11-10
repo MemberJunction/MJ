@@ -1,69 +1,76 @@
-import { Command, Flags } from '@oclif/core';
-import ora from 'ora-classic';
-import path from 'path';
-import { getTestService } from '../../services/test';
+import { Command, Flags, Args } from '@oclif/core';
+import { ValidateCommand } from '@memberjunction/testing-cli';
+import { UserInfo } from '@memberjunction/core';
 
-export default class Validate extends Command {
-  static description = 'Validate test files';
+export default class TestValidate extends Command {
+  static description = 'Validate test definitions without executing';
 
   static examples = [
-    '<%= config.bin %> <%= command.id %> --type=eval',
-    '<%= config.bin %> <%= command.id %> --type=eval --dir=./custom-evals',
-    '<%= config.bin %> <%= command.id %> --type=eval --verbose',
-    '<%= config.bin %> <%= command.id %> --type=eval --format=json',
+    '<%= config.bin %> <%= command.id %> <test-id>',
+    '<%= config.bin %> <%= command.id %> --all',
+    '<%= config.bin %> <%= command.id %> --type=agent-eval',
+    '<%= config.bin %> <%= command.id %> --all --save-report',
+    '<%= config.bin %> <%= command.id %> --all --output=validation-report.md',
   ];
 
-  static flags = {
-    type: Flags.string({
-      description: 'Type of tests to validate',
-      options: ['eval'],
-      required: true,
+  static args = {
+    testId: Args.string({
+      description: 'Test ID to validate',
+      required: false,
     }),
-    dir: Flags.string({
-      description: 'Directory containing test files',
-      default: './evals',
+  };
+
+  static flags = {
+    all: Flags.boolean({
+      char: 'a',
+      description: 'Validate all tests',
+      default: false,
+    }),
+    type: Flags.string({
+      char: 't',
+      description: 'Validate tests by type',
+    }),
+    'save-report': Flags.boolean({
+      description: 'Save validation report to file',
+      default: false,
+    }),
+    format: Flags.string({
+      char: 'f',
+      description: 'Output format',
+      options: ['console', 'json', 'markdown'],
+      default: 'console',
+    }),
+    output: Flags.string({
+      char: 'o',
+      description: 'Output file path',
     }),
     verbose: Flags.boolean({
       char: 'v',
-      description: 'Show detailed validation output',
-    }),
-    format: Flags.string({
-      description: 'Output format',
-      options: ['console', 'json'],
-      default: 'console',
+      description: 'Show detailed information',
+      default: false,
     }),
   };
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(Validate);
-    const spinner = ora();
+    const { args, flags } = await this.parse(TestValidate);
 
     try {
-      // Resolve directory
-      const testDir = path.resolve(flags.dir);
+      // Get context user
+      const contextUser = new UserInfo();
 
-      spinner.start('Validating test files...');
-      const testService = getTestService();
-      const result = await testService.validateEvals(testDir, flags.verbose);
-      spinner.stop();
+      // Create ValidateCommand instance and execute
+      const validateCommand = new ValidateCommand();
+      await validateCommand.execute(args.testId, {
+        all: flags.all,
+        type: flags.type,
+        saveReport: flags['save-report'],
+        format: flags.format as 'console' | 'json' | 'markdown',
+        output: flags.output,
+        verbose: flags.verbose,
+      }, contextUser);
 
-      // Display results
-      const reporter = testService.getReporter();
-
-      if (flags.format === 'json') {
-        this.log(reporter.formatAsJSON(result));
-      } else {
-        this.log(reporter.formatValidationResult(result, flags.verbose));
-      }
-
-      // Exit with error code if validation failed
-      if (!result.is_valid) {
-        this.exit(1);
-      }
-
-    } catch (error: any) {
-      spinner.fail(error.message);
-      this.error(error);
+    } catch (error) {
+      this.error(error as Error);
     }
   }
 }

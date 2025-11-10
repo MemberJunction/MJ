@@ -1,10 +1,10 @@
 # @memberjunction/cli
 
-The official command-line interface (CLI) for MemberJunction, providing essential tools for installation, database management, code generation, and dependency management.
+The official command-line interface (CLI) for MemberJunction, providing essential tools for installation, database management, code generation, AI operations, testing, and database documentation.
 
 ## Overview
 
-The MemberJunction CLI (`mj`) is a comprehensive toolset designed to streamline the development and maintenance of MemberJunction applications. It handles everything from initial installation to ongoing database migrations and code generation.
+The MemberJunction CLI (`mj`) is a comprehensive toolset designed to streamline the development and maintenance of MemberJunction applications. It handles everything from initial installation to ongoing database migrations, code generation, AI agent execution, testing, and automated database documentation.
 
 ## Installation
 
@@ -52,7 +52,7 @@ interface MJConfig {
   coreSchema?: string;         // Core schema name (default: '__mj')
   cleanDisabled?: boolean;     // Disable database cleaning (default: true)
   mjRepoUrl?: string;          // MemberJunction repository URL
-  
+
   // AI-specific settings (optional)
   aiSettings?: {
     defaultTimeout?: number;    // Default timeout for AI operations (default: 300000ms)
@@ -81,7 +81,84 @@ module.exports = {
 
 ## Commands
 
-### `mj sync`
+### Core Commands
+
+#### `mj install`
+
+Performs a complete installation of MemberJunction, including:
+- Database setup
+- Generated entities configuration
+- API server configuration
+- Explorer UI configuration
+
+```bash
+mj install [--verbose]
+```
+
+The install command will:
+1. Verify Node.js version and disk space requirements
+2. Check for required directories (GeneratedEntities, SQL Scripts, MJAPI, MJExplorer)
+3. Prompt for configuration values or read from `install.config.json`
+4. Create `.env` files with database and authentication settings
+5. Run npm installations and link packages
+6. Execute CodeGen to generate initial code
+
+#### `mj codegen`
+
+Runs the MemberJunction code generation process to create TypeScript entities and metadata from your database schema.
+
+```bash
+mj codegen [--skipdb]
+```
+
+Options:
+- `--skipdb`: Skip database migration before running code generation
+
+#### `mj migrate`
+
+Applies database migrations to update your MemberJunction schema to the latest version.
+
+```bash
+mj migrate [--verbose] [--tag <version>]
+```
+
+Options:
+- `--verbose`: Enable detailed logging
+- `--tag <version>`: Specify a version tag for migrations (e.g., 'v2.10.0')
+
+#### `mj bump`
+
+Updates all @memberjunction/* package dependencies to a specified version.
+
+```bash
+mj bump [--recursive] [--dry] [--quiet] [--tag <version>] [--verbose]
+```
+
+Options:
+- `-r, --recursive`: Update dependencies in all subdirectories
+- `-d, --dry`: Preview changes without writing to files
+- `-q, --quiet`: Only output paths of updated packages
+- `-t, --tag <version>`: Target version (defaults to CLI version)
+- `-v, --verbose`: Enable detailed logging
+
+Example - Update all packages recursively and run npm install:
+```bash
+mj bump -rqt v2.10.0 | xargs -n1 -I{} npm install --prefix {}
+```
+
+#### `mj clean`
+
+Resets the MemberJunction database to a pre-installation state. **Use with caution!**
+
+```bash
+mj clean [--verbose]
+```
+
+Note: This command is disabled by default. Set `cleanDisabled: false` in your configuration to enable it.
+
+---
+
+### `mj sync` - Metadata Synchronization
 
 Manages MemberJunction metadata synchronization between database and local files. This suite of commands enables version control, IDE-based editing, and CI/CD integration for MJ metadata.
 
@@ -98,7 +175,7 @@ Available sync commands:
 - `watch` - Watch for changes and auto-sync
 - `file-reset` - Reset file checksums after manual edits
 
-For detailed documentation on metadata sync, see the [MetadataSync README](../MetadataSync/README.md).
+**📚 For detailed documentation:** See the [MetadataSync README](../MetadataSync/README.md)
 
 #### Quick Examples:
 ```bash
@@ -115,7 +192,9 @@ mj sync push
 mj sync watch
 ```
 
-### `mj ai`
+---
+
+### `mj ai` - AI Operations
 
 Execute AI agents and actions using MemberJunction's AI framework. This command provides access to 20+ AI agents and 30+ actions for various tasks.
 
@@ -130,6 +209,8 @@ Available AI commands:
 - `actions run` - Execute an AI action with parameters
 - `prompts list` - List available AI models for direct prompt execution
 - `prompts run` - Execute a direct prompt with an AI model
+
+**📚 For detailed documentation:** See the [AI-CLI README](../AI/AICLI/README.md)
 
 #### Quick Examples:
 
@@ -225,7 +306,7 @@ Add AI-specific settings to your `mj.config.cjs`:
 ```javascript
 module.exports = {
   // Existing database settings...
-  
+
   aiSettings: {
     defaultTimeout: 300000,
     outputFormat: 'compact',
@@ -238,80 +319,245 @@ module.exports = {
 
 Execution logs are stored in `.mj-ai/logs/` for debugging and audit purposes.
 
-### `mj install`
+---
 
-Performs a complete installation of MemberJunction, including:
-- Database setup
-- Generated entities configuration
-- API server configuration
-- Explorer UI configuration
+### `mj test` - Testing Framework
+
+Execute and manage tests using MemberJunction's comprehensive testing framework. Run database-driven tests, test suites, and view execution history.
 
 ```bash
-mj install [--verbose]
+mj test [COMMAND] [OPTIONS]
 ```
 
-The install command will:
-1. Verify Node.js version and disk space requirements
-2. Check for required directories (GeneratedEntities, SQL Scripts, MJAPI, MJExplorer)
-3. Prompt for configuration values or read from `install.config.json`
-4. Create `.env` files with database and authentication settings
-5. Run npm installations and link packages
-6. Execute CodeGen to generate initial code
+Available test commands:
+- `run` - Execute a single test by ID or name
+- `suite` - Execute a test suite
+- `list` - List available tests, suites, and types
+- `validate` - Validate test definitions without executing
+- `history` - View test execution history
+- `compare` - Compare test runs for regression detection
 
-### `mj codegen`
+**📚 For detailed documentation:** See the [Testing CLI README](../TestingFramework/CLI/README.md)
 
-Runs the MemberJunction code generation process to create TypeScript entities and metadata from your database schema.
+#### Quick Examples:
 
 ```bash
-mj codegen [--skipdb]
+# Run a single test
+mj test run <test-id>
+
+# Run a test by name
+mj test run --name="Active Members Count"
+
+# Run a test suite
+mj test suite <suite-id>
+
+# Run suite by name
+mj test suite --name="Agent Quality Suite"
+
+# List all tests
+mj test list
+
+# List test suites
+mj test list --suites
+
+# List test types
+mj test list --types
+
+# Filter by test type
+mj test list --type=agent-eval
+
+# Validate all tests
+mj test validate --all
+
+# Validate specific test type
+mj test validate --type=agent-eval
+
+# View test execution history
+mj test history --test=<test-id>
+
+# Compare two test runs
+mj test compare <run-id-1> <run-id-2>
+
+# Output formats
+mj test run <test-id> --format=json --output=results.json
+mj test suite <suite-id> --format=markdown --output=report.md
 ```
 
-Options:
-- `--skipdb`: Skip database migration before running code generation
+#### Test Command Options:
 
-### `mj migrate`
+**Run Command:**
+- `<testId>`: Test ID to execute
+- `-n, --name <name>`: Test name to execute
+- `-e, --environment <env>`: Environment context (dev, staging, prod)
+- `-f, --format <format>`: Output format (console, json, markdown)
+- `-o, --output <path>`: Output file path
+- `--dry-run`: Validate without executing
+- `-v, --verbose`: Show detailed execution information
 
-Applies database migrations to update your MemberJunction schema to the latest version.
+**Suite Command:**
+- `<suiteId>`: Test suite ID to execute
+- `-n, --name <name>`: Test suite name to execute
+- `-f, --format <format>`: Output format (console, json, markdown)
+- `-o, --output <path>`: Output file path
+- `-v, --verbose`: Show detailed execution information
+
+**List Command:**
+- `--suites`: List test suites instead of tests
+- `--types`: List test types
+- `-t, --type <type>`: Filter by test type
+- `--tag <tag>`: Filter by tag
+- `-s, --status <status>`: Filter by status
+- `-f, --format <format>`: Output format (console, json, markdown)
+- `-v, --verbose`: Show detailed information
+
+**Validate Command:**
+- `<testId>`: Test ID to validate
+- `-a, --all`: Validate all tests
+- `-t, --type <type>`: Validate tests by type
+- `--save-report`: Save validation report to file
+- `-f, --format <format>`: Output format (console, json, markdown)
+- `-o, --output <path>`: Output file path
+- `-v, --verbose`: Show detailed information
+
+**History Command:**
+- `-t, --test <id>`: Filter by test ID
+- `-r, --recent <n>`: Number of recent runs to show
+- `--from <date>`: Show history from date (YYYY-MM-DD)
+- `-s, --status <status>`: Filter by status
+- `-f, --format <format>`: Output format (console, json, markdown)
+- `-o, --output <path>`: Output file path
+- `-v, --verbose`: Show detailed information
+
+**Compare Command:**
+- `<runId1>`: First test run ID to compare
+- `<runId2>`: Second test run ID to compare
+- `-v, --version <versions>`: Compare runs by version
+- `-c, --commit <commits>`: Compare runs by git commit
+- `--diff-only`: Show only differences
+- `-f, --format <format>`: Output format (console, json, markdown)
+- `-o, --output <path>`: Output file path
+- `--verbose`: Show detailed information
+
+---
+
+### `mj dbdoc` - Database Documentation
+
+AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL. Analyzes your database structure, uses AI to generate comprehensive descriptions, and saves them as database metadata.
 
 ```bash
-mj migrate [--verbose] [--tag <version>]
+mj dbdoc [COMMAND] [OPTIONS]
 ```
 
-Options:
-- `--verbose`: Enable detailed logging
-- `--tag <version>`: Specify a version tag for migrations (e.g., 'v2.10.0')
+Available dbdoc commands:
+- `init` - Initialize a new DBAutoDoc project
+- `analyze` - Analyze database and generate documentation
+- `export` - Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)
+- `status` - Show analysis status and progress
+- `reset` - Reset analysis state
 
-### `mj bump`
+**📚 For detailed documentation:** See the [DBAutoDoc README](../DBAutoDoc/README.md)
 
-Updates all @memberjunction/* package dependencies to a specified version.
+#### Quick Examples:
 
 ```bash
-mj bump [--recursive] [--dry] [--quiet] [--tag <version>] [--verbose]
+# Initialize new project (interactive wizard)
+mj dbdoc init
+
+# Analyze database
+mj dbdoc analyze
+
+# Resume from existing state
+mj dbdoc analyze --resume ./output/run-6/state.json
+
+# Use custom config
+mj dbdoc analyze --config ./my-config.json
+
+# Export all formats
+mj dbdoc export --sql --markdown --html --csv --mermaid
+
+# Export specific state file
+mj dbdoc export --state-file ./output/run-6/state.json --sql --markdown
+
+# Apply SQL directly to database
+mj dbdoc export --sql --apply
+
+# Export with filtering
+mj dbdoc export --approved-only --confidence-threshold 0.8
+
+# Check status
+mj dbdoc status
+
+# Reset state
+mj dbdoc reset --force
 ```
 
-Options:
-- `-r, --recursive`: Update dependencies in all subdirectories
-- `-d, --dry`: Preview changes without writing to files
-- `-q, --quiet`: Only output paths of updated packages
-- `-t, --tag <version>`: Target version (defaults to CLI version)
-- `-v, --verbose`: Enable detailed logging
+#### DBAutoDoc Command Options:
 
-Example - Update all packages recursively and run npm install:
-```bash
-mj bump -rqt v2.10.0 | xargs -n1 -I{} npm install --prefix {}
-```
+**Init Command:**
+- Interactive wizard guides you through:
+  - Database connection configuration
+  - AI provider setup (OpenAI, Anthropic, Google, Groq)
+  - Resource limits and guardrails
+  - Optional seed context for better analysis
 
-### `mj clean`
+**Analyze Command:**
+- `-r, --resume <path>`: Resume from an existing state file
+- `-c, --config <path>`: Path to config file (default: ./config.json)
 
-Resets the MemberJunction database to a pre-installation state. **Use with caution!**
+**Export Command:**
+- `-s, --state-file <path>`: Path to state JSON file
+- `-o, --output-dir <path>`: Output directory for generated files
+- `--sql`: Generate SQL script with database-specific metadata statements
+- `--markdown`: Generate Markdown documentation with ERD diagrams
+- `--html`: Generate interactive HTML documentation
+- `--csv`: Generate CSV exports (tables.csv and columns.csv)
+- `--mermaid`: Generate Mermaid ERD diagram files (.mmd and .html)
+- `--report`: Generate analysis report with metrics
+- `--apply`: Apply SQL script directly to database
+- `--approved-only`: Only export approved items
+- `--confidence-threshold <value>`: Minimum confidence threshold (default: 0)
 
-```bash
-mj clean [--verbose]
-```
+**Status Command:**
+- `-s, --state-file <path>`: Path to state JSON file
 
-Note: This command is disabled by default. Set `cleanDisabled: false` in your configuration to enable it.
+**Reset Command:**
+- `-f, --force`: Force reset without confirmation
 
-### `mj help`
+#### DBAutoDoc Features:
+
+**Core Capabilities:**
+- 🤖 **AI-Powered Analysis** - Uses OpenAI, Anthropic, Google, or Groq
+- 🔄 **Iterative Refinement** - Multi-pass analysis with backpropagation
+- 📊 **Topological Processing** - Analyzes tables in dependency order
+- 📈 **Data-Driven** - Leverages cardinality, statistics, and sample data
+- 🎯 **Convergence Detection** - Automatically knows when analysis is complete
+- 💾 **State Tracking** - Full audit trail of all iterations
+- 🔌 **Standalone** - Works with ANY database, no MemberJunction required
+
+**Multi-Database Support:**
+- SQL Server (extended properties)
+- PostgreSQL (COMMENT syntax)
+- MySQL (column/table comments)
+
+**Advanced Features:**
+- 🔍 **Relationship Discovery** - Detect missing primary and foreign keys
+- 🛡️ **Granular Guardrails** - Multi-level resource controls
+- ⏸️ **Resume Capability** - Pause and resume from checkpoint
+- 📦 **Programmatic API** - Use as a library in your applications
+
+**Output Formats:**
+- SQL Scripts (database-specific metadata)
+- Markdown Documentation (human-readable with ERD)
+- HTML Documentation (interactive, searchable)
+- CSV Exports (spreadsheet-ready)
+- Mermaid Diagrams (standalone ERD files)
+- Analysis Reports (detailed metrics)
+
+---
+
+### Utility Commands
+
+#### `mj help`
 
 Display help information for any command.
 
@@ -319,7 +565,7 @@ Display help information for any command.
 mj help [COMMAND]
 ```
 
-### `mj version`
+#### `mj version`
 
 Display the CLI version and additional system information.
 
@@ -339,9 +585,11 @@ The CLI respects the following environment variables:
 
 The CLI integrates seamlessly with other MemberJunction packages:
 
-- **@memberjunction/codegen-lib**: Powers the code generation functionality
-- **@memberjunction/metadata-sync**: Provides metadata synchronization capabilities
-- **@memberjunction/ai-cli**: Enables AI agent and action execution
+- **[@memberjunction/codegen-lib](../CodeGenLib)**: Powers the code generation functionality
+- **[@memberjunction/metadata-sync](../MetadataSync)**: Provides metadata synchronization capabilities ([README](../MetadataSync/README.md))
+- **[@memberjunction/ai-cli](../AI/AICLI)**: Enables AI agent and action execution ([README](../AI/AICLI/README.md))
+- **[@memberjunction/testing-cli](../TestingFramework/CLI)**: Testing framework for database-driven tests ([README](../TestingFramework/CLI/README.md))
+- **[@memberjunction/db-auto-doc](../DBAutoDoc)**: AI-powered database documentation generator ([README](../DBAutoDoc/README.md))
 - **Generated Entities**: Automatically linked during installation
 - **MJAPI**: Configured and linked during installation
 - **MJExplorer**: UI configuration handled during installation
@@ -390,6 +638,9 @@ Run any command with the `--verbose` flag for detailed logging:
 ```bash
 mj install --verbose
 mj codegen --verbose
+mj ai agents run -a "My Agent" -p "My prompt" --verbose
+mj test run <test-id> --verbose
+mj dbdoc analyze --verbose
 ```
 
 ## License

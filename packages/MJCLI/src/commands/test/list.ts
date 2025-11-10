@@ -1,86 +1,78 @@
 import { Command, Flags } from '@oclif/core';
-import ora from 'ora-classic';
-import path from 'path';
-import { getTestService } from '../../services/test';
-import { EvalListOptions } from '../../services/test/types';
+import { ListCommand } from '@memberjunction/testing-cli';
+import { UserInfo } from '@memberjunction/core';
 
-export default class List extends Command {
-  static description = 'List available tests';
+export default class TestList extends Command {
+  static description = 'List available tests, suites, and types';
 
   static examples = [
-    '<%= config.bin %> <%= command.id %> --type=eval',
-    '<%= config.bin %> <%= command.id %> --type=eval --category=simple_aggregation',
-    '<%= config.bin %> <%= command.id %> --type=eval --difficulty=easy',
-    '<%= config.bin %> <%= command.id %> --type=eval --tags=membership',
-    '<%= config.bin %> <%= command.id %> --type=eval --verbose',
-    '<%= config.bin %> <%= command.id %> --type=eval --format=json',
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --suites',
+    '<%= config.bin %> <%= command.id %> --types',
+    '<%= config.bin %> <%= command.id %> --type=agent-eval',
+    '<%= config.bin %> <%= command.id %> --tag=smoke',
+    '<%= config.bin %> <%= command.id %> --status=active --verbose',
   ];
 
   static flags = {
+    suites: Flags.boolean({
+      description: 'List test suites instead of tests',
+      default: false,
+    }),
+    types: Flags.boolean({
+      description: 'List test types',
+      default: false,
+    }),
     type: Flags.string({
-      description: 'Type of tests to list',
-      options: ['eval'],
-      required: true,
+      char: 't',
+      description: 'Filter by test type',
     }),
-    category: Flags.string({
-      description: 'Filter by category',
-      options: ['simple_aggregation', 'trend', 'cross_domain', 'drill_down', 'complex'],
+    tag: Flags.string({
+      description: 'Filter by tag',
     }),
-    difficulty: Flags.string({
-      description: 'Filter by difficulty',
-      options: ['easy', 'medium', 'hard', 'very_hard'],
+    status: Flags.string({
+      char: 's',
+      description: 'Filter by status',
     }),
-    tags: Flags.string({
-      description: 'Filter by tags (comma-separated)',
+    format: Flags.string({
+      char: 'f',
+      description: 'Output format',
+      options: ['console', 'json', 'markdown'],
+      default: 'console',
     }),
-    dir: Flags.string({
-      description: 'Directory containing test files',
-      default: './evals',
+    output: Flags.string({
+      char: 'o',
+      description: 'Output file path',
     }),
     verbose: Flags.boolean({
       char: 'v',
       description: 'Show detailed information',
-    }),
-    format: Flags.string({
-      description: 'Output format',
-      options: ['console', 'json'],
-      default: 'console',
+      default: false,
     }),
   };
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(List);
-    const spinner = ora();
+    const { flags } = await this.parse(TestList);
 
     try {
-      // Resolve directory
-      const testDir = path.resolve(flags.dir);
+      // Get context user
+      const contextUser = new UserInfo();
 
-      // Build list options
-      const options: EvalListOptions = {
-        category: flags.category as any,
-        difficulty: flags.difficulty as any,
-        tags: flags.tags ? flags.tags.split(',').map(t => t.trim()) : undefined,
+      // Create ListCommand instance and execute
+      const listCommand = new ListCommand();
+      await listCommand.execute({
+        suites: flags.suites,
+        types: flags.types,
+        type: flags.type,
+        tag: flags.tag,
+        status: flags.status,
+        format: flags.format as 'console' | 'json' | 'markdown',
+        output: flags.output,
         verbose: flags.verbose,
-      };
+      }, contextUser);
 
-      spinner.start('Discovering tests...');
-      const testService = getTestService();
-      const evals = await testService.listEvals(testDir, options);
-      spinner.succeed(`Found ${evals.length} eval(s)`);
-
-      // Display results
-      const reporter = testService.getReporter();
-
-      if (flags.format === 'json') {
-        this.log(reporter.formatAsJSON(evals));
-      } else {
-        this.log(reporter.formatEvalList(evals, flags.verbose));
-      }
-
-    } catch (error: any) {
-      spinner.fail(error.message);
-      this.error(error);
+    } catch (error) {
+      this.error(error as Error);
     }
   }
 }
