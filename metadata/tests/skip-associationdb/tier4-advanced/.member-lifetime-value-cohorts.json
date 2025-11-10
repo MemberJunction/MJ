@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Member Lifetime Value by Join Year",
+    "Description": "Tests Skip's ability to perform cohort analysis by calculating average lifetime value for members grouped by their join year.",
+    "InputDefinition": {
+      "userMessage": "Calculate the average lifetime value (total revenue generated) for members grouped by the year they joined, and show how this has changed over time in a chart."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a chart showing average lifetime value by join year cohort",
+        "Lifetime value is calculated as total revenue per member",
+        "Members are grouped by join year",
+        "Chart shows trend over different cohorts",
+        "Values are properly formatted as currency"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 120000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "A258FDC2-C772-43ED-AD51-E953943E758E"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:14.164Z",
+    "checksum": "8a3901636107dc804880834a32af3e53880e2d7528e7d46965569a51a1bf7349"
+  }
+}

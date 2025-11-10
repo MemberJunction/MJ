@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Complete Member Journey Timeline",
+    "Description": "Tests Skip's ability to create a comprehensive timeline across multiple entities showing all activities for a specific member.",
+    "InputDefinition": {
+      "userMessage": "Show me a complete activity timeline for member 'Sarah Johnson' including all memberships, events attended, courses completed, chapters joined, and committees served on, with all dates and status changes. Present as a chronological timeline visualization or table."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes activities from multiple domains (memberships, events, courses, chapters, committees)",
+        "All activities are in chronological order by date",
+        "Dates and status information are clearly shown",
+        "Timeline covers the complete member history",
+        "Visualization or table makes the journey easy to understand"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 150000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "F76D0929-F530-430C-84A0-1CC0C1E93C6C"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:14.185Z",
+    "checksum": "b4225ba73522d950d1ed43921276e8fd4ad0ea79eb6f40ca3e28f5d4e3420c2f"
+  }
+}

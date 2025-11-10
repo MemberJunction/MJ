@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Course Performance with Enrollment Cohorts",
+    "Description": "Tests Skip's ability to rank courses and break down completion rates by enrollment period (quarter-based cohorts).",
+    "InputDefinition": {
+      "userMessage": "Show me the top 10 courses by enrollment, and for each course, break down completion rates by the quarter students enrolled. Present this with a summary table and supporting charts."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes top 10 courses ranked by enrollment",
+        "Completion rates are shown by enrollment quarter for each course",
+        "Quarter-based cohort grouping is correct",
+        "Both summary and detailed views are provided",
+        "Completion rates are calculated as percentages"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 120000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "E6F7B5CF-E5DB-47AB-8E55-D805AFC64EC9"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:14.140Z",
+    "checksum": "938152144133a72fed2af2c7056e6aa7ee642cd2146a991a85dfcd76e11d1699"
+  }
+}

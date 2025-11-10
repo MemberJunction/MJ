@@ -1,6 +1,6 @@
 {
   "entity": "MJ: Component Libraries",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {
   },
   "pull": {

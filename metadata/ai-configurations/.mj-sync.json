@@ -1,6 +1,6 @@
 {
   "entity": "MJ: AI Configurations",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,

@@ -1,6 +1,6 @@
 {
   "entity": "AI Agents",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {
     "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop"
   },

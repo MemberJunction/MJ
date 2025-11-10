@@ -1,6 +1,6 @@
 {
   "entity": "Dashboards",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "pull": {
     "lookupFields": {
       "CategoryID": {

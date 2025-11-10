@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Course Catalog by Category",
+    "Description": "Tests Skip's ability to aggregate courses by category and present in a visualization showing distribution.",
+    "InputDefinition": {
+      "userMessage": "Create a chart showing how many courses we offer in each category"
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a chart (bar or pie chart) showing course counts by category",
+        "All course categories are represented",
+        "Count values are accurate",
+        "Chart is properly labeled with category names and counts",
+        "Visual presentation makes it easy to compare categories"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "B5AD587A-3975-4DC2-917F-B6468A1C87B8"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:13.821Z",
+    "checksum": "25f382de1f87f9044b5b684257e055df344e17fbaaf61e1defa41072e1c31a95"
+  }
+}

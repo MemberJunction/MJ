@@ -1,6 +1,6 @@
 {
   "entity": "Applications",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "pull": {
     "relatedEntities": {
       "Application Entities": {

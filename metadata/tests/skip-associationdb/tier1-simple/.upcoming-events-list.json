@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Upcoming Events List",
+    "Description": "Tests Skip's ability to filter events by date and present them in a structured table format.",
+    "InputDefinition": {
+      "userMessage": "Give me a table showing all events scheduled for the next 30 days with their names, dates, and types"
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a table with event information",
+        "Only events within the next 30 days are shown",
+        "Table includes event name, date, and type columns",
+        "Events are sorted chronologically",
+        "Date formatting is clear and consistent"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "78373A70-D4D9-4DCD-87F2-13937C8E285B"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:13.842Z",
+    "checksum": "4125e593ec417162617e5ffd1f4e6e3ff91104b31ef45f749e6519e628105e47"
+  }
+}

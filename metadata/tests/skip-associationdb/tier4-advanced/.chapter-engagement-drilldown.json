@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Chapter Engagement with Drill-Down",
+    "Description": "Tests Skip's ability to create a master-detail report showing chapter-level engagement summary followed by top members within the most engaged chapter.",
+    "InputDefinition": {
+      "userMessage": "Create a chapter engagement report showing each chapter's member count, event participation, and average member tenure. Then show me the top 5 most active members in the chapter with the highest engagement."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes two parts: summary and drill-down",
+        "Summary shows all chapters with engagement metrics",
+        "Drill-down identifies the most engaged chapter and shows its top 5 members",
+        "Both tables/visualizations are clearly presented",
+        "Engagement metrics are properly calculated"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 120000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "5988E8AE-D8E2-496C-8940-7521DAF36C18"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:14.119Z",
+    "checksum": "168769d69a9cc5a0353defa9f68ab0d7f2b3abcc14a9db31af474a4f35f023f0"
+  }
+}

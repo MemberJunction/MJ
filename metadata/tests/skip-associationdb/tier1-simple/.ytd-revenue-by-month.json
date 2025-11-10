@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - YTD Revenue by Month",
+    "Description": "Tests Skip's ability to calculate year-to-date revenue broken down by month with appropriate visualization. Tests date filtering and financial aggregation.",
+    "InputDefinition": {
+      "userMessage": "Show me our total revenue for this year, broken down by month in a bar chart"
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes revenue totals for each month of the current year",
+        "A bar chart or similar visualization is provided",
+        "Revenue values are reasonable and properly formatted with currency",
+        "Months are in chronological order",
+        "Only current year data is included"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "99511F83-49E6-4C66-9951-BE57D5056B11"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:13.863Z",
+    "checksum": "fe33f68f5f71efa070a1b21ae68c1ad83e2f9451cc47b37449d35b258c7f5f1e"
+  }
+}

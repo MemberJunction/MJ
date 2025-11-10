@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Revenue Breakdown by Source",
+    "Description": "Tests Skip's ability to categorize revenue by source (memberships, events, courses) and show percentage distribution.",
+    "InputDefinition": {
+      "userMessage": "What percentage of our revenue comes from memberships, events, and courses? Show this as a pie chart with the breakdown."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a pie chart showing revenue distribution",
+        "Three main categories are shown: memberships, events, courses",
+        "Percentages add up to 100% (or close to it)",
+        "Each segment is clearly labeled with category and percentage/amount",
+        "Chart makes it easy to see which source generates most revenue"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 90000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "E1E769E2-522E-4853-9101-E39BFD11E7CB"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:14.076Z",
+    "checksum": "25eeded8cf7427e419fdd8b68abd1ee74556eddb0cf309ea3f8d540384d19103"
+  }
+}

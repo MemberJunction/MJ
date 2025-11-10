@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Active Members by Type",
+    "Description": "Tests Skip's ability to count active members and break them down by membership type with a table visualization. Simple aggregation with grouping.",
+    "InputDefinition": {
+      "userMessage": "Show me how many active members we have, broken down by membership type in a table"
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a table showing membership types and counts",
+        "Only active members are included in the count",
+        "All major membership types are represented (Individual, Corporate, Student, etc.)",
+        "Total count is reasonable (300-500 active members expected)",
+        "Table is properly formatted and easy to read"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "090D46FF-2E41-41CC-8FAD-FF9EA7E9FECE"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:13.775Z",
+    "checksum": "88f9b7aa7cd4d0431fb522ea64ded6b90b32baa89bdb31d819eaa62cecdb9658"
+  }
+}

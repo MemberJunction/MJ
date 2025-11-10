@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Chapter Membership Distribution",
+    "Description": "Tests Skip's ability to show chapter membership counts in a visual format, testing multi-table aggregation.",
+    "InputDefinition": {
+      "userMessage": "Show me a chart displaying the number of members in each chapter"
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a chart showing chapters and their member counts",
+        "All chapters are included in the visualization",
+        "Member counts are accurate",
+        "Chapters are clearly labeled",
+        "Chart type is appropriate (horizontal bar chart works well for this)"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "7739E114-9909-4A94-B851-3C60FC12402B"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:13.800Z",
+    "checksum": "0c6e311d512979a4119969965195d175519ccda2dbbd6925eafa0906680b785d"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Event Attendance by Quarter",
+    "Description": "Tests Skip's ability to group data by quarter and visualize attendance patterns over time.",
+    "InputDefinition": {
+      "userMessage": "What are our event attendance trends by quarter for the last 2 years? Show it as a chart."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a chart showing attendance by quarter",
+        "Covers 2 years of data (8 quarters)",
+        "Quarters are properly calculated and labeled (Q1, Q2, Q3, Q4)",
+        "Attendance counts are accurate",
+        "Visualization shows seasonal patterns if they exist"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "97BEBC74-DD67-44A2-A75B-AB11E47E5C77"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:13.933Z",
+    "checksum": "1d5fba73d5f265632e0697753e130461263bf7a46fc04ec8284935e5e663d57f"
+  }
+}

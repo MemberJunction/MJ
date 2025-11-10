@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Email Engagement Trends",
+    "Description": "Tests Skip's ability to track multiple percentage metrics over time (open rate and click-through rate).",
+    "InputDefinition": {
+      "userMessage": "How has our email open rate and click-through rate changed month by month this year? Show both metrics on the same chart."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a chart showing both open rate and click-through rate",
+        "Two distinct lines or series for the two metrics",
+        "Rates are calculated as percentages",
+        "Covers all months of current year",
+        "Chart clearly distinguishes between the two metrics with legend or labels"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "1B35A225-983B-4A19-A851-7229627A278C"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:13.908Z",
+    "checksum": "c6a743283b8382d1318f2c9cdca26d2e8e7041d0c42b129f308d7caea153456b"
+  }
+}

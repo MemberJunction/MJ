@@ -1,0 +1,38 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Organization Member Activity Summary",
+    "Description": "Tests Skip's ability to aggregate member activity at the organization level with filtering.",
+    "InputDefinition": {
+      "userMessage": "For each organization with 5 or more member employees, show me the organization name, member count, and their combined event and course activity. Display as a table ranked by total activity."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a table of organizations filtered to those with 5+ members",
+        "Organization name and member count are shown",
+        "Combined event and course activity metrics are displayed",
+        "Organizations are ranked by activity level",
+        "Only qualifying organizations (5+ members) are included"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 90000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "FD401744-1015-4B09-8D8C-21ED4A29885E"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T15:33:14.055Z",
+    "checksum": "79aaa8c4db3c1622e026d755972503e428c1166cc042a080f3b34898376c23ae"
+  }
+}

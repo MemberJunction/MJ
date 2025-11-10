@@ -1,6 +1,6 @@
 {
   "entity": "MJ: Artifact Types",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
