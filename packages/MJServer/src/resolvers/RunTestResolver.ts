@@ -137,18 +137,47 @@ export class RunTestResolver extends ResolverBase {
 
             const result = await engine.RunTest(testId, options, user);
 
-            // Publish completion
-            if (pubSub && result.testRunId) {
-                this.publishComplete(pubSub, userPayload, result);
+            // Handle both single result and array of results (RepeatCount > 1)
+            let finalResult;
+            let allPassed = true;
+
+            if (Array.isArray(result)) {
+                // Multiple iterations - check if all passed
+                allPassed = result.every(r => r.status === 'Passed');
+
+                // For GraphQL, return summary information
+                // The full array is serialized in the result field
+                finalResult = {
+                    testRunId: result[0]?.testRunId || '',
+                    status: allPassed ? 'Passed' as const : 'Failed' as const
+                };
+
+                // Publish completion for each iteration
+                if (pubSub) {
+                    for (const iterationResult of result) {
+                        this.publishComplete(pubSub, userPayload, iterationResult);
+                    }
+                }
+
+                LogStatus(`[RunTestResolver] Test completed: ${result.length} iterations, ${allPassed ? 'all passed' : 'some failed'} in ${Date.now() - startTime}ms`);
+            } else {
+                // Single result
+                finalResult = result;
+                allPassed = result.status === 'Passed';
+
+                // Publish completion
+                if (pubSub && result.testRunId) {
+                    this.publishComplete(pubSub, userPayload, result);
+                }
+
+                LogStatus(`[RunTestResolver] Test completed: ${result.status} in ${Date.now() - startTime}ms`);
             }
 
             const executionTime = Date.now() - startTime;
 
-            LogStatus(`[RunTestResolver] Test completed: ${result.status} in ${executionTime}ms`);
-
             return {
-                success: result.status === 'Passed',
-                result: JSON.stringify(result),
+                success: allPassed,
+                result: JSON.stringify(result), // Full result (single or array)
                 executionTimeMs: executionTime
             };
 

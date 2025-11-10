@@ -192,6 +192,11 @@ export interface TestRunResult {
    * Error message if status is Error
    */
   errorMessage?: string;
+
+  /**
+   * Iteration number for repeated tests (when RepeatCount > 1)
+   */
+  sequence?: number;
 }
 
 /**

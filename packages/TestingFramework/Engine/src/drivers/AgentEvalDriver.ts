@@ -190,7 +190,8 @@ export class AgentEvalDriver extends BaseTestDriver {
                 input,
                 context.contextUser,
                 context.test,
-                config.maxExecutionTime
+                config.maxExecutionTime,
+                context.testRun.ID
             );
 
             const agentRun = agentResult.agentRun;
@@ -370,7 +371,8 @@ export class AgentEvalDriver extends BaseTestDriver {
         input: AgentEvalInput,
         contextUser: UserInfo,
         test: TestEntity,
-        maxExecutionTime?: number
+        maxExecutionTime?: number,
+        testRunId?: string
     ): Promise<{ agentRun: AIAgentRunEntity }> {
         const runner = new AgentRunner();
 
@@ -416,7 +418,8 @@ export class AgentEvalDriver extends BaseTestDriver {
                 runner.RunAgentInConversation(params, {
                     userMessage: input.userMessage,
                     createArtifacts: true,
-                    conversationName: conversationName
+                    conversationName: conversationName,
+                    testRunId: testRunId
                 }),
                 timeoutPromise
             ]);
@@ -426,7 +429,8 @@ export class AgentEvalDriver extends BaseTestDriver {
             const runResult = await runner.RunAgentInConversation(params, {
                 userMessage: input.userMessage,
                 createArtifacts: true,
-                conversationName: conversationName
+                conversationName: conversationName,
+                testRunId: testRunId
             });
 
             return { agentRun: runResult.agentResult.agentRun };
