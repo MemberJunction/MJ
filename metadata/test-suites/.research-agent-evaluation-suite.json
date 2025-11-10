@@ -9,7 +9,7 @@
       {
         "fields": {
           "SuiteID": "@parent:ID",
-          "TestID": "@lookup:MJ: Tests.Name=Research Agent - Web Only Question",
+          "TestID": "@lookup:MJ: Tests.Name=Research Agent - Potato Soup Recipe Comparison",
           "Sequence": 1,
           "Status": "Active"
         },
@@ -17,8 +17,8 @@
           "ID": "77AD9CB2-D302-4DE9-95F9-56EA2FD06634"
         },
         "sync": {
-          "lastModified": "2025-11-10T00:32:49.250Z",
-          "checksum": "a062d119c63fa17e9ff3bef7a3ff01fb8ee441defc519dd90a3387dc293b871d"
+          "lastModified": "2025-11-10T03:20:36.425Z",
+          "checksum": "b4155ead3f33ffc5e8ae7dbc48f22d85c6c4404642f8dd9ce84fc0191599570d"
         }
       },
       {

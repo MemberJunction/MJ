@@ -1,22 +1,23 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
-    "Name": "Research Agent - Web Only Question",
-    "Description": "Tests the Research Agent's ability to answer questions using only web research, without requiring database access. Validates that the Web Research Agent is invoked appropriately and Database Research Agent is not used unnecessarily.",
+    "Name": "Research Agent - Potato Soup Recipe Comparison",
+    "Description": "Tests the Research Agent's ability to answer questions using only web research, without requiring database access. Validates that the Web Research Agent is invoked appropriately and Database Research Agent is not used unnecessarily. Uses a fun, practical query to test web research capabilities.",
     "InputDefinition": {
-      "userMessage": "What are the latest developments in quantum computing announced in the past month? Please provide a comprehensive overview of recent breakthroughs, companies involved, and potential applications."
+      "userMessage": "Find me 3 examples of great potato soup recipes and then compare them in detail in a report. I want to see the differences in ingredients, cooking methods, and flavor profiles."
     },
     "ExpectedOutcomes": {
       "judgeValidationCriteria": [
-        "Response includes recent (last month) developments in quantum computing",
-        "Multiple sources or companies are referenced",
-        "Potential applications are discussed",
-        "Information appears current and factual",
-        "Response is well-structured with clear findings"
+        "Response includes exactly 3 distinct potato soup recipes",
+        "Each recipe's ingredients are clearly listed",
+        "Cooking methods for each recipe are explained",
+        "Detailed comparison highlights differences between the recipes",
+        "Report includes analysis of flavor profiles or variations",
+        "Response is well-structured with clear sections for each recipe and the comparison"
       ]
     },
     "Configuration": {
-      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
+      "agentId": "@lookup:AI Agents.Name=Research Agent",
       "oracles": [
         {
           "type": "trace-no-errors",
@@ -44,11 +45,12 @@
           "weight": 0.4,
           "config": {
             "criteria": [
-              "Response includes recent (last month) developments in quantum computing",
-              "Multiple sources or companies are referenced",
-              "Potential applications are discussed",
-              "Information appears current and factual",
-              "Response is well-structured with clear findings"
+              "Response includes exactly 3 distinct potato soup recipes",
+              "Each recipe's ingredients are clearly listed",
+              "Cooking methods for each recipe are explained",
+              "Detailed comparison highlights differences between the recipes",
+              "Report includes analysis of flavor profiles or variations",
+              "Response is well-structured with clear sections for each recipe and the comparison"
             ]
           }
         }
@@ -66,7 +68,7 @@
     "ID": "A5189586-8248-4641-98ED-BC1B3B2969B2"
   },
   "sync": {
-    "lastModified": "2025-11-10T02:38:25.792Z",
-    "checksum": "d465e86cef040b5d983d5efb4f2734f0a174379e6a7081708ca4a404e6984afe"
+    "lastModified": "2025-11-10T03:26:07.340Z",
+    "checksum": "50f27e77e12dfd7e9e2206265428de4665d43c7d06199cb1d75d49cdd1a0216e"
   }
 }

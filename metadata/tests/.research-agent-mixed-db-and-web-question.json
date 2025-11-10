@@ -17,7 +17,7 @@
       ]
     },
     "Configuration": {
-      "agentId": "63070640-7E8E-4953-B13C-9F840D6BDD81",
+      "agentId": "@lookup:AI Agents.Name=Research Agent",
       "oracles": [
         {
           "type": "trace-no-errors",
@@ -66,7 +66,7 @@
     "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
   },
   "sync": {
-    "lastModified": "2025-11-10T02:38:25.771Z",
-    "checksum": "66b0935ccb7cd8f731ef2b46da0983f72c6dc74d131ad260685a846eef402854"
+    "lastModified": "2025-11-10T03:26:07.317Z",
+    "checksum": "cf81d16172f50ae9c19c58a9877c1b135f172b4d0372ea743d003794319aa6c8"
   }
 }
