@@ -7,6 +7,10 @@
         <i class="fas fa-folder"></i>
         <span>{{ conversation.Project || 'Project' }}</span>
         </button>
+        <button class="test-indicator" (click)="viewTestRun(conversation.TestRunID)" title="View Test Run" *ngIf="conversation.TestRunID">
+        <i class="fas fa-flask"></i>
+        <span>Test</span>
+        </button>
         <mj-active-agent-indicator
         [conversationId]="conversationState.activeConversation.ID"
         [currentUser]="currentUser"
@@ -80,6 +84,7 @@
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
               (retryMessage)="onRetryMessage($event)"
+              (testFeedbackMessage)="onTestFeedbackMessage($event)"
               (artifactClicked)="onArtifactClicked($event)"
               (messageEdited)="onMessageEdited($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"

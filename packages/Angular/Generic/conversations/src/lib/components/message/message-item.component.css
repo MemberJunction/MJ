@@ -683,6 +683,16 @@
   color: #3B82F6;
 }
 
+.action-bar-btn.test-feedback {
+  color: #F57C00;
+}
+
+.action-bar-btn.test-feedback:hover {
+  opacity: 1;
+  background: #FFF8E1;
+  border-color: #F57C00;
+}
+
 /* Message status indicator */
 .message-status {
   display: inline-flex;

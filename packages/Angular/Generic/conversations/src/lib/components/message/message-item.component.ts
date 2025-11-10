@@ -50,6 +50,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<ConversationDetailEntity>();
+  @Output() public testFeedbackClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
@@ -722,6 +723,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public onDeleteClick(): void {
     if (!this.isProcessing) {
       this.deleteClicked.emit(this.message);
+    }
+  }
+
+  public onTestFeedbackClick(): void {
+    if (!this.isProcessing) {
+      this.testFeedbackClicked.emit(this.message);
     }
   }
 

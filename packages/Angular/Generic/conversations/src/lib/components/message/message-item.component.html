@@ -149,6 +149,11 @@
               <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
                 <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
               </button>
+              @if (message.TestRunID) {
+                <button class="action-bar-btn test-feedback" (click)="onTestFeedbackClick()" title="Provide Test Feedback">
+                  <i class="fas fa-flask"></i>
+                </button>
+              }
               <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
                 <i class="fas fa-trash"></i>
               </button>
