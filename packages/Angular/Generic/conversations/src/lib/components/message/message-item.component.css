@@ -761,6 +761,29 @@
   transform: scale(1.1);
 }
 
+/* Test feedback icon in header - appears for test runs */
+.test-feedback-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  margin-left: 8px;
+}
+
+.test-feedback-icon i.fa-flask {
+  font-size: 13px;
+}
+
+.test-feedback-icon:hover {
+  color: #3B82F6; /* Blue color for test feedback */
+  transform: scale(1.1);
+}
+
 @keyframes rotate {
   from {
     transform: rotate(0deg);
