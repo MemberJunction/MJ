@@ -10,7 +10,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
@@ -828,25 +828,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
         }
       }
-      // Stage 4: Direct chat response from Sage
+      // Stage 4: Direct chat response from Agent
       else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
-        // Mark message as completing BEFORE setting final content (prevents race condition)
-        this.markMessageComplete(conversationManagerMessage);
-
-        // Set response form and command fields before saving
-        if (result.responseForm) {
-          conversationManagerMessage.ResponseForm = JSON.stringify(result.responseForm);
-        }
-        if (result.actionableCommands && result.actionableCommands.length > 0) {
-          conversationManagerMessage.ActionableCommands = JSON.stringify(result.actionableCommands);
-        }
-        if (result.automaticCommands && result.automaticCommands.length > 0) {
-          conversationManagerMessage.AutomaticCommands = JSON.stringify(result.automaticCommands);
-        }
-
         // Normal chat response
         // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete');
+        // Note: updateConversationDetail will call markMessageComplete() for us
+        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.responseForm, result.actionableCommands, result.automaticCommands);
 
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         // Server already created artifacts - just emit event to trigger UI reload
@@ -1132,7 +1119,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
   }
 
-  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error'): Promise<void> {
+  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', responseForm?: AgentResponseForm, actionableCommands?: ActionableCommand[], automaticCommands?: AutomaticCommand[]): Promise<void> {
     // Mark as completing FIRST if status is Complete or Error
     // This ensures task cleanup happens even if we return early due to guard clause
     if (status === 'Complete' || status === 'Error') {
@@ -1148,6 +1135,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const maxAttempts = 2;
     let attempts = 0, done = false;
     while (attempts < maxAttempts && !done) {
+      // Set response form and command fields before saving
+      if (responseForm) {
+        convoDetail.ResponseForm = JSON.stringify(responseForm);
+      }
+      if (actionableCommands) {
+        convoDetail.ActionableCommands = JSON.stringify(actionableCommands);
+      }
+      if (automaticCommands) {
+        convoDetail.AutomaticCommands = JSON.stringify(automaticCommands);
+      }
+
       convoDetail.Message = message;
       convoDetail.Status = status;
 

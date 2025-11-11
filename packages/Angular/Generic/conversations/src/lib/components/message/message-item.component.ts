@@ -987,19 +987,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * Get agent response form from message
    * Uses ResponseForm property from ConversationDetailEntity
-   * TODO: This field needs to be added to the database schema
    */
   public get responseForm(): AgentResponseForm | null {
     try {
-      // For now, check if the property exists (will be added to schema)
-      const rawData = (this.message as any).ResponseForm;
-      if (!rawData) return null;
+      const rawData = this.message.ResponseForm;
+      if (!rawData) {
+        return null;
+      }
 
       // Parse JSON string to AgentResponseForm object
       const form = JSON.parse(rawData);
       return form || null;
     } catch (error) {
-      console.error('Failed to parse response form:', error);
+      console.error('Failed to parse response form:', error, 'Raw data:', this.message.ResponseForm);
       return null;
     }
   }
@@ -1007,12 +1007,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * Get actionable commands from message
    * Uses ActionableCommands property from ConversationDetailEntity
-   * TODO: This field needs to be added to the database schema
    */
   public get actionableCommands(): ActionableCommand[] {
     try {
-      // For now, check if the property exists (will be added to schema)
-      const rawData = (this.message as any).ActionableCommands;
+      const rawData = this.message.ActionableCommands;
       if (!rawData) return [];
 
       // Parse JSON string to array of ActionableCommand objects
