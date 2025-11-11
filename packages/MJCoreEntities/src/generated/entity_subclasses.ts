@@ -4128,13 +4128,28 @@ export const ConversationDetailSchema = z.object({
         * * Field Name: SuggestedResponses
         * * Display Name: Suggested Responses
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).`),
+        * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
         * * Display Name: Test Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`),
+    ResponseForm: z.string().nullable().describe(`
+        * * Field Name: ResponseForm
+        * * Display Name: Response Form
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing agent response form definition with questions and validation rules. Supports 8 question types: text, textarea, email, number, currency, date, datetime, choices (buttongroup/radio/dropdown/checkbox). Used for collecting structured user input with proper validation.`),
+    ActionableCommands: z.string().nullable().describe(`
+        * * Field Name: ActionableCommands
+        * * Display Name: Actionable Commands
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of actionable commands that user can trigger (shown as clickable buttons/links). Supports open:resource (navigate to records/dashboards/reports/forms) and open:url (external links). Typically used after completing work to provide easy navigation to created/modified resources.`),
+    AutomaticCommands: z.string().nullable().describe(`
+        * * Field Name: AutomaticCommands
+        * * Display Name: Automatic Commands
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -28241,8 +28256,9 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     /**
     * * Field Name: SuggestedResponses
     * * Display Name: Suggested Responses
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.
     */
     get SuggestedResponses(): string | null {
         return this.Get('SuggestedResponses');
@@ -28263,6 +28279,45 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
     set TestRunID(value: string | null) {
         this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: ResponseForm
+    * * Display Name: Response Form
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing agent response form definition with questions and validation rules. Supports 8 question types: text, textarea, email, number, currency, date, datetime, choices (buttongroup/radio/dropdown/checkbox). Used for collecting structured user input with proper validation.
+    */
+    get ResponseForm(): string | null {
+        return this.Get('ResponseForm');
+    }
+    set ResponseForm(value: string | null) {
+        this.Set('ResponseForm', value);
+    }
+
+    /**
+    * * Field Name: ActionableCommands
+    * * Display Name: Actionable Commands
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of actionable commands that user can trigger (shown as clickable buttons/links). Supports open:resource (navigate to records/dashboards/reports/forms) and open:url (external links). Typically used after completing work to provide easy navigation to created/modified resources.
+    */
+    get ActionableCommands(): string | null {
+        return this.Get('ActionableCommands');
+    }
+    set ActionableCommands(value: string | null) {
+        this.Set('ActionableCommands', value);
+    }
+
+    /**
+    * * Field Name: AutomaticCommands
+    * * Display Name: Automatic Commands
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.
+    */
+    get AutomaticCommands(): string | null {
+        return this.Get('AutomaticCommands');
+    }
+    set AutomaticCommands(value: string | null) {
+        this.Set('AutomaticCommands', value);
     }
 
     /**
