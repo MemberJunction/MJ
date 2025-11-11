@@ -344,6 +344,74 @@ sqlcmd -S localhost -d AssociationDB2 -Q "
 
 ---
 
+## Project Structure Reference
+
+### File Organization (from README.md)
+```
+AssociationDB/
+├── README.md                              # Project overview and documentation
+├── data-enhancements.md                   # This file - enhancement roadmap
+├── .env.template                          # Database credentials template
+├── install.sh                             # Installation script (requires .env file)
+├── prepare_build.sh                       # Generates combined SQL file
+├── MASTER_BUILD_AssociationDB.sql         # Alternative SQLCMD entry point
+│
+├── schema/                                # Schema definition files
+│   ├── V001__create_schema.sql           # Creates AssociationDemo schema
+│   ├── V002__create_tables.sql           # Original 27 tables
+│   ├── V003__table_documentation.sql     # Extended properties for docs
+│   ├── V004__create_community_tables.sql # NEW: Forum tables (8 tables)
+│   ├── V005__create_resources_tables.sql # NEW: Resource library (6 tables)
+│   └── V006__create_networking_tables.sql# NEW: Networking (7 tables)
+│
+├── data/                                  # Sample data population files
+│   ├── 00_parameters.sql                 # Date parameters and UUID declarations
+│   ├── 01_membership_data.sql            # 500 members, 60 orgs, memberships
+│   ├── 02_events_data.sql                # 35 events, sessions, registrations
+│   ├── 03_learning_data.sql              # 60 courses (NEEDS CHEESE FOCUS)
+│   ├── 04_finance_data.sql               # Invoices, payments
+│   ├── 05_marketing_email_data.sql       # Campaigns, segments, emails
+│   ├── 06_chapters_governance_data.sql   # Chapters, committees, board
+│   ├── 07_community_forum_data.sql       # NEW: Forum data
+│   ├── 08_resources_data.sql             # NEW: Resource library data
+│   └── 09_networking_data.sql            # NEW: Networking data
+│
+├── tmp/                                   # Generated files (gitignored)
+│   ├── combined_build.sql                # Generated during installation
+│   └── build_output.txt                  # Execution output
+│
+└── docs/                                  # Documentation
+    ├── SCHEMA_OVERVIEW.md                # Detailed schema documentation
+    ├── SAMPLE_QUERIES.md                 # Example queries
+    └── BUSINESS_SCENARIOS.md             # Member journey documentation
+```
+
+### Data Volumes (Target State from README.md)
+
+| Domain | Tables | Target Sample Data |
+|--------|--------|-------------------|
+| **Membership** | 4 | 60 organizations (40 cheese + 20 dairy/CPG), 500 members, 625 memberships, 8 types |
+| **Events** | 3 | 35 events, 85+ sessions, 1,400+ registrations |
+| **Learning** | 3 | 60 courses (cheese-focused), 900 enrollments, 650+ certificates |
+| **Finance** | 3 | Programmatic (based on memberships/events/courses) |
+| **Marketing** | 3 | 45 campaigns, 80 segments, membership tracking |
+| **Email** | 3 | 30 templates, programmatic sends/engagement |
+| **Chapters** | 3 | 15 chapters, 275+ members, 45 officers |
+| **Governance** | 4 | 12 committees, 9 board positions, assignments |
+| **Community/Forums** | 8 | 12 categories, 150+ threads, 500+ posts, 1200+ reactions, 300+ tags |
+| **Resources** | 6 | 15 categories, 100+ resources, 2000+ accesses, 200+ reviews |
+| **Networking** | 7 | 400+ connections, 45 mentorships, 30 collaborations, 25 events, 350+ attendances |
+
+**Total: 48 tables across 11 domains**
+
+### Industry Focus (from README.md)
+- **Organizations**: Mix of cheese producers (40) and dairy/CPG companies (20)
+- **Events**: Cheese industry conferences and workshops
+- **Courses**: Should be cheese-focused (cheesemaking, aging, food safety, business)
+- **Resources**: Cheese industry knowledge base
+- **Forums**: Cheese production and business discussions
+- **Networking**: Professional connections in cheese industry
+
 ## Technical Notes
 
 ### SQL Server Date Handling
