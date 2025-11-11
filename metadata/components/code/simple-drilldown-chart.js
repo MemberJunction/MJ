@@ -1,5 +1,4 @@
 function SimpleDrilldownChart({
-  entityName,
   data,
   groupBy,
   valueField,
@@ -7,6 +6,8 @@ function SimpleDrilldownChart({
   chartType = 'auto',
   title,
   gridFields,
+  entityName,
+  entityPrimaryKeys,
   showDrilldown = true,
   drilldownHeight = 300,
   showSingleRecordView = false,
@@ -216,8 +217,9 @@ function SimpleDrilldownChart({
           }}>
             {DataGrid ? (
               <DataGrid
-                entityName={entityName}
                 data={getDrilldownData()}
+                entityName={entityName}
+                entityPrimaryKeys={entityPrimaryKeys}
                 columns={getGridFields()}
                 sorting={true}
                 paging={true}
