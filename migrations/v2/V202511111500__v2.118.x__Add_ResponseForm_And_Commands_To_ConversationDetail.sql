@@ -267,7 +267,7 @@ GO
          (
             '2433c81e-0921-404b-969f-7a37dbf23d4a',
             '12248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Conversation Details
-            100055,
+            100057,
             'ActionableCommands',
             'Actionable Commands',
             'JSON array of actionable commands that user can trigger (shown as clickable buttons/links). Supports open:resource (navigate to records/dashboards/reports/forms) and open:url (external links). Typically used after completing work to provide easy navigation to created/modified resources.',
@@ -332,7 +332,7 @@ GO
          (
             '5d185550-a536-43bd-8a45-1324f35b7ba1',
             '12248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Conversation Details
-            100056,
+            100058,
             'AutomaticCommands',
             'Automatic Commands',
             'JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.',
