@@ -1,79 +1,43 @@
 import { Command, Flags } from '@oclif/core';
-import ora from 'ora-classic';
-import chalk from 'chalk';
-import * as dotenv from 'dotenv';
-import {
-  DatabaseConnection,
-  StateManager,
-  SimpleAIClient,
-  DatabaseAnalyzer,
-} from '@memberjunction/db-auto-doc';
 
-dotenv.config();
-
-export default class Analyze extends Command {
-  static description = 'Analyze database and generate documentation';
+export default class DbDocAnalyze extends Command {
+  static description = 'Analyze database and generate documentation (delegates to db-auto-doc analyze)';
 
   static examples = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --incremental',
-    '<%= config.bin %> <%= command.id %> --schemas dbo,sales',
+    '<%= config.bin %> <%= command.id %> --resume ./output/run-6/state.json',
+    '<%= config.bin %> <%= command.id %> --config ./my-config.json',
   ];
 
   static flags = {
-    incremental: Flags.boolean({
-      description: 'Only process new tables',
-      default: false,
+    resume: Flags.string({
+      char: 'r',
+      description: 'Resume from an existing state file',
+      required: false
     }),
-    schemas: Flags.string({
-      description: 'Comma-separated schema list',
-    }),
+    config: Flags.string({
+      char: 'c',
+      description: 'Path to config file',
+      default: './config.json'
+    })
   };
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(Analyze);
+    const { flags } = await this.parse(DbDocAnalyze);
 
-    this.log(chalk.blue.bold('\n📊 Analyzing Database\n'));
+    // Load DBAutoDoc command dynamically
+    const { default: AnalyzeCommand } = await import('@memberjunction/db-auto-doc/dist/commands/analyze.js');
 
-    try {
-      // Check API key
-      if (!process.env.AI_API_KEY || process.env.AI_API_KEY === 'your-api-key-here') {
-        this.error('AI_API_KEY not set in .env file');
-      }
-
-      const connection = DatabaseConnection.fromEnv();
-      const stateManager = new StateManager();
-
-      // Test connection
-      const connected = await connection.test();
-      if (!connected) {
-        this.error('Cannot connect to database');
-      }
-
-      // Load state
-      await stateManager.load(
-        process.env.DB_SERVER || 'localhost',
-        process.env.DB_DATABASE || 'master'
-      );
-
-      const aiClient = new SimpleAIClient();
-      const analyzer = new DatabaseAnalyzer(connection, stateManager, aiClient);
-
-      const schemas = flags.schemas ? flags.schemas.split(',') : undefined;
-
-      await analyzer.analyze({
-        schemas,
-        incremental: flags.incremental,
-      });
-
-      await connection.close();
-
-      this.log(chalk.green('\n✅ Analysis complete!'));
-      this.log('\nNext steps:');
-      this.log('  - Review: mj dbdoc review');
-      this.log('  - Export: mj dbdoc export');
-    } catch (error: any) {
-      this.error(error.message);
+    // Build args array for DBAutoDoc command
+    const args: string[] = [];
+    if (flags.resume) {
+      args.push('--resume', flags.resume);
     }
+    if (flags.config) {
+      args.push('--config', flags.config);
+    }
+
+    // Execute the DBAutoDoc analyze command
+    await AnalyzeCommand.run(args);
   }
 }

@@ -1,0 +1,58 @@
+{
+  "eval_id": "chapter-membership-distribution",
+  "category": "cross_domain",
+  "difficulty": "medium",
+  "tags": ["chapters", "membership", "distribution", "geography"],
+
+  "business_context": "Chapter leadership needs to understand member distribution across chapters to allocate resources, plan events, and identify underserved regions or opportunities for new chapters.",
+
+  "prompt": "Show member distribution across chapters",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "chapters_shown",
+        "expected_value": 15,
+        "sql_validation": "SELECT COUNT(*) FROM chapters.Chapter",
+        "description": "Should show all 15 chapters"
+      },
+      {
+        "metric": "total_chapter_members",
+        "expected_range": [270, 280],
+        "sql_validation": "SELECT COUNT(*) FROM chapters.ChapterMembership",
+        "description": "Total chapter memberships across all chapters"
+      }
+    ],
+    "visualization": {
+      "type": "bar_chart",
+      "alternatives": ["horizontal_bar", "map", "treemap"],
+      "should_not_be": ["line_chart", "scatter_plot", "single_metric"],
+      "reasoning": "Distribution across categories is best shown with bar chart or map"
+    },
+    "required_features": ["chapter_name", "member_count", "sorted_view"],
+    "optional_features": ["geographic_location", "chapter_type", "percentage_of_total", "map_view"],
+    "interactivity": [
+      {
+        "action": "Click on chapter bar",
+        "expected_result": "Show member list for that chapter with contact details"
+      },
+      {
+        "action": "Toggle between chart and map view",
+        "expected_result": "Show geographic distribution on a map"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Member distribution by chapter\nSELECT \n  c.Name as ChapterName,\n  c.ChapterType,\n  c.City,\n  c.State,\n  COUNT(cm.ID) as MemberCount,\n  CAST(COUNT(cm.ID) AS FLOAT) / (SELECT COUNT(*) FROM chapters.ChapterMembership) as Percentage\nFROM chapters.Chapter c\nLEFT JOIN chapters.ChapterMembership cm ON c.ID = cm.ChapterID\nGROUP BY c.Name, c.ChapterType, c.City, c.State\nORDER BY MemberCount DESC;",
+
+  "human_eval_guidance": "Verify all 15 chapters are shown. Check that member counts sum to ~275. Confirm geographic information is displayed if available.",
+
+  "common_pitfalls": "Missing chapters with zero members; not showing geographic distribution; incorrect aggregation causing duplicate counts; missing chapter details."
+}

@@ -1,0 +1,117 @@
+{
+  "version": "1.0.0",
+  "database": {
+    "provider": "sqlserver",
+    "server": "${DB_SERVER}",
+    "port": 1433,
+    "database": "${DB_NAME}",
+    "user": "${DB_USER}",
+    "password": "${DB_PASSWORD}",
+    "encrypt": true,
+    "trustServerCertificate": true,
+    "connectionTimeout": 30000
+  },
+  "ai": {
+    "provider": "${AI_PROVIDER}",
+    "model": "${AI_MODEL}",
+    "apiKey": "${AI_API_KEY}",
+    "temperature": 0.1,
+    "maxTokens": 8000
+  },
+  "analysis": {
+    "cardinalityThreshold": 20,
+    "sampleSize": 10,
+    "includeStatistics": true,
+    "includePatternAnalysis": true,
+    "convergence": {
+      "maxIterations": 50,
+      "stabilityWindow": 2,
+      "confidenceThreshold": 0.85
+    },
+    "backpropagation": {
+      "enabled": true,
+      "maxDepth": 3
+    },
+    "sanityChecks": {
+      "dependencyLevel": true,
+      "schemaLevel": true,
+      "crossSchema": true
+    },
+    "guardrails": {
+      "enabled": true,
+      "stopOnExceeded": true,
+      "maxTokensPerRun": 250000,
+      "maxDurationSeconds": 3600,
+      "maxCostDollars": 50,
+      "maxTokensPerPhase": {
+        "discovery": 100000,
+        "analysis": 150000,
+        "sanityChecks": 50000
+      },
+      "maxTokensPerIteration": 50000,
+      "maxIterationDurationSeconds": 600,
+      "warnThresholds": {
+        "tokenPercentage": 80,
+        "durationPercentage": 80,
+        "costPercentage": 80,
+        "iterationTokenPercentage": 85,
+        "phaseTokenPercentage": 85
+      }
+    },
+    "relationshipDiscovery": {
+      "enabled": true,
+      "triggers": {
+        "runOnMissingPKs": true,
+        "runOnInsufficientFKs": true,
+        "fkDeficitThreshold": 0.4
+      },
+      "tokenBudget": {
+        "ratioOfTotal": 0.4
+      },
+      "confidence": {
+        "primaryKeyMinimum": 0.7,
+        "foreignKeyMinimum": 0.6,
+        "llmValidationThreshold": 0.8
+      },
+      "sampling": {
+        "maxRowsPerTable": 1000,
+        "valueOverlapSampleSize": 100,
+        "statisticalSignificance": 100,
+        "compositeKeyMaxColumns": 3
+      },
+      "patterns": {
+        "primaryKeyNames": [
+          "^id$",
+          ".*_id$",
+          "^pk_.*",
+          ".*_key$"
+        ],
+        "foreignKeyNames": [
+          ".*_id$",
+          ".*_fk$",
+          "^fk_.*"
+        ]
+      },
+      "llmValidation": {
+        "enabled": true,
+        "batchSize": 10
+      },
+      "backpropagation": {
+        "enabled": true,
+        "maxIterations": 5
+      }
+    }
+  },
+  "output": {
+    "stateFile": "./db-doc-state.json",
+    "outputDir": "./output",
+    "sqlFile": "./output/add-descriptions.sql",
+    "markdownFile": "./output/database-documentation.md"
+  },
+  "schemas": {
+    "exclude": ["sys", "INFORMATION_SCHEMA"]
+  },
+  "tables": {
+    "exclude": ["sysdiagrams", "__MigrationHistory"]
+  }
+}

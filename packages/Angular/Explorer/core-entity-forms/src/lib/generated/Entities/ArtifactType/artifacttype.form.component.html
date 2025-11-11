@@ -1,86 +1,242 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="MJ: Artifact Types" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="MJ: Conversation Artifacts" [Visible]="record.IsSaved"> 
-                        MJ: Conversation Artifacts
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ArtifactTypeID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
-                            [AllowLoad]="IsCurrentTab('MJ: Conversation Artifacts')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Artifact Type Definition Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="artifactTypeDefinition"
+        sectionName="Artifact Type Definition"
+        icon="fa fa-wrench"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentType"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsEnabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="MJ: AI Agent Artifact Types" [Visible]="record.IsSaved"> 
-                        MJ: AI Agent Artifact Types
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Artifact Types')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: Artifacts" [Visible]="record.IsSaved"> 
-                        MJ: Artifacts
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','TypeID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
-                            [AllowLoad]="IsCurrentTab('MJ: Artifacts')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Hierarchy & Inheritance Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="hierarchyInheritance"
+        sectionName="Hierarchy & Inheritance"
+        icon="fa fa-sitemap"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExtractRules"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="MJ: Artifact Types" [Visible]="record.IsSaved"> 
-                        MJ: Artifact Types
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
-                            [AllowLoad]="IsCurrentTab('MJ: Artifact Types')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="AI Agents" [Visible]="record.IsSaved"> 
-                        AI Agents
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','DefaultArtifactTypeID')"  
-                            [NewRecordValues]="NewRecordValues('AI Agents')"
-                            [AllowLoad]="IsCurrentTab('AI Agents')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
-    </form>
-</div>
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- MJ: AI Agent Artifact Types Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentArtifactTypes"
+        sectionName="MJ: AI Agent Artifact Types"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Conversation Artifacts Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJConversationArtifacts"
+        sectionName="MJ: Conversation Artifacts"
+        icon="fa fa-file-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJConversationArtifacts')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ArtifactTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
+                [AllowLoad]="IsSectionExpanded('mJConversationArtifacts')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJConversationArtifacts', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Artifact Types Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJArtifactTypes"
+        sectionName="MJ: Artifact Types"
+        icon="fa fa-puzzle-piece"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJArtifactTypes')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactTypes')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJArtifactTypes', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Artifacts Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJArtifacts"
+        sectionName="MJ: Artifacts"
+        icon="fa fa-file"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJArtifacts')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','TypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
+                [AllowLoad]="IsSectionExpanded('mJArtifacts')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- AI Agents Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIAgents"
+        sectionName="AI Agents"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIAgents')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','DefaultArtifactTypeID')"
+                [NewRecordValues]="NewRecordValues('AI Agents')"
+                [AllowLoad]="IsSectionExpanded('aIAgents')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

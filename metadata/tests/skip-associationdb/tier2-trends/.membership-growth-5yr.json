@@ -1,0 +1,40 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Membership Growth 5 Years",
+    "Description": "Tests Skip's ability to calculate and visualize membership growth trends over multiple years with time-series analysis.",
+    "InputDefinition": {
+      "userMessage": "Show me how our membership has grown over the past 5 years with a line chart showing the trend by year. I'd like to click on any year to see the members who joined that year."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes a line chart showing membership counts over 5 years",
+        "Years are properly grouped and displayed on x-axis",
+        "Trend line shows membership progression",
+        "Chart includes proper labels and title",
+        "Response includes narrative interpretation of the growth trend",
+        "Chart supports drill-down to show member list for selected year",
+        "Member table allows opening individual member records"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 60000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "9F379477-0536-46CC-8E22-A065EC8FD37A"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T18:37:02.553Z",
+    "checksum": "61f6786546f447093e95a48812b6cc7280323150d10868ec2253c9af857bb650"
+  }
+}

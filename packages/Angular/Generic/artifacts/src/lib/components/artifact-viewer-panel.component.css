@@ -205,6 +205,30 @@
   font-size: 14px;
 }
 
+.maximize-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6B7280;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.maximize-btn:hover {
+  background: #F3F4F6;
+  color: #111827;
+}
+
+.maximize-btn i {
+  font-size: 14px;
+}
+
 .close-btn {
   background: none;
   border: none;

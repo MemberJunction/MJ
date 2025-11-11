@@ -1,0 +1,61 @@
+{
+  "eval_id": "revenue-transactions-drilldown",
+  "category": "drill_down",
+  "difficulty": "hard",
+  "tags": ["finance", "revenue", "transactions", "drill-down"],
+
+  "business_context": "Finance team needs to analyze revenue at multiple levels - from high-level summaries by source, down to individual invoices and line items for detailed reconciliation and auditing.",
+
+  "prompt": "Show revenue with drill-down to individual transactions",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "revenue_sources_shown",
+        "expected_range": [3, 4],
+        "description": "Should show revenue grouped by major sources (memberships, events, courses)"
+      },
+      {
+        "metric": "total_transactions",
+        "expected_range": [2800, 3000],
+        "sql_validation": "SELECT COUNT(*) FROM finance.Invoice WHERE Status IN ('Paid', 'Partial')",
+        "description": "Total number of paid invoices"
+      }
+    ],
+    "visualization": {
+      "type": "interactive_table",
+      "alternatives": ["master_detail", "expandable_hierarchy", "tree_view"],
+      "should_not_be": ["static_pie_chart", "line_chart", "scatter_plot"],
+      "reasoning": "Multi-level financial drill-down requires hierarchical interactive table"
+    },
+    "required_features": ["revenue_source", "total_amount", "transaction_count", "drill_down"],
+    "optional_features": ["date_range_filter", "payment_method", "status_breakdown"],
+    "interactivity": [
+      {
+        "action": "Click on revenue source",
+        "expected_result": "Expand to show individual invoices for that source"
+      },
+      {
+        "action": "Click on invoice",
+        "expected_result": "Show invoice details including line items, member info, and payment history"
+      },
+      {
+        "action": "Filter by date range",
+        "expected_result": "Update all levels to show only transactions in selected period"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Revenue transactions with multi-level drill-down\n-- Level 1: Revenue by source\nSELECT \n  inv.InvoiceType as RevenueSource,\n  COUNT(*) as InvoiceCount,\n  SUM(inv.Total) as TotalRevenue\nFROM finance.Invoice inv\nWHERE inv.Status IN ('Paid', 'Partial')\nGROUP BY inv.InvoiceType\nORDER BY TotalRevenue DESC;\n\n-- Level 2: Invoices within source (drill-down level 1)\nSELECT \n  inv.InvoiceNumber,\n  m.FirstName + ' ' + m.LastName as MemberName,\n  inv.InvoiceDate,\n  inv.Total,\n  inv.Status\nFROM finance.Invoice inv\nJOIN membership.Member m ON inv.MemberID = m.ID\nWHERE inv.InvoiceType = @SelectedSource\n  AND inv.Status IN ('Paid', 'Partial')\nORDER BY inv.InvoiceDate DESC;\n\n-- Level 3: Line items within invoice (drill-down level 2)\nSELECT \n  li.Description,\n  li.Quantity,\n  li.UnitPrice,\n  li.Total,\n  p.PaymentDate,\n  p.Amount as PaymentAmount\nFROM finance.InvoiceLineItem li\nLEFT JOIN finance.Payment p ON li.InvoiceID = p.InvoiceID\nWHERE li.InvoiceID = @SelectedInvoiceID\nORDER BY li.ID;",
+
+  "human_eval_guidance": "Test multi-level drill-down through sources → invoices → line items. Verify totals aggregate correctly at each level. Check that payment details are shown. Confirm filtering works across all levels.",
+
+  "common_pitfalls": "Including unpaid invoices; drill-down levels not maintaining context; slow performance with large datasets; totals not matching across hierarchy levels; missing line item details."
+}

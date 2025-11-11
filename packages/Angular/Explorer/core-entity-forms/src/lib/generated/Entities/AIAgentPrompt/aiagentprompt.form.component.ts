@@ -2,18 +2,26 @@ import { Component } from '@angular/core';
 import { AIAgentPromptEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadAIAgentPromptDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Prompts') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiagentprompt-form',
-    templateUrl: './aiagentprompt.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './aiagentprompt.form.component.html'
 })
 export class AIAgentPromptFormComponent extends BaseFormComponent {
     public record!: AIAgentPromptEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'technicalIdentification', sectionName: 'Technical Identification', isExpanded: true },
+            { sectionKey: 'executionConfiguration', sectionName: 'Execution Configuration', isExpanded: true },
+            { sectionKey: 'descriptiveLabels', sectionName: 'Descriptive Labels', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadAIAgentPromptFormComponent() {
-    LoadAIAgentPromptDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

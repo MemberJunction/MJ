@@ -157,6 +157,8 @@ export interface ValidationOptions {
     outputFormat: 'human' | 'json';
     maxNestingDepth: number;
     checkBestPractices: boolean;
+    include?: string[]; // Only process these directories (whitelist, supports patterns)
+    exclude?: string[]; // Skip these directories (blacklist, supports patterns)
 }
 
 /**

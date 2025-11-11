@@ -240,10 +240,6 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         return 'fa-times-circle';
     }
 
-    toggleSection(section: keyof typeof this.expandedSections) {
-        this.expandedSections[section] = !this.expandedSections[section];
-    }
-
     // Save handlers for JSON fields
     async saveParams() {
         if (!this.EditMode) return;

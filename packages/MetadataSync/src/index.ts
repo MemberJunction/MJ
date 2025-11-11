@@ -11,6 +11,17 @@ export { TransactionManager } from './lib/transaction-manager';
 export { JsonWriteHelper } from './lib/json-write-helper';
 export { FileWriteBatch } from './lib/file-write-batch';
 
+// Deletion audit exports
+export { RecordDependencyAnalyzer } from './lib/record-dependency-analyzer';
+export type { FlattenedRecord, ReverseDependency, DependencyAnalysisResult } from './lib/record-dependency-analyzer';
+export { EntityForeignKeyHelper } from './lib/entity-foreign-key-helper';
+export type { ReverseFKInfo } from './lib/entity-foreign-key-helper';
+export { DatabaseReferenceScanner } from './lib/database-reference-scanner';
+export type { DatabaseReference } from './lib/database-reference-scanner';
+export { DeletionAuditor } from './lib/deletion-auditor';
+export type { DeletionAudit } from './lib/deletion-auditor';
+export { DeletionReportGenerator } from './lib/deletion-report-generator';
+
 // Service exports
 export { InitService } from './services/InitService';
 export type { InitOptions, InitCallbacks } from './services/InitService';

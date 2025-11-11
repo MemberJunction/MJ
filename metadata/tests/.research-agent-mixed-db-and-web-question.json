@@ -1,0 +1,72 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Research Agent - Mixed DB and Web Question",
+    "Description": "Tests the Research Agent's ability to orchestrate both Database Research Agent and Web Research Agent to answer questions requiring internal data analysis combined with external benchmarking. Validates proper sub-agent coordination.",
+    "InputDefinition": {
+      "userMessage": "Compare our user engagement metrics over the past quarter with industry benchmarks. Specifically, I want to understand how our daily active user rate, session duration, and feature adoption compare to similar B2B SaaS platforms. Are we above or below average in these areas?"
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes actual internal metrics (DAU rate, session duration, feature adoption)",
+        "Response includes external industry benchmarks for comparison",
+        "Clear comparison is made between internal metrics and industry standards",
+        "Response identifies whether company is above/below average in each area",
+        "Findings show evidence of both database analysis and web research",
+        "Comparisons section effectively synthesizes internal and external data"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Research Agent",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 0.15
+        },
+        {
+          "type": "schema-validate",
+          "weight": 0.15
+        },
+        {
+          "type": "trace-validate-sub-agents",
+          "weight": 0.3,
+          "config": {
+            "requiredAgents": [
+              "Database Research Agent",
+              "Web Research Agent"
+            ],
+            "minIterations": 1
+          }
+        },
+        {
+          "type": "llm-judge",
+          "weight": 0.4,
+          "config": {
+            "criteria": [
+              "Response includes actual internal metrics (DAU rate, session duration, feature adoption)",
+              "Response includes external industry benchmarks for comparison",
+              "Clear comparison is made between internal metrics and industry standards",
+              "Response identifies whether company is above/below average in each area",
+              "Findings show evidence of both database analysis and web research",
+              "Comparisons section effectively synthesizes internal and external data"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "trace-no-errors": 0.15,
+        "schema-validate": 0.15,
+        "trace-validate-sub-agents": 0.3,
+        "llm-judge": 0.4
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T03:26:07.317Z",
+    "checksum": "cf81d16172f50ae9c19c58a9877c1b135f172b4d0372ea743d003794319aa6c8"
+  }
+}

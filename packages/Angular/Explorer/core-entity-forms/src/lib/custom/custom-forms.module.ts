@@ -15,7 +15,6 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { EntityFormExtendedComponent, LoadEntitiesFormComponent } from "./Entities/entities-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
-import { ActionTopComponentExtended, LoadActionExtendedTopComponent } from "./Actions/actions-top-area-extended";
 import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
 import { TemplatesFormExtendedComponent, LoadTemplatesFormExtendedComponent } from "./Templates/templates-form.component";
 import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
@@ -62,12 +61,17 @@ import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-age
 import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
 import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
 import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-integrated-flow-editor.component";
+import { TestRunFormComponentExtended, LoadTestRunFormComponentExtended } from "./Tests/test-run-form.component";
+import { TestFormComponentExtended, LoadTestFormComponentExtended } from "./Tests/test-form.component";
+import { TestSuiteRunFormComponentExtended, LoadTestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
+import { TestSuiteFormComponentExtended, LoadTestSuiteFormComponentExtended } from "./Tests/test-suite-form.component";
+import { TestRunFeedbackFormComponentExtended, LoadTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedback-form.component";
+import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
 
 @NgModule({
     declarations: [
         EntityFormExtendedComponent,
         EntityActionExtendedFormComponent,
-        ActionTopComponentExtended,
         TemplatesFormExtendedComponent,
         TemplateParamDialogComponent,
         TemplateParamsGridComponent,
@@ -104,6 +108,12 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
         FlowAgentFormSectionComponent,
         StepInfoControlComponent,
         FlowAgentDiagramComponent,
+        TestRunFormComponentExtended,
+        TestFormComponentExtended,
+        TestSuiteRunFormComponentExtended,
+        TestSuiteFormComponentExtended,
+        TestRunFeedbackFormComponentExtended,
+        TestRubricFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -147,7 +157,6 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
     ],
     exports: [
         EntityFormExtendedComponent,
-        ActionTopComponentExtended,
         EntityActionExtendedFormComponent,
         TemplatesFormExtendedComponent,
         TemplateEditorComponent,
@@ -167,7 +176,13 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
         FlowAgentFormSectionComponent,
         StepInfoControlComponent,
         FlowAgentDiagramComponent,
-        MJIntegratedFlowEditorComponent
+        MJIntegratedFlowEditorComponent,
+        TestRunFormComponentExtended,
+        TestFormComponentExtended,
+        TestSuiteRunFormComponentExtended,
+        TestSuiteFormComponentExtended,
+        TestRunFeedbackFormComponentExtended,
+        TestRubricFormComponentExtended
     ],
     providers: [
         NewAgentDialogService,
@@ -178,7 +193,6 @@ export class MemberJunctionCoreEntityFormsModule { }
 
 export function LoadCoreCustomForms() {
     LoadEntitiesFormComponent()
-    LoadActionExtendedTopComponent();
     LoadEntityActionExtendedFormComponent();
     LoadTemplatesFormExtendedComponent();
     LoadAIPromptFormComponentExtended();
@@ -187,4 +201,10 @@ export function LoadCoreCustomForms() {
     LoadActionFormComponentExtended();
     LoadAIAgentRunFormComponent();
     LoadQueryFormExtendedComponent();
+    LoadTestRunFormComponentExtended();
+    LoadTestFormComponentExtended();
+    LoadTestSuiteRunFormComponentExtended();
+    LoadTestSuiteFormComponentExtended();
+    LoadTestRunFeedbackFormComponentExtended();
+    LoadTestRubricFormComponentExtended();
 }

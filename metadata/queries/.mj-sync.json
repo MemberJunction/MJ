@@ -1,6 +1,6 @@
 {
   "entity": "Queries",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {
     "Status": "Pending"
   },

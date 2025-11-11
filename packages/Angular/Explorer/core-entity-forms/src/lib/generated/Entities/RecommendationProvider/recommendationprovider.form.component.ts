@@ -2,19 +2,26 @@ import { Component } from '@angular/core';
 import { RecommendationProviderEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadRecommendationProviderDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Recommendation Providers') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-recommendationprovider-form',
-    templateUrl: './recommendationprovider.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './recommendationprovider.form.component.html'
 })
 export class RecommendationProviderFormComponent extends BaseFormComponent {
     public record!: RecommendationProviderEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'providerInformation', sectionName: 'Provider Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'recommendationRuns', sectionName: 'Recommendation Runs', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadRecommendationProviderFormComponent() {
-    LoadRecommendationProviderDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

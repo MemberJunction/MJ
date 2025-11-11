@@ -11,6 +11,9 @@ import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
+import { findEntityDirectories } from '../lib/provider-utils';
+import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
+import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 // Configuration for parallel processing
@@ -23,6 +26,8 @@ export interface PushOptions {
   verbose?: boolean;
   noValidate?: boolean;
   parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
+  include?: string[]; // Only process these directories (whitelist, supports patterns)
+  exclude?: string[]; // Skip these directories (blacklist, supports patterns)
 }
 
 export interface PushCallbacks {
@@ -54,11 +59,21 @@ export interface EntityPushResult {
   errors: number;
 }
 
+/**
+ * Tracks files that need to be written back after deletions complete
+ */
+interface DeferredFileWrite {
+  filePath: string;
+  records: RecordData[];
+  isArray: boolean;
+}
+
 export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
   private syncConfig: any;
+  private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   
   constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
     this.syncEngine = syncEngine;
@@ -67,6 +82,13 @@ export class PushService {
   
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
+
+    // Validate that include and exclude are not used together
+    if (options.include && options.exclude) {
+      throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
+    }
+
+    this.deferredFileWrites.clear(); // Reset deferred writes for this push operation
     
     const fileBackupManager = new FileBackupManager();
     
@@ -149,7 +171,14 @@ export class PushService {
       // Find entity directories to process
       // Note: If options.dir is specified, configDir already points to that directory
       // So we don't need to pass it as specificDir
-      const entityDirs = this.findEntityDirectories(configDir, undefined, this.syncConfig?.directoryOrder);
+      const entityDirs = findEntityDirectories(
+        configDir,
+        undefined,
+        this.syncConfig?.directoryOrder,
+        this.syncConfig?.ignoreDirectories,
+        options.include,
+        options.exclude
+      );
       
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
@@ -175,12 +204,59 @@ export class PushService {
       let totalSkipped = 0;
       let totalErrors = 0;
       
+      // PHASE 0: Audit all deletions across all entities (if any exist)
+      let deletionAudit: DeletionAudit | null = null;
+      try {
+        deletionAudit = await this.auditAllDeletions(entityDirs, options, callbacks);
+      } catch (auditError) {
+        // Audit failed, cannot proceed
+        throw auditError;
+      }
+
+      // CONFIRMATION PROMPT: Ask user to confirm only if deletions will occur
+      if (!options.dryRun && deletionAudit) {
+        const shouldProceed = await this.promptForConfirmation(deletionAudit, callbacks);
+        if (!shouldProceed) {
+          callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
+
+          // Clean up SQL logging session and file if it was created
+          if (sqlLoggingSession) {
+            const sqlLogPath = sqlLoggingSession.filePath;
+            try {
+              await sqlLoggingSession.dispose();
+              // Delete the empty SQL log file since no operations occurred
+              if (await fs.pathExists(sqlLogPath)) {
+                await fs.remove(sqlLogPath);
+                if (options.verbose) {
+                  callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
+                }
+              }
+            } catch (cleanupError) {
+              callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
+            }
+          }
+
+          return {
+            created: 0,
+            updated: 0,
+            unchanged: 0,
+            deleted: 0,
+            skipped: 0,
+            errors: 0,
+            warnings: this.warnings
+          };
+        }
+      }
+
       // Begin transaction if not in dry-run mode
       if (!options.dryRun) {
         await transactionManager.beginTransaction();
       }
-      
+
       try {
+        // PHASE 1: Process creates/updates for all entities
+        callbacks?.onLog?.('📝 Processing creates and updates...\n');
+
         for (const entityDir of entityDirs) {
           const entityConfig = await loadEntityConfig(entityDir);
           if (!entityConfig) {
@@ -190,11 +266,11 @@ export class PushService {
             totalSkipped++; // Count skipped directories
             continue;
           }
-          
+
           // Show folder with spinner at start
           const dirName = path.relative(process.cwd(), entityDir) || '.';
           callbacks?.onLog?.(`\n📁 ${dirName}:`);
-          
+
           // Use onProgress for animated spinner if available
           if (callbacks?.onProgress) {
             callbacks.onProgress(`Processing ${dirName}...`);
@@ -250,10 +326,22 @@ export class PushService {
           totalSkipped += result.skipped;
           totalErrors += result.errors;
         }
-        
+
+        // PHASE 2: Process deletions in reverse dependency order (if any exist)
+        if (deletionAudit && totalErrors === 0) {
+          const deletionResult = await this.processDeletionsFromAudit(deletionAudit, options, callbacks);
+          totalDeleted += deletionResult.deleted;
+          totalErrors += deletionResult.errors;
+        }
+
         // Commit transaction if successful
         if (!options.dryRun && totalErrors === 0) {
           await transactionManager.commitTransaction();
+        }
+
+        // PHASE 3: Write deferred files with updated deletion timestamps
+        if (!options.dryRun && totalErrors === 0 && this.deferredFileWrites.size > 0) {
+          await this.writeDeferredFiles(options, callbacks);
         }
       } catch (error) {
         // Rollback transaction on error
@@ -445,7 +533,10 @@ export class PushService {
                 
                 // Update stats for successful results
                 const result = batchResult.result!;
-                if (result.isDuplicate) {
+                // Don't count deletion records - they're counted in Phase 2
+                if (result.isDeletedRecord) {
+                  continue; // Skip entirely
+                } else if (result.isDuplicate) {
                   skipped++; // Count duplicates as skipped
                 } else {
                   if (result.status === 'created') created++;
@@ -472,15 +563,18 @@ export class PushService {
               );
               
               // Update stats
-              if (result.isDuplicate) {
-                skipped++; // Count duplicates as skipped
-              } else {
-                if (result.status === 'created') created++;
-                else if (result.status === 'updated') updated++;
-                else if (result.status === 'unchanged') unchanged++;
-                else if (result.status === 'deleted') deleted++;
-                else if (result.status === 'skipped') skipped++;
-                else if (result.status === 'error') errors++;
+              // Don't count deletion records - they're counted in Phase 2
+              if (!result.isDeletedRecord) {
+                if (result.isDuplicate) {
+                  skipped++; // Count duplicates as skipped
+                } else {
+                  if (result.status === 'created') created++;
+                  else if (result.status === 'updated') updated++;
+                  else if (result.status === 'unchanged') unchanged++;
+                  else if (result.status === 'deleted') deleted++;
+                  else if (result.status === 'skipped') skipped++;
+                  else if (result.status === 'error') errors++;
+                }
               }
             } catch (recordError) {
               const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
@@ -490,13 +584,26 @@ export class PushService {
           }
         }
         
+        // Check if this file has any deletion records (including nested relatedEntities)
+        const hasDeletions = this.hasAnyDeletions(records);
+
         // Write back to file (handles both single records and arrays)
+        // Defer writing if file contains deletions - they'll be written after Phase 2
         if (!options.dryRun) {
-          if (isArray) {
-            await JsonWriteHelper.writeOrderedRecordData(filePath, records);
+          if (hasDeletions) {
+            // Store for later writing after deletions complete
+            this.deferredFileWrites.set(filePath, {
+              filePath,
+              records,
+              isArray
+            });
           } else {
-            // For single record files, write back the single record
-            await JsonWriteHelper.writeOrderedRecordData(filePath, records[0]);
+            // Write immediately for files without deletions
+            if (isArray) {
+              await JsonWriteHelper.writeOrderedRecordData(filePath, records);
+            } else {
+              await JsonWriteHelper.writeOrderedRecordData(filePath, records[0]);
+            }
           }
         }
       } catch (fileError) {
@@ -515,13 +622,15 @@ export class PushService {
     batchContext: Map<string, BaseEntity>,
     callbacks?: PushCallbacks,
     entityConfig?: any
-  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped'; isDuplicate?: boolean }> {
+  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped'; isDuplicate?: boolean; isDeletedRecord?: boolean }> {
     const metadata = new Metadata();
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
-    
-    // Check if this record has a deleteRecord directive
+
+    // Skip deletion records - they're handled in Phase 2
+    // File writing is deferred for files containing deletions
+    // Mark with special flag so they don't count in Phase 1 stats at all
     if (record.deleteRecord && record.deleteRecord.delete === true) {
-      return await this.processDeleteRecord(flattenedRecord, entityDir, options, callbacks);
+      return { status: 'unchanged', isDuplicate: false, isDeletedRecord: true };
     }
     
     // Use the unique record ID from the flattened record for batch context
@@ -948,17 +1057,26 @@ export class PushService {
       throw new Error(`Cannot delete ${entityName} record without primaryKey. Please specify primaryKey fields.`);
     }
     
+    // Load the entity to check if it exists in the target database
+    const existingEntity = await this.syncEngine.loadEntity(entityName, record.primaryKey);
+
     // Check if the deletion has already been processed
     if (record.deleteRecord?.deletedAt) {
-      if (options.verbose) {
-        callbacks?.onLog?.(`   ℹ️  Record already deleted on ${record.deleteRecord.deletedAt}`);
+      // Verify if record still exists in THIS database
+      if (!existingEntity) {
+        if (options.verbose) {
+          callbacks?.onLog?.(`   ℹ️  Record already deleted on ${record.deleteRecord.deletedAt} and confirmed absent from database`);
+        }
+        return { status: 'unchanged', isDuplicate: false };
       }
-      // Return unchanged since the record is already in the desired state (deleted)
-      return { status: 'unchanged', isDuplicate: false };
+
+      // Record has deletedAt timestamp but still exists in this database
+      // This can happen when syncing to a different database
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ℹ️  Record marked as deleted on ${record.deleteRecord.deletedAt}, but still exists in this database. Re-deleting...`);
+      }
+      // Fall through to deletion logic
     }
-    
-    // Load the entity to verify it exists
-    const existingEntity = await this.syncEngine.loadEntity(entityName, record.primaryKey);
     
     if (!existingEntity) {
       const pkDisplay = Object.entries(record.primaryKey)
@@ -1025,21 +1143,19 @@ export class PushService {
         throw new Error(`Failed to delete ${entityName} record: ${errorMessage}`);
       }
       
-      // Update the deleteRecord section with deletedAt timestamp
+      // Set deletedAt timestamp after successful deletion
       if (!record.deleteRecord) {
         record.deleteRecord = { delete: true };
       }
       record.deleteRecord.deletedAt = new Date().toISOString();
-      
-      // Remove notFound flag if it exists since we successfully found and deleted the record
-      if (record.deleteRecord.notFound) {
-        delete record.deleteRecord.notFound;
-      }
-      
+
+      // Update the corresponding record in deferred file writes
+      this.updateDeferredFileRecord(flattenedRecord);
+
       if (options.verbose) {
         callbacks?.onLog?.(`   ✓ Successfully deleted ${entityName} record`);
       }
-      
+
       return { status: 'deleted', isDuplicate: false };
       
     } catch (deleteError: any) {
@@ -1059,10 +1175,404 @@ export class PushService {
     }
   }
   
+  /**
+   * Prompt user for confirmation before proceeding with push operation
+   * This happens after deletion audit but before any database operations
+   */
+  private async promptForConfirmation(
+    deletionAudit: DeletionAudit | null,
+    callbacks?: PushCallbacks
+  ): Promise<boolean> {
+    // Build confirmation message
+    const messages: string[] = [];
+    messages.push('\n' + '═'.repeat(80));
+    messages.push('CONFIRMATION REQUIRED');
+    messages.push('═'.repeat(80));
+    messages.push('');
+    messages.push('This operation will:');
+    messages.push('  • Create new records');
+    messages.push('  • Update existing records');
+
+    if (deletionAudit) {
+      const totalDeletes = deletionAudit.explicitDeletes.size + deletionAudit.implicitDeletes.size;
+      messages.push(`  • Delete ${totalDeletes} record${totalDeletes > 1 ? 's' : ''} (${deletionAudit.explicitDeletes.size} explicit, ${deletionAudit.implicitDeletes.size} implicit)`);
+
+      if (deletionAudit.orphanedReferences.length > 0) {
+        messages.push(`  ⚠️  ${deletionAudit.orphanedReferences.length} database-only reference${deletionAudit.orphanedReferences.length > 1 ? 's' : ''} detected (may cause FK errors)`);
+      }
+    } else {
+      messages.push('  • No deletions');
+    }
+
+    messages.push('');
+    messages.push('All operations will occur within a transaction and can be rolled back on error.');
+    messages.push('');
+    messages.push('═'.repeat(80));
+    messages.push('');
+
+    // Display messages
+    for (const msg of messages) {
+      callbacks?.onLog?.(msg);
+    }
+
+    // Use onConfirm callback if available, otherwise throw error
+    if (callbacks?.onConfirm) {
+      const confirmed = await callbacks.onConfirm('Do you want to proceed? (yes/no)');
+      return confirmed;
+    } else {
+      // No confirmation callback provided - this shouldn't happen in interactive mode
+      callbacks?.onWarn?.('⚠️  No confirmation callback provided. Proceeding automatically.');
+      callbacks?.onWarn?.('   To enable confirmation prompts, provide an onConfirm callback.\n');
+      return true;
+    }
+  }
+
+  /**
+   * Audit all deletions across all metadata files
+   * This pre-processes all records to identify deletion dependencies and order
+   */
+  private async auditAllDeletions(
+    entityDirs: string[],
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<DeletionAudit | null> {
+    // OPTIMIZATION: Quick scan to check if ANY deletions exist before doing expensive loading
+    let hasAnyDeletions = false;
+
+    for (const entityDir of entityDirs) {
+      if (hasAnyDeletions) break; // Early exit once we find any deletion
+
+      const entityConfig = await loadEntityConfig(entityDir);
+      if (!entityConfig) {
+        continue;
+      }
+
+      const pattern = entityConfig.filePattern || '*.json';
+      const files = await fastGlob(pattern, {
+        cwd: entityDir,
+        absolute: true,
+        onlyFiles: true,
+        dot: true,
+        ignore: ['**/node_modules/**', '**/.mj-*.json']
+      });
+
+      // Quick scan for delete directives without full processing
+      for (const filePath of files) {
+        try {
+          const content = await fs.readFile(filePath, 'utf-8');
+          // Fast string check for delete directives
+          if (content.includes('"delete"') && content.includes('true')) {
+            // More precise check - parse JSON to confirm
+            const data = JSON.parse(content);
+            const records = Array.isArray(data) ? data : [data];
+
+            const hasDelete = records.some((r: RecordData) => r.deleteRecord?.delete === true);
+            if (hasDelete) {
+              hasAnyDeletions = true;
+              break;
+            }
+          }
+        } catch (error) {
+          // Ignore errors in quick scan
+        }
+      }
+    }
+
+    // If no deletions found, skip all processing
+    if (!hasAnyDeletions) {
+      if (options.verbose) {
+        callbacks?.onLog?.('No deletion operations found - skipping deletion audit.\n');
+      }
+      return null;
+    }
+
+    // Deletions exist - proceed with full audit
+    callbacks?.onLog?.('\n🔍 Analyzing deletion operations...\n');
+
+    // Load all records from all entity directories
+    const allRecords: FlattenedRecord[] = [];
+    const analyzer = new RecordDependencyAnalyzer();
+
+    for (const entityDir of entityDirs) {
+      const entityConfig = await loadEntityConfig(entityDir);
+      if (!entityConfig) {
+        continue;
+      }
+
+      // Find all JSON files
+      const pattern = entityConfig.filePattern || '*.json';
+      const files = await fastGlob(pattern, {
+        cwd: entityDir,
+        absolute: true,
+        onlyFiles: true,
+        dot: true,
+        ignore: ['**/node_modules/**', '**/.mj-*.json']
+      });
+
+      // Load and flatten records from each file
+      for (const filePath of files) {
+        try {
+          const rawFileData = await fs.readJson(filePath);
+
+          // Handle @include directives if present
+          let fileData = rawFileData;
+          const jsonString = JSON.stringify(rawFileData);
+          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+
+          if (hasIncludes) {
+            const jsonPreprocessor = new JsonPreprocessor();
+            fileData = await jsonPreprocessor.processFile(filePath);
+          }
+
+          const records = Array.isArray(fileData) ? fileData : [fileData];
+
+          // Analyze and flatten records
+          const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
+          allRecords.push(...analysisResult.sortedRecords);
+        } catch (error) {
+          if (options.verbose) {
+            callbacks?.onLog?.(`Warning: Could not load ${filePath}: ${error}`);
+          }
+        }
+      }
+    }
+
+    // Perform comprehensive deletion audit
+    const md = new Metadata();
+    const auditor = new DeletionAuditor(
+      md,
+      this.contextUser
+    );
+
+    const audit = await auditor.auditDeletions(allRecords);
+
+    // Check if any records actually need deletion
+    const totalMarkedForDeletion = audit.explicitDeletes.size + audit.implicitDeletes.size;
+    const needDeletion = audit.deletionLevels.flat().length; // Only records that exist in DB
+
+    if (needDeletion === 0) {
+      // All records marked for deletion are already deleted
+      if (options.verbose && totalMarkedForDeletion > 0) {
+        callbacks?.onLog?.(`ℹ️  All ${totalMarkedForDeletion} record${totalMarkedForDeletion > 1 ? 's' : ''} marked for deletion are already deleted from the database.`);
+        callbacks?.onLog?.('   No deletion operations needed.\n');
+      }
+      return null; // Signal that no deletion audit is needed
+    }
+
+    // Generate and display report (only if records need deletion)
+    const report = DeletionReportGenerator.generateReport(audit, options.verbose);
+    callbacks?.onLog?.(report);
+    callbacks?.onLog?.('');
+
+    // Check for blocking issues (only circular dependencies block execution)
+    if (audit.circularDependencies.length > 0) {
+      const error = `Cannot proceed: ${audit.circularDependencies.length} circular ${audit.circularDependencies.length > 1 ? 'dependencies' : 'dependency'} detected.\n` +
+                   `Please resolve the circular dependencies before attempting deletion.`;
+      callbacks?.onError?.(error);
+      throw new Error(error);
+    }
+
+    // Warn about database-only references (non-blocking)
+    // These may be handled by cascade delete rules at the database level
+    if (audit.orphanedReferences.length > 0) {
+      callbacks?.onWarn?.(`⚠️  WARNING: ${audit.orphanedReferences.length} database-only reference${audit.orphanedReferences.length > 1 ? 's' : ''} found.`);
+      callbacks?.onWarn?.(`   These records exist in the database but not in metadata.`);
+      callbacks?.onWarn?.(`   If your database has cascade delete rules, these will be handled automatically.`);
+      callbacks?.onWarn?.(`   Otherwise, deletion may fail with FK constraint errors.\n`);
+    }
+
+    // Warn about implicit deletes
+    if (audit.implicitDeletes.size > 0) {
+      callbacks?.onWarn?.('⚠️  WARNING: Implicit deletions will occur.');
+      callbacks?.onWarn?.(`   ${audit.implicitDeletes.size} record${audit.implicitDeletes.size > 1 ? 's' : ''} will be deleted due to FK constraints.`);
+      callbacks?.onWarn?.('   Review the deletion audit report above.\n');
+    }
+
+    return audit;
+  }
+
+  /**
+   * Process deletions in reverse dependency order
+   */
+  private async processDeletionsFromAudit(
+    audit: DeletionAudit,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<{ deleted: number; errors: number }> {
+    let deleted = 0;
+    let errors = 0;
+
+    callbacks?.onLog?.('🗑️  Processing deletions in reverse dependency order...\n');
+
+    // Process deletion levels in order (highest dependency level first)
+    for (let i = 0; i < audit.deletionLevels.length; i++) {
+      const level = audit.deletionLevels[i];
+      const levelNumber = audit.deletionLevels.length - i; // Reverse numbering for clarity
+
+      callbacks?.onLog?.(`   Level ${levelNumber}: Deleting ${level.length} record${level.length > 1 ? 's' : ''}...`);
+
+      // Process records within same level (can be done in parallel in the future)
+      for (const record of level) {
+        try {
+          const result = await this.processDeleteRecord(record, '', options, callbacks);
+
+          if (result.status === 'deleted') {
+            deleted++;
+          } else if (result.status === 'skipped') {
+            // Record not found, already handled in processDeleteRecord
+          }
+        } catch (error) {
+          callbacks?.onError?.(`   Failed to delete ${record.entityName}: ${error}`);
+          errors++;
+          throw error; // Fail fast on first deletion error
+        }
+      }
+    }
+
+    if (deleted > 0) {
+      callbacks?.onLog?.(`   ✓ Successfully deleted ${deleted} record${deleted > 1 ? 's' : ''}\n`);
+    }
+
+    return { deleted, errors };
+  }
+
+  /**
+   * Recursively check if any records in an array (including nested relatedEntities) have deletions
+   */
+  private hasAnyDeletions(records: RecordData[]): boolean {
+    for (const record of records) {
+      // Check this record
+      if (record.deleteRecord?.delete === true) {
+        return true;
+      }
+
+      // Check nested related entities recursively
+      if (record.relatedEntities) {
+        for (const relatedRecords of Object.values(record.relatedEntities)) {
+          if (Array.isArray(relatedRecords)) {
+            if (this.hasAnyDeletions(relatedRecords)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Write all deferred files with updated deletion timestamps
+   * Called in Phase 3 after all deletions complete successfully
+   */
+  private async writeDeferredFiles(options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    if (this.deferredFileWrites.size === 0) {
+      return;
+    }
+
+    if (options.verbose) {
+      callbacks?.onLog?.(`\n📝 Writing ${this.deferredFileWrites.size} file${this.deferredFileWrites.size > 1 ? 's' : ''} with deletion timestamps...`);
+    }
+
+    for (const deferredWrite of this.deferredFileWrites.values()) {
+      try {
+        if (deferredWrite.isArray) {
+          await JsonWriteHelper.writeOrderedRecordData(deferredWrite.filePath, deferredWrite.records);
+        } else {
+          await JsonWriteHelper.writeOrderedRecordData(deferredWrite.filePath, deferredWrite.records[0]);
+        }
+      } catch (error) {
+        callbacks?.onWarn?.(`   ⚠️  Failed to write ${deferredWrite.filePath}: ${error}`);
+      }
+    }
+
+    if (options.verbose) {
+      callbacks?.onLog?.(`   ✓ Completed writing deferred files\n`);
+    }
+  }
+
+  /**
+   * Update a record in deferred file writes after successful deletion
+   * Finds the matching RecordData by primary key and updates its deleteRecord section
+   * Searches recursively through nested relatedEntities
+   */
+  private updateDeferredFileRecord(flattenedRecord: FlattenedRecord): void {
+    const { record } = flattenedRecord;
+
+    // Search through all deferred files to find the matching record
+    for (const deferredWrite of this.deferredFileWrites.values()) {
+      for (const fileRecord of deferredWrite.records) {
+        // Search this record and all nested related entities recursively
+        if (this.findAndUpdateRecord(fileRecord, record, flattenedRecord.entityName)) {
+          return; // Found and updated
+        }
+      }
+    }
+  }
+
+  /**
+   * Recursively search a RecordData and its relatedEntities for a matching record
+   * Updates the matching record's deleteRecord timestamp
+   */
+  private findAndUpdateRecord(
+    searchIn: RecordData,
+    targetRecord: RecordData,
+    targetEntityName: string
+  ): boolean {
+    // Check if this is the matching record
+    if (this.recordsMatch(searchIn, targetRecord, targetEntityName)) {
+      // Update the deleteRecord section with the timestamp
+      if (!searchIn.deleteRecord) {
+        searchIn.deleteRecord = { delete: true };
+      }
+      searchIn.deleteRecord.deletedAt = targetRecord.deleteRecord!.deletedAt;
+      return true; // Found and updated
+    }
+
+    // Search through related entities recursively
+    if (searchIn.relatedEntities) {
+      for (const relatedRecords of Object.values(searchIn.relatedEntities)) {
+        if (Array.isArray(relatedRecords)) {
+          for (const relatedRecord of relatedRecords) {
+            if (this.findAndUpdateRecord(relatedRecord, targetRecord, targetEntityName)) {
+              return true; // Found in nested record
+            }
+          }
+        }
+      }
+    }
+
+    return false; // Not found in this branch
+  }
+
+  /**
+   * Check if two RecordData objects represent the same record
+   * Compares primary keys and entity context
+   */
+  private recordsMatch(record1: RecordData, record2: RecordData, entityName: string): boolean {
+    // Must both have primary keys
+    if (!record1.primaryKey || !record2.primaryKey) {
+      return false;
+    }
+
+    // Must have same primary key fields
+    const pk1Keys = Object.keys(record1.primaryKey);
+    const pk2Keys = Object.keys(record2.primaryKey);
+
+    if (pk1Keys.length !== pk2Keys.length) {
+      return false;
+    }
+
+    // All primary key values must match
+    return pk1Keys.every(key =>
+      record1.primaryKey![key] === record2.primaryKey![key]
+    );
+  }
+
   private _buildBatchContextKey(entityName: string, record: RecordData): string {
     // Build a unique key for the batch context based on entity name and identifying fields
     const keyParts = [entityName];
-    
+
     // Use primary key if available
     if (record.primaryKey) {
       for (const [field, value] of Object.entries(record.primaryKey)) {
@@ -1077,89 +1587,7 @@ export class PushService {
         }
       }
     }
-    
-    return keyParts.join('|');
-  }
-  
-  private findEntityDirectories(baseDir: string, specificDir?: string, directoryOrder?: string[]): string[] {
-    const dirs: string[] = [];
-    
-    if (specificDir) {
-      // Process specific directory
-      const fullPath = path.resolve(baseDir, specificDir);
-      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-        // Check if this directory has an entity configuration
-        const configPath = path.join(fullPath, '.mj-sync.json');
-        if (fs.existsSync(configPath)) {
-          try {
-            const config = fs.readJsonSync(configPath);
-            if (config.entity) {
-              // It's an entity directory, add it
-              dirs.push(fullPath);
-            } else {
-              // It's a container directory, search its subdirectories
-              this.findEntityDirectoriesRecursive(fullPath, dirs);
-            }
-          } catch {
-            // Invalid config, skip
-          }
-        }
-      }
-    } else {
-      // Find all entity directories
-      this.findEntityDirectoriesRecursive(baseDir, dirs);
-    }
-    
-    // Apply directory ordering if specified
-    if (directoryOrder && directoryOrder.length > 0 && !specificDir) {
-      // Create a map of directory name to order index
-      const orderMap = new Map<string, number>();
-      directoryOrder.forEach((dir, index) => {
-        orderMap.set(dir, index);
-      });
-      
-      // Sort directories based on the order map
-      dirs.sort((a, b) => {
-        const nameA = path.basename(a);
-        const nameB = path.basename(b);
-        const orderA = orderMap.get(nameA) ?? Number.MAX_SAFE_INTEGER;
-        const orderB = orderMap.get(nameB) ?? Number.MAX_SAFE_INTEGER;
-        
-        // If both have specified orders, use them
-        if (orderA !== Number.MAX_SAFE_INTEGER || orderB !== Number.MAX_SAFE_INTEGER) {
-          return orderA - orderB;
-        }
-        
-        // Otherwise, maintain original order (stable sort)
-        return 0;
-      });
-    }
-    
-    return dirs;
-  }
 
-  private findEntityDirectoriesRecursive(dir: string, dirs: string[]): void {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-        const fullPath = path.join(dir, entry.name);
-        const configPath = path.join(fullPath, '.mj-sync.json');
-        
-        if (fs.existsSync(configPath)) {
-          try {
-            const config = fs.readJsonSync(configPath);
-            if (config.entity) {
-              dirs.push(fullPath);
-            }
-          } catch {
-            // Skip invalid config files
-          }
-        } else {
-          // Recurse into subdirectories
-          this.findEntityDirectoriesRecursive(fullPath, dirs);
-        }
-      }
-    }
+    return keyParts.join('|');
   }
 }

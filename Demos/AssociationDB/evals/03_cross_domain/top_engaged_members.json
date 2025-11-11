@@ -1,0 +1,56 @@
+{
+  "eval_id": "top-engaged-members",
+  "category": "cross_domain",
+  "difficulty": "medium",
+  "tags": ["membership", "engagement", "events", "learning", "ranking"],
+
+  "business_context": "Member engagement team wants to identify the most active members to recognize their participation, offer leadership opportunities, or use them as testimonials.",
+
+  "prompt": "Who are our top 10 most engaged members?",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "members_shown",
+        "expected_value": 10,
+        "description": "Should show exactly top 10 members"
+      },
+      {
+        "metric": "engagement_metrics",
+        "expected_value": true,
+        "description": "Should include multiple engagement metrics (events attended, courses completed, etc.)"
+      }
+    ],
+    "visualization": {
+      "type": "table",
+      "alternatives": ["leaderboard", "card_list"],
+      "should_not_be": ["pie_chart", "line_chart", "single_metric"],
+      "reasoning": "Ranking of people with multiple metrics is best shown in table or leaderboard format"
+    },
+    "required_features": ["member_name", "engagement_score", "ranking"],
+    "optional_features": ["events_attended", "courses_completed", "chapter_involvement", "committee_membership"],
+    "interactivity": [
+      {
+        "action": "Click on member name",
+        "expected_result": "Show full member profile with detailed engagement history"
+      },
+      {
+        "action": "Sort by different metric",
+        "expected_result": "Reorder members by selected engagement dimension"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Top engaged members\nSELECT TOP 10\n  m.FirstName + ' ' + m.LastName as MemberName,\n  COUNT(DISTINCT er.ID) as EventsAttended,\n  COUNT(DISTINCT enr.ID) as CoursesCompleted,\n  COUNT(DISTINCT cm.ID) as ChapterMemberships,\n  COUNT(DISTINCT com.ID) as CommitteeMemberships,\n  (COUNT(DISTINCT er.ID) * 2) + \n  (COUNT(DISTINCT enr.ID) * 3) + \n  (COUNT(DISTINCT cm.ID) * 1) + \n  (COUNT(DISTINCT com.ID) * 5) as EngagementScore\nFROM membership.Member m\nLEFT JOIN events.EventRegistration er ON m.ID = er.MemberID AND er.Status = 'Attended'\nLEFT JOIN learning.Enrollment enr ON m.ID = enr.MemberID AND enr.Status = 'Completed'\nLEFT JOIN chapters.ChapterMembership cm ON m.ID = cm.MemberID\nLEFT JOIN governance.CommitteeMember com ON m.ID = com.MemberID\nGROUP BY m.FirstName, m.LastName\nORDER BY EngagementScore DESC;",
+
+  "human_eval_guidance": "Verify members are ranked by overall engagement (not just one metric). Check that engagement score considers multiple activities. Confirm top members have significant participation.",
+
+  "common_pitfalls": "Using only one engagement dimension; not weighting different activities appropriately; including inactive members; counting registrations instead of attendance."
+}

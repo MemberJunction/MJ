@@ -1,6 +1,6 @@
 {
   "entity": "MJ: Scheduled Jobs",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {
   },
   "pull": {

@@ -1,0 +1,60 @@
+{
+  "eval_id": "campaign-conversion-attribution",
+  "category": "complex",
+  "difficulty": "very_hard",
+  "tags": ["marketing", "campaigns", "attribution", "conversion", "advanced"],
+
+  "business_context": "Marketing leadership needs to understand which campaigns drive real business outcomes (event registrations, course enrollments, renewals) with proper attribution to optimize marketing spend and strategy.",
+
+  "prompt": "Show campaign performance with conversion attribution",
+
+  "expected_outcome": {
+    "data_assertions": [
+      {
+        "metric": "campaigns_with_attribution",
+        "expected_range": [5, 10],
+        "description": "Should show campaigns with conversion data"
+      },
+      {
+        "metric": "conversion_types",
+        "expected_range": [3, 5],
+        "description": "Should track multiple conversion types (event reg, course enrollment, renewal, etc.)"
+      }
+    ],
+    "visualization": {
+      "type": "dashboard",
+      "alternatives": ["multi_chart_dashboard", "funnel_with_attribution"],
+      "should_not_be": ["single_chart", "simple_table", "pie_chart"],
+      "reasoning": "Complex attribution analysis requires multiple coordinated views showing campaign performance, conversion funnels, and attribution models"
+    },
+    "required_features": ["campaign_list", "conversion_metrics", "attribution_model", "roi_calculation"],
+    "optional_features": ["funnel_visualization", "time_to_conversion", "multi_touch_attribution", "comparison_view"],
+    "interactivity": [
+      {
+        "action": "Click on campaign",
+        "expected_result": "Show detailed conversion funnel and individual conversions for that campaign"
+      },
+      {
+        "action": "Toggle attribution model",
+        "expected_result": "Switch between first-touch, last-touch, and multi-touch attribution"
+      },
+      {
+        "action": "Filter by conversion type",
+        "expected_result": "Show only selected conversion actions"
+      }
+    ]
+  },
+
+  "validation_criteria": {
+    "data_correctness": 0.6,
+    "visualization_choice": 0.2,
+    "interactivity": 0.15,
+    "performance": 0.05
+  },
+
+  "sample_sql": "-- Campaign conversion attribution\n-- Note: This requires campaign tracking data (which campaign influenced which action)\nWITH CampaignActivity AS (\n  SELECT \n    c.ID as CampaignID,\n    c.Name as CampaignName,\n    c.CampaignType,\n    c.StartDate,\n    c.EndDate,\n    cm.MemberID,\n    es.SentAt as ContactDate\n  FROM marketing.Campaign c\n  LEFT JOIN marketing.CampaignMember cm ON c.ID = cm.CampaignID\n  LEFT JOIN email.EmailSend es ON cm.MemberID = es.MemberID\n  WHERE es.SentAt BETWEEN c.StartDate AND c.EndDate\n),\nConversions AS (\n  -- Event Registrations\n  SELECT \n    ca.CampaignID,\n    ca.CampaignName,\n    'Event Registration' as ConversionType,\n    er.MemberID,\n    er.RegistrationDate as ConversionDate,\n    DATEDIFF(DAY, ca.ContactDate, er.RegistrationDate) as DaysToConvert,\n    inv.Total as ConversionValue\n  FROM CampaignActivity ca\n  JOIN events.EventRegistration er ON ca.MemberID = er.MemberID\n  LEFT JOIN finance.Invoice inv ON inv.RelatedEntityID = er.ID AND inv.Status IN ('Paid', 'Partial')\n  WHERE er.RegistrationDate >= ca.ContactDate\n    AND er.RegistrationDate <= DATEADD(DAY, 30, ca.ContactDate)\n  \n  UNION ALL\n  \n  -- Course Enrollments\n  SELECT \n    ca.CampaignID,\n    ca.CampaignName,\n    'Course Enrollment' as ConversionType,\n    enr.MemberID,\n    enr.EnrollmentDate as ConversionDate,\n    DATEDIFF(DAY, ca.ContactDate, enr.EnrollmentDate) as DaysToConvert,\n    inv.Total as ConversionValue\n  FROM CampaignActivity ca\n  JOIN learning.Enrollment enr ON ca.MemberID = enr.MemberID\n  LEFT JOIN finance.Invoice inv ON inv.RelatedEntityID = enr.ID AND inv.Status IN ('Paid', 'Partial')\n  WHERE enr.EnrollmentDate >= ca.ContactDate\n    AND enr.EnrollmentDate <= DATEADD(DAY, 30, ca.ContactDate)\n  \n  UNION ALL\n  \n  -- Membership Renewals\n  SELECT \n    ca.CampaignID,\n    ca.CampaignName,\n    'Membership Renewal' as ConversionType,\n    ms.MemberID,\n    ms.StartDate as ConversionDate,\n    DATEDIFF(DAY, ca.ContactDate, ms.StartDate) as DaysToConvert,\n    inv.Total as ConversionValue\n  FROM CampaignActivity ca\n  JOIN membership.Membership ms ON ca.MemberID = ms.MemberID\n  LEFT JOIN finance.Invoice inv ON inv.RelatedEntityID = ms.ID AND inv.Status IN ('Paid', 'Partial')\n  WHERE ms.StartDate >= ca.ContactDate\n    AND ms.StartDate <= DATEADD(DAY, 30, ca.ContactDate)\n)\nSELECT \n  CampaignName,\n  ConversionType,\n  COUNT(DISTINCT MemberID) as UniqueConverters,\n  COUNT(*) as TotalConversions,\n  SUM(ConversionValue) as TotalRevenue,\n  AVG(ConversionValue) as AvgConversionValue,\n  AVG(DaysToConvert) as AvgDaysToConvert\nFROM Conversions\nGROUP BY CampaignID, CampaignName, ConversionType\nORDER BY TotalRevenue DESC;",
+
+  "human_eval_guidance": "Verify attribution logic connects campaigns to subsequent actions correctly. Check that conversion window is reasonable (not too short or long). Confirm revenue attribution includes all conversion types. Look for clear funnel visualization showing campaign → engagement → conversion.",
+
+  "common_pitfalls": "Attribution window too narrow or too wide; not tracking campaign touches in database; missing conversion types; incorrect revenue attribution; double-counting conversions; not handling multi-touch attribution; overly complex visualization that obscures insights."
+}

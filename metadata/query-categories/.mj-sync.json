@@ -1,6 +1,6 @@
 {
   "entity": "Query Categories",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {
   },
   "pull": {

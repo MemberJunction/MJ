@@ -2,7 +2,7 @@
   <div class="panel-header">
     <div class="panel-header-left">
       <h3>
-        <i class="fas fa-cube"></i>
+        <i class="fas" [ngClass]="getArtifactIcon()"></i>
         {{ displayName }}
       </h3>
       @if (displayDescription) {
@@ -49,6 +49,11 @@
           <i class="fas fa-share-nodes"></i>
         </button>
       }
+      <button class="maximize-btn"
+              (click)="onMaximizeToggle()"
+              [title]="isMaximized ? 'Restore Width' : 'Maximize Width'">
+        <i class="fas" [ngClass]="isMaximized ? 'fa-compress-arrows-alt' : 'fa-arrows-left-right'"></i>
+      </button>
       <button class="close-btn" (click)="onClose()" title="Close">
         <i class="fas fa-times"></i>
       </button>

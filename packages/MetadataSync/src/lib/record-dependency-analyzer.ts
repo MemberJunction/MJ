@@ -21,6 +21,18 @@ export interface FlattenedRecord {
 }
 
 /**
+ * Represents a reverse dependency relationship
+ * (which records depend on a given record)
+ */
+export interface ReverseDependency {
+  recordId: string;           // The record being referenced
+  dependentId: string;        // The record that depends on it
+  entityName: string;         // Entity of the dependent
+  fieldName: string | null;   // Foreign key field name (if known)
+  filePath: string;           // Location of dependent record
+}
+
+/**
  * Result of dependency analysis
  */
 export interface DependencyAnalysisResult {
@@ -579,5 +591,173 @@ export class RecordDependencyAnalyzer {
     }
     
     return levels;
+  }
+
+  /**
+   * Build reverse dependency map from forward dependencies
+   * Maps: record ID -> list of records that depend on it
+   *
+   * This is essential for deletion ordering - we need to know what depends on a record
+   * before we can safely delete it.
+   */
+  public buildReverseDependencyMap(
+    records: FlattenedRecord[]
+  ): Map<string, ReverseDependency[]> {
+    const reverseMap = new Map<string, ReverseDependency[]>();
+
+    for (const record of records) {
+      // For each dependency this record has...
+      for (const depId of record.dependencies) {
+        // Add this record as a dependent of that dependency
+        if (!reverseMap.has(depId)) {
+          reverseMap.set(depId, []);
+        }
+
+        reverseMap.get(depId)!.push({
+          recordId: depId,
+          dependentId: record.id,
+          entityName: record.entityName,
+          fieldName: this.findForeignKeyFieldForDependency(record, depId),
+          filePath: record.path
+        });
+      }
+    }
+
+    return reverseMap;
+  }
+
+  /**
+   * Find the foreign key field that creates a dependency
+   * Used for better error reporting
+   */
+  private findForeignKeyFieldForDependency(
+    record: FlattenedRecord,
+    dependencyId: string
+  ): string | null {
+    const entityInfo = this.getEntityInfo(record.entityName);
+    if (!entityInfo) return null;
+
+    const dependentRecord = this.recordIdMap.get(dependencyId);
+    if (!dependentRecord) return null;
+
+    // Check all foreign key fields
+    for (const field of entityInfo.ForeignKeys) {
+      const fieldValue = record.record.fields?.[field.Name];
+
+      // Check if this field references the dependent record
+      if (fieldValue && typeof fieldValue === 'string') {
+        // Handle @lookup references
+        if (fieldValue.startsWith(METADATA_KEYWORDS.LOOKUP)) {
+          const resolvedDep = this.findLookupDependency(fieldValue, record);
+          if (resolvedDep === dependencyId) {
+            return field.Name;
+          }
+        }
+        // Handle direct foreign key values
+        else if (!fieldValue.startsWith('@')) {
+          const relatedEntityInfo = this.getEntityInfo(field.RelatedEntity);
+          if (relatedEntityInfo) {
+            const dep = this.findRecordByPrimaryKey(
+              field.RelatedEntity,
+              fieldValue,
+              relatedEntityInfo
+            );
+            if (dep === dependencyId) {
+              return field.Name;
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Perform reverse topological sort for deletion order
+   * Returns records grouped by dependency level, with leaf nodes (highest dependency level) first
+   *
+   * For deletions, we want to delete in reverse order of creation:
+   * - Records at highest forward dependency levels (leaf nodes) delete FIRST
+   * - Records at level 0 (root nodes with no dependencies) delete LAST
+   *
+   * This is simply the reverse of the forward topological sort used for creates.
+   */
+  public reverseTopologicalSort(
+    records: FlattenedRecord[],
+    reverseDependencies: Map<string, ReverseDependency[]>
+  ): FlattenedRecord[][] {
+    // Calculate forward dependency levels (same as creation order)
+    const recordLevels = new Map<string, number>();
+
+    // Calculate the level for each record based on its FORWARD dependencies
+    for (const record of records) {
+      let maxDependencyLevel = -1;
+
+      // Find the maximum level of all dependencies (things this record depends ON)
+      for (const depId of record.dependencies) {
+        const depLevel = recordLevels.get(depId);
+        if (depLevel !== undefined && depLevel > maxDependencyLevel) {
+          maxDependencyLevel = depLevel;
+        }
+      }
+
+      // This record's level is one more than its highest dependency
+      const recordLevel = maxDependencyLevel + 1;
+      recordLevels.set(record.id, recordLevel);
+    }
+
+    // Group records by level
+    const forwardLevels: FlattenedRecord[][] = [];
+    for (const record of records) {
+      const level = recordLevels.get(record.id) || 0;
+
+      if (!forwardLevels[level]) {
+        forwardLevels[level] = [];
+      }
+      forwardLevels[level].push(record);
+    }
+
+    // Reverse the array for deletion order
+    // Forward level 0 (roots) becomes last to delete
+    // Forward level N (leaves) becomes first to delete
+    return forwardLevels.reverse();
+  }
+
+  /**
+   * Find all transitive dependents of a set of records
+   * This is useful for finding all records that must be deleted when deleting a parent
+   *
+   * @param recordIds Set of record IDs to find dependents for
+   * @param reverseDependencies Reverse dependency map
+   * @returns Set of all record IDs that depend on the input records (transitively)
+   */
+  public findTransitiveDependents(
+    recordIds: Set<string>,
+    reverseDependencies: Map<string, ReverseDependency[]>
+  ): Set<string> {
+    const dependents = new Set<string>();
+    const visited = new Set<string>();
+
+    // BFS to find all transitive dependents
+    const queue = Array.from(recordIds);
+
+    while (queue.length > 0) {
+      const recordId = queue.shift()!;
+      if (visited.has(recordId)) continue;
+      visited.add(recordId);
+
+      const deps = reverseDependencies.get(recordId) || [];
+
+      for (const dep of deps) {
+        // Add dependent to result set
+        dependents.add(dep.dependentId);
+
+        // Queue for processing its dependents
+        queue.push(dep.dependentId);
+      }
+    }
+
+    return dependents;
   }
 }

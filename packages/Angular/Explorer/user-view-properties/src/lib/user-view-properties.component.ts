@@ -339,7 +339,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.record.GridState = JSON.stringify(tempO); // stringify the state into the record  
   }
 
-  public onFilterChange(value: CompositeFilterDescriptor): void {
+  public onViewFilterChange(value: CompositeFilterDescriptor): void {
     this.localFilterState = value;
   }
 

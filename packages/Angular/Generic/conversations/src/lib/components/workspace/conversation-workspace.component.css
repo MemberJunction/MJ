@@ -106,6 +106,12 @@
   background-color: #1e3a8a;
 }
 
+/* Maximized artifact panel */
+.workspace-artifact-panel.maximized {
+  width: 100% !important;
+  max-width: 100%;
+}
+
 /* Compact layout */
 .conversation-workspace[data-layout="compact"] .workspace-sidebar {
   width: 240px;

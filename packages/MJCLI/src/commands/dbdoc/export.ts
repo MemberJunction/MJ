@@ -1,103 +1,81 @@
 import { Command, Flags } from '@oclif/core';
-import { confirm } from '@inquirer/prompts';
-import ora from 'ora-classic';
-import chalk from 'chalk';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import {
-  StateManager,
-  SQLGenerator,
-  MarkdownGenerator,
-  DatabaseConnection,
-} from '@memberjunction/db-auto-doc';
 
-export default class Export extends Command {
-  static description = 'Generate output files (SQL scripts, markdown documentation)';
+export default class DbDocExport extends Command {
+  static description = 'Export documentation in multiple formats (delegates to db-auto-doc export)';
 
   static examples = [
-    '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --format sql',
-    '<%= config.bin %> <%= command.id %> --format markdown --output ./docs',
-    '<%= config.bin %> <%= command.id %> --execute --approved-only',
+    '<%= config.bin %> <%= command.id %> --state-file=./db-doc-state.json',
+    '<%= config.bin %> <%= command.id %> --sql',
+    '<%= config.bin %> <%= command.id %> --markdown',
+    '<%= config.bin %> <%= command.id %> --html',
+    '<%= config.bin %> <%= command.id %> --csv',
+    '<%= config.bin %> <%= command.id %> --mermaid',
+    '<%= config.bin %> <%= command.id %> --sql --markdown --html --csv --mermaid --apply',
   ];
 
   static flags = {
-    format: Flags.string({
-      description: 'Output format',
-      options: ['sql', 'markdown', 'all'],
-      default: 'all',
+    'state-file': Flags.string({
+      description: 'Path to state JSON file',
+      char: 's'
     }),
-    output: Flags.string({
-      description: 'Output directory',
-      default: './docs',
+    'output-dir': Flags.string({
+      description: 'Output directory for generated files',
+      char: 'o'
+    }),
+    sql: Flags.boolean({
+      description: 'Generate SQL script'
+    }),
+    markdown: Flags.boolean({
+      description: 'Generate Markdown documentation'
+    }),
+    html: Flags.boolean({
+      description: 'Generate interactive HTML documentation'
+    }),
+    csv: Flags.boolean({
+      description: 'Generate CSV exports (tables and columns)'
+    }),
+    mermaid: Flags.boolean({
+      description: 'Generate Mermaid ERD diagram files'
+    }),
+    report: Flags.boolean({
+      description: 'Generate analysis report'
+    }),
+    apply: Flags.boolean({
+      description: 'Apply SQL to database',
+      default: false
     }),
     'approved-only': Flags.boolean({
       description: 'Only export approved items',
-      default: false,
+      default: false
     }),
-    execute: Flags.boolean({
-      description: 'Execute SQL script (apply to database)',
-      default: false,
-    }),
+    'confidence-threshold': Flags.string({
+      description: 'Minimum confidence threshold',
+      default: '0'
+    })
   };
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(Export);
+    const { flags } = await this.parse(DbDocExport);
 
-    this.log(chalk.blue.bold('\n📤 Exporting Documentation\n'));
+    // Load DBAutoDoc command dynamically
+    const { default: ExportCommand } = await import('@memberjunction/db-auto-doc/dist/commands/export.js');
 
-    try {
-      const stateManager = new StateManager();
-      const state = await stateManager.load();
+    // Build args array for DBAutoDoc command
+    const args: string[] = [];
 
-      const outputDir = flags.output;
-      await fs.mkdir(outputDir, { recursive: true });
+    if (flags['state-file']) args.push('--state-file', flags['state-file']);
+    if (flags['output-dir']) args.push('--output-dir', flags['output-dir']);
+    if (flags.sql) args.push('--sql');
+    if (flags.markdown) args.push('--markdown');
+    if (flags.html) args.push('--html');
+    if (flags.csv) args.push('--csv');
+    if (flags.mermaid) args.push('--mermaid');
+    if (flags.report) args.push('--report');
+    if (flags.apply) args.push('--apply');
+    if (flags['approved-only']) args.push('--approved-only');
+    if (flags['confidence-threshold']) args.push('--confidence-threshold', flags['confidence-threshold']);
 
-      if (flags.format === 'sql' || flags.format === 'all') {
-        const sqlGen = new SQLGenerator();
-        const sql = sqlGen.generate(state, {
-          approvedOnly: flags['approved-only'],
-        });
-
-        const sqlPath = path.join(outputDir, 'extended-properties.sql');
-        await fs.writeFile(sqlPath, sql);
-        this.log(chalk.green(`✓ Generated SQL: ${sqlPath}`));
-
-        if (flags.execute) {
-          const confirmed = await confirm({
-            message: chalk.yellow('Execute SQL script? This will modify your database.'),
-            default: false,
-          });
-
-          if (confirmed) {
-            const connection = DatabaseConnection.fromEnv();
-            const spinner = ora('Executing SQL...').start();
-
-            try {
-              await connection.query(sql);
-              spinner.succeed('SQL executed successfully');
-            } catch (error) {
-              spinner.fail('SQL execution failed');
-              throw error;
-            }
-
-            await connection.close();
-          }
-        }
-      }
-
-      if (flags.format === 'markdown' || flags.format === 'all') {
-        const mdGen = new MarkdownGenerator();
-        const markdown = mdGen.generate(state);
-
-        const mdPath = path.join(outputDir, 'database-documentation.md');
-        await fs.writeFile(mdPath, markdown);
-        this.log(chalk.green(`✓ Generated Markdown: ${mdPath}`));
-      }
-
-      this.log(chalk.green('\n✅ Export complete!'));
-    } catch (error: any) {
-      this.error(error.message);
-    }
+    // Execute the DBAutoDoc export command
+    await ExportCommand.run(args);
   }
 }

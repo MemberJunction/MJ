@@ -686,6 +686,23 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * ```
      */
     absoluteMaxIterations?: number;
+
+    /**
+     * Optional test run ID to associate with this agent execution.
+     * When provided, this value is stored in the TestRunID column within
+     * the AIAgentRun record, linking the agent run to a specific test run
+     * from the MemberJunction testing framework for tracking and reporting purposes.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   testRunId: '12345678-1234-1234-1234-123456789012',  // Link to test run
+     * };
+     * ```
+     */
+    testRunId?: string;
 }
 
 /**

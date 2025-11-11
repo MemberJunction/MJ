@@ -49,6 +49,11 @@ export class ValidationService {
    * Validates all metadata files in the specified directory
    */
   public async validateDirectory(dir: string): Promise<ValidationResult> {
+    // Validate that include and exclude are not used together
+    if (this.options.include && this.options.exclude) {
+      throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
+    }
+
     this.reset();
 
     const configPath = path.join(dir, '.mj-sync.json');
@@ -976,13 +981,46 @@ export class ValidationService {
       .filter((f) => fs.statSync(path.join(rootDir, f)).isDirectory())
       .filter((d) => !d.startsWith('.'));
 
+    let orderedDirs: string[];
     if (config.directoryOrder && Array.isArray(config.directoryOrder)) {
       const ordered = config.directoryOrder.filter((d: string) => allDirs.includes(d));
       const remaining = allDirs.filter((d) => !ordered.includes(d)).sort();
-      return [...ordered, ...remaining];
+      orderedDirs = [...ordered, ...remaining];
+    } else {
+      orderedDirs = allDirs.sort();
     }
 
-    return allDirs.sort();
+    // Apply include/exclude filters if specified
+    return this.applyDirectoryFilters(orderedDirs);
+  }
+
+  /**
+   * Apply include/exclude filters to directory list
+   */
+  private applyDirectoryFilters(directories: string[]): string[] {
+    let filteredDirs = directories;
+
+    // Apply include filter (whitelist)
+    if (this.options.include && this.options.include.length > 0) {
+      const minimatch = require('minimatch').minimatch;
+      filteredDirs = directories.filter(dirName => {
+        return this.options.include!.some(pattern =>
+          minimatch(dirName, pattern, { nocase: true })
+        );
+      });
+    }
+
+    // Apply exclude filter (blacklist)
+    if (this.options.exclude && this.options.exclude.length > 0) {
+      const minimatch = require('minimatch').minimatch;
+      filteredDirs = filteredDirs.filter(dirName => {
+        return !this.options.exclude!.some(pattern =>
+          minimatch(dirName, pattern, { nocase: true })
+        );
+      });
+    }
+
+    return filteredDirs;
   }
 
   /**

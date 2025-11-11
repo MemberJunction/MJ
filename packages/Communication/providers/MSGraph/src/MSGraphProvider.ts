@@ -229,7 +229,11 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 Body: contextData?.ReturnAsPlainTex ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
                 ExternalSystemRecordID: message.id || '',
                 ThreadID: message.conversationId || '',
-                Headers: headers ? headers[index] : null
+                Headers: headers ? headers[index] : null,
+                CreatedAt: message.createdDateTime ? new Date(message.createdDateTime) : undefined,
+                LastModifiedAt: message.lastModifiedDateTime ? new Date(message.lastModifiedDateTime) : undefined,
+                ReceivedAt: message.receivedDateTime ? new Date(message.receivedDateTime) : undefined,
+                SentAt: message.sentDateTime ? new Date(message.sentDateTime) : undefined,
             };
         });
 

@@ -1,6 +1,6 @@
 {
   "entity": "Actions",
-  "filePattern": ".*.json",
+  "filePattern": "**/.*.json",
   "defaults": {
       "CategoryID": "@lookup:Action Categories.Name=System"
   },

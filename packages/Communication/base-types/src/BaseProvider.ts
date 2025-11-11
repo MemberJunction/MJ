@@ -187,6 +187,13 @@ export type GetMessageMessage = {
      * The ID of the thread the message belongs to
      */
     ThreadID?: string;
+    /**
+     * Date and times associated with the message
+     */
+    CreatedAt?: Date;
+    LastModifiedAt?: Date;
+    ReceivedAt?: Date;
+    SentAt?: Date;
 };
 
 export type GetMessagesResult<T = Record<string, any>> = BaseMessageResult & {

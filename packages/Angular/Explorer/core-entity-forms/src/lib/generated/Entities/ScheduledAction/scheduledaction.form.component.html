@@ -1,34 +1,210 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Scheduled Actions" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Scheduled Action Params" [Visible]="record.IsSaved"> 
-                        Scheduled Action Params
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ScheduledActionID')"  
-                            [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
-                            [AllowLoad]="IsCurrentTab('Scheduled Action Params')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
-    </form>
-</div>
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Action Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="actionInformation"
+        sectionName="Action Information"
+        icon="fa fa-bolt"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ActionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Action"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Ownership & Status Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="ownershipStatus"
+        sectionName="Ownership & Status"
+        icon="fa fa-user"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Schedule Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="scheduleSettings"
+        sectionName="Schedule Settings"
+        icon="fa fa-calendar-alt"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CronExpression"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Timezone"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IntervalDays"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DayOfWeek"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DayOfMonth"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Month"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CustomCronExpression"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- Scheduled Action Params Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="scheduledActionParams"
+        sectionName="Scheduled Action Params"
+        icon="fa fa-calendar-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('scheduledActionParams')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ScheduledActionID')"
+                [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
+                [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

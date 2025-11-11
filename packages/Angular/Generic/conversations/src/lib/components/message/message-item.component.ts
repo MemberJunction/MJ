@@ -52,6 +52,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<ConversationDetailEntity>();
+  @Output() public testFeedbackClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
@@ -114,16 +115,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      LogStatusEx({message: `🎯 Message ${this.message.ID} status changed to Complete, stopping timer`, verboseOnly: true});
-
       // Stop the elapsed time interval
       if (this._elapsedTimeInterval !== null) {
         clearInterval(this._elapsedTimeInterval);
         this._elapsedTimeInterval = null;
       }
 
-      // Force change detection to update the pill color
-      this.cdRef.markForCheck();
+      // Force immediate synchronous change detection for dynamically created components
+      // markForCheck() only schedules a check which may not run for dynamic components
+      // detectChanges() forces immediate view update so UI shows timer stopped right away
+      this.cdRef.detectChanges();
     }
 
     // Update previous status for next check
@@ -337,6 +338,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Transform @mentions in text to HTML badge elements
+   * Supports both JSON format (@{type:"agent",id:"uuid",...}) and legacy text format (@AgentName)
    * Uses inline HTML that markdown will preserve
    */
   private transformMentionsToHTML(text: string): string {
@@ -345,12 +347,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const agents = this.mentionAutocomplete.getAvailableAgents();
     const users = this.mentionAutocomplete.getAvailableUsers();
 
-    // Parse mentions from the text
+    // Parse mentions from the text (handles both JSON and legacy formats)
     const parseResult = this.mentionParser.parseMentions(text, agents, users);
 
     // Replace each mention with an HTML badge
-    // Note: Handle both @"Agent Name" (quoted) and @AgentName formats
     let transformedText = text;
+
     for (const mention of parseResult.mentions) {
       const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
 
@@ -359,13 +361,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (mention.type === 'agent') {
         // For agents, look up their LogoURL or IconClass from AIEngineBase cached agents
         const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === mention.id);
-
-        // Debug logging
-        if (agent) {
-          console.log(`[MessageItem] Agent ${agent.Name}: LogoURL="${agent.LogoURL}", IconClass="${agent.IconClass}"`);
-        } else {
-          console.warn(`[MessageItem] Agent not found for mention ID: ${mention.id}, name: ${mention.name}`);
-        }
 
         if (agent?.LogoURL && agent.LogoURL.trim()) {
           // Use LogoURL image if available (takes precedence)
@@ -391,16 +386,51 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         iconHTML = '<i class="fa-solid fa-user"></i> ';
       }
 
-      // Match both quoted and unquoted versions
-      const quotedPattern = new RegExp(`@"${this.escapeRegex(mention.name)}"`, 'gi');
-      const unquotedPattern = new RegExp(`@${this.escapeRegex(mention.name)}(?![\\w"])`, 'gi');
-
       // Create badge HTML with icon and NO @ sign
-      const badgeHTML = `<span class="${badgeClass}">${iconHTML}${mention.name}</span>`;
+      // Include configuration indicator if present (for agent mentions with non-default config)
+      let badgeHTML = `<span class="${badgeClass}">${iconHTML}${mention.name}`;
+      if (mention.type === 'agent' && mention.configurationId) {
+        // Add visual indicator for configuration preset
+        // mention.configurationId contains AIAgentConfiguration.ID (preset ID)
+        // We need to find the preset that matches this ID
+        const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === mention.id);
+        if (agent) {
+          const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
+          const preset = presets.find(p => p.ID === mention.configurationId);
+          const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
 
-      // Replace quoted version first, then unquoted
-      transformedText = transformedText.replace(quotedPattern, badgeHTML);
-      transformedText = transformedText.replace(unquotedPattern, badgeHTML);
+          // Only show indicator if this is NOT the default preset
+          if (preset && preset.ID !== defaultPreset?.ID) {
+            // Use DisplayName if available, otherwise Name
+            const displayName = preset.DisplayName || preset.Name;
+            badgeHTML += ` <span class="preset-indicator" title="Configuration: ${preset.Name}">${displayName}</span>`;
+          }
+        }
+      }
+      badgeHTML += `</span>`;
+
+      // First, try to replace JSON mention format
+      // JSON format: @{type:"agent",id:"uuid",name:"Agent Name",configId:"uuid",config:"High"}
+      // Build a regex to match the specific JSON mention
+      const jsonPattern = new RegExp(
+        `@\\{[^}]*"type":"${mention.type}"[^}]*"id":"${this.escapeRegex(mention.id)}"[^}]*\\}`,
+        'g'
+      );
+
+      // Check if this is a JSON mention (by testing if the pattern matches)
+      if (jsonPattern.test(transformedText)) {
+        // Replace JSON mention format
+        transformedText = transformedText.replace(jsonPattern, badgeHTML);
+      } else {
+        // Fall back to legacy text format replacement
+        // Match both quoted and unquoted versions
+        const quotedPattern = new RegExp(`@"${this.escapeRegex(mention.name)}"`, 'gi');
+        const unquotedPattern = new RegExp(`@${this.escapeRegex(mention.name)}(?![\\w"])`, 'gi');
+
+        // Replace quoted version first, then unquoted
+        transformedText = transformedText.replace(quotedPattern, badgeHTML);
+        transformedText = transformedText.replace(unquotedPattern, badgeHTML);
+      }
     }
 
     return transformedText;
@@ -536,6 +566,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * - Failed messages: Time before failure
    */
   public get timePillText(): string | null {
+    return this.calculateTimePillText();
+  }
+
+  private calculateTimePillText(): string | null {
     if (this.isUserMessage) {
       return null;
     }
@@ -695,6 +729,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public onDeleteClick(): void {
     if (!this.isProcessing) {
       this.deleteClicked.emit(this.message);
+    }
+  }
+
+  public onTestFeedbackClick(): void {
+    if (!this.isProcessing) {
+      this.testFeedbackClicked.emit(this.message);
     }
   }
 

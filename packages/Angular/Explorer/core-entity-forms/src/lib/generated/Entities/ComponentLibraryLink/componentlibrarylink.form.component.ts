@@ -2,18 +2,25 @@ import { Component } from '@angular/core';
 import { ComponentLibraryLinkEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadComponentLibraryLinkDetailsComponent } from "./sections/details.component"
 
 @RegisterClass(BaseFormComponent, 'MJ: Component Library Links') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-componentlibrarylink-form',
-    templateUrl: './componentlibrarylink.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './componentlibrarylink.form.component.html'
 })
 export class ComponentLibraryLinkFormComponent extends BaseFormComponent {
     public record!: ComponentLibraryLinkEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'componentLinkDetails', sectionName: 'Component Link Details', isExpanded: true },
+            { sectionKey: 'libraryDependency', sectionName: 'Library Dependency', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadComponentLibraryLinkFormComponent() {
-    LoadComponentLibraryLinkDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

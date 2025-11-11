@@ -1,112 +1,224 @@
-<div class="record-form-container"  >
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+<mj-record-form-container [record]="record" [formComponent]="this">
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Roles" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-                    
-                    <mj-tab Name="Employee Roles" [Visible]="record.IsSaved"> 
-                        Employee Roles
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','RoleID')"  
-                            [NewRecordValues]="NewRecordValues('Employee Roles')"
-                            [AllowLoad]="IsCurrentTab('Employee Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Core Role Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="coreRoleDetails"
+        sectionName="Core Role Details"
+        icon="fa fa-shield-alt"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DirectoryID"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SQLName"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="Entity Permissions" [Visible]="record.IsSaved"> 
-                        Entity Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','RoleName')"  
-                            [NewRecordValues]="NewRecordValues('Entity Permissions')"
-                            [AllowLoad]="IsCurrentTab('Entity Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="User Roles" [Visible]="record.IsSaved"> 
-                        User Roles
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('User Roles','RoleName')"  
-                            [NewRecordValues]="NewRecordValues('User Roles')"
-                            [AllowLoad]="IsCurrentTab('User Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
-                    <mj-tab Name="Authorization Roles" [Visible]="record.IsSaved"> 
-                        Authorization Roles
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','RoleName')"  
-                            [NewRecordValues]="NewRecordValues('Authorization Roles')"
-                            [AllowLoad]="IsCurrentTab('Authorization Roles')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
 
-                    <mj-tab Name="Query Permissions" [Visible]="record.IsSaved"> 
-                        Query Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','RoleName')"  
-                            [NewRecordValues]="NewRecordValues('Query Permissions')"
-                            [AllowLoad]="IsCurrentTab('Query Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Authorization Roles Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="authorizationRoles"
+        sectionName="Authorization Roles"
+        icon="fa fa-user-shield"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('authorizationRoles')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','RoleName')"
+                [NewRecordValues]="NewRecordValues('Authorization Roles')"
+                [AllowLoad]="IsSectionExpanded('authorizationRoles')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('authorizationRoles', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="Resource Permissions" [Visible]="record.IsSaved"> 
-                        Resource Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','RoleID')"  
-                            [NewRecordValues]="NewRecordValues('Resource Permissions')"
-                            [AllowLoad]="IsCurrentTab('Resource Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
+    <!-- Employee Roles Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="employeeRoles"
+        sectionName="Employee Roles"
+        icon="fa fa-user-tag"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('employeeRoles')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','RoleID')"
+                [NewRecordValues]="NewRecordValues('Employee Roles')"
+                [AllowLoad]="IsSectionExpanded('employeeRoles')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('employeeRoles', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 
-                    <mj-tab Name="MJ: AI Agent Permissions" [Visible]="record.IsSaved"> 
-                        MJ: AI Agent Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','RoleID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-                </mj-tabstrip>
-    </form>
-</div>
+    <!-- Entity Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="entityPermissions"
+        sectionName="Entity Permissions"
+        icon="fa fa-shield-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('entityPermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','RoleName')"
+                [NewRecordValues]="NewRecordValues('Entity Permissions')"
+                [AllowLoad]="IsSectionExpanded('entityPermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('entityPermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Query Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="queryPermissions"
+        sectionName="Query Permissions"
+        icon="fa fa-shield-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('queryPermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','RoleName')"
+                [NewRecordValues]="NewRecordValues('Query Permissions')"
+                [AllowLoad]="IsSectionExpanded('queryPermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- User Roles Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="userRoles"
+        sectionName="User Roles"
+        icon="fa fa-user-shield"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('userRoles')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('User Roles','RoleName')"
+                [NewRecordValues]="NewRecordValues('User Roles')"
+                [AllowLoad]="IsSectionExpanded('userRoles')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('userRoles', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Resource Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resourcePermissions"
+        sectionName="Resource Permissions"
+        icon="fa fa-lock"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('resourcePermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','RoleID')"
+                [NewRecordValues]="NewRecordValues('Resource Permissions')"
+                [AllowLoad]="IsSectionExpanded('resourcePermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Agent Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentPermissions"
+        sectionName="MJ: AI Agent Permissions"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','RoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
         

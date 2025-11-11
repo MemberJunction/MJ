@@ -9,7 +9,7 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
+import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -17,6 +17,7 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
+import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
@@ -125,6 +126,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Resize state - Artifact Panel
   public artifactPanelWidth: number = 40; // Default 40% width
+  public isArtifactPanelMaximized: boolean = false;
+  private artifactPanelWidthBeforeMaximize: number = 40; // Store width before maximizing
   private isArtifactPanelResizing: boolean = false;
   private artifactPanelResizeStartX: number = 0;
   private artifactPanelResizeStartWidth: number = 0;
@@ -149,12 +152,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     private artifactPermissionService: ArtifactPermissionService,
     private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
+    private streamingService: ConversationStreamingService,
     private cdr: ChangeDetectorRef
   ) {
     super();
   }
 
   async ngOnInit() {
+    // Initialize global streaming service FIRST
+    // This establishes the single PubSub connection for all conversations
+    this.streamingService.initialize();
+    console.log('✅ Global streaming service initialized');
+
     // Check initial mobile state
     this.checkMobileView();
 
@@ -170,12 +179,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
 
-    // CRITICAL: Initialize AI Engine FIRST before rendering any UI
+    // CRITICAL: Initialize engines FIRST before rendering any UI
     // The isWorkspaceReady flag blocks all child components from rendering
-    // until agents are fully loaded and ready
+    // until engines are fully loaded and ready
     try {
-      await AIEngineBase.Instance.Config(false);
+      // Load both engines in parallel - ArtifactMetadataEngine is lightweight (just artifact types)
+      // Using Promise.all ensures optimal performance with no additional delay
+      await Promise.all([
+        AIEngineBase.Instance.Config(false),
+        ArtifactMetadataEngine.Instance.Config(false)
+      ]);
+
       console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+      console.log('✅ Artifact Metadata Engine initialized with',
+        ArtifactMetadataEngine.Instance.ArtifactTypes?.length || 0, 'artifact types');
 
       // Initialize mention autocomplete service immediately after AI engine
       // This ensures the cache is built from the fully-loaded agent list
@@ -187,7 +204,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.cdr.detectChanges();
       console.log('✅ Workspace ready - UI can now render');
     } catch (error) {
-      console.error('❌ Failed to initialize AI Engine:', error);
+      console.error('❌ Failed to initialize engines:', error);
       // Still mark as ready so UI isn't blocked forever
       this.isWorkspaceReady = true;
       this.cdr.detectChanges();
@@ -646,6 +663,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       localStorage.setItem(this.ARTIFACT_PANEL_WIDTH_KEY, this.artifactPanelWidth.toString());
     } catch (error) {
       console.warn('Failed to save artifact panel width to localStorage:', error);
+    }
+  }
+
+  /**
+   * Toggle maximize/restore state for artifact panel
+   */
+  toggleMaximizeArtifactPanel(): void {
+    if (this.isArtifactPanelMaximized) {
+      // Restore to previous width
+      this.artifactPanelWidth = this.artifactPanelWidthBeforeMaximize;
+      this.isArtifactPanelMaximized = false;
+    } else {
+      // Maximize - store current width and set to 100%
+      this.artifactPanelWidthBeforeMaximize = this.artifactPanelWidth;
+      this.artifactPanelWidth = 100;
+      this.isArtifactPanelMaximized = true;
     }
   }
 

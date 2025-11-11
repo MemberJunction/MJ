@@ -2,19 +2,31 @@ import { Component } from '@angular/core';
 import { ApplicationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadApplicationDetailsComponent } from "./sections/details.component"
-import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Applications') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-application-form',
-    templateUrl: './application.form.component.html',
-    styleUrls: ['../../../../shared/form-styles.css']
+    templateUrl: './application.form.component.html'
 })
 export class ApplicationFormComponent extends BaseFormComponent {
     public record!: ApplicationEntity;
-} 
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'applicationConfiguration', sectionName: 'Application Configuration', isExpanded: true },
+            { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'entities', sectionName: 'Entities', isExpanded: false },
+            { sectionKey: 'applicationSettings', sectionName: 'Application Settings', isExpanded: false },
+            { sectionKey: 'userApplications', sectionName: 'User Applications', isExpanded: false },
+            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'mJDashboardUserPreferences', sectionName: 'MJ: Dashboard User Preferences', isExpanded: false }
+        ]);
+    }
+}
 
 export function LoadApplicationFormComponent() {
-    LoadApplicationDetailsComponent();
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
 }

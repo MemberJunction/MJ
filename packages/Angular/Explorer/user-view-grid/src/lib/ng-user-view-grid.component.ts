@@ -94,6 +94,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   @Output() rowClicked = new EventEmitter<GridRowClickedEvent>();
   @Output() rowEdited = new EventEmitter<GridRowEditedEvent>();
+  @Output() dataLoaded = new EventEmitter<{ totalRowCount: number, loadTime: number }>();
 
   @ViewChild('kendoGrid', { read: GridComponent }) kendoGridElement: GridComponent | null = null;
   @ViewChild('kendoGrid', { read: ElementRef }) kendoGridElementRef: ElementRef | null = null;
@@ -119,7 +120,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public isLoading: boolean = false;
   public neverLoaded: boolean = true;
   public gridView: GridDataResult = { data: [], total: 0 };
-  public gridHeight: number = 750;
+  public gridHeight: number = 400;
 
   public _viewEntity: UserViewEntityExtended | undefined
   public  _entityInfo: EntityInfo | undefined;
@@ -813,7 +814,13 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       }
 
       this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
-      this.isLoading = false
+      this.isLoading = false;
+
+      // Emit dataLoaded event with row count and load time
+      this.dataLoaded.emit({
+        totalRowCount: this.totalRowCount,
+        loadTime: this.viewExecutionTime
+      });
     }
     else {
       LogError("Refresh(params) must have ViewID or ViewName or (EntityName and ExtraFilter)")

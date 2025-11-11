@@ -4129,6 +4129,12 @@ export const ConversationDetailSchema = z.object({
         * * Display Name: Suggested Responses
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).`),
+    TestRunID: z.string().nullable().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -4141,6 +4147,14 @@ export const ConversationDetailSchema = z.object({
         * * Field Name: Artifact
         * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(MAX)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -4244,6 +4258,12 @@ export const ConversationSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation is pinned to the top of lists`),
+    TestRunID: z.string().nullable().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -6515,6 +6535,24 @@ export const EntityFieldSchema = z.object({
     *   * Deprecated
     *   * Disabled
         * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`),
+    AutoUpdateIsNameField: z.boolean().describe(`
+        * * Field Name: AutoUpdateIsNameField
+        * * Display Name: Auto Update Is Name Field
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field`),
+    AutoUpdateDefaultInView: z.boolean().describe(`
+        * * Field Name: AutoUpdateDefaultInView
+        * * Display Name: Auto Update Default In View
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field`),
+    AutoUpdateCategory: z.boolean().describe(`
+        * * Field Name: AutoUpdateCategory
+        * * Display Name: Auto Update Category
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -6928,6 +6966,17 @@ export const EntityRelationshipSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
+    AdditionalFieldsToInclude: z.string().nullable().describe(`
+        * * Field Name: AdditionalFieldsToInclude
+        * * Display Name: Additional Fields To Include
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])`),
+    AutoUpdateAdditionalFieldsToInclude: z.boolean().describe(`
+        * * Field Name: AutoUpdateAdditionalFieldsToInclude
+        * * Display Name: Auto Update Additional Fields To Include
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -8049,6 +8098,88 @@ export const AIAgentArtifactTypeSchema = z.object({
 export type AIAgentArtifactTypeEntityType = z.infer<typeof AIAgentArtifactTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Configurations
+ */
+export const AIAgentConfigurationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary Key - Unique identifier for the agent configuration preset`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+        * * Description: Foreign Key - The agent this configuration preset belongs to`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Code-friendly name for the preset (e.g., HighPower, Fast, Balanced). Used in API calls and metadata references.`),
+    DisplayName: z.string().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: User-friendly display name shown in UI (e.g., "High Quality", "Quick Draft", "Maximum Detail")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description shown to users explaining what this configuration does (e.g., "Uses Claude Opus for highest quality results")`),
+    AIConfigurationID: z.string().nullable().describe(`
+        * * Field Name: AIConfigurationID
+        * * Display Name: AI Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Foreign Key - Optional AI Configuration to use for this preset. If NULL, uses default configuration (prompts with ConfigurationID IS NULL)`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this is the default preset for the agent. Should have exactly one default per agent.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Display order for UI. Lower numbers appear first. Typical values: 100 (Default), 200 (Fast), 300 (Balanced), 400 (High Quality)`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+        * * Description: Status of the preset: Pending (being configured), Active (available for use), Revoked (no longer available)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    AIConfiguration: z.string().nullable().describe(`
+        * * Field Name: AIConfiguration
+        * * Display Name: AI Configuration
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIAgentConfigurationEntityType = z.infer<typeof AIAgentConfigurationSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Data Sources
  */
 export const AIAgentDataSourceSchema = z.object({
@@ -9001,9 +9132,19 @@ each time the agent processes a prompt step.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
         * * Description: Links to the scheduled job run that triggered this agent execution. NULL for manually-triggered agent runs. Enables tracking which scheduled jobs spawned which agent executions.`),
+    TestRunID: z.string().nullable().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    ParentRun: z.string().nullable().describe(`
+        * * Field Name: ParentRun
+        * * Display Name: Parent Run
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
@@ -9013,6 +9154,14 @@ each time the agent processes a prompt step.`),
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    ConversationDetail: z.string().nullable().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: nvarchar(MAX)`),
+    LastRun: z.string().nullable().describe(`
+        * * Field Name: LastRun
+        * * Display Name: Last Run
+        * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
@@ -9025,6 +9174,10 @@ each time the agent processes a prompt step.`),
         * * Field Name: OverrideVendor
         * * Display Name: Override Vendor
         * * SQL Data Type: nvarchar(50)`),
+    ScheduledJobRun: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRun
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: nvarchar(200)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run ID
@@ -10329,6 +10482,12 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this prompt run`),
+    TestRunID: z.string().nullable().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: Optional Foreign Key - Links this prompt run to a test run if this prompt execution was part of a test. Enables testing individual prompts for quality and consistency before agent integration.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -10349,10 +10508,22 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
     OriginalModel: z.string().nullable().describe(`
         * * Field Name: OriginalModel
         * * Display Name: Original Model
         * * SQL Data Type: nvarchar(50)`),
+    RerunFromPromptRun: z.string().nullable().describe(`
+        * * Field Name: RerunFromPromptRun
+        * * Display Name: Rerun From Prompt Run
+        * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
         * * Display Name: Judge
@@ -10627,6 +10798,11 @@ export const ArtifactTypeSchema = z.object({
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: Driver class name for the artifact viewer plugin. References Angular component registered with @RegisterClass decorator.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -12937,6 +13113,696 @@ export const TaskSchema = z.object({
 export type TaskEntityType = z.infer<typeof TaskSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Test Rubrics
+ */
+export const TestRubricSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
+        * * Description: Foreign Key - The test type this rubric applies to (e.g., Agent Eval, Code Generation)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique name for the rubric (e.g., "Component Quality Rubric v1", "Agent Response Quality")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this rubric evaluates and when to use it`),
+    PromptTemplate: z.string().nullable().describe(`
+        * * Field Name: PromptTemplate
+        * * Display Name: Prompt Template
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: LLM prompt template for automated judgment. Can include placeholders for test inputs/outputs (e.g., "Evaluate the following React component for correctness, UX, and maintainability...")`),
+    Criteria: z.string().nullable().describe(`
+        * * Field Name: Criteria
+        * * Display Name: Criteria
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object defining structured evaluation criteria with dimensions, weights, and scoring guidance (e.g., {correctness: {weight: 0.4, description: "..."}, ux: {weight: 0.3, description: "..."}})`),
+    Version: z.string().nullable().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Version identifier for the rubric. Allows tracking changes and comparing results across rubric versions.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+        * * Description: Status of the rubric: Pending (under development), Active (available for use), Disabled (deprecated)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type TestRubricEntityType = z.infer<typeof TestRubricSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Run Feedbacks
+ */
+export const TestRunFeedbackSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TestRunID: z.string().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: Foreign Key - The test run being reviewed`),
+    ReviewerUserID: z.string().describe(`
+        * * Field Name: ReviewerUserID
+        * * Display Name: Reviewer User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: Foreign Key - The user providing the feedback`),
+    Rating: z.number().nullable().describe(`
+        * * Field Name: Rating
+        * * Display Name: Rating
+        * * SQL Data Type: int
+        * * Description: Numeric rating from 1 (poor) to 10 (excellent). Allows quantitative tracking of result quality.`),
+    IsCorrect: z.boolean().nullable().describe(`
+        * * Field Name: IsCorrect
+        * * Display Name: Is Correct
+        * * SQL Data Type: bit
+        * * Description: Boolean indicating if the automated test result was correct. Can override automated Pass/Fail status.`),
+    CorrectionSummary: z.string().nullable().describe(`
+        * * Field Name: CorrectionSummary
+        * * Display Name: Correction Summary
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Summary of corrections or adjustments made by the human reviewer`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form comments from the reviewer about the test result, quality, or issues found`),
+    ReviewedAt: z.date().describe(`
+        * * Field Name: ReviewedAt
+        * * Display Name: Reviewed At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        * * Description: Timestamp when the feedback was provided`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ReviewerUser: z.string().describe(`
+        * * Field Name: ReviewerUser
+        * * Display Name: Reviewer User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type TestRunFeedbackEntityType = z.infer<typeof TestRunFeedbackSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Runs
+ */
+export const TestRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TestID: z.string().describe(`
+        * * Field Name: TestID
+        * * Display Name: Test ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+        * * Description: Foreign Key - The test definition that was executed`),
+    TestSuiteRunID: z.string().nullable().describe(`
+        * * Field Name: TestSuiteRunID
+        * * Display Name: Test Suite Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Suite Runs (vwTestSuiteRuns.ID)
+        * * Description: Foreign Key - Optional parent suite run if this test was part of a suite execution. NULL for standalone test runs.`),
+    RunByUserID: z.string().describe(`
+        * * Field Name: RunByUserID
+        * * Display Name: Run By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)`),
+    Sequence: z.number().nullable().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Execution sequence within the suite run. Indicates order of execution for tests in the same suite.`),
+    TargetType: z.string().nullable().describe(`
+        * * Field Name: TargetType
+        * * Display Name: Target Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.`),
+    TargetLogID: z.string().nullable().describe(`
+        * * Field Name: TargetLogID
+        * * Display Name: Target Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.`),
+    Status: z.union([z.literal('Error'), z.literal('Failed'), z.literal('Passed'), z.literal('Pending'), z.literal('Running'), z.literal('Skipped')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * Failed
+    *   * Passed
+    *   * Pending
+    *   * Running
+    *   * Skipped
+        * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp when the test run started execution`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp when the test run completed`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration Seconds
+        * * SQL Data Type: decimal(10, 3)
+        * * Description: Execution time in seconds for this test`),
+    InputData: z.string().nullable().describe(`
+        * * Field Name: InputData
+        * * Display Name: Input Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object with the actual inputs used for this test run (may differ from test definition if parameterized)`),
+    ExpectedOutputData: z.string().nullable().describe(`
+        * * Field Name: ExpectedOutputData
+        * * Display Name: Expected Output Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object with the expected outputs/outcomes for this test run`),
+    ActualOutputData: z.string().nullable().describe(`
+        * * Field Name: ActualOutputData
+        * * Display Name: Actual Output Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object with the actual outputs produced by the test execution`),
+    PassedChecks: z.number().nullable().describe(`
+        * * Field Name: PassedChecks
+        * * Display Name: Passed Checks
+        * * SQL Data Type: int
+        * * Description: Number of validation checks that passed`),
+    FailedChecks: z.number().nullable().describe(`
+        * * Field Name: FailedChecks
+        * * Display Name: Failed Checks
+        * * SQL Data Type: int
+        * * Description: Number of validation checks that failed`),
+    TotalChecks: z.number().nullable().describe(`
+        * * Field Name: TotalChecks
+        * * Display Name: Total Checks
+        * * SQL Data Type: int
+        * * Description: Total number of validation checks performed`),
+    Score: z.number().nullable().describe(`
+        * * Field Name: Score
+        * * Display Name: Score
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Overall test score from 0.0000 to 1.0000 (0-100%). Calculated by test driver based on passed/failed checks and weights.`),
+    CostUSD: z.number().nullable().describe(`
+        * * Field Name: CostUSD
+        * * Display Name: Cost USD
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error message if the test encountered an execution error`),
+    ResultDetails: z.string().nullable().describe(`
+        * * Field Name: ResultDetails
+        * * Display Name: Result Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object with detailed results including individual check results, metrics, oracle outputs, and diagnostic information`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Test: z.string().describe(`
+        * * Field Name: Test
+        * * Display Name: Test
+        * * SQL Data Type: nvarchar(255)`),
+    RunByUser: z.string().describe(`
+        * * Field Name: RunByUser
+        * * Display Name: Run By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type TestRunEntityType = z.infer<typeof TestRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Suite Runs
+ */
+export const TestSuiteRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SuiteID: z.string().describe(`
+        * * Field Name: SuiteID
+        * * Display Name: Suite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
+        * * Description: Foreign Key - The test suite that was executed`),
+    RunByUserID: z.string().describe(`
+        * * Field Name: RunByUserID
+        * * Display Name: Run By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)`),
+    Environment: z.string().nullable().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Environment where tests were executed (e.g., "dev", "staging", "prod", "ci")`),
+    TriggerType: z.string().nullable().describe(`
+        * * Field Name: TriggerType
+        * * Display Name: Trigger Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: How the run was triggered (e.g., "manual", "ci", "scheduled", "shadow", "release")`),
+    GitCommit: z.string().nullable().describe(`
+        * * Field Name: GitCommit
+        * * Display Name: Git Commit
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Git commit SHA of the code version being tested. Enables correlation between test results and code changes.`),
+    AgentVersion: z.string().nullable().describe(`
+        * * Field Name: AgentVersion
+        * * Display Name: Agent Version
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Version of the agent or system being tested (e.g., "skip-agent-2.1.0", "workflow-engine-3.4.2"). Enables version comparison and regression detection.`),
+    Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Pending'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Running
+        * * Description: Current status of the suite run: Pending (queued), Running (in progress), Completed (finished successfully), Failed (suite-level failure), Cancelled (stopped by user)`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp when the suite run started execution`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp when the suite run completed (successfully or with failures)`),
+    TotalTests: z.number().nullable().describe(`
+        * * Field Name: TotalTests
+        * * Display Name: Total Tests
+        * * SQL Data Type: int
+        * * Description: Total number of tests executed in this suite run`),
+    PassedTests: z.number().nullable().describe(`
+        * * Field Name: PassedTests
+        * * Display Name: Passed Tests
+        * * SQL Data Type: int
+        * * Description: Number of tests that passed all checks`),
+    FailedTests: z.number().nullable().describe(`
+        * * Field Name: FailedTests
+        * * Display Name: Failed Tests
+        * * SQL Data Type: int
+        * * Description: Number of tests that failed at least one check`),
+    SkippedTests: z.number().nullable().describe(`
+        * * Field Name: SkippedTests
+        * * Display Name: Skipped Tests
+        * * SQL Data Type: int
+        * * Description: Number of tests that were skipped (not executed)`),
+    ErrorTests: z.number().nullable().describe(`
+        * * Field Name: ErrorTests
+        * * Display Name: Error Tests
+        * * SQL Data Type: int
+        * * Description: Number of tests that encountered execution errors (different from failing validation)`),
+    TotalDurationSeconds: z.number().nullable().describe(`
+        * * Field Name: TotalDurationSeconds
+        * * Display Name: Total Duration Seconds
+        * * SQL Data Type: decimal(10, 3)
+        * * Description: Total execution time in seconds for the entire suite`),
+    TotalCostUSD: z.number().nullable().describe(`
+        * * Field Name: TotalCostUSD
+        * * Display Name: Total Cost USD
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Total cost in USD for running the entire suite (sum of all test costs)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the runtime configuration used for this suite run`),
+    ResultSummary: z.string().nullable().describe(`
+        * * Field Name: ResultSummary
+        * * Display Name: Result Summary
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object with aggregated results and statistics from the suite run`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error message if the suite-level execution failed (before individual tests could run)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Suite: z.string().describe(`
+        * * Field Name: Suite
+        * * Display Name: Suite
+        * * SQL Data Type: nvarchar(255)`),
+    RunByUser: z.string().describe(`
+        * * Field Name: RunByUser
+        * * Display Name: Run By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type TestSuiteRunEntityType = z.infer<typeof TestSuiteRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Suite Tests
+ */
+export const TestSuiteTestSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SuiteID: z.string().describe(`
+        * * Field Name: SuiteID
+        * * Display Name: Suite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
+        * * Description: Foreign Key - The test suite this relationship belongs to`),
+    TestID: z.string().describe(`
+        * * Field Name: TestID
+        * * Display Name: Test ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+        * * Description: Foreign Key - The test included in this suite`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution sequence within the suite. Lower numbers run first. Tests with same sequence may run in parallel.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Skip')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Skip
+        * * Description: Status of this test within this suite: Active (will run), Disabled (temporarily excluded), Skip (documented exclusion)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object to override test configuration for this specific suite. Allows same test to run with different parameters in different suites.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Suite: z.string().describe(`
+        * * Field Name: Suite
+        * * Display Name: Suite
+        * * SQL Data Type: nvarchar(255)`),
+    Test: z.string().describe(`
+        * * Field Name: Test
+        * * Display Name: Test
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type TestSuiteTestEntityType = z.infer<typeof TestSuiteTestSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Suites
+ */
+export const TestSuiteSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
+        * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the test suite (e.g., "Skip Component Generation Suite", "Agent Memory Tests")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this suite tests and its purpose`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+        * * Description: Status of the suite: Pending (being configured), Active (available for use), Disabled (archived/not in use)`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of tags for categorization and filtering (e.g., ["smoke", "regression", "nightly"])`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration object for suite-level settings (e.g., environment defaults, retry policies, notification settings)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type TestSuiteEntityType = z.infer<typeof TestSuiteSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Types
+ */
+export const TestTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for the test type (e.g., "Agent Eval", "Workflow Test", "Code Generation Test")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this test type validates and how it works`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Class name for the driver implementation (e.g., "AgentEvalDriver"). Used with ClassFactory to instantiate the appropriate BaseTestDriver subclass.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+        * * Description: Status of the test type: Pending (under development), Active (available for use), Disabled (no longer available)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type TestTypeEntityType = z.infer<typeof TestTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Tests
+ */
+export const TestSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
+        * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the test (e.g., "Pie Chart with Drilldown", "Memory Recall Accuracy")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this test validates and why it matters`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+        * * Description: Status of the test: Pending (being configured), Active (ready to run), Disabled (archived/not in use)`),
+    InputDefinition: z.string().nullable().describe(`
+        * * Field Name: InputDefinition
+        * * Display Name: Input Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object defining the inputs/parameters for the test. Structure varies by test type (e.g., for Agent Eval: {prompt, context, conversationHistory})`),
+    ExpectedOutcomes: z.string().nullable().describe(`
+        * * Field Name: ExpectedOutcomes
+        * * Display Name: Expected Outcomes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object defining what success looks like. Structure varies by test type (e.g., for Agent Eval: {toolCalls, outputFormat, semanticGoals, dataAssertions})`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object for test-specific configuration (e.g., oracles to use, rubrics, retry policies, timeout settings)`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of tags for categorization and filtering (e.g., ["smoke", "agent-quality", "performance"])`),
+    Priority: z.number().nullable().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Priority for execution ordering. Lower numbers run first. Useful for dependencies or critical path tests.`),
+    EstimatedDurationSeconds: z.number().nullable().describe(`
+        * * Field Name: EstimatedDurationSeconds
+        * * Display Name: Estimated Duration Seconds
+        * * SQL Data Type: int
+        * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.`),
+    EstimatedCostUSD: z.number().nullable().describe(`
+        * * Field Name: EstimatedCostUSD
+        * * Display Name: Estimated Cost USD
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RepeatCount: z.number().nullable().describe(`
+        * * Field Name: RepeatCount
+        * * Display Name: Repeat Count
+        * * SQL Data Type: int
+        * * Description: Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type TestEntityType = z.infer<typeof TestSchema>;
+
+/**
  * zod schema definition for the entity Output Delivery Types
  */
 export const OutputDeliveryTypeSchema = z.object({
@@ -14918,6 +15784,10 @@ export const SchemaInfoSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
 });
 
 export type SchemaInfoEntityType = z.infer<typeof SchemaInfoSchema>;
@@ -27382,6 +28252,20 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.
+    */
+    get TestRunID(): string | null {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string | null) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -27406,6 +28290,24 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     */
     get Artifact(): string | null {
         return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
     }
 
     /**
@@ -27700,6 +28602,20 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     }
     set IsPinned(value: boolean) {
         this.Set('IsPinned', value);
+    }
+
+    /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.
+    */
+    get TestRunID(): string | null {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string | null) {
+        this.Set('TestRunID', value);
     }
 
     /**
@@ -33374,6 +34290,48 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: AutoUpdateIsNameField
+    * * Display Name: Auto Update Is Name Field
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field
+    */
+    get AutoUpdateIsNameField(): boolean {
+        return this.Get('AutoUpdateIsNameField');
+    }
+    set AutoUpdateIsNameField(value: boolean) {
+        this.Set('AutoUpdateIsNameField', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateDefaultInView
+    * * Display Name: Auto Update Default In View
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field
+    */
+    get AutoUpdateDefaultInView(): boolean {
+        return this.Get('AutoUpdateDefaultInView');
+    }
+    set AutoUpdateDefaultInView(value: boolean) {
+        this.Set('AutoUpdateDefaultInView', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateCategory
+    * * Display Name: Auto Update Category
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field
+    */
+    get AutoUpdateCategory(): boolean {
+        return this.Get('AutoUpdateCategory');
+    }
+    set AutoUpdateCategory(value: boolean) {
+        this.Set('AutoUpdateCategory', value);
+    }
+
+    /**
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -34392,6 +35350,33 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     }
     set AutoUpdateFromSchema(value: boolean) {
         this.Set('AutoUpdateFromSchema', value);
+    }
+
+    /**
+    * * Field Name: AdditionalFieldsToInclude
+    * * Display Name: Additional Fields To Include
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])
+    */
+    get AdditionalFieldsToInclude(): string | null {
+        return this.Get('AdditionalFieldsToInclude');
+    }
+    set AdditionalFieldsToInclude(value: string | null) {
+        this.Set('AdditionalFieldsToInclude', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateAdditionalFieldsToInclude
+    * * Display Name: Auto Update Additional Fields To Include
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field
+    */
+    get AutoUpdateAdditionalFieldsToInclude(): boolean {
+        return this.Get('AutoUpdateAdditionalFieldsToInclude');
+    }
+    set AutoUpdateAdditionalFieldsToInclude(value: boolean) {
+        this.Set('AutoUpdateAdditionalFieldsToInclude', value);
     }
 
     /**
@@ -37318,6 +38303,204 @@ export class AIAgentArtifactTypeEntity extends BaseEntity<AIAgentArtifactTypeEnt
 
 
 /**
+ * MJ: AI Agent Configurations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentConfiguration
+ * * Base View: vwAIAgentConfigurations
+ * * @description Defines semantic configuration presets for agents, allowing users to select between different AI model configurations (e.g., Fast, Balanced, High Quality) when executing an agent. Each preset maps to an AI Configuration which controls model selection across all prompts.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Configurations')
+export class AIAgentConfigurationEntity extends BaseEntity<AIAgentConfigurationEntityType> {
+    /**
+    * Loads the MJ: AI Agent Configurations record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Configurations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentConfigurationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary Key - Unique identifier for the agent configuration preset
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Foreign Key - The agent this configuration preset belongs to
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Code-friendly name for the preset (e.g., HighPower, Fast, Balanced). Used in API calls and metadata references.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: User-friendly display name shown in UI (e.g., "High Quality", "Quick Draft", "Maximum Detail")
+    */
+    get DisplayName(): string {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description shown to users explaining what this configuration does (e.g., "Uses Claude Opus for highest quality results")
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: AIConfigurationID
+    * * Display Name: AI Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Foreign Key - Optional AI Configuration to use for this preset. If NULL, uses default configuration (prompts with ConfigurationID IS NULL)
+    */
+    get AIConfigurationID(): string | null {
+        return this.Get('AIConfigurationID');
+    }
+    set AIConfigurationID(value: string | null) {
+        this.Set('AIConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this is the default preset for the agent. Should have exactly one default per agent.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Display order for UI. Lower numbers appear first. Typical values: 100 (Default), 200 (Fast), 300 (Balanced), 400 (High Quality)
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+    * * Description: Status of the preset: Pending (being configured), Active (available for use), Revoked (no longer available)
+    */
+    get Status(): 'Active' | 'Pending' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: AIConfiguration
+    * * Display Name: AI Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AIConfiguration(): string | null {
+        return this.Get('AIConfiguration');
+    }
+}
+
+
+/**
  * MJ: AI Agent Data Sources - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentDataSource
@@ -39752,12 +40935,35 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.
+    */
+    get TestRunID(): string | null {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string | null) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
         return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: ParentRun
+    * * Display Name: Parent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ParentRun(): string | null {
+        return this.Get('ParentRun');
     }
 
     /**
@@ -39776,6 +40982,24 @@ each time the agent processes a prompt step.
     */
     get User(): string | null {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConversationDetail(): string | null {
+        return this.Get('ConversationDetail');
+    }
+
+    /**
+    * * Field Name: LastRun
+    * * Display Name: Last Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LastRun(): string | null {
+        return this.Get('LastRun');
     }
 
     /**
@@ -39803,6 +41027,15 @@ each time the agent processes a prompt step.
     */
     get OverrideVendor(): string | null {
         return this.Get('OverrideVendor');
+    }
+
+    /**
+    * * Field Name: ScheduledJobRun
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJobRun(): string | null {
+        return this.Get('ScheduledJobRun');
     }
 
     /**
@@ -43419,6 +44652,20 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: Optional Foreign Key - Links this prompt run to a test run if this prompt execution was part of a test. Enables testing individual prompts for quality and consistency before agent integration.
+    */
+    get TestRunID(): string | null {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string | null) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -43464,12 +44711,39 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
     * * Field Name: OriginalModel
     * * Display Name: Original Model
     * * SQL Data Type: nvarchar(50)
     */
     get OriginalModel(): string | null {
         return this.Get('OriginalModel');
+    }
+
+    /**
+    * * Field Name: RerunFromPromptRun
+    * * Display Name: Rerun From Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RerunFromPromptRun(): string | null {
+        return this.Get('RerunFromPromptRun');
     }
 
     /**
@@ -44202,6 +45476,19 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     }
     set DriverClass(value: string | null) {
         this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
     }
 
     /**
@@ -50275,6 +51562,1792 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
 
 /**
+ * MJ: Test Rubrics - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestRubric
+ * * Base View: vwTestRubrics
+ * * @description Reusable evaluation criteria (rubrics) for consistent scoring across tests. Rubrics define structured evaluation dimensions and can include LLM prompts for automated judgment. Particularly useful for LLM-as-judge patterns where consistent evaluation criteria are critical.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Rubrics')
+export class TestRubricEntity extends BaseEntity<TestRubricEntityType> {
+    /**
+    * Loads the MJ: Test Rubrics record from the database
+    * @param ID: string - primary key value to load the MJ: Test Rubrics record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestRubricEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
+    * * Description: Foreign Key - The test type this rubric applies to (e.g., Agent Eval, Code Generation)
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique name for the rubric (e.g., "Component Quality Rubric v1", "Agent Response Quality")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this rubric evaluates and when to use it
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PromptTemplate
+    * * Display Name: Prompt Template
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: LLM prompt template for automated judgment. Can include placeholders for test inputs/outputs (e.g., "Evaluate the following React component for correctness, UX, and maintainability...")
+    */
+    get PromptTemplate(): string | null {
+        return this.Get('PromptTemplate');
+    }
+    set PromptTemplate(value: string | null) {
+        this.Set('PromptTemplate', value);
+    }
+
+    /**
+    * * Field Name: Criteria
+    * * Display Name: Criteria
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object defining structured evaluation criteria with dimensions, weights, and scoring guidance (e.g., {correctness: {weight: 0.4, description: "..."}, ux: {weight: 0.3, description: "..."}})
+    */
+    get Criteria(): string | null {
+        return this.Get('Criteria');
+    }
+    set Criteria(value: string | null) {
+        this.Set('Criteria', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Version identifier for the rubric. Allows tracking changes and comparing results across rubric versions.
+    */
+    get Version(): string | null {
+        return this.Get('Version');
+    }
+    set Version(value: string | null) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+    * * Description: Status of the rubric: Pending (under development), Active (available for use), Disabled (deprecated)
+    */
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+}
+
+
+/**
+ * MJ: Test Run Feedbacks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestRunFeedback
+ * * Base View: vwTestRunFeedbacks
+ * * @description Human-in-the-loop feedback on test run results. Allows human reviewers to validate, correct, or override automated test results. Essential for training and improving automated evaluation criteria.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Run Feedbacks')
+export class TestRunFeedbackEntity extends BaseEntity<TestRunFeedbackEntityType> {
+    /**
+    * Loads the MJ: Test Run Feedbacks record from the database
+    * @param ID: string - primary key value to load the MJ: Test Run Feedbacks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestRunFeedbackEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Test Run Feedbacks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rating: When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRatingRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRatingRange(result: ValidationResult) {
+    	if (this.Rating != null && (this.Rating < 1 || this.Rating > 10)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rating",
+    			"Rating must be between 1 and 10.",
+    			this.Rating,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: Foreign Key - The test run being reviewed
+    */
+    get TestRunID(): string {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: ReviewerUserID
+    * * Display Name: Reviewer User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: Foreign Key - The user providing the feedback
+    */
+    get ReviewerUserID(): string {
+        return this.Get('ReviewerUserID');
+    }
+    set ReviewerUserID(value: string) {
+        this.Set('ReviewerUserID', value);
+    }
+
+    /**
+    * * Field Name: Rating
+    * * Display Name: Rating
+    * * SQL Data Type: int
+    * * Description: Numeric rating from 1 (poor) to 10 (excellent). Allows quantitative tracking of result quality.
+    */
+    get Rating(): number | null {
+        return this.Get('Rating');
+    }
+    set Rating(value: number | null) {
+        this.Set('Rating', value);
+    }
+
+    /**
+    * * Field Name: IsCorrect
+    * * Display Name: Is Correct
+    * * SQL Data Type: bit
+    * * Description: Boolean indicating if the automated test result was correct. Can override automated Pass/Fail status.
+    */
+    get IsCorrect(): boolean | null {
+        return this.Get('IsCorrect');
+    }
+    set IsCorrect(value: boolean | null) {
+        this.Set('IsCorrect', value);
+    }
+
+    /**
+    * * Field Name: CorrectionSummary
+    * * Display Name: Correction Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary of corrections or adjustments made by the human reviewer
+    */
+    get CorrectionSummary(): string | null {
+        return this.Get('CorrectionSummary');
+    }
+    set CorrectionSummary(value: string | null) {
+        this.Set('CorrectionSummary', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form comments from the reviewer about the test result, quality, or issues found
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: ReviewedAt
+    * * Display Name: Reviewed At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
+    * * Description: Timestamp when the feedback was provided
+    */
+    get ReviewedAt(): Date {
+        return this.Get('ReviewedAt');
+    }
+    set ReviewedAt(value: Date) {
+        this.Set('ReviewedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ReviewerUser
+    * * Display Name: Reviewer User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ReviewerUser(): string {
+        return this.Get('ReviewerUser');
+    }
+}
+
+
+/**
+ * MJ: Test Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestRun
+ * * Base View: vwTestRuns
+ * * @description Execution instance of a single test. Captures inputs, outputs, results, and links to the target being tested (e.g., Agent Run). Can be part of a suite run or standalone. The TargetLogID links to type-specific execution logs (AgentRun, WorkflowRun, etc.) which contain the detailed trace information.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Runs')
+export class TestRunEntity extends BaseEntity<TestRunEntityType> {
+    /**
+    * Loads the MJ: Test Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Test Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TestID
+    * * Display Name: Test ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+    * * Description: Foreign Key - The test definition that was executed
+    */
+    get TestID(): string {
+        return this.Get('TestID');
+    }
+    set TestID(value: string) {
+        this.Set('TestID', value);
+    }
+
+    /**
+    * * Field Name: TestSuiteRunID
+    * * Display Name: Test Suite Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Suite Runs (vwTestSuiteRuns.ID)
+    * * Description: Foreign Key - Optional parent suite run if this test was part of a suite execution. NULL for standalone test runs.
+    */
+    get TestSuiteRunID(): string | null {
+        return this.Get('TestSuiteRunID');
+    }
+    set TestSuiteRunID(value: string | null) {
+        this.Set('TestSuiteRunID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserID
+    * * Display Name: Run By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)
+    */
+    get RunByUserID(): string {
+        return this.Get('RunByUserID');
+    }
+    set RunByUserID(value: string) {
+        this.Set('RunByUserID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: Execution sequence within the suite run. Indicates order of execution for tests in the same suite.
+    */
+    get Sequence(): number | null {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number | null) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: TargetType
+    * * Display Name: Target Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.
+    */
+    get TargetType(): string | null {
+        return this.Get('TargetType');
+    }
+    set TargetType(value: string | null) {
+        this.Set('TargetType', value);
+    }
+
+    /**
+    * * Field Name: TargetLogID
+    * * Display Name: Target Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.
+    */
+    get TargetLogID(): string | null {
+        return this.Get('TargetLogID');
+    }
+    set TargetLogID(value: string | null) {
+        this.Set('TargetLogID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * Failed
+    *   * Passed
+    *   * Pending
+    *   * Running
+    *   * Skipped
+    * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)
+    */
+    get Status(): 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetime
+    * * Description: Timestamp when the test run started execution
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetime
+    * * Description: Timestamp when the test run completed
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration Seconds
+    * * SQL Data Type: decimal(10, 3)
+    * * Description: Execution time in seconds for this test
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: InputData
+    * * Display Name: Input Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object with the actual inputs used for this test run (may differ from test definition if parameterized)
+    */
+    get InputData(): string | null {
+        return this.Get('InputData');
+    }
+    set InputData(value: string | null) {
+        this.Set('InputData', value);
+    }
+
+    /**
+    * * Field Name: ExpectedOutputData
+    * * Display Name: Expected Output Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object with the expected outputs/outcomes for this test run
+    */
+    get ExpectedOutputData(): string | null {
+        return this.Get('ExpectedOutputData');
+    }
+    set ExpectedOutputData(value: string | null) {
+        this.Set('ExpectedOutputData', value);
+    }
+
+    /**
+    * * Field Name: ActualOutputData
+    * * Display Name: Actual Output Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object with the actual outputs produced by the test execution
+    */
+    get ActualOutputData(): string | null {
+        return this.Get('ActualOutputData');
+    }
+    set ActualOutputData(value: string | null) {
+        this.Set('ActualOutputData', value);
+    }
+
+    /**
+    * * Field Name: PassedChecks
+    * * Display Name: Passed Checks
+    * * SQL Data Type: int
+    * * Description: Number of validation checks that passed
+    */
+    get PassedChecks(): number | null {
+        return this.Get('PassedChecks');
+    }
+    set PassedChecks(value: number | null) {
+        this.Set('PassedChecks', value);
+    }
+
+    /**
+    * * Field Name: FailedChecks
+    * * Display Name: Failed Checks
+    * * SQL Data Type: int
+    * * Description: Number of validation checks that failed
+    */
+    get FailedChecks(): number | null {
+        return this.Get('FailedChecks');
+    }
+    set FailedChecks(value: number | null) {
+        this.Set('FailedChecks', value);
+    }
+
+    /**
+    * * Field Name: TotalChecks
+    * * Display Name: Total Checks
+    * * SQL Data Type: int
+    * * Description: Total number of validation checks performed
+    */
+    get TotalChecks(): number | null {
+        return this.Get('TotalChecks');
+    }
+    set TotalChecks(value: number | null) {
+        this.Set('TotalChecks', value);
+    }
+
+    /**
+    * * Field Name: Score
+    * * Display Name: Score
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Overall test score from 0.0000 to 1.0000 (0-100%). Calculated by test driver based on passed/failed checks and weights.
+    */
+    get Score(): number | null {
+        return this.Get('Score');
+    }
+    set Score(value: number | null) {
+        this.Set('Score', value);
+    }
+
+    /**
+    * * Field Name: CostUSD
+    * * Display Name: Cost USD
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)
+    */
+    get CostUSD(): number | null {
+        return this.Get('CostUSD');
+    }
+    set CostUSD(value: number | null) {
+        this.Set('CostUSD', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the test encountered an execution error
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ResultDetails
+    * * Display Name: Result Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object with detailed results including individual check results, metrics, oracle outputs, and diagnostic information
+    */
+    get ResultDetails(): string | null {
+        return this.Get('ResultDetails');
+    }
+    set ResultDetails(value: string | null) {
+        this.Set('ResultDetails', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Test
+    * * Display Name: Test
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Test(): string {
+        return this.Get('Test');
+    }
+
+    /**
+    * * Field Name: RunByUser
+    * * Display Name: Run By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RunByUser(): string {
+        return this.Get('RunByUser');
+    }
+}
+
+
+/**
+ * MJ: Test Suite Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestSuiteRun
+ * * Base View: vwTestSuiteRuns
+ * * @description Execution instance of a test suite. Captures who ran it, when, in what environment, and aggregates results from all tests in the suite. Supports versioning via GitCommit and AgentVersion fields to track system state during execution.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Suite Runs')
+export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
+    /**
+    * Loads the MJ: Test Suite Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Test Suite Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestSuiteRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SuiteID
+    * * Display Name: Suite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
+    * * Description: Foreign Key - The test suite that was executed
+    */
+    get SuiteID(): string {
+        return this.Get('SuiteID');
+    }
+    set SuiteID(value: string) {
+        this.Set('SuiteID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserID
+    * * Display Name: Run By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)
+    */
+    get RunByUserID(): string {
+        return this.Get('RunByUserID');
+    }
+    set RunByUserID(value: string) {
+        this.Set('RunByUserID', value);
+    }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Environment where tests were executed (e.g., "dev", "staging", "prod", "ci")
+    */
+    get Environment(): string | null {
+        return this.Get('Environment');
+    }
+    set Environment(value: string | null) {
+        this.Set('Environment', value);
+    }
+
+    /**
+    * * Field Name: TriggerType
+    * * Display Name: Trigger Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: How the run was triggered (e.g., "manual", "ci", "scheduled", "shadow", "release")
+    */
+    get TriggerType(): string | null {
+        return this.Get('TriggerType');
+    }
+    set TriggerType(value: string | null) {
+        this.Set('TriggerType', value);
+    }
+
+    /**
+    * * Field Name: GitCommit
+    * * Display Name: Git Commit
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Git commit SHA of the code version being tested. Enables correlation between test results and code changes.
+    */
+    get GitCommit(): string | null {
+        return this.Get('GitCommit');
+    }
+    set GitCommit(value: string | null) {
+        this.Set('GitCommit', value);
+    }
+
+    /**
+    * * Field Name: AgentVersion
+    * * Display Name: Agent Version
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Version of the agent or system being tested (e.g., "skip-agent-2.1.0", "workflow-engine-3.4.2"). Enables version comparison and regression detection.
+    */
+    get AgentVersion(): string | null {
+        return this.Get('AgentVersion');
+    }
+    set AgentVersion(value: string | null) {
+        this.Set('AgentVersion', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Running
+    * * Description: Current status of the suite run: Pending (queued), Running (in progress), Completed (finished successfully), Failed (suite-level failure), Cancelled (stopped by user)
+    */
+    get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Pending' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Cancelled' | 'Completed' | 'Failed' | 'Pending' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetime
+    * * Description: Timestamp when the suite run started execution
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetime
+    * * Description: Timestamp when the suite run completed (successfully or with failures)
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: TotalTests
+    * * Display Name: Total Tests
+    * * SQL Data Type: int
+    * * Description: Total number of tests executed in this suite run
+    */
+    get TotalTests(): number | null {
+        return this.Get('TotalTests');
+    }
+    set TotalTests(value: number | null) {
+        this.Set('TotalTests', value);
+    }
+
+    /**
+    * * Field Name: PassedTests
+    * * Display Name: Passed Tests
+    * * SQL Data Type: int
+    * * Description: Number of tests that passed all checks
+    */
+    get PassedTests(): number | null {
+        return this.Get('PassedTests');
+    }
+    set PassedTests(value: number | null) {
+        this.Set('PassedTests', value);
+    }
+
+    /**
+    * * Field Name: FailedTests
+    * * Display Name: Failed Tests
+    * * SQL Data Type: int
+    * * Description: Number of tests that failed at least one check
+    */
+    get FailedTests(): number | null {
+        return this.Get('FailedTests');
+    }
+    set FailedTests(value: number | null) {
+        this.Set('FailedTests', value);
+    }
+
+    /**
+    * * Field Name: SkippedTests
+    * * Display Name: Skipped Tests
+    * * SQL Data Type: int
+    * * Description: Number of tests that were skipped (not executed)
+    */
+    get SkippedTests(): number | null {
+        return this.Get('SkippedTests');
+    }
+    set SkippedTests(value: number | null) {
+        this.Set('SkippedTests', value);
+    }
+
+    /**
+    * * Field Name: ErrorTests
+    * * Display Name: Error Tests
+    * * SQL Data Type: int
+    * * Description: Number of tests that encountered execution errors (different from failing validation)
+    */
+    get ErrorTests(): number | null {
+        return this.Get('ErrorTests');
+    }
+    set ErrorTests(value: number | null) {
+        this.Set('ErrorTests', value);
+    }
+
+    /**
+    * * Field Name: TotalDurationSeconds
+    * * Display Name: Total Duration Seconds
+    * * SQL Data Type: decimal(10, 3)
+    * * Description: Total execution time in seconds for the entire suite
+    */
+    get TotalDurationSeconds(): number | null {
+        return this.Get('TotalDurationSeconds');
+    }
+    set TotalDurationSeconds(value: number | null) {
+        this.Set('TotalDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: TotalCostUSD
+    * * Display Name: Total Cost USD
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Total cost in USD for running the entire suite (sum of all test costs)
+    */
+    get TotalCostUSD(): number | null {
+        return this.Get('TotalCostUSD');
+    }
+    set TotalCostUSD(value: number | null) {
+        this.Set('TotalCostUSD', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the runtime configuration used for this suite run
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: ResultSummary
+    * * Display Name: Result Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object with aggregated results and statistics from the suite run
+    */
+    get ResultSummary(): string | null {
+        return this.Get('ResultSummary');
+    }
+    set ResultSummary(value: string | null) {
+        this.Set('ResultSummary', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the suite-level execution failed (before individual tests could run)
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Suite
+    * * Display Name: Suite
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Suite(): string {
+        return this.Get('Suite');
+    }
+
+    /**
+    * * Field Name: RunByUser
+    * * Display Name: Run By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RunByUser(): string {
+        return this.Get('RunByUser');
+    }
+}
+
+
+/**
+ * MJ: Test Suite Tests - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestSuiteTest
+ * * Base View: vwTestSuiteTests
+ * * @description Junction table linking tests to test suites. Allows many-to-many relationship where a test can belong to multiple suites and a suite can contain multiple tests. Includes sequence for execution order and configuration overrides specific to this suite-test pairing.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Suite Tests')
+export class TestSuiteTestEntity extends BaseEntity<TestSuiteTestEntityType> {
+    /**
+    * Loads the MJ: Test Suite Tests record from the database
+    * @param ID: string - primary key value to load the MJ: Test Suite Tests record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestSuiteTestEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SuiteID
+    * * Display Name: Suite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
+    * * Description: Foreign Key - The test suite this relationship belongs to
+    */
+    get SuiteID(): string {
+        return this.Get('SuiteID');
+    }
+    set SuiteID(value: string) {
+        this.Set('SuiteID', value);
+    }
+
+    /**
+    * * Field Name: TestID
+    * * Display Name: Test ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+    * * Description: Foreign Key - The test included in this suite
+    */
+    get TestID(): string {
+        return this.Get('TestID');
+    }
+    set TestID(value: string) {
+        this.Set('TestID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution sequence within the suite. Lower numbers run first. Tests with same sequence may run in parallel.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Skip
+    * * Description: Status of this test within this suite: Active (will run), Disabled (temporarily excluded), Skip (documented exclusion)
+    */
+    get Status(): 'Active' | 'Disabled' | 'Skip' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Skip') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object to override test configuration for this specific suite. Allows same test to run with different parameters in different suites.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Suite
+    * * Display Name: Suite
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Suite(): string {
+        return this.Get('Suite');
+    }
+
+    /**
+    * * Field Name: Test
+    * * Display Name: Test
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Test(): string {
+        return this.Get('Test');
+    }
+}
+
+
+/**
+ * MJ: Test Suites - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestSuite
+ * * Base View: vwTestSuites
+ * * @description Hierarchical organization of tests into suites. Test suites can contain other suites (via ParentID) and tests (via TestSuiteTest junction table). Suites provide logical grouping for running batches of related tests.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Suites')
+export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
+    /**
+    * Loads the MJ: Test Suites record from the database
+    * @param ID: string - primary key value to load the MJ: Test Suites record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestSuiteEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
+    * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the test suite (e.g., "Skip Component Generation Suite", "Agent Memory Tests")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this suite tests and its purpose
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+    * * Description: Status of the suite: Pending (being configured), Active (available for use), Disabled (archived/not in use)
+    */
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of tags for categorization and filtering (e.g., ["smoke", "regression", "nightly"])
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration object for suite-level settings (e.g., environment defaults, retry policies, notification settings)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Test Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestType
+ * * Base View: vwTestTypes
+ * * @description Defines test type drivers that can be dynamically instantiated via MJGlobal.Instance.ClassFactory.CreateInstance(BaseTestDriver, DriverClass). Each test type represents a different category of testing (e.g., Agent Evals, Workflow Tests, Code Generation Tests).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Types')
+export class TestTypeEntity extends BaseEntity<TestTypeEntityType> {
+    /**
+    * Loads the MJ: Test Types record from the database
+    * @param ID: string - primary key value to load the MJ: Test Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for the test type (e.g., "Agent Eval", "Workflow Test", "Code Generation Test")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this test type validates and how it works
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Class name for the driver implementation (e.g., "AgentEvalDriver"). Used with ClassFactory to instantiate the appropriate BaseTestDriver subclass.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+    * * Description: Status of the test type: Pending (under development), Active (available for use), Disabled (no longer available)
+    */
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Tests - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Test
+ * * Base View: vwTests
+ * * @description Individual test definitions. Each test has a specific type (via TypeID) which determines how it executes. Tests store their inputs, expected outcomes, and configuration as JSON, allowing flexibility for different test types while maintaining a common schema.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tests')
+export class TestEntity extends BaseEntity<TestEntityType> {
+    /**
+    * Loads the MJ: Tests record from the database
+    * @param ID: string - primary key value to load the MJ: Tests record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TestEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RepeatCount: If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRepeatCountPositive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRepeatCountPositive(result: ValidationResult) {
+    	// If a repeat count is set, it must be greater than zero
+    	if (this.RepeatCount != null && this.RepeatCount <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RepeatCount",
+    			"Repeat count must be greater than zero if provided.",
+    			this.RepeatCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
+    * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the test (e.g., "Pie Chart with Drilldown", "Memory Recall Accuracy")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this test validates and why it matters
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+    * * Description: Status of the test: Pending (being configured), Active (ready to run), Disabled (archived/not in use)
+    */
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: InputDefinition
+    * * Display Name: Input Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object defining the inputs/parameters for the test. Structure varies by test type (e.g., for Agent Eval: {prompt, context, conversationHistory})
+    */
+    get InputDefinition(): string | null {
+        return this.Get('InputDefinition');
+    }
+    set InputDefinition(value: string | null) {
+        this.Set('InputDefinition', value);
+    }
+
+    /**
+    * * Field Name: ExpectedOutcomes
+    * * Display Name: Expected Outcomes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object defining what success looks like. Structure varies by test type (e.g., for Agent Eval: {toolCalls, outputFormat, semanticGoals, dataAssertions})
+    */
+    get ExpectedOutcomes(): string | null {
+        return this.Get('ExpectedOutcomes');
+    }
+    set ExpectedOutcomes(value: string | null) {
+        this.Set('ExpectedOutcomes', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object for test-specific configuration (e.g., oracles to use, rubrics, retry policies, timeout settings)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of tags for categorization and filtering (e.g., ["smoke", "agent-quality", "performance"])
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Priority for execution ordering. Lower numbers run first. Useful for dependencies or critical path tests.
+    */
+    get Priority(): number | null {
+        return this.Get('Priority');
+    }
+    set Priority(value: number | null) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: EstimatedDurationSeconds
+    * * Display Name: Estimated Duration Seconds
+    * * SQL Data Type: int
+    * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.
+    */
+    get EstimatedDurationSeconds(): number | null {
+        return this.Get('EstimatedDurationSeconds');
+    }
+    set EstimatedDurationSeconds(value: number | null) {
+        this.Set('EstimatedDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: EstimatedCostUSD
+    * * Display Name: Estimated Cost USD
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.
+    */
+    get EstimatedCostUSD(): number | null {
+        return this.Get('EstimatedCostUSD');
+    }
+    set EstimatedCostUSD(value: number | null) {
+        this.Set('EstimatedCostUSD', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RepeatCount
+    * * Display Name: Repeat Count
+    * * SQL Data Type: int
+    * * Description: Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.
+    */
+    get RepeatCount(): number | null {
+        return this.Get('RepeatCount');
+    }
+    set RepeatCount(value: number | null) {
+        this.Set('RepeatCount', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+}
+
+
+/**
  * Output Delivery Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: OutputDeliveryType
@@ -55560,6 +58633,18 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
     }
 }
 

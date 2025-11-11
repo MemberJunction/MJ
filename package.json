@@ -20,7 +20,8 @@
     "packages/Angular/Generic/*",
     "packages/AngularElements/*",
     "packages/React/*",
-    "packages/Scheduling/*"
+    "packages/Scheduling/*",
+    "packages/TestingFramework/*"
   ],
   "scripts": {
     "build": "npm run build:stream",
@@ -48,7 +49,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/cli": "2.114.0",
+    "@memberjunction/cli": "2.116.0",
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
     "simple-git": "^3.27.0"

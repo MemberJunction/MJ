@@ -1,5 +1,48 @@
 # @memberjunction/ng-conversations
 
+## 2.117.0
+
+### Patch Changes
+
+- Updated dependencies [8c092ec]
+  - @memberjunction/core@2.117.0
+  - @memberjunction/ai-engine-base@2.117.0
+  - @memberjunction/ai-core-plus@2.117.0
+  - @memberjunction/ng-artifacts@2.117.0
+  - @memberjunction/ng-base-types@2.117.0
+  - @memberjunction/ng-code-editor@2.117.0
+  - @memberjunction/ng-container-directives@2.117.0
+  - @memberjunction/ng-notifications@2.117.0
+  - @memberjunction/ng-tasks@2.117.0
+  - @memberjunction/graphql-dataprovider@2.117.0
+  - @memberjunction/core-entities@2.117.0
+  - @memberjunction/ai@2.117.0
+  - @memberjunction/global@2.117.0
+
+## 2.116.0
+
+### Minor Changes
+
+- b80fe44: Migration
+
+### Patch Changes
+
+- Updated dependencies [81bb7a4]
+- Updated dependencies [a8d5592]
+  - @memberjunction/core@2.116.0
+  - @memberjunction/global@2.116.0
+  - @memberjunction/ai-engine-base@2.116.0
+  - @memberjunction/ai-core-plus@2.116.0
+  - @memberjunction/ng-artifacts@2.116.0
+  - @memberjunction/ng-base-types@2.116.0
+  - @memberjunction/ng-code-editor@2.116.0
+  - @memberjunction/ng-container-directives@2.116.0
+  - @memberjunction/ng-notifications@2.116.0
+  - @memberjunction/ng-tasks@2.116.0
+  - @memberjunction/graphql-dataprovider@2.116.0
+  - @memberjunction/core-entities@2.116.0
+  - @memberjunction/ai@2.116.0
+
 ## 2.115.0
 
 ### Minor Changes
