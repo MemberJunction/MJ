@@ -84,6 +84,7 @@ EOF
 cat schema/V001__create_schema.sql >> "$OUTPUT"
 cat schema/V002__create_tables.sql >> "$OUTPUT"
 cat schema/V004__create_community_tables.sql >> "$OUTPUT"
+cat schema/V005__create_resource_library_tables.sql >> "$OUTPUT"
 
 # Add Phase 1A complete message
 cat >> "$OUTPUT" << 'EOF'
@@ -162,6 +163,7 @@ cat data/04_finance_data.sql >> "$OUTPUT"
 cat data/05_marketing_email_data.sql >> "$OUTPUT"
 cat data/06_chapters_governance_data.sql >> "$OUTPUT"
 cat data/07_community_forum_data.sql >> "$OUTPUT"
+cat data/08_resource_library_data.sql >> "$OUTPUT"
 
 # Add Phase 2 complete and verification
 cat >> "$OUTPUT" << 'EOF'
@@ -181,17 +183,19 @@ PRINT '===================================================================';
 PRINT '';
 GO
 
-DECLARE @MemberCount INT, @EventCount INT, @CourseCount INT, @ThreadCount INT;
+DECLARE @MemberCount INT, @EventCount INT, @CourseCount INT, @ThreadCount INT, @ResourceCount INT;
 SELECT @MemberCount = COUNT(*) FROM AssociationDemo.Member;
 SELECT @EventCount = COUNT(*) FROM AssociationDemo.Event;
 SELECT @CourseCount = COUNT(*) FROM AssociationDemo.Course;
 SELECT @ThreadCount = COUNT(*) FROM AssociationDemo.ForumThread;
+SELECT @ResourceCount = COUNT(*) FROM AssociationDemo.Resource;
 
 PRINT 'Record counts:';
 PRINT '  Members: ' + CAST(@MemberCount AS VARCHAR);
 PRINT '  Events: ' + CAST(@EventCount AS VARCHAR);
 PRINT '  Courses: ' + CAST(@CourseCount AS VARCHAR);
 PRINT '  Forum Threads: ' + CAST(@ThreadCount AS VARCHAR);
+PRINT '  Resources: ' + CAST(@ResourceCount AS VARCHAR);
 PRINT '';
 GO
 
