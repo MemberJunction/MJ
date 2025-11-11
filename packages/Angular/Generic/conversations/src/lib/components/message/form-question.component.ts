@@ -60,7 +60,7 @@ export class FormQuestionComponent implements ControlValueAccessor {
    */
   public get allowMultiple(): boolean {
     return this.questionType === 'checkbox' ||
-      (typeof this.question.type === 'object' && 'multiple' in this.question.type && this.question.type.multiple);
+      (typeof this.question.type === 'object' && 'multiple' in this.question.type && !!this.question.type.multiple);
   }
 
   /**

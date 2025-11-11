@@ -1,60 +1,55 @@
-import { Injectable } from '@angular/core';
-import { Router } from '@angular/router';
-import { ActionableCommand, AutomaticCommand, RefreshDataCommand, ShowNotificationCommand } from '@memberjunction/ai-core-plus';
-import { NotificationService } from './notification.service';
+import { Injectable, EventEmitter } from '@angular/core';
+import { ActionableCommand, AutomaticCommand, RefreshDataCommand } from '@memberjunction/ai-core-plus';
 import { DataCacheService } from './data-cache.service';
 
 /**
  * Service for handling UI commands from agents
- * Executes both actionable (user-triggered) and automatic (immediate) commands
+ * Emits events for commands to be handled by the host application
+ * This allows the generic conversations package to remain app-agnostic
  */
 @Injectable({
   providedIn: 'root'
 })
 export class UICommandHandlerService {
+  /**
+   * Event emitted when an actionable command should be executed
+   * Host application should subscribe to this and handle the command appropriately
+   */
+  public actionableCommandRequested = new EventEmitter<ActionableCommand>();
+
+  /**
+   * Event emitted when an automatic command should be executed
+   * Host application should subscribe to this and handle the command appropriately
+   */
+  public automaticCommandRequested = new EventEmitter<AutomaticCommand>();
+
   constructor(
-    private router: Router,
-    private notificationService: NotificationService,
     private dataCacheService: DataCacheService
   ) {}
 
   /**
    * Execute an actionable command (triggered by user clicking a button)
+   * Emits the command for the host application to handle
    */
   public async executeActionableCommand(command: ActionableCommand): Promise<void> {
-    console.log('Executing actionable command:', command);
-
-    switch (command.type) {
-      case 'open:resource':
-        await this.handleOpenResource(command);
-        break;
-
-      case 'open:url':
-        this.handleOpenURL(command);
-        break;
-
-      default:
-        console.warn('Unknown actionable command type:', (command as any).type);
-    }
+    console.log('📤 Emitting actionable command for host app:', command);
+    this.actionableCommandRequested.emit(command);
   }
 
   /**
    * Execute an automatic command (runs immediately without user interaction)
+   * Special handling: refresh:data commands execute locally, others emit to host
    */
   public async executeAutomaticCommand(command: AutomaticCommand): Promise<void> {
     console.log('Executing automatic command:', command);
 
-    switch (command.type) {
-      case 'refresh:data':
-        await this.handleRefreshData(command);
-        break;
-
-      case 'notification':
-        this.handleShowNotification(command);
-        break;
-
-      default:
-        console.warn('Unknown automatic command type:', (command as any).type);
+    if (command.type === 'refresh:data') {
+      // Handle data refresh locally as it's a generic operation
+      await this.handleRefreshData(command);
+    } else {
+      // Emit other automatic commands (like notifications) for host to handle
+      console.log('📤 Emitting automatic command for host app:', command);
+      this.automaticCommandRequested.emit(command);
     }
   }
 
@@ -76,72 +71,8 @@ export class UICommandHandlerService {
   }
 
   /**
-   * Handle opening a resource (record, dashboard, report, form, view)
-   */
-  private async handleOpenResource(command: ActionableCommand): Promise<void> {
-    if (command.type !== 'open:resource') return;
-
-    const { resourceType, resourceId, mode, parameters } = command;
-
-    // Build route based on resource type
-    let route: string;
-    const queryParams: Record<string, any> = { ...parameters };
-
-    switch (resourceType) {
-      case 'Record':
-        route = `/record/${resourceId}`;
-        if (mode) {
-          queryParams['mode'] = mode;
-        }
-        break;
-
-      case 'Dashboard':
-        route = `/dashboard/${resourceId}`;
-        break;
-
-      case 'Report':
-        route = `/report/${resourceId}`;
-        break;
-
-      case 'Form':
-        route = `/form/${resourceId}`;
-        if (mode) {
-          queryParams['mode'] = mode;
-        }
-        break;
-
-      case 'View':
-        route = `/view/${resourceId}`;
-        break;
-
-      default:
-        console.warn('Unknown resource type:', resourceType);
-        return;
-    }
-
-    // Navigate to the resource
-    await this.router.navigate([route], { queryParams });
-  }
-
-  /**
-   * Handle opening a URL in a new tab
-   */
-  private handleOpenURL(command: ActionableCommand): void {
-    if (command.type !== 'open:url') return;
-
-    const { url, openInNewTab } = command;
-
-    if (openInNewTab !== false) {
-      // Open in new tab (default behavior)
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      // Navigate in current window
-      window.location.href = url;
-    }
-  }
-
-  /**
    * Handle refreshing data (entity data or caches)
+   * This is handled locally as it's a generic operation that doesn't require host app knowledge
    */
   private async handleRefreshData(command: RefreshDataCommand): Promise<void> {
     const { scope, entityNames, cacheName } = command;
@@ -159,25 +90,5 @@ export class UICommandHandlerService {
     } else {
       console.warn('Invalid refresh:data command parameters:', command);
     }
-  }
-
-  /**
-   * Handle showing a notification to the user
-   */
-  private handleShowNotification(command: ShowNotificationCommand): void {
-    const { message, severity, duration } = command;
-
-    this.notificationService.show({
-      content: message,
-      type: this.mapSeverityToType(severity || 'info'),
-      hideAfter: duration || 5000
-    });
-  }
-
-  /**
-   * Map notification severity to Kendo notification type
-   */
-  private mapSeverityToType(severity: 'success' | 'info' | 'warning' | 'error'): 'success' | 'info' | 'warning' | 'error' {
-    return severity;
   }
 }

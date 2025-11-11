@@ -107,3 +107,4 @@ export interface LoopAgentResponse<P = any> {
 }
 
 //\n{@include ../../../CorePlus/src/agent-payload-change-request.ts}
+//\n{@include ../../../CorePlus/src/response-forms.ts}

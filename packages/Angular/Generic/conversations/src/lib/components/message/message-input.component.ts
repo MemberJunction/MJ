@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -10,7 +10,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, BaseAgentSuggestedResponse } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
@@ -60,7 +60,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
   @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
-  @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentRunId?: string}>(); // Emits when message completes (success or error)
+  @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentId?: string}>(); // Emits when message completes (success or error)
   @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
@@ -805,7 +805,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         hasMessage: !!result.agentRun.Message,
         payloadKeys: result.payload ? Object.keys(result.payload) : [],
         payload: result.payload, // Full payload for debugging,
-        suggestedResponses: result.suggestedResponses
+        responseForm: result.responseForm,
+        actionableCommands: result.actionableCommands,
+        automaticCommands: result.automaticCommands
       });
 
       // Stage 2: Check for task graph (multi-step orchestration)
@@ -831,9 +833,20 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // Mark message as completing BEFORE setting final content (prevents race condition)
         this.markMessageComplete(conversationManagerMessage);
 
+        // Set response form and command fields before saving
+        if (result.responseForm) {
+          conversationManagerMessage.ResponseForm = JSON.stringify(result.responseForm);
+        }
+        if (result.actionableCommands && result.actionableCommands.length > 0) {
+          conversationManagerMessage.ActionableCommands = JSON.stringify(result.actionableCommands);
+        }
+        if (result.automaticCommands && result.automaticCommands.length > 0) {
+          conversationManagerMessage.AutomaticCommands = JSON.stringify(result.automaticCommands);
+        }
+
         // Normal chat response
         // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.suggestedResponses );
+        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete');
 
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         // Server already created artifacts - just emit event to trigger UI reload
@@ -871,7 +884,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           conversationManagerMessage.HiddenToUser = false;
 
           // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.suggestedResponses);
+          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete');
 
           this.messageSent.emit(conversationManagerMessage);
 
@@ -1009,11 +1022,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
 
     try {
-      // Get environment ID from user
-      const environmentId = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+      // Get default environment ID (MJ standard environment used across all installations)
+      const environmentId = EnvironmentEntityExtended.DefaultEnvironmentID;
 
-      // Get session ID for PubSub
-      const sessionId = (GraphQLDataProvider.Instance as any).sessionId || '';
+      // Get session ID for PubSub subscriptions
+      const sessionId = GraphQLDataProvider.Instance.sessionId || '';
       
       // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
       const mutation = `
@@ -1119,7 +1132,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
   }
 
-  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', suggestedResponses?: BaseAgentSuggestedResponse[]): Promise<void> {
+  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error'): Promise<void> {
     // Mark as completing FIRST if status is Complete or Error
     // This ensures task cleanup happens even if we return early due to guard clause
     if (status === 'Complete' || status === 'Error') {
@@ -1137,9 +1150,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     while (attempts < maxAttempts && !done) {
       convoDetail.Message = message;
       convoDetail.Status = status;
-      if (suggestedResponses !== undefined) {
-        convoDetail.SuggestedResponses = JSON.stringify(suggestedResponses);  
-      }
 
       await convoDetail.Save();
 
@@ -1278,7 +1288,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (agentResult && agentResult.success) {
         // Update message with result
-        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', agentResult.suggestedResponses);
+        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
         // Server created artifacts - emit event to trigger UI reload
         if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
@@ -1384,7 +1394,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           agentResponseMessage.AgentID = subResult.agentRun.AgentID;
         }
 
-        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult.suggestedResponses);
+        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
         // Server created artifacts - emit event to trigger UI reload
         if (subResult.payload && Object.keys(subResult.payload).length > 0) {
@@ -1714,7 +1724,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         }
         // Stage 3: Normal chat response
         else {
-          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result.suggestedResponses)
+          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
 
           // Server created artifacts - emit event to trigger UI reload
           if (result.payload && Object.keys(result.payload).length > 0) {
@@ -1932,7 +1942,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (result && result.success) {
         // Update the response message with agent result
-        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result.suggestedResponses);
+        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
         // Server created artifacts (handles versioning) - emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
@@ -2078,7 +2088,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     // Emit completion event to parent so it can refresh agent run data
     this.messageComplete.emit({
       conversationDetailId: conversationDetail.ID,
-      agentRunId: (conversationDetail as any).AgentRunID
+      agentId: conversationDetail.AgentID || undefined
     });
   }
 

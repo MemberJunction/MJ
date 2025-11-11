@@ -14,7 +14,7 @@ import { AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } f
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
-import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse } from './agent-payload-change-request';
+import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';

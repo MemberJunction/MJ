@@ -339,9 +339,15 @@ export class AgentRunner {
                                              (agentResult.success ? '✅ Completed' : '❌ Failed');
                 agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
 
-                // Set suggested responses if present
-                if (agentResult.suggestedResponses) {
-                    agentResponseDetail.SuggestedResponses = JSON.stringify(agentResult.suggestedResponses);
+                // Set response form and command fields
+                if (agentResult.responseForm) {
+                    agentResponseDetail.ResponseForm = JSON.stringify(agentResult.responseForm);
+                }
+                if (agentResult.actionableCommands && agentResult.actionableCommands.length > 0) {
+                    agentResponseDetail.ActionableCommands = JSON.stringify(agentResult.actionableCommands);
+                }
+                if (agentResult.automaticCommands && agentResult.automaticCommands.length > 0) {
+                    agentResponseDetail.AutomaticCommands = JSON.stringify(agentResult.automaticCommands);
                 }
 
                 await agentResponseDetail.Save();

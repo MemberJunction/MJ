@@ -50,9 +50,9 @@
   <kendo-numerictextbox
     *ngIf="questionType === 'number'"
     [value]="value"
-    [min]="min"
-    [max]="max"
-    [step]="step"
+    [min]="min || 0"
+    [max]="max || 999999999"
+    [step]="step || 1"
     [disabled]="disabled"
     (valueChange)="onValueChange($event)"
     class="question-input"
@@ -62,8 +62,8 @@
   <kendo-numerictextbox
     *ngIf="questionType === 'currency'"
     [value]="value"
-    [min]="min"
-    [max]="max"
+    [min]="min || 0"
+    [max]="max || 999999999"
     [step]="step || 0.01"
     [format]="'c2'"
     [disabled]="disabled"

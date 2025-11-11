@@ -42,7 +42,7 @@ export class ActionableCommandsComponent {
   /**
    * Get button theme color based on command type
    */
-  public getButtonTheme(command: ActionableCommand): string {
+  public getButtonTheme(command: ActionableCommand): 'base' | 'primary' | 'secondary' | 'tertiary' | 'info' | 'success' | 'warning' | 'error' | 'dark' | 'light' | 'inverse' {
     // Use different themes for different command types
     if (command.type === 'open:resource') {
       return 'primary';

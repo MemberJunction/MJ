@@ -114,7 +114,9 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     terminate: true, // Chat always terminates to return to user
                     payloadChangeRequest: response.payloadChangeRequest,
-                    suggestedResponses: response.suggestedResponses,
+                    responseForm: response.responseForm,
+                    actionableCommands: response.actionableCommands,
+                    automaticCommands: response.automaticCommands,
                     reasoning: response.reasoning,
                     confidence: response.confidence
                 });

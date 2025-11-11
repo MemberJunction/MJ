@@ -617,7 +617,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * Handle message completion event from message-input
    * Refreshes the agent run data in-place to get final status and timestamps
    */
-  async onMessageComplete(event: {conversationDetailId: string; agentRunId?: string}): Promise<void> {
+  async onMessageComplete(event: {conversationDetailId: string; agentId?: string}): Promise<void> {
     // Get existing agent run from map
     const existingAgentRun = this.agentRunsByDetailId.get(event.conversationDetailId);
 

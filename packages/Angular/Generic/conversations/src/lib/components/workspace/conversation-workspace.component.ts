@@ -18,11 +18,13 @@ import { CollectionStateService } from '../../services/collection-state.service'
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
+import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 
 /**
  * Top-level workspace component for conversations
@@ -89,7 +91,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   @Output() conversationChanged = new EventEmitter<ConversationEntity>();
   @Output() artifactOpened = new EventEmitter<ArtifactEntity>();
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationChanged = new EventEmitter<{
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
@@ -98,6 +99,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     taskId?: string;
   }>();
   @Output() newConversationStarted = new EventEmitter<void>();
+  @Output() actionableCommandExecuted = new EventEmitter<ActionableCommand>();
+  @Output() automaticCommandExecuted = new EventEmitter<AutomaticCommand>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -153,6 +156,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private streamingService: ConversationStreamingService,
+    private uiCommandHandler: UICommandHandlerService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -163,6 +167,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // This establishes the single PubSub connection for all conversations
     this.streamingService.initialize();
     console.log('✅ Global streaming service initialized');
+
+    // Subscribe to command events from UI Command Handler service
+    // These will be bubbled up to the host application
+    this.uiCommandHandler.actionableCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(command => {
+        this.onActionableCommand(command);
+      });
+
+    this.uiCommandHandler.automaticCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(command => {
+        this.onAutomaticCommand(command);
+      });
 
     // Check initial mobile state
     this.checkMobileView();
@@ -694,19 +712,30 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
-    // Pass the event up to the parent component (chat-wrapper in explorer-core)
-    this.openEntityRecord.emit(event);
+    // Convert to actionable command and emit
+    const firstKeyValue = event.compositeKey.KeyValuePairs[0]?.Value || '';
+    const resourceId = `${event.entityName}:${firstKeyValue}`;
+    const command: ActionableCommand = {
+      type: 'open:resource',
+      label: `Open ${event.entityName}`,
+      resourceType: 'Record',
+      resourceId: resourceId,
+      mode: 'view'
+    };
+    this.actionableCommandExecuted.emit(command);
   }
 
   onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
-    // Convert from tasks format (recordId) to workspace format (compositeKey)
-    const compositeKey = new CompositeKey([
-      new KeyValuePair('ID', event.recordId)
-    ]);
-    this.openEntityRecord.emit({
-      entityName: event.entityName,
-      compositeKey
-    });
+    // Convert to actionable command and emit
+    const resourceId = `${event.entityName}:${event.recordId}`;
+    const command: ActionableCommand = {
+      type: 'open:resource',
+      label: `Open ${event.entityName}`,
+      resourceType: 'Record',
+      resourceId: resourceId,
+      mode: 'view'
+    };
+    this.actionableCommandExecuted.emit(command);
   }
 
   onTaskClicked(task: TaskEntity): void {
@@ -860,5 +889,23 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     if (this.activeArtifactId) {
       await this.loadArtifactPermissions(this.activeArtifactId);
     }
+  }
+
+  /**
+   * Handle actionable command execution from child components
+   * Bubbles up to host application for handling
+   */
+  onActionableCommand(command: ActionableCommand): void {
+    console.log('📤 Bubbling up actionable command:', command);
+    this.actionableCommandExecuted.emit(command);
+  }
+
+  /**
+   * Handle automatic command execution from child components
+   * Bubbles up to host application for handling
+   */
+  onAutomaticCommand(command: AutomaticCommand): void {
+    console.log('📤 Bubbling up automatic command:', command);
+    this.automaticCommandExecuted.emit(command);
   }
 }
