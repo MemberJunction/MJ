@@ -22,10 +22,12 @@
   font-style: italic;
 }
 
+/* Default widths - controlled by input-container width classes */
 .question-input,
 .question-textarea,
 .question-dropdown {
   width: 100%;
+  max-width: 100%;
 }
 
 .question-dropdown {
@@ -70,12 +72,35 @@
 
 .question-buttongroup {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 185, 129, 0.3) transparent;
+}
+
+.question-buttongroup::-webkit-scrollbar {
+  height: 6px;
+}
+
+.question-buttongroup::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.question-buttongroup::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.3);
+  border-radius: 3px;
+}
+
+.question-buttongroup::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.5);
 }
 
 .buttongroup-option {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .buttongroup-option i {
@@ -85,8 +110,8 @@
 .question-radio-group,
 .question-checkbox-group {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
 }
 
 .radio-option,
@@ -94,6 +119,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 120px;
+  flex: 0 0 auto;
 }
 
 .radio-label,
@@ -170,5 +197,74 @@
   .daterange-separator {
     text-align: center;
     padding: 4px 0;
+  }
+}
+
+/* ===== Semantic Width Classes ===== */
+/* Controls field width based on expected content length */
+
+.input-container {
+  display: block;
+}
+
+/* Narrow fields - for numbers, dates, times, short codes */
+.input-container.width-narrow {
+  max-width: 200px;
+}
+
+.input-container.width-narrow .question-input,
+.input-container.width-narrow .question-dropdown {
+  width: 100%;
+}
+
+/* Medium fields - for names, cities, phone numbers (DEFAULT) */
+.input-container.width-medium {
+  max-width: 350px;
+}
+
+.input-container.width-medium .question-input,
+.input-container.width-medium .question-dropdown {
+  width: 100%;
+}
+
+/* Wide fields - for emails, URLs, long text */
+.input-container.width-wide {
+  max-width: 500px;
+}
+
+.input-container.width-wide .question-input,
+.input-container.width-wide .question-dropdown {
+  width: 100%;
+}
+
+/* Full width - for textarea, search fields */
+.input-container.width-full {
+  max-width: 100%;
+}
+
+.input-container.width-full .question-input,
+.input-container.width-full .question-textarea,
+.input-container.width-full .question-dropdown {
+  width: 100%;
+}
+
+/* Auto-width - for dropdowns, radio, checkbox (sizes to content) */
+.input-container.width-auto {
+  max-width: 350px;
+  min-width: 150px;
+  width: auto;
+}
+
+.input-container.width-auto .question-dropdown {
+  width: 100%;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 600px) {
+  .input-container.width-narrow,
+  .input-container.width-medium,
+  .input-container.width-wide,
+  .input-container.width-auto {
+    max-width: 100%;
   }
 }

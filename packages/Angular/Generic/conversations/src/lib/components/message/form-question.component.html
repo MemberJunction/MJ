@@ -10,6 +10,9 @@
     {{ question.helpText }}
   </div>
 
+  <!-- Input Container with width class -->
+  <div class="input-container" [ngClass]="widthClass">
+
   <!-- Text Input -->
   <input
     *ngIf="questionType === 'text'"
@@ -204,6 +207,7 @@
       </label>
     </div>
   </div>
+  </div><!-- end input-container -->
 
   <!-- Validation Error -->
   <div *ngIf="control?.invalid && control?.touched" class="validation-error">

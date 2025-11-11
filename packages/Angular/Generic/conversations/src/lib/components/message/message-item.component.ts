@@ -430,14 +430,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       // This handles cases like "Choose an option: weather" -> just show "weather"
       return `<span class="form-response-pill single-field"><i class="fa fa-check" aria-hidden="true"></i>${value}</span>`;
     } else {
-      // Multiple fields - card-style pill with table-like layout
+      // Multiple fields - vertical question/answer layout for complex forms
       const title = content.title ? this.escapeHtml(content.title) : 'Form Response';
       const fieldsHTML = content.fields.map((f: any) => {
         const label = this.escapeHtml(f.label || f.name);
         const value = this.formatFieldValue(f);
         return `<div class="pill-field">
-          <span class="field-label">${label}</span>
-          <span class="field-value">${value}</span>
+          <div class="field-question">${label}</div>
+          <div class="field-answer">${value}</div>
         </div>`;
       }).join('');
 

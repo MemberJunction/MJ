@@ -117,6 +117,25 @@ export interface FormQuestion {
      * Use for clarification or examples (e.g., "Estimated annual revenue in USD").
      */
     helpText?: string;
+
+    /**
+     * Optional width hint for the input field.
+     * Controls the visual width of the input control:
+     * - 'narrow': ~150-200px (numbers, dates, times, short codes)
+     * - 'medium': ~250-350px (names, cities, phone numbers)
+     * - 'wide': ~400-500px (email, URLs, button groups, radio, checkbox)
+     * - 'full': 100% width (textarea, search fields)
+     * - 'auto': Auto-size based on content (dropdowns)
+     *
+     * Default behavior (if not specified):
+     * - textarea: 'full'
+     * - number/currency/date/time: 'narrow'
+     * - buttongroup/radio/checkbox: 'wide' (with wrapping)
+     * - dropdown: 'auto'
+     * - email: 'wide'
+     * - text: 'medium'
+     */
+    widthHint?: 'narrow' | 'medium' | 'wide' | 'full' | 'auto';
 }
 
 /**

@@ -77,6 +77,47 @@ export class FormQuestionComponent implements ControlValueAccessor, OnInit {
   }
 
   /**
+   * Get CSS class for field width based on widthHint or intelligent defaults
+   */
+  public get widthClass(): string {
+    // If explicit widthHint provided, use it
+    if (this.question.widthHint) {
+      return `width-${this.question.widthHint}`;
+    }
+
+    // Otherwise, apply intelligent defaults based on question type
+    const type = this.questionType;
+
+    // Narrow fields
+    if (['number', 'currency', 'date', 'datetime', 'time'].includes(type)) {
+      return 'width-narrow';
+    }
+
+    // Wide fields for choice-based controls (need space for multiple options)
+    if (['buttongroup', 'radio', 'checkbox'].includes(type)) {
+      return 'width-wide';
+    }
+
+    // Auto-width for dropdowns
+    if (type === 'dropdown') {
+      return 'width-auto';
+    }
+
+    // Full-width fields
+    if (type === 'textarea') {
+      return 'width-full';
+    }
+
+    // Wide fields
+    if (type === 'email') {
+      return 'width-wide';
+    }
+
+    // Default to medium for text and other types
+    return 'width-medium';
+  }
+
+  /**
    * Get placeholder text for text inputs
    */
   public get placeholder(): string | undefined {

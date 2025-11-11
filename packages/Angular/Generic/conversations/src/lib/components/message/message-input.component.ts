@@ -871,7 +871,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           conversationManagerMessage.HiddenToUser = false;
 
           // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete');
+          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result);
 
           this.messageSent.emit(conversationManagerMessage);
 
@@ -887,7 +887,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           conversationManagerMessage.HiddenToUser = true;
 
           // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-          await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete');
+          await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete', result);
 
           this.messageSent.emit(conversationManagerMessage);
 
@@ -1392,7 +1392,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           agentResponseMessage.AgentID = subResult.agentRun.AgentID;
         }
 
-        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult);
 
         // Server created artifacts - emit event to trigger UI reload
         if (subResult.payload && Object.keys(subResult.payload).length > 0) {
@@ -1439,7 +1439,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
             agentResponseMessage.AgentID = retryResult.agentRun.AgentID;
           }
 
-          await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+          await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', retryResult);
 
           // Server created artifacts - emit event to trigger UI reload
           if (retryResult.payload && Object.keys(retryResult.payload).length > 0) {
@@ -1722,7 +1722,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         }
         // Stage 3: Normal chat response
         else {
-          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
+          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result)
 
           // Server created artifacts - emit event to trigger UI reload
           if (result.payload && Object.keys(result.payload).length > 0) {
