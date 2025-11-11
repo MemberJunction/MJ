@@ -672,11 +672,21 @@ function DataGrid({
     }
   };
 
-  // Handle row click with OpenEntityRecord integration
+  // Handle row click with cancelable event pattern
   const handleRowClick = (record) => {
-    // If custom onRowClick handler provided, use it (overrides default OpenEntityRecord behavior)
+    // Create event object with cancel property (cancelable event pattern)
+    const rowClickEvent = {
+      record: record,
+      cancel: false
+    };
+
+    // Always call onRowClick first if provided (allows custom handling + optional cancellation)
     if (onRowClick) {
-      onRowClick(record);
+      onRowClick(rowClickEvent);
+    }
+
+    // If the event was cancelled, don't execute default behavior
+    if (rowClickEvent.cancel) {
       return;
     }
 

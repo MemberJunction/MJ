@@ -63,16 +63,20 @@ function SimpleDrilldownChart({
   };
   
   // Handle row selection in grid
-  const handleRowClick = (record) => {
-    setSelectedRecord(record);
-    
+  const handleRowClick = (event) => {
+    // event has shape: { record: object, cancel: boolean }
+    setSelectedRecord(event.record);
+
     // Bubble up the row selection event
     if (onRowSelected) {
       onRowSelected({
-        record,
+        record: event.record,
         segment: selectedSegment
       });
     }
+
+    // Don't prevent default OpenEntityRecord behavior
+    // (leave event.cancel as false to allow DataGrid to open record if entityPrimaryKeys provided)
   };
   
   // Filter data for selected segment
