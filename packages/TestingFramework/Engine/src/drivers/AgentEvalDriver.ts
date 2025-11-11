@@ -191,7 +191,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 context.contextUser,
                 context.test,
                 config.maxExecutionTime,
-                context.testRun.ID
+                context.testRun
             );
 
             const agentRun = agentResult.agentRun;
@@ -371,8 +371,8 @@ export class AgentEvalDriver extends BaseTestDriver {
         input: AgentEvalInput,
         contextUser: UserInfo,
         test: TestEntity,
-        maxExecutionTime?: number,
-        testRunId?: string
+        maxExecutionTime: number | undefined,
+        testRun: TestRunEntity
     ): Promise<{ agentRun: AIAgentRunEntity }> {
         const runner = new AgentRunner();
 
@@ -405,8 +405,11 @@ export class AgentEvalDriver extends BaseTestDriver {
             } : undefined
         };
 
-        // Generate conversation name with [Test] prefix
-        const conversationName = `[Test] ${test.Name}`;
+        // Generate conversation name with sequence number (if in suite) or [Test] prefix (standalone)
+        // Sequence will be non-null when test is part of a suite run, showing test execution order
+        const conversationName = testRun.Sequence != null
+            ? `[${testRun.Sequence}] ${test.Name}`
+            : `[Test] ${test.Name}`;
 
         // Execute agent with timeout if specified
         if (maxExecutionTime) {
@@ -419,7 +422,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     userMessage: input.userMessage,
                     createArtifacts: true,
                     conversationName: conversationName,
-                    testRunId: testRunId
+                    testRunId: testRun.ID
                 }),
                 timeoutPromise
             ]);
@@ -430,7 +433,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 userMessage: input.userMessage,
                 createArtifacts: true,
                 conversationName: conversationName,
-                testRunId: testRunId
+                testRunId: testRun.ID
             });
 
             return { agentRun: runResult.agentResult.agentRun };

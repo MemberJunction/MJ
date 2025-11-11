@@ -25717,12 +25717,21 @@ export class MJConversationDetail_ {
     @MaxLength(40)
     Status: string;
         
-    @Field({nullable: true, description: `JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).`}) 
+    @Field({nullable: true, description: `DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.`}) 
     SuggestedResponses?: string;
         
     @Field({nullable: true, description: `Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`}) 
     @MaxLength(16)
     TestRunID?: string;
+        
+    @Field({nullable: true, description: `JSON object containing agent response form definition with questions and validation rules. Supports 8 question types: text, textarea, email, number, currency, date, datetime, choices (buttongroup/radio/dropdown/checkbox). Used for collecting structured user input with proper validation.`}) 
+    ResponseForm?: string;
+        
+    @Field({nullable: true, description: `JSON array of actionable commands that user can trigger (shown as clickable buttons/links). Supports open:resource (navigate to records/dashboards/reports/forms) and open:url (external links). Typically used after completing work to provide easy navigation to created/modified resources.`}) 
+    ActionableCommands?: string;
+        
+    @Field({nullable: true, description: `JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`}) 
+    AutomaticCommands?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -25844,6 +25853,15 @@ export class CreateMJConversationDetailInput {
 
     @Field({ nullable: true })
     TestRunID: string | null;
+
+    @Field({ nullable: true })
+    ResponseForm: string | null;
+
+    @Field({ nullable: true })
+    ActionableCommands: string | null;
+
+    @Field({ nullable: true })
+    AutomaticCommands: string | null;
 }
     
 
@@ -25914,6 +25932,15 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     TestRunID?: string | null;
+
+    @Field({ nullable: true })
+    ResponseForm?: string | null;
+
+    @Field({ nullable: true })
+    ActionableCommands?: string | null;
+
+    @Field({ nullable: true })
+    AutomaticCommands?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

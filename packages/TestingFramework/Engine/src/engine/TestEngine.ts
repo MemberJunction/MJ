@@ -100,7 +100,8 @@ export class TestEngine extends TestEngineBase {
         testId: string,
         options: TestRunOptions,
         contextUser: UserInfo,
-        suiteRunId?: string | null
+        suiteRunId?: string | null,
+        suiteTestSequence?: number | null
     ): Promise<TestRunResult | TestRunResult[]> {
         const startTime = Date.now();
         this.log(`Starting test execution: ${testId}`, options.verbose);
@@ -122,11 +123,11 @@ export class TestEngine extends TestEngineBase {
 
             // Check RepeatCount and branch to repeated execution if needed
             if (test.RepeatCount && test.RepeatCount > 1) {
-                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, startTime);
+                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime);
             }
 
             // Single execution - delegate to helper method
-            return await this.runSingleTestIteration(test, suiteRunId, null, options, contextUser, startTime);
+            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime);
 
         } catch (error) {
             this.logError(`Test execution failed: ${testId}`, error as Error);
@@ -168,9 +169,11 @@ export class TestEngine extends TestEngineBase {
 
             // Execute tests
             const testResults: TestRunResult[] = [];
+            let testSequence = 1; // Track suite execution order (1-based)
             for (const test of tests) {
                 try {
-                    const result = await this.RunTest(test.ID, options, contextUser, suiteRun.ID);
+                    const result = await this.RunTest(test.ID, options, contextUser, suiteRun.ID, testSequence);
+                    testSequence++; // Increment for next test in suite
 
                     // Handle both single result and array of results (if RepeatCount > 1)
                     if (Array.isArray(result)) {
@@ -346,8 +349,12 @@ export class TestEngine extends TestEngineBase {
             testRun.TestSuiteRunID = suiteRunId;
         }
 
-        // Set sequence for repeat iterations
-        if (sequence && sequence > 1) {
+        // Set sequence if provided (for suite test order or repeat iterations)
+        // sequence will be:
+        // - Suite test position (1, 2, 3...) for tests in a suite
+        // - Iteration number (1, 2, 3...) for repeated tests
+        // - null for standalone, non-repeated tests
+        if (sequence != null) {
             testRun.Sequence = sequence;
         }
 
@@ -454,6 +461,7 @@ export class TestEngine extends TestEngineBase {
         options: TestRunOptions,
         contextUser: UserInfo,
         suiteRunId: string | null | undefined,
+        suiteTestSequence: number | null | undefined,
         startTime: number
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];

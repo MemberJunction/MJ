@@ -761,6 +761,29 @@
   transform: scale(1.1);
 }
 
+/* Test feedback icon in header - appears for test runs */
+.test-feedback-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  margin-left: 8px;
+}
+
+.test-feedback-icon i.fa-flask {
+  font-size: 13px;
+}
+
+.test-feedback-icon:hover {
+  color: #3B82F6; /* Blue color for test feedback */
+  transform: scale(1.1);
+}
+
 @keyframes rotate {
   from {
     transform: rotate(0deg);
@@ -1181,5 +1204,150 @@
   .detail-label,
   .detail-value {
     font-size: 11px;
+  }
+}
+
+/* Form Response Pills */
+:host ::ng-deep .form-response-pill {
+  margin: 0 3px;
+  transition: all 0.2s ease;
+}
+
+/* Single field form - inline pill (similar to mention badges) */
+:host ::ng-deep .form-response-pill.single-field {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* Multi-field form - card-style (block display) */
+:host ::ng-deep .form-response-pill.multi-field {
+  display: inline-block;
+  max-width: min(800px, 100%);
+  width: auto;
+  min-width: 400px;
+  margin: 8px 0;
+  vertical-align: top;
+}
+
+:host ::ng-deep .form-response-pill.single-field i {
+  font-size: 11px;
+  opacity: 0.95;
+}
+
+:host ::ng-deep .form-response-pill.single-field strong {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* Multi-field form - card-style pill */
+:host ::ng-deep .form-response-pill .pill-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 12px 12px 0 0;
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-bottom: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+:host ::ng-deep .form-response-pill .pill-header i {
+  font-size: 12px;
+  opacity: 0.95;
+}
+
+:host ::ng-deep .form-response-pill .pill-fields {
+  padding: 10px 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+}
+
+:host ::ng-deep .form-response-pill .pill-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  font-size: 13px;
+}
+
+:host ::ng-deep .form-response-pill .pill-field:not(:last-child) {
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+  padding-bottom: 12px;
+  margin-bottom: 0;
+}
+
+:host ::ng-deep .form-response-pill .field-question {
+  font-weight: 600;
+  color: #059669;
+  font-size: 12px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.9;
+}
+
+:host ::ng-deep .form-response-pill .field-answer {
+  color: #1f2937;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 8px 0 8px 12px;
+  background: transparent;
+  border-left: 3px solid rgba(16, 185, 129, 0.4);
+  font-style: italic;
+}
+
+
+/* Hover effect for form pills */
+:host ::ng-deep .form-response-pill.single-field:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+:host ::ng-deep .form-response-pill.multi-field:hover {
+  transform: translateY(-1px);
+}
+
+:host ::ng-deep .form-response-pill.multi-field:hover .pill-header {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive adjustments for multi-field forms */
+@media (max-width: 600px) {
+  :host ::ng-deep .form-response-pill.multi-field {
+    min-width: 300px;
+  }
+}
+
+@media (max-width: 400px) {
+  :host ::ng-deep .form-response-pill.multi-field {
+    min-width: 100%;
+  }
+
+  :host ::ng-deep .form-response-pill .field-question {
+    font-size: 11px;
+  }
+
+  :host ::ng-deep .form-response-pill .field-answer {
+    font-size: 14px;
+    padding: 6px 0 6px 10px;
   }
 }

@@ -39,6 +39,14 @@
         {{ timePillText }}
       </span>
 
+      <!-- Test feedback icon (appears for test runs only) -->
+      <span *ngIf="message.TestRunID"
+            class="test-feedback-icon"
+            (click)="onTestFeedbackClick()"
+            title="Provide Test Feedback">
+        <i class="fas fa-flask"></i>
+      </span>
+
       <!-- Agent run icon (clickable to expand details) - always rightmost when present -->
       <span *ngIf="hasAgentRun"
             class="agent-run-icon"
@@ -81,6 +89,28 @@
             [isConversationOwner]="isConversationOwner"
             (responseSelected)="onSuggestedResponseSelected($event)">
           </mj-suggested-responses>
+        }
+
+        <!-- Agent Response Form (shown only for last message by owner) -->
+        @if (isLastMessageInConversation && isConversationOwner && responseForm) {
+          <mj-agent-response-form
+            [responseForm]="responseForm"
+            [disabled]="isProcessing"
+            [isLastMessage]="isLastMessageInConversation"
+            [isConversationOwner]="isConversationOwner"
+            (formSubmitted)="onFormSubmitted($event)">
+          </mj-agent-response-form>
+        }
+
+        <!-- Actionable Commands (shown only for last message by owner) -->
+        @if (isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
+          <mj-actionable-commands
+            [commands]="actionableCommands"
+            [disabled]="isProcessing"
+            [isLastMessage]="isLastMessageInConversation"
+            [isConversationOwner]="isConversationOwner"
+            (commandExecuted)="onCommandExecuted($event)">
+          </mj-actionable-commands>
         }
       }
 
@@ -149,11 +179,6 @@
               <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
                 <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
               </button>
-              @if (message.TestRunID) {
-                <button class="action-bar-btn test-feedback" (click)="onTestFeedbackClick()" title="Provide Test Feedback">
-                  <i class="fas fa-flask"></i>
-                </button>
-              }
               <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
                 <i class="fas fa-trash"></i>
               </button>

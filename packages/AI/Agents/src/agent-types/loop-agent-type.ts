@@ -114,7 +114,9 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     terminate: true, // Chat always terminates to return to user
                     payloadChangeRequest: response.payloadChangeRequest,
-                    suggestedResponses: response.suggestedResponses,
+                    responseForm: response.responseForm,
+                    actionableCommands: response.actionableCommands,
+                    automaticCommands: response.automaticCommands,
                     reasoning: response.reasoning,
                     confidence: response.confidence
                 });
@@ -131,7 +133,9 @@ export class LoopAgentType extends BaseAgentType {
                     reasoning: response.reasoning,
                     confidence: response.confidence,
                     payloadChangeRequest: response.payloadChangeRequest,
-                    suggestedResponses: response.suggestedResponses
+                    responseForm: response.responseForm,
+                    actionableCommands: response.actionableCommands,
+                    automaticCommands: response.automaticCommands
                 });
             }
 
@@ -144,7 +148,9 @@ export class LoopAgentType extends BaseAgentType {
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 payloadChangeRequest: response.payloadChangeRequest,
                 terminate: response.taskComplete,
-                suggestedResponses: response.suggestedResponses
+                responseForm: response.responseForm,
+                actionableCommands: response.actionableCommands,
+                automaticCommands: response.automaticCommands
             }
             switch (response.nextStep.type) {
                 case 'Sub-Agent':

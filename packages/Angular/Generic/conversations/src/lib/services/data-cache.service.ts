@@ -209,6 +209,49 @@ export class DataCacheService {
   // =============================================================================
 
   /**
+   * Refresh entity data by clearing cached entities of a specific type
+   * This forces a reload from the database on next access
+   * @param entityName The entity name to refresh (e.g., 'Conversations', 'Conversation Details')
+   */
+  async refreshEntity(entityName: string): Promise<void> {
+    switch (entityName) {
+      case 'Conversations':
+        this.conversations = [];
+        break;
+      case 'Conversation Details':
+        this.conversationDetails = [];
+        break;
+      default:
+        console.warn('Unknown entity name for refresh:', entityName);
+    }
+  }
+
+  /**
+   * Refresh a specific cache by name
+   * This method can be extended to handle different cache types
+   * @param cacheName The cache name ('Core', 'AI', 'Actions')
+   */
+  async refreshCache(cacheName: 'Core' | 'AI' | 'Actions'): Promise<void> {
+    switch (cacheName) {
+      case 'Core':
+        // Clear core entity caches
+        this.clear();
+        break;
+      case 'AI':
+        // AI-specific cache refresh would go here
+        // For now, just log it
+        console.log('AI cache refresh requested (not yet implemented)');
+        break;
+      case 'Actions':
+        // Actions-specific cache refresh would go here
+        console.log('Actions cache refresh requested (not yet implemented)');
+        break;
+      default:
+        console.warn('Unknown cache name for refresh:', cacheName);
+    }
+  }
+
+  /**
    * Clear all cached entities
    * Call when switching environments, users, or when needed
    */

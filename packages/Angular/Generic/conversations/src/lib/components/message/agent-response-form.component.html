@@ -1,0 +1,54 @@
+<div *ngIf="isVisible" class="agent-response-form">
+  <!-- Simple Choice Mode (single question, no title, buttongroup/radio) -->
+  <div *ngIf="isSimpleChoice" class="simple-choice-buttons">
+    <button
+      *ngFor="let option of getOptions(responseForm.questions[0]); trackBy: trackByValue"
+      kendoButton
+      [disabled]="disabled || isSubmitting"
+      (click)="onSimpleChoiceClick(option.value)"
+      class="choice-button"
+    >
+      <i *ngIf="hasIcon(option)" class="fa {{ option.icon }}" aria-hidden="true"></i>
+      {{ option.label }}
+    </button>
+  </div>
+
+  <!-- Full Form Mode (complex forms) -->
+  <form *ngIf="!isSimpleChoice" [formGroup]="formGroup" (ngSubmit)="onSubmit()" class="response-form">
+    <!-- Form Title -->
+    <h3 *ngIf="responseForm.title" class="form-title">{{ responseForm.title }}</h3>
+
+    <!-- Form Description -->
+    <p *ngIf="responseForm.description" class="form-description">{{ responseForm.description }}</p>
+
+    <!-- Questions -->
+    <div class="form-questions">
+      <mj-form-question
+        *ngFor="let question of responseForm.questions; trackBy: trackByQuestionId"
+        [question]="question"
+        [control]="getControl(question.id)"
+        [formControlName]="question.id"
+      ></mj-form-question>
+    </div>
+
+    <!-- Submit Button -->
+    <div class="form-actions">
+      <button
+        kendoButton
+        type="submit"
+        [themeColor]="'primary'"
+        [disabled]="disabled || isSubmitting || formGroup.invalid"
+        class="submit-button"
+      >
+        <span *ngIf="!isSubmitting">
+          <i class="fa fa-check" aria-hidden="true"></i>
+          {{ submitLabel }}
+        </span>
+        <span *ngIf="isSubmitting">
+          <span class="k-icon k-i-loading"></span>
+          Submitting...
+        </span>
+      </button>
+    </div>
+  </form>
+</div>

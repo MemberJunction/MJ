@@ -1,0 +1,43 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - Hierarchical Treemap with Color-Coded Drill-Down",
+    "Description": "Tests Skip's ability to create D3-based treemap visualizations with hierarchical data, color scales, and progressive drill-down through multiple detail levels.",
+    "InputDefinition": {
+      "userMessage": "Create a treemap visualization showing our revenue breakdown by membership type. Each rectangle should be sized by total revenue amount, and colored by growth rate compared to last year (use a gradient from red for negative growth to green for positive growth). When I click on any membership type rectangle, I want to see a horizontal bar chart showing the top 10 members in that type ranked by their individual revenue contribution. Then, when I click on any member's bar, show me a detailed breakdown table listing all their transactions (memberships, event registrations, course enrollments) with dates, amounts, and transaction types. Make sure each row in that transaction table is clickable so I can open the actual record. Include a breadcrumb or back button so I can navigate back up through the levels. The treemap should show both the membership type name and the total revenue amount in each rectangle."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes treemap with rectangles sized by revenue",
+        "Color gradient applied based on growth rate (red to green spectrum)",
+        "Each rectangle clearly labeled with membership type and revenue amount",
+        "Clicking rectangle drills down to horizontal bar chart of top 10 members",
+        "Bar chart shows member names and individual revenue contributions",
+        "Clicking member bar shows transaction detail table",
+        "Transaction table includes dates, amounts, types (membership/event/course)",
+        "Table rows support OpenEntityRecord for invoice/membership/registration records",
+        "Navigation includes breadcrumb or back functionality",
+        "Three levels of drill-down work smoothly with context maintained"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 180000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "C0894BE7-18C1-4E60-BDD4-AA614FEAB9FF"
+  },
+  "sync": {
+    "lastModified": "2025-11-11T01:15:37.413Z",
+    "checksum": "7f0f6861694c0cae441ed914d0051cb1b14aaa140c0c60bcee6b0d47bab074ad"
+  }
+}

@@ -4,6 +4,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
+import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 
 /**
  * Wrapper component for the conversations interface within MJ Explorer
@@ -28,7 +29,8 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
         [activeTaskInput]="activeTaskId"
         (navigationChanged)="onNavigationChanged($event)"
         (newConversationStarted)="onNewConversationStarted()"
-        (openEntityRecord)="onOpenEntityRecord($event)">
+        (actionableCommandExecuted)="onActionableCommand($event)"
+        (automaticCommandExecuted)="onAutomaticCommand($event)">
       </mj-conversation-workspace>
     </div>
   `,
@@ -178,10 +180,80 @@ export class ChatWrapperComponent implements OnInit {
   }
 
   /**
-   * Handle openEntityRecord event from conversation components
-   * Opens the specified entity record in a new tab using SharedService
+   * Handle actionable commands from agents and UI interactions
+   * Routes commands to appropriate Explorer services (SharedService for entity records, etc.)
    */
-  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
-    SharedService.Instance.OpenEntityRecord(event.entityName, event.compositeKey);
+  onActionableCommand(command: ActionableCommand): void {
+    console.log('🎯 Explorer handling actionable command:', command);
+
+    if (command.type === 'open:resource') {
+      // Handle opening MJ resources using SharedService
+      const { resourceType, resourceId, entityName, mode } = command;
+
+      if (resourceType === 'Record') {
+        // Open entity record using SharedService
+        if (!entityName) {
+          console.error('entityName is required for Record type commands');
+          return;
+        }
+
+        const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: resourceId }]);
+        SharedService.Instance.OpenEntityRecord(entityName, compositeKey);
+      } else {
+        // For other resource types (Dashboard, Report, Form, View), navigate using Router
+        const routeMap: Record<string, string> = {
+          'Dashboard': '/dashboard',
+          'Report': '/report',
+          'Form': '/form',
+          'View': '/view'
+        };
+
+        const basePath = routeMap[resourceType];
+        if (basePath) {
+          const queryParams = command.parameters || {};
+          if (mode) {
+            queryParams['mode'] = mode;
+          }
+          this.router.navigate([`${basePath}/${resourceId}`], { queryParams });
+        } else {
+          console.warn('Unknown resource type:', resourceType);
+        }
+      }
+    } else if (command.type === 'open:url') {
+      // Handle opening external URLs
+      const { url, newTab } = command;
+
+      if (newTab !== false) {
+        // Open in new tab (default behavior)
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        // Navigate in current window
+        window.location.href = url;
+      }
+    }
+  }
+
+  /**
+   * Handle automatic commands from agents
+   * Shows notifications using SharedService notification system
+   */
+  onAutomaticCommand(command: AutomaticCommand): void {
+    console.log('🎯 Explorer handling automatic command:', command);
+
+    if (command.type === 'notification') {
+      // Show notification using SharedService
+      const { message, severity, duration } = command;
+
+      // Map severity to SharedService notification types
+      const typeMap: Record<string, 'success' | 'info' | 'warning' | 'error'> = {
+        'success': 'success',
+        'info': 'info',
+        'warning': 'warning',
+        'error': 'error'
+      };
+
+      const notificationType = typeMap[severity || 'info'] || 'info';
+      SharedService.Instance.CreateSimpleNotification(message, notificationType, duration || 3000);
+    }
   }
 }

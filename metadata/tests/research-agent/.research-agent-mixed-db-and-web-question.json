@@ -4,14 +4,10 @@
     "Name": "Research Agent - Mixed DB and Web Question",
     "Description": "Tests the Research Agent's ability to orchestrate both Database Research Agent and Web Research Agent to answer questions requiring internal data analysis combined with external benchmarking. Validates proper sub-agent coordination.",
     "InputDefinition": {
-      "userMessage": "Compare our user engagement metrics over the past quarter with industry benchmarks. Specifically, I want to understand how our daily active user rate, session duration, and feature adoption compare to similar B2B SaaS platforms. Are we above or below average in these areas?"
+      "userMessage": "Compare the AI models we have in our database to the leading AI models available now, and prepare a detailed report suggesting any improvements we should make to the AI Model catalog we have."
     },
     "ExpectedOutcomes": {
       "judgeValidationCriteria": [
-        "Response includes actual internal metrics (DAU rate, session duration, feature adoption)",
-        "Response includes external industry benchmarks for comparison",
-        "Clear comparison is made between internal metrics and industry standards",
-        "Response identifies whether company is above/below average in each area",
         "Findings show evidence of both database analysis and web research",
         "Comparisons section effectively synthesizes internal and external data"
       ]
@@ -66,7 +62,7 @@
     "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
   },
   "sync": {
-    "lastModified": "2025-11-10T03:26:07.317Z",
-    "checksum": "cf81d16172f50ae9c19c58a9877c1b135f172b4d0372ea743d003794319aa6c8"
+    "lastModified": "2025-11-11T11:33:01.665Z",
+    "checksum": "5b16a17d21cb5257f36b0e296465c8f56ef987db313025c0b291d0ab6fea591d"
   }
 }
