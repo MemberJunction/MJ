@@ -1,0 +1,46 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Skip AssociationDB - KPI Gauge Dashboard with 4-Level Drill-Down",
+    "Description": "Tests Skip's ability to create comprehensive dashboards with multiple gauge visualizations and implement deep drill-down patterns from high-level KPIs to detailed transaction records.",
+    "InputDefinition": {
+      "userMessage": "Design a comprehensive KPI dashboard for our association with six radial gauge charts arranged in a 2x3 grid. The gauges should show: (1) Membership Retention Rate as a percentage with a target of 85%, (2) Event Attendance Rate (registered vs attended) targeting 70%, (3) Course Completion Rate targeting 65%, (4) Average Revenue Per Member targeting $500, (5) Overall Engagement Score (0-100) targeting 75, and (6) Member Satisfaction Score targeting 4.5 out of 5. Color each gauge based on performance: green if meeting or exceeding target, yellow if within 10% of target, red if below that. When I click on any gauge, show me a line chart displaying that KPI's trend over the past 12 months so I can see how it's changed over time. Then, when I click on any data point in that trend line, show me another chart breaking down the contributing factors for that specific month - for example, if I clicked the retention gauge and then clicked on a month, show me a breakdown of why members left (expired, cancelled, etc.) as a pie chart. Finally, when I click on any segment of that breakdown chart, show me a detailed table of the actual members or transactions that make up that segment, with all relevant details. Ensure every row in that final table is clickable to open the appropriate record (member, event, course, etc.). Include clear labels on all gauges showing both the current value and the target, and make sure the dashboard has a clean layout with proper spacing."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes 6 radial gauge charts in organized grid layout",
+        "All six KPIs properly calculated and displayed with current values and targets",
+        "Gauges color-coded by performance (green/yellow/red) relative to targets",
+        "Each gauge clearly labeled with metric name, value, and target",
+        "Clicking gauge opens trend line chart showing 12 months of history",
+        "Trend chart includes proper time axis and value scaling",
+        "Clicking trend data point opens breakdown chart for that month",
+        "Breakdown chart appropriate to KPI (pie chart, bar chart, etc.)",
+        "Clicking breakdown segment shows detailed table of contributing records",
+        "Table includes relevant columns for the specific KPI and breakdown",
+        "Table rows support OpenEntityRecord for member, event, course, or other records",
+        "Four levels of drill-down work smoothly with context maintained throughout",
+        "Dashboard layout is clean and professional with good spacing"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Skip",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ],
+      "maxExecutionTime": 180000
+    },
+    "Status": "Active",
+    "Priority": 100
+  },
+  "primaryKey": {
+    "ID": "C6827698-3DE9-42E7-B16E-969E848A57CF"
+  },
+  "sync": {
+    "lastModified": "2025-11-11T01:15:37.435Z",
+    "checksum": "f0a4a296b2f9e08965c829b67dd51c9491c1304b94bb4c1ce307472fd6f4ecf8"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "fields": {
     "Name": "Skip AssociationDB Comprehensive Evaluation Suite",
-    "Description": "Comprehensive evaluation of Skip's analytics capabilities on the AssociationDB sample database. Tests 20 scenarios across 5 complexity tiers from simple queries to advanced multi-dimensional analytics. Covers all major business domains including membership, events, learning, finance, marketing, chapters, and governance.",
+    "Description": "Comprehensive evaluation of Skip's analytics capabilities on the AssociationDB sample database. Tests 25 scenarios across 6 complexity tiers from simple queries to advanced visualizations with multi-level drill-downs. Covers all major business domains including membership, events, learning, finance, marketing, chapters, and governance. Includes advanced visualization types: dual-axis time series, treemaps, matrix with sparklines, force-directed graphs, and KPI gauge dashboards.",
     "Status": "Active"
   },
   "relatedEntities": {
@@ -305,6 +305,81 @@
           "lastModified": "2025-11-10T15:33:14.647Z",
           "checksum": "93520c9942dfead4d43abecc3aab8fa4b0f6ba0e86d74ed7efbb1f6d34df458a"
         }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Dual-Axis Time Series with 4-Level Drill-Down",
+          "Sequence": 21,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "496A37EE-FD43-473C-B8C0-BD338CFB5E6A"
+        },
+        "sync": {
+          "lastModified": "2025-11-11T01:15:37.718Z",
+          "checksum": "f2a7dfcda48e537e549ce1798746437809e1c1d6e12aa05fa2188814b96de58b"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Hierarchical Treemap with Color-Coded Drill-Down",
+          "Sequence": 22,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B479E4A5-2820-4F22-A88E-E36D738CCF81"
+        },
+        "sync": {
+          "lastModified": "2025-11-11T01:15:37.729Z",
+          "checksum": "dc45946ebeba7cf47c3aaf63dd0218f54d4a2a713be3c773685b37efe6414f4a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Engagement Matrix with Embedded Sparklines",
+          "Sequence": 23,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B8946D26-EAE4-4686-8646-F324552C0111"
+        },
+        "sync": {
+          "lastModified": "2025-11-11T01:15:37.740Z",
+          "checksum": "86ea9c6da9168cd2cca5118a111319e938d8b5be2170d7293037d879adba7e0d"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - Force-Directed Network Graph with Clustering",
+          "Sequence": 24,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6E47070C-4BEA-4E94-ABA5-EF9187191BF1"
+        },
+        "sync": {
+          "lastModified": "2025-11-11T01:15:37.752Z",
+          "checksum": "c2527c3009f5c205d4e85625aec5d087baebd0fea6f8dbd4e7e1e38165b29c29"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Skip AssociationDB - KPI Gauge Dashboard with 4-Level Drill-Down",
+          "Sequence": 25,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "FB8EDC0B-CCD7-48C1-91F5-E167808A9622"
+        },
+        "sync": {
+          "lastModified": "2025-11-11T01:15:37.764Z",
+          "checksum": "bf8f9dc34eb8f39d0622db216d3a761fe0a4b21a0fbd982701fee19ce6af89fc"
+        }
       }
     ]
   },
@@ -312,7 +387,7 @@
     "ID": "D78536E4-FAFE-4E90-A5E3-514DD25E3A08"
   },
   "sync": {
-    "lastModified": "2025-11-10T15:33:14.256Z",
-    "checksum": "568b409d72b2b4193b9b2c6bc5ed5d26f6bd94b739a4233c713a0c82a5ed26ec"
+    "lastModified": "2025-11-11T01:15:37.499Z",
+    "checksum": "020f1f581f91b87ca2be5a5a6ac8248f4016f1ad90795084035254d3f8f65aa7"
   }
 }
