@@ -87,6 +87,7 @@ cat schema/V004__create_community_tables.sql >> "$OUTPUT"
 cat schema/V005__create_resource_library_tables.sql >> "$OUTPUT"
 cat schema/V006__create_certification_tables.sql >> "$OUTPUT"
 cat schema/V007__create_product_showcase_tables.sql >> "$OUTPUT"
+cat schema/V008__create_legislative_tracking_tables.sql >> "$OUTPUT"
 
 # Add Phase 1A complete message
 cat >> "$OUTPUT" << 'EOF'
@@ -168,6 +169,7 @@ cat data/07_community_forum_data.sql >> "$OUTPUT"
 cat data/08_resource_library_data.sql >> "$OUTPUT"
 cat data/09_certification_data.sql >> "$OUTPUT"
 cat data/10_product_showcase_data.sql >> "$OUTPUT"
+cat data/11_legislative_tracking_data.sql >> "$OUTPUT"
 
 # Add Phase 2 complete and verification
 cat >> "$OUTPUT" << 'EOF'
@@ -187,7 +189,7 @@ PRINT '===================================================================';
 PRINT '';
 GO
 
-DECLARE @MemberCount INT, @EventCount INT, @CourseCount INT, @ThreadCount INT, @ResourceCount INT, @CertificationCount INT, @ProductCount INT;
+DECLARE @MemberCount INT, @EventCount INT, @CourseCount INT, @ThreadCount INT, @ResourceCount INT, @CertificationCount INT, @ProductCount INT, @LegislativeIssueCount INT;
 SELECT @MemberCount = COUNT(*) FROM AssociationDemo.Member;
 SELECT @EventCount = COUNT(*) FROM AssociationDemo.Event;
 SELECT @CourseCount = COUNT(*) FROM AssociationDemo.Course;
@@ -195,6 +197,7 @@ SELECT @ThreadCount = COUNT(*) FROM AssociationDemo.ForumThread;
 SELECT @ResourceCount = COUNT(*) FROM AssociationDemo.Resource;
 SELECT @CertificationCount = COUNT(*) FROM AssociationDemo.Certification;
 SELECT @ProductCount = COUNT(*) FROM AssociationDemo.Product;
+SELECT @LegislativeIssueCount = COUNT(*) FROM AssociationDemo.LegislativeIssue;
 
 PRINT 'Record counts:';
 PRINT '  Members: ' + CAST(@MemberCount AS VARCHAR);
@@ -204,6 +207,7 @@ PRINT '  Forum Threads: ' + CAST(@ThreadCount AS VARCHAR);
 PRINT '  Resources: ' + CAST(@ResourceCount AS VARCHAR);
 PRINT '  Certifications: ' + CAST(@CertificationCount AS VARCHAR);
 PRINT '  Products: ' + CAST(@ProductCount AS VARCHAR);
+PRINT '  Legislative Issues: ' + CAST(@LegislativeIssueCount AS VARCHAR);
 PRINT '';
 GO
 
