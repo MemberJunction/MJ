@@ -15,10 +15,12 @@ import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AI
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair, LogStatusEx } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AgentResponseForm, ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
+import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 
 /**
  * Component for displaying a single message in a conversation
@@ -80,13 +82,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   constructor(
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService
+    private mentionAutocomplete: MentionAutocompleteService,
+    private uiCommandHandler: UICommandHandlerService
   ) {
     super();
   }
 
   async ngOnInit() {
     // No longer need to load artifacts per message - they are preloaded in chat area
+
+    // Execute automatic commands if present
+    await this.executeAutomaticCommands();
   }
 
   ngOnChanges(_changes: SimpleChanges) {
@@ -976,6 +982,93 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
     this.suggestedResponseSelected.emit(event);
+  }
+
+  /**
+   * Get agent response form from message
+   * Uses ResponseForm property from ConversationDetailEntity
+   * TODO: This field needs to be added to the database schema
+   */
+  public get responseForm(): AgentResponseForm | null {
+    try {
+      // For now, check if the property exists (will be added to schema)
+      const rawData = (this.message as any).ResponseForm;
+      if (!rawData) return null;
+
+      // Parse JSON string to AgentResponseForm object
+      const form = JSON.parse(rawData);
+      return form || null;
+    } catch (error) {
+      console.error('Failed to parse response form:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get actionable commands from message
+   * Uses ActionableCommands property from ConversationDetailEntity
+   * TODO: This field needs to be added to the database schema
+   */
+  public get actionableCommands(): ActionableCommand[] {
+    try {
+      // For now, check if the property exists (will be added to schema)
+      const rawData = (this.message as any).ActionableCommands;
+      if (!rawData) return [];
+
+      // Parse JSON string to array of ActionableCommand objects
+      const commands = JSON.parse(rawData);
+      return Array.isArray(commands) ? commands : [];
+    } catch (error) {
+      console.error('Failed to parse actionable commands:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Handle agent response form submission
+   */
+  public onFormSubmitted(formData: Record<string, any>): void {
+    // Convert form data to a message string
+    const message = Object.entries(formData)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ');
+
+    // Emit as a suggested response with the form data
+    this.suggestedResponseSelected.emit({
+      text: message,
+      customInput: JSON.stringify(formData)
+    });
+  }
+
+  /**
+   * Handle actionable command execution
+   */
+  public async onCommandExecuted(command: ActionableCommand): Promise<void> {
+    try {
+      await this.uiCommandHandler.executeActionableCommand(command);
+    } catch (error) {
+      console.error('Failed to execute command:', command, error);
+    }
+  }
+
+  /**
+   * Execute automatic commands when message loads
+   * This is called after a message with automatic commands is received
+   */
+  private async executeAutomaticCommands(): Promise<void> {
+    try {
+      // For now, check if the property exists (will be added to schema)
+      const rawData = (this.message as any).AutomaticCommands;
+      if (!rawData) return;
+
+      // Parse JSON string to array of AutomaticCommand objects
+      const commands: AutomaticCommand[] = JSON.parse(rawData);
+      if (Array.isArray(commands) && commands.length > 0) {
+        await this.uiCommandHandler.executeAutomaticCommands(commands);
+      }
+    } catch (error) {
+      console.error('Failed to execute automatic commands:', error);
+    }
   }
 
 }

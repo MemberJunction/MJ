@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse, ForEachOperation, WhileOperation } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand } from "@memberjunction/ai-core-plus";
 
 // Re-export universal types for backward compatibility
 export type { ForEachOperation, WhileOperation };
@@ -18,10 +18,25 @@ export interface LoopAgentResponse<P = any> {
     message?: string;
 
     /**
-     * Optional, when nextStep.type is 'Chat' or 'Success', this is a list of suggested responses
-     * to show the user for quick selection in a UI.
+     * Optional response form to collect structured user input.
+     * When present, UI will render appropriate input controls.
+     * @since 2.116.0
      */
-    suggestedResponses?: Array<BaseAgentSuggestedResponse>;
+    responseForm?: AgentResponseForm;
+
+    /**
+     * Optional actionable commands shown as clickable buttons/links.
+     * Typically used after completing work to provide navigation to created/modified resources.
+     * @since 2.116.0
+     */
+    actionableCommands?: ActionableCommand[];
+
+    /**
+     * Optional automatic commands executed immediately when received.
+     * Used for refreshing data, showing notifications, and updating UI state.
+     * @since 2.116.0
+     */
+    automaticCommands?: AutomaticCommand[];
 
     /**
      * Payload changes. Omit if no changes needed

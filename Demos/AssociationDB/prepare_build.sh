@@ -36,6 +36,9 @@ fi
 # Output file goes in tmp directory
 OUTPUT="tmp/combined_build.sql"
 
+# Create tmp directory if it doesn't exist
+mkdir -p tmp
+
 # Start fresh
 > "$OUTPUT"
 

@@ -1,0 +1,83 @@
+.agent-response-form {
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* Simple Choice Mode */
+.simple-choice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.choice-button {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.choice-button i {
+  margin-right: 6px;
+}
+
+/* Full Form Mode */
+.response-form {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 20px;
+  margin-top: 12px;
+}
+
+.form-title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-description {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.form-questions {
+  margin-bottom: 20px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.submit-button {
+  min-width: 120px;
+}
+
+.submit-button .k-icon {
+  margin-right: 6px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .response-form {
+    padding: 16px;
+  }
+
+  .simple-choice-buttons {
+    flex-direction: column;
+  }
+
+  .choice-button {
+    width: 100%;
+  }
+}

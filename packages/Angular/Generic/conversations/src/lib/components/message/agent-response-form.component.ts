@@ -1,0 +1,185 @@
+import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
+import { FormGroup, FormControl, Validators } from '@angular/forms';
+import { AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
+
+/**
+ * Component for displaying agent response forms with dynamic questions
+ * Handles both simple button choices and complex multi-question forms
+ */
+@Component({
+  selector: 'mj-agent-response-form',
+  templateUrl: './agent-response-form.component.html',
+  styleUrls: ['./agent-response-form.component.css']
+})
+export class AgentResponseFormComponent implements OnInit {
+  @Input() responseForm!: AgentResponseForm;
+  @Input() disabled: boolean = false;
+  @Input() isLastMessage: boolean = false;
+  @Input() isConversationOwner: boolean = false;
+
+  @Output() formSubmitted = new EventEmitter<Record<string, any>>();
+
+  public formGroup!: FormGroup;
+  public isSubmitting: boolean = false;
+
+  constructor(private cdr: ChangeDetectorRef) {}
+
+  ngOnInit(): void {
+    this.buildFormGroup();
+  }
+
+  /**
+   * Check if this is a simple choice (single question with buttongroup/radio, no title)
+   * Simple choices render as buttons only, complex forms render as full forms
+   */
+  public get isSimpleChoice(): boolean {
+    if (!this.responseForm) return false;
+
+    return (
+      this.responseForm.questions.length === 1 &&
+      !this.responseForm.title &&
+      this.isChoiceQuestion(this.responseForm.questions[0])
+    );
+  }
+
+  /**
+   * Check if component should be visible
+   */
+  public get isVisible(): boolean {
+    return (
+      this.isLastMessage &&
+      this.isConversationOwner &&
+      this.responseForm &&
+      this.responseForm.questions.length > 0
+    );
+  }
+
+  /**
+   * Get submit button label
+   */
+  public get submitLabel(): string {
+    return this.responseForm.submitLabel || 'Submit';
+  }
+
+  /**
+   * Check if a question is a choice-based question
+   */
+  private isChoiceQuestion(question: FormQuestion): boolean {
+    const type = typeof question.type === 'string' ? question.type : question.type.type;
+    return ['buttongroup', 'radio'].includes(type);
+  }
+
+  /**
+   * Build the reactive form group from the response form definition
+   */
+  private buildFormGroup(): void {
+    const controls: Record<string, FormControl> = {};
+
+    for (const question of this.responseForm.questions) {
+      const validators = [];
+      if (question.required) {
+        validators.push(Validators.required);
+      }
+
+      // Add email validator for email questions
+      const questionType = typeof question.type === 'string' ? question.type : question.type.type;
+      if (questionType === 'email') {
+        validators.push(Validators.email);
+      }
+
+      // Add min/max validators for number/currency questions
+      if (['number', 'currency'].includes(questionType) && typeof question.type === 'object') {
+        if ('min' in question.type && question.type.min != null) {
+          validators.push(Validators.min(question.type.min as number));
+        }
+        if ('max' in question.type && question.type.max != null) {
+          validators.push(Validators.max(question.type.max as number));
+        }
+      }
+
+      controls[question.id] = new FormControl(question.defaultValue || null, validators);
+    }
+
+    this.formGroup = new FormGroup(controls);
+  }
+
+  /**
+   * Get FormControl for a specific question
+   */
+  public getControl(questionId: string): FormControl {
+    return this.formGroup.get(questionId) as FormControl;
+  }
+
+  /**
+   * Handle simple choice button click (for single question forms)
+   */
+  public onSimpleChoiceClick(value: any): void {
+    if (!this.disabled && !this.isSubmitting) {
+      const question = this.responseForm.questions[0];
+      this.isSubmitting = true;
+      this.formSubmitted.emit({ [question.id]: value });
+
+      // Reset submitting state after a short delay
+      setTimeout(() => {
+        this.isSubmitting = false;
+        this.cdr.detectChanges();
+      }, 1000);
+    }
+  }
+
+  /**
+   * Handle full form submission
+   */
+  public onSubmit(): void {
+    if (this.formGroup.invalid) {
+      // Mark all fields as touched to show validation errors
+      Object.keys(this.formGroup.controls).forEach(key => {
+        this.formGroup.controls[key].markAsTouched();
+      });
+      return;
+    }
+
+    if (!this.disabled && !this.isSubmitting) {
+      this.isSubmitting = true;
+      this.formSubmitted.emit(this.formGroup.value);
+
+      // Reset form and submitting state
+      Promise.resolve().then(() => {
+        this.formGroup.reset();
+        this.isSubmitting = false;
+        this.cdr.detectChanges();
+      });
+    }
+  }
+
+  /**
+   * Get options for a choice question (used in simple choice mode)
+   */
+  public getOptions(question: FormQuestion): any[] {
+    if (typeof question.type === 'object' && 'options' in question.type) {
+      return question.type.options;
+    }
+    return [];
+  }
+
+  /**
+   * Check if question has an icon
+   */
+  public hasIcon(option: any): boolean {
+    return option && option.icon;
+  }
+
+  /**
+   * Track by function for questions list
+   */
+  public trackByQuestionId(index: number, question: FormQuestion): string {
+    return question.id;
+  }
+
+  /**
+   * Track by function for options list
+   */
+  public trackByValue(index: number, option: any): any {
+    return option.value;
+  }
+}
