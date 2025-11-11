@@ -542,10 +542,262 @@ AssociationDB/
 
 ---
 
+## Working Task List
+
+### Phase 0: Fix Existing Issues - ✅ COMPLETE
+**Status**: ✅ COMPLETE - All baseline issues fixed, courses rewritten to cheese theme
+
+**What Was Actually Done**:
+After restoring the baseline, we discovered that most of the reported issues (apostrophe escaping, EventSession columns, DateTime arithmetic, reserved keywords) were in the **new files that had already been rolled back**. The baseline itself was working fine.
+
+The ONLY actual issue in the baseline was:
+- ✅ **Task 0.8**: Rewrote all 60 courses from tech-focused to cheese industry-focused
+  - Changed categories: Cloud→Cheesemaking, Security→Food Safety, Data Science→Dairy Science, DevOps→Production, Leadership→Industry Leadership, Software Development→Marketing & Sales, Business→Business Management
+  - Updated certificate expiration logic to use 'Food Safety' and 'Cheesemaking' instead of 'Security' and 'Cloud'
+  - All course codes, titles, descriptions now cheese-themed
+  - Verified build completes successfully: 2000 Members, 21 Events, 60 Courses
+
+**Build Verification**:
+```
+Record counts:
+  Members: 2000
+  Events: 21
+  Courses: 60
+
+BUILD COMPLETE!
+Build completed successfully!
+```
+
+**Next Steps**: Ready to proceed to Phase 1 (Community/Forums domain)
+
+#### Task 0.1: Fix Apostrophe Escaping (NOT NEEDED - baseline has no issues)
+- [ ] **File**: `data/01_membership_data.sql`
+- [ ] **Action**: Replace `\'` with `''` in 4 locations (lines ~222, 226, 228, 230)
+- [ ] **Command**:
+  ```bash
+  cd Demos/AssociationDB
+  sed -i '' "s/\\\\\'/\'\'/g" data/01_membership_data.sql
+  ```
+- [ ] **Verify**: Search for `\'` - should find zero instances
+- [ ] **Test**: Run `./install.sh` and verify Members table has 2000 records
+- [ ] **Success**: No SQL errors, Members = 2000
+
+#### Task 0.2: Fix Reserved Keyword (EASY - DO SECOND)
+- [ ] **File**: `data/09_networking_data.sql`
+- [ ] **Action**: Change alias `commit` to `timecommit` (2 locations)
+- [ ] **Line 1**: Around line 228 in CollaborationOpportunity INSERT
+- [ ] **Line 2**: Around line 318 in same query
+- [ ] **Verify**: Search for `) commit` - should find zero instances
+- [ ] **Test**: Run `./install.sh` - this file won't execute yet (Phase 3)
+- [ ] **Success**: No "syntax near 'commit'" errors
+
+#### Task 0.3: Fix EventSession Column Names - Part 1 (FIRST INSERT)
+- [ ] **File**: `data/02_events_data.sql`
+- [ ] **Action**: Fix column names in FIRST INSERT statement (~line 248)
+- [ ] **Change**:
+  - `Title` → `Name`
+  - `Location` → `Room`
+  - `Speaker` → `SpeakerName`
+  - Remove `IsMandatory` from column list
+- [ ] **Remove**: The trailing `, 1` or `, 0` from end of each VALUES row
+- [ ] **Verify**: EventSession schema has: Name, Room, SpeakerName (NOT Title, Location, Speaker)
+- [ ] **Test**: Run `./install.sh` and check EventSession count
+- [ ] **Success**: No "Invalid column name" errors, EventSession has records
+
+#### Task 0.4: Fix EventSession Column Names - Part 2 (REMAINING INSERTS)
+- [ ] **File**: `data/02_events_data.sql`
+- [ ] **Action**: Fix ALL remaining EventSession INSERT statements
+- [ ] **Locations**: Lines ~351, 381, 408, 435, and any others
+- [ ] **Same Changes**: Title→Name, Location→Room, Speaker→SpeakerName, remove IsMandatory
+- [ ] **Test**: Run `./install.sh` and verify EventSession count = 85+
+- [ ] **Success**: EventSession table fully populated
+
+#### Task 0.5: Fix DateTime Arithmetic - Identify All Patterns
+- [ ] **File**: `data/02_events_data.sql`
+- [ ] **Action**: Search for all `+ CAST('` patterns
+- [ ] **Command**: `grep -n "+ CAST('" data/02_events_data.sql`
+- [ ] **Document**: List all unique time patterns found
+- [ ] **Do NOT fix yet** - just document what needs fixing
+- [ ] **Success**: Have complete list of time patterns
+
+#### Task 0.6: Fix DateTime Arithmetic - Create Helper Function
+- [ ] **Action**: Create bash function to convert time to DATEADD
+- [ ] **Example**: `'09:00'` → `DATEADD(MINUTE, 0, DATEADD(HOUR, 9, `
+- [ ] **Example**: `'10:30'` → `DATEADD(MINUTE, 30, DATEADD(HOUR, 10, `
+- [ ] **Test**: Test function on sample lines
+- [ ] **Success**: Function correctly converts all time patterns
+
+#### Task 0.7: Fix DateTime Arithmetic - Apply Fixes
+- [ ] **File**: `data/02_events_data.sql`
+- [ ] **Action**: Apply systematic TIME→DATEADD replacements
+- [ ] **Strategy**: Fix 5-10 instances at a time, test after each batch
+- [ ] **Test**: Run `./install.sh` after each batch
+- [ ] **Success**: Zero "datetime and time are incompatible" errors
+
+#### Task 0.8: Rewrite Courses to Cheese Theme
+- [ ] **File**: `data/03_learning_data.sql`
+- [ ] **Action**: Replace tech course names with cheese course names
+- [ ] **Keep**: Same structure, IDs, counts (60 courses)
+- [ ] **Change**: Names, descriptions, instructors to cheese-focused
+- [ ] **Examples**:
+  - Cloud Architecture → Cheesemaking Fundamentals
+  - Cybersecurity → Food Safety and HACCP
+  - Data Science → Cheese Business Analytics
+- [ ] **Test**: Run `./install.sh` and verify Course count = 60
+- [ ] **Success**: All courses are cheese-themed
+
+#### Task 0.9: Final Phase 0 Verification
+- [ ] **Action**: Complete end-to-end test
+- [ ] **Test Commands**:
+  ```bash
+  cd Demos/AssociationDB
+  ./install.sh > tmp/build_output.txt 2>&1
+  grep -i "error\|msg [0-9]" tmp/build_output.txt
+  ```
+- [ ] **Verify Counts** (using sqlcmd):
+  ```sql
+  SELECT 'Members' as Entity, COUNT(*) as Count FROM AssociationDemo.Member
+  UNION ALL SELECT 'Events', COUNT(*) FROM AssociationDemo.Event
+  UNION ALL SELECT 'EventSession', COUNT(*) FROM AssociationDemo.EventSession
+  UNION ALL SELECT 'Courses', COUNT(*) FROM AssociationDemo.Course
+  ```
+- [ ] **Expected**: Members=2000, Events=21, EventSession=85+, Courses=60
+- [ ] **Success**: Zero errors, all counts correct
+- [ ] **Commit**: `git commit -m "Phase 0: Fixed baseline issues - VERIFIED WORKING"`
+
+---
+
+### Phase 1: Add Community/Forums Domain - NOT STARTED
+**Status**: ⏸️ Waiting for Phase 0 completion
+
+#### Task 1.1: Enable V004 Schema in Build Scripts
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Uncomment or add `cat schema/V004__create_community_tables.sql >> "$OUTPUT"`
+- [ ] **Location**: Schema section (after V002, before data section)
+- [ ] **Verify**: `tmp/combined_build.sql` includes community table CREATE statements
+- [ ] **Test**: Run `./install.sh` and check for ForumCategory table
+- [ ] **Success**: 8 new forum tables created
+
+#### Task 1.2: Enable 07 Data in Build Scripts
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Uncomment or add `cat data/07_community_forum_data.sql >> "$OUTPUT"`
+- [ ] **Location**: Data section (after 06, before Phase 2 complete)
+- [ ] **Test**: Run `./install.sh` and check ForumThread count
+- [ ] **Success**: ForumThread table has 150+ records
+
+#### Task 1.3: Update Phase 3 Verification
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Add ForumThread count to verification section
+- [ ] **Add**: `SELECT @ForumThreadCount = COUNT(*) FROM AssociationDemo.ForumThread;`
+- [ ] **Add**: `PRINT '  Forum Threads: ' + CAST(@ForumThreadCount AS VARCHAR);`
+- [ ] **Test**: Run `./install.sh` and verify output shows Forum count
+- [ ] **Success**: Verification section shows forum statistics
+
+#### Task 1.4: Full Phase 1 Test
+- [ ] **Test**: Complete build and verification
+- [ ] **Verify**: All forum tables populated (12 categories, 150+ threads, 500+ posts)
+- [ ] **Success**: All Phase 0 tables still work + new forum tables
+- [ ] **Commit**: `git commit -m "Phase 1: Added Community/Forums domain - VERIFIED WORKING"`
+
+---
+
+### Phase 2: Add Resources Domain - NOT STARTED
+**Status**: ⏸️ Waiting for Phase 1 completion
+
+#### Task 2.1: Fix CROSS APPLY Error in 08_resources_data.sql
+- [ ] **File**: `data/08_resources_data.sql`
+- [ ] **Issue**: Line ~275 has binding error with `cat.CategoryID`
+- [ ] **Action**: Fix CROSS APPLY syntax
+- [ ] **Current**: `CROSS APPLY (SELECT CategoryID FROM (SELECT CategoryID) AS c(CategoryID)) cat;`
+- [ ] **Should be**: Just use `res.CategoryID` directly in INSERT
+- [ ] **Test**: Verify programmatic resource generation works
+- [ ] **Success**: No "could not be bound" errors
+
+#### Task 2.2: Enable V005 Schema in Build Scripts
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Uncomment or add `cat schema/V005__create_resources_tables.sql >> "$OUTPUT"`
+- [ ] **Test**: Run `./install.sh` and check for ResourceCategory table
+- [ ] **Success**: 6 new resource tables created
+
+#### Task 2.3: Enable 08 Data in Build Scripts
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Uncomment or add `cat data/08_resources_data.sql >> "$OUTPUT"`
+- [ ] **Test**: Run `./install.sh` and check Resource count
+- [ ] **Success**: Resource table has 100+ records
+
+#### Task 2.4: Update Phase 3 Verification
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Add Resource count to verification
+- [ ] **Test**: Run `./install.sh` and verify output
+- [ ] **Success**: Verification shows resource statistics
+
+#### Task 2.5: Full Phase 2 Test
+- [ ] **Test**: Complete build and verification
+- [ ] **Verify**: All resource tables populated (15 categories, 100+ resources)
+- [ ] **Success**: All Phase 0+1 tables still work + new resource tables
+- [ ] **Commit**: `git commit -m "Phase 2: Added Resources domain - VERIFIED WORKING"`
+
+---
+
+### Phase 3: Add Networking Domain - NOT STARTED
+**Status**: ⏸️ Waiting for Phase 2 completion
+
+#### Task 3.1: Enable V006 Schema in Build Scripts
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Uncomment or add `cat schema/V006__create_networking_tables.sql >> "$OUTPUT"`
+- [ ] **Test**: Run `./install.sh` and check for MemberConnection table
+- [ ] **Success**: 7 new networking tables created
+
+#### Task 3.2: Enable 09 Data in Build Scripts
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Uncomment or add `cat data/09_networking_data.sql >> "$OUTPUT"`
+- [ ] **Test**: Run `./install.sh` and check MemberConnection count
+- [ ] **Success**: MemberConnection table has 400+ records
+
+#### Task 3.3: Update Phase 3 Verification
+- [ ] **File**: `prepare_build.sh`
+- [ ] **Action**: Add MemberConnection count to verification
+- [ ] **Test**: Run `./install.sh` and verify output
+- [ ] **Success**: Verification shows networking statistics
+
+#### Task 3.4: Full Phase 3 Test
+- [ ] **Test**: Complete build and verification
+- [ ] **Verify**: All networking tables populated (400+ connections, 45 mentorships)
+- [ ] **Success**: All 48 tables across 11 domains work perfectly
+- [ ] **Commit**: `git commit -m "Phase 3: Added Networking domain - VERIFIED WORKING"`
+
+---
+
+### Final Integration Test - NOT STARTED
+**Status**: ⏸️ Waiting for Phase 3 completion
+
+#### Task 4.1: Clean Build from Scratch
+- [ ] **Action**: Drop database, recreate, run full install
+- [ ] **Verify**: Zero errors from start to finish
+- [ ] **Success**: Complete 11-domain database builds successfully
+
+#### Task 4.2: Verify All 48 Tables
+- [ ] **Action**: Query all table counts
+- [ ] **Verify**: Every table has expected record count
+- [ ] **Success**: All counts match targets from README.md
+
+#### Task 4.3: Update Documentation
+- [ ] **Update**: README.md with "11 domains" instead of "8 domains"
+- [ ] **Update**: data-enhancements.md status to "COMPLETE"
+- [ ] **Success**: Documentation accurate and complete
+
+#### Task 4.4: Final Commit
+- [ ] **Commit**: `git commit -m "Complete: 11-domain AssociationDB - ALL PHASES VERIFIED"`
+- [ ] **Tag**: `git tag v1.0-11domains`
+- [ ] **Success**: Clean git history with working phases
+
+---
+
 ## Document Maintenance
 
 **Last Updated**: 2025-11-11
-**Status**: Planning phase - ready for Phase 0 implementation
+**Status**: Phase 0 ready to begin - Baseline restored and verified working
+**Current Task**: Task 0.1 - Fix apostrophe escaping
 **Next Review**: After Phase 0 completion
 
 ---
