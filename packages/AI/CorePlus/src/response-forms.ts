@@ -127,7 +127,10 @@ export type FormQuestionType =
     | TextQuestionType
     | NumberQuestionType
     | DateQuestionType
-    | ChoiceQuestionType;
+    | ChoiceQuestionType
+    | SliderQuestionType
+    | DateRangeQuestionType
+    | TimeQuestionType;
 
 /**
  * Text input question types.
@@ -232,4 +235,61 @@ export interface FormOption {
      * Should be a Font Awesome class (e.g., "fa-user", "fa-building").
      */
     icon?: string;
+}
+
+/**
+ * Slider input for numeric ranges.
+ * Provides visual control for selecting values within a range.
+ * Useful for ratings, percentages, volumes, or any bounded numeric input.
+ */
+export interface SliderQuestionType {
+    /**
+     * Type identifier for slider input.
+     */
+    type: 'slider';
+
+    /**
+     * Minimum value on the slider scale.
+     */
+    min: number;
+
+    /**
+     * Maximum value on the slider scale.
+     */
+    max: number;
+
+    /**
+     * Step increment for the slider.
+     * Default: 1
+     */
+    step?: number;
+
+    /**
+     * Optional unit suffix displayed with the value (e.g., '%', 'kg', 'miles').
+     */
+    suffix?: string;
+}
+
+/**
+ * Date range input for selecting start and end dates.
+ * Returns an object with 'start' and 'end' date properties.
+ * Useful for project durations, availability periods, reporting ranges.
+ */
+export interface DateRangeQuestionType {
+    /**
+     * Type identifier for date range input.
+     */
+    type: 'daterange';
+}
+
+/**
+ * Time-only input (no date component).
+ * For scheduling, business hours, appointment times, etc.
+ * Returns time in 'HH:mm' format.
+ */
+export interface TimeQuestionType {
+    /**
+     * Type identifier for time input.
+     */
+    type: 'time';
 }

@@ -130,16 +130,62 @@
   </div>
 
   <!-- Dropdown -->
-  <kendo-dropdownlist
+  <select
     *ngIf="questionType === 'dropdown'"
-    [data]="options"
-    [textField]="'label'"
-    [valueField]="'value'"
+    [formControl]="control"
+    [disabled]="disabled"
+    class="question-dropdown"
+  >
+    <option value="">Select an option...</option>
+    <option *ngFor="let option of options; trackBy: trackByValue" [value]="option.value">
+      {{ option.label }}
+    </option>
+  </select>
+
+  <!-- Slider -->
+  <div *ngIf="questionType === 'slider'" class="question-slider-container">
+    <kendo-slider
+      [min]="getSliderConfig().min"
+      [max]="getSliderConfig().max"
+      [smallStep]="getSliderConfig().step || 1"
+      [value]="value || getSliderConfig().min"
+      [disabled]="disabled"
+      (valueChange)="onValueChange($event)"
+      class="question-slider"
+    ></kendo-slider>
+    <div class="slider-value">
+      {{ value || getSliderConfig().min }}{{ getSliderConfig().suffix || '' }}
+    </div>
+  </div>
+
+  <!-- Date Range -->
+  <div *ngIf="questionType === 'daterange'" class="question-daterange">
+    <kendo-datepicker
+      [value]="value?.start"
+      [disabled]="disabled"
+      (valueChange)="onDateRangeStartChange($event)"
+      placeholder="Start Date"
+      class="daterange-start"
+    ></kendo-datepicker>
+    <span class="daterange-separator">to</span>
+    <kendo-datepicker
+      [value]="value?.end"
+      [disabled]="disabled"
+      (valueChange)="onDateRangeEndChange($event)"
+      placeholder="End Date"
+      class="daterange-end"
+    ></kendo-datepicker>
+  </div>
+
+  <!-- Time Picker -->
+  <kendo-timepicker
+    *ngIf="questionType === 'time'"
     [value]="value"
     [disabled]="disabled"
     (valueChange)="onValueChange($event)"
-    class="question-dropdown"
-  ></kendo-dropdownlist>
+    [format]="'h:mm a'"
+    class="question-input"
+  ></kendo-timepicker>
 
   <!-- Checkboxes -->
   <div *ngIf="questionType === 'checkbox'" class="question-checkbox-group">

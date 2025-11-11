@@ -1,4 +1,4 @@
-import { Component, Input, forwardRef } from '@angular/core';
+import { Component, Input, forwardRef, OnInit } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR, FormControl } from '@angular/forms';
 import { FormQuestion, FormOption } from '@memberjunction/ai-core-plus';
 
@@ -18,7 +18,7 @@ import { FormQuestion, FormOption } from '@memberjunction/ai-core-plus';
     }
   ]
 })
-export class FormQuestionComponent implements ControlValueAccessor {
+export class FormQuestionComponent implements ControlValueAccessor, OnInit {
   @Input() question!: FormQuestion;
   @Input() control!: FormControl;
 
@@ -27,6 +27,19 @@ export class FormQuestionComponent implements ControlValueAccessor {
 
   private onChange: (value: any) => void = () => {};
   private onTouched: () => void = () => {};
+
+  ngOnInit(): void {
+    // Debug logging for dropdown issues
+    if (this.questionType === 'dropdown') {
+      console.log('[FormQuestion] Dropdown initialized:', {
+        questionId: this.question.id,
+        hasControl: !!this.control,
+        controlValue: this.control?.value,
+        options: this.options,
+        value: this.value
+      });
+    }
+  }
 
   /**
    * Get the question type (handles both simple string and complex types)
@@ -183,6 +196,49 @@ export class FormQuestionComponent implements ControlValueAccessor {
 
   setDisabledState(isDisabled: boolean): void {
     this.disabled = isDisabled;
+  }
+
+  /**
+   * Debug handler for dropdown changes
+   */
+  public onDropdownChange(value: any): void {
+    console.log('[FormQuestion] Dropdown value changed:', {
+      questionId: this.question.id,
+      newValue: value,
+      controlValue: this.control?.value,
+      optionsCount: this.options.length
+    });
+  }
+
+  /**
+   * Get slider configuration
+   */
+  public getSliderConfig(): { min: number; max: number; step?: number; suffix?: string } {
+    if (typeof this.question.type === 'object' && this.question.type.type === 'slider') {
+      return {
+        min: this.question.type.min,
+        max: this.question.type.max,
+        step: this.question.type.step,
+        suffix: this.question.type.suffix
+      };
+    }
+    return { min: 0, max: 100, step: 1 };
+  }
+
+  /**
+   * Handle date range start date change
+   */
+  public onDateRangeStartChange(value: Date): void {
+    const current = this.value || {};
+    this.onValueChange({ ...current, start: value });
+  }
+
+  /**
+   * Handle date range end date change
+   */
+  public onDateRangeEndChange(value: Date): void {
+    const current = this.value || {};
+    this.onValueChange({ ...current, end: value });
   }
 
   /**

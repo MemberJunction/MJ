@@ -833,7 +833,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // Normal chat response
         // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
         // Note: updateConversationDetail will call markMessageComplete() for us
-        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.responseForm, result.actionableCommands, result.automaticCommands);
+        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result);
 
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         // Server already created artifacts - just emit event to trigger UI reload
@@ -1119,7 +1119,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
   }
 
-  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', responseForm?: AgentResponseForm, actionableCommands?: ActionableCommand[], automaticCommands?: AutomaticCommand[]): Promise<void> {
+  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', result?: ExecuteAgentResult): Promise<void> {
     // Mark as completing FIRST if status is Complete or Error
     // This ensures task cleanup happens even if we return early due to guard clause
     if (status === 'Complete' || status === 'Error') {
@@ -1136,14 +1136,14 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let attempts = 0, done = false;
     while (attempts < maxAttempts && !done) {
       // Set response form and command fields before saving
-      if (responseForm) {
-        convoDetail.ResponseForm = JSON.stringify(responseForm);
+      if (result?.responseForm) {
+        convoDetail.ResponseForm = JSON.stringify(result.responseForm);
       }
-      if (actionableCommands) {
-        convoDetail.ActionableCommands = JSON.stringify(actionableCommands);
+      if (result?.actionableCommands) {
+        convoDetail.ActionableCommands = JSON.stringify(result.actionableCommands);
       }
-      if (automaticCommands) {
-        convoDetail.AutomaticCommands = JSON.stringify(automaticCommands);
+      if (result?.automaticCommands) {
+        convoDetail.AutomaticCommands = JSON.stringify(result.automaticCommands);
       }
 
       convoDetail.Message = message;
@@ -1286,7 +1286,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (agentResult && agentResult.success) {
         // Update message with result
-        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', agentResult);
 
         // Server created artifacts - emit event to trigger UI reload
         if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
@@ -1940,7 +1940,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (result && result.success) {
         // Update the response message with agent result
-        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result);
 
         // Server created artifacts (handles versioning) - emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {

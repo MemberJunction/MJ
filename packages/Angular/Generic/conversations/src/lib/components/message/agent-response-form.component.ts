@@ -25,6 +25,15 @@ export class AgentResponseFormComponent implements OnInit {
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
+    console.log('AgentResponseForm ngOnInit:', {
+      hasResponseForm: !!this.responseForm,
+      responseForm: this.responseForm,
+      disabled: this.disabled,
+      isLastMessage: this.isLastMessage,
+      isConversationOwner: this.isConversationOwner,
+      isVisible: this.isVisible,
+      isSimpleChoice: this.isSimpleChoice
+    });
     this.buildFormGroup();
   }
 
@@ -97,7 +106,18 @@ export class AgentResponseFormComponent implements OnInit {
         }
       }
 
-      controls[question.id] = new FormControl(question.defaultValue || null, validators);
+      // Initialize value based on question type
+      let initialValue = question.defaultValue;
+      if (!initialValue) {
+        // For checkbox with multiple selection, initialize as empty array
+        if (questionType === 'checkbox' && typeof question.type === 'object' && 'multiple' in question.type && question.type.multiple) {
+          initialValue = [];
+        } else {
+          initialValue = null;
+        }
+      }
+
+      controls[question.id] = new FormControl(initialValue, validators);
     }
 
     this.formGroup = new FormGroup(controls);

@@ -40,7 +40,10 @@
         [disabled]="disabled || isSubmitting || formGroup.invalid"
         class="submit-button"
       >
-        <span *ngIf="!isSubmitting">{{ submitLabel }}</span>
+        <span *ngIf="!isSubmitting">
+          <i class="fa fa-check" aria-hidden="true"></i>
+          {{ submitLabel }}
+        </span>
         <span *ngIf="isSubmitting">
           <span class="k-icon k-i-loading"></span>
           Submitting...

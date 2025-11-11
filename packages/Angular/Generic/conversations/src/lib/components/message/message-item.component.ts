@@ -15,7 +15,7 @@ import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AI
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair, LogStatusEx } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
@@ -89,6 +89,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   async ngOnInit() {
+    // Debug logging for message initialization
+    console.log('MessageItem ngOnInit:', {
+      messageId: this.message.ID,
+      hasResponseForm: !!this.message.ResponseForm,
+      responseFormRaw: this.message.ResponseForm,
+      isLastMessage: this.isLastMessage,
+      isConversationOwner: this.isConversationOwner
+    });
+
     // No longer need to load artifacts per message - they are preloaded in chat area
 
     // Execute automatic commands if present
@@ -344,103 +353,215 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private transformMentionsToHTML(text: string): string {
     if (!text) return '';
 
+    // Get available agents and users for name/icon lookup
     const agents = this.mentionAutocomplete.getAvailableAgents();
     const users = this.mentionAutocomplete.getAvailableUsers();
 
-    // Parse mentions from the text (handles both JSON and legacy formats)
-    const parseResult = this.mentionParser.parseMentions(text, agents, users);
+    // Parse all @{...} tokens
+    const tokens = ConversationUtility.ParseSpecialContent(text);
+    if (tokens.length === 0) return text; // No tokens found, return original text
 
-    // Replace each mention with an HTML badge
-    let transformedText = text;
+    // Replace tokens in reverse order to maintain indices
+    let result = text;
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const token = tokens[i];
+      let html = '';
 
-    for (const mention of parseResult.mentions) {
-      const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
-
-      // Get icon or image for the mention
-      let iconHTML = '';
-      if (mention.type === 'agent') {
-        // For agents, look up their LogoURL or IconClass from AIEngineBase cached agents
-        const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === mention.id);
-
-        if (agent?.LogoURL && agent.LogoURL.trim()) {
-          // Use LogoURL image if available (takes precedence)
-          // Escape any quotes in the URL for safety
-          const safeUrl = agent.LogoURL.replace(/"/g, '&quot;');
-          iconHTML = `<img src="${safeUrl}" alt="${mention.name}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;"> `;
-        } else {
-          // Fallback to IconClass
-          const iconClass = agent?.IconClass || 'fa-solid fa-robot';
-
-          // Special handling for mj-icon-skip (and other custom CSS icons with background-image)
-          // Extract the SVG data URI and use it as an img src instead of relying on CSS
-          if (iconClass === 'mj-icon-skip') {
-            const skipSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 101.89918457031249 96.83947368421053'%3E%3Cg transform='translate(-0.1288232421875,-0.0)'%3E%3Cpath d='M93.85,41.56c-.84,0-1.62.2-2.37.55-3-4.35-7.49-8.12-13.04-11.04l.04-7.18v-14.44h-10.24v17.6c-1.52-.43-3.07-.8-4.67-1.11V0h-10.24v24.72s-.09,0-.14,0h-4.38s-.1,0-.14,0V7.3h-10.24v18.62c-1.6.32-3.15.69-4.67,1.11v-11.67h-10.24v6.09l.04,9.6c-5.55,2.92-10.04,6.7-13.04,11.04-.75-.35-1.53-.55-2.37-.55-4.5,0-8.14,5.61-8.14,12.51s3.64,12.53,8.14,12.53c.58,0,1.14-.12,1.67-.29,4.1,6.62,11.54,12.06,20.98,15.28l.79.13v7.05c0,2.97,1.45,5.58,3.87,6.99,1.18.69,2.5,1.04,3.85,1.03,1.4,0,2.83-.37,4.15-1.12l7.54-4.29,7.56,4.3c1.31.74,2.73,1.12,4.13,1.12s2.67-.35,3.85-1.04c2.42-1.41,3.86-4.02,3.86-6.98v-7.05l.79-.13c9.44-3.22,16.89-8.66,20.98-15.28.54.17,1.09.29,1.68.29,4.5,0,8.14-5.61,8.14-12.53s-3.63-12.51-8.14-12.51' fill='%23AAAAAA'/%3E%3Cpath d='M86.69,50.87c0-12.22-13.6-19.1-28.94-20.66-4.48-.47-9.19-.54-13.52,0-15.34,1.53-28.93,8.41-28.93,20.66,0,8.55,5.7,15.55,12.68,15.55h7.94c3.05,2.5,6.93,4.1,11.08,4.71,2.65.4,5.44.46,8.01,0,4.15-.6,8.05-2.2,11.1-4.71h7.92c6.97,0,12.68-7,12.68-15.55' fill='white' opacity='0.9'/%3E%3Cpath d='M57.83,55.82c-1.19,2.58-3.8,4.35-6.84,4.35s-5.65-1.77-6.84-4.35h13.68Z' fill='%23AAAAAA'/%3E%3Cpath d='M32.52,41.14c1.74,0,3.18,2.13,3.18,4.76s-1.44,4.74-3.18,4.74-3.16-2.13-3.16-4.74,1.41-4.76,3.16-4.76' fill='%23AAAAAA'/%3E%3Cpath d='M69.46,41.14c1.74,0,3.16,2.13,3.16,4.76s-1.41,4.74-3.16,4.74-3.18-2.13-3.18-4.74,1.41-4.76,3.18-4.76' fill='%23AAAAAA'/%3E%3Cpath d='M63.91,76.15c-.82-.48-1.84-.43-2.8.12l-10.13,5.75-10.11-5.75c-.96-.55-1.98-.59-2.8-.12-.82.47-1.29,1.38-1.29,2.49v10.12c0,1.11.47,2.02,1.28,2.49.38.22.8.33,1.24.33.51,0,1.05-.15,1.57-.44l10.12-5.75,10.11,5.75c.52.29,1.05.44,1.56.44.44,0,.86-.11,1.24-.33.81-.48,1.28-1.38,1.28-2.49v-10.12c0-1.11-.47-2.02-1.28-2.49' fill='white' opacity='0.9'/%3E%3C/g%3E%3C/svg%3E";
-            iconHTML = `<img src="${skipSvg}" alt="${mention.name}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;"> `;
-          } else {
-            // Regular icon font class
-            iconHTML = `<i class="${iconClass}"></i> `;
-          }
-        }
-      } else {
-        // For users, use user icon
-        iconHTML = '<i class="fa-solid fa-user"></i> ';
+      switch (token.mode) {
+        case 'mention':
+          html = this.renderMentionHTML(token.content as any, agents, users);
+          break;
+        case 'form':
+          html = this.renderFormHTML(token.content as any);
+          break;
+        default:
+          // Unknown mode, leave original text as-is
+          html = token.originalText;
       }
 
-      // Create badge HTML with icon and NO @ sign
-      // Include configuration indicator if present (for agent mentions with non-default config)
-      let badgeHTML = `<span class="${badgeClass}">${iconHTML}${mention.name}`;
-      if (mention.type === 'agent' && mention.configurationId) {
-        // Add visual indicator for configuration preset
-        // mention.configurationId contains AIAgentConfiguration.ID (preset ID)
-        // We need to find the preset that matches this ID
-        const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === mention.id);
-        if (agent) {
-          const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
-          const preset = presets.find(p => p.ID === mention.configurationId);
-          const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
-
-          // Only show indicator if this is NOT the default preset
-          if (preset && preset.ID !== defaultPreset?.ID) {
-            // Use DisplayName if available, otherwise Name
-            const displayName = preset.DisplayName || preset.Name;
-            badgeHTML += ` <span class="preset-indicator" title="Configuration: ${preset.Name}">${displayName}</span>`;
-          }
-        }
-      }
-      badgeHTML += `</span>`;
-
-      // First, try to replace JSON mention format
-      // JSON format: @{type:"agent",id:"uuid",name:"Agent Name",configId:"uuid",config:"High"}
-      // Build a regex to match the specific JSON mention
-      const jsonPattern = new RegExp(
-        `@\\{[^}]*"type":"${mention.type}"[^}]*"id":"${this.escapeRegex(mention.id)}"[^}]*\\}`,
-        'g'
-      );
-
-      // Check if this is a JSON mention (by testing if the pattern matches)
-      if (jsonPattern.test(transformedText)) {
-        // Replace JSON mention format
-        transformedText = transformedText.replace(jsonPattern, badgeHTML);
-      } else {
-        // Fall back to legacy text format replacement
-        // Match both quoted and unquoted versions
-        const quotedPattern = new RegExp(`@"${this.escapeRegex(mention.name)}"`, 'gi');
-        const unquotedPattern = new RegExp(`@${this.escapeRegex(mention.name)}(?![\\w"])`, 'gi');
-
-        // Replace quoted version first, then unquoted
-        transformedText = transformedText.replace(quotedPattern, badgeHTML);
-        transformedText = transformedText.replace(unquotedPattern, badgeHTML);
-      }
+      result = result.substring(0, token.startIndex) + html + result.substring(token.endIndex);
     }
 
-    return transformedText;
+    return result;
   }
 
-  /**
-   * Escape special regex characters
-   */
-  private escapeRegex(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  private renderMentionHTML(content: any, agents: any[], users: any[]): string {
+    let name = content.name;
+    let iconClass = '';
+    let logoURL = '';
+
+    // Look up actual name and icon if ID provided
+    if (content.type === 'agent' && agents) {
+      const agent = agents.find(a => a.ID === content.id);
+      if (agent) {
+        name = agent.Name;
+        iconClass = agent.IconClass || '';
+        logoURL = agent.LogoURL || '';
+      }
+    } else if (content.type === 'user' && users) {
+      const user = users.find(u => u.ID === content.id);
+      if (user) name = user.Name;
+    }
+
+    const escapedName = this.escapeHtml(name);
+    const typeClass = content.type === 'agent' ? 'agent' : 'user';
+
+    // Generate HTML based on whether we have an icon
+    if (logoURL) {
+      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}</span>`;
+    } else if (iconClass) {
+      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}</span>`;
+    } else {
+      return `<span class="mention-badge ${typeClass}">${escapedName}</span>`;
+    }
+  }
+
+  private renderFormHTML(content: any): string {
+    if (!content.fields || content.fields.length === 0) {
+      return this.escapeHtml(JSON.stringify(content));
+    }
+
+    if (content.fields.length === 1) {
+      // Single field - simple inline pill
+      const field = content.fields[0];
+      const value = this.escapeHtml(String(field.value));
+
+      // Just show the value if it's a single simple response
+      // This handles cases like "Choose an option: weather" -> just show "weather"
+      return `<span class="form-response-pill single-field"><i class="fa fa-check" aria-hidden="true"></i>${value}</span>`;
+    } else {
+      // Multiple fields - card-style pill with table-like layout
+      const title = content.title ? this.escapeHtml(content.title) : 'Form Response';
+      const fieldsHTML = content.fields.map((f: any) => {
+        const label = this.escapeHtml(f.label || f.name);
+        const value = this.formatFieldValue(f);
+        return `<div class="pill-field">
+          <span class="field-label">${label}</span>
+          <span class="field-value">${value}</span>
+        </div>`;
+      }).join('');
+
+      return `<div class="form-response-pill multi-field">
+        <div class="pill-header">
+          <i class="fa fa-check-square" aria-hidden="true"></i>
+          ${title}
+        </div>
+        <div class="pill-fields">${fieldsHTML}</div>
+      </div>`;
+    }
+  }
+
+  private formatFieldValue(field: { name?: string; value: any; label?: string; type?: string }): string {
+    // Handle null/undefined
+    if (field.value == null) {
+      return this.escapeHtml('');
+    }
+
+    const stringValue = String(field.value);
+
+    // Format based on field type
+    switch (field.type) {
+      case 'date':
+        // Date-only: "May 1, 2024"
+        return this.formatDate(stringValue, false);
+
+      case 'datetime':
+        // Date and time: "May 1, 2024 at 6:00 AM"
+        return this.formatDate(stringValue, true);
+
+      case 'time':
+        // Time-only: "2:30 PM"
+        return this.formatTime(stringValue);
+
+      case 'daterange':
+        // Parse object: { start: '...', end: '...' }
+        return this.formatDateRange(field.value);
+
+      case 'slider':
+        // Value with optional suffix
+        return this.escapeHtml(stringValue);
+
+      default:
+        // Try auto-detect ISO date (for backward compatibility)
+        if (stringValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+          // Legacy: guess based on time component
+          const date = new Date(stringValue);
+          const hasMidnight = date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0;
+          return this.formatDate(stringValue, !hasMidnight);
+        }
+
+        return this.escapeHtml(stringValue);
+    }
+  }
+
+  private formatDate(value: string, includeTime: boolean): string {
+    try {
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return this.escapeHtml(value);
+
+      if (includeTime) {
+        return this.escapeHtml(date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        }));
+      } else {
+        return this.escapeHtml(date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        }));
+      }
+    } catch (e) {
+      return this.escapeHtml(value);
+    }
+  }
+
+  private formatTime(value: string): string {
+    // Handle "HH:mm" or "HH:mm:ss" format
+    try {
+      const [hours, minutes] = value.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0);
+
+      return this.escapeHtml(date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }));
+    } catch (e) {
+      return this.escapeHtml(value);
+    }
+  }
+
+  private formatDateRange(value: any): string {
+    if (typeof value === 'object' && value.start && value.end) {
+      const start = this.formatDate(value.start, false);
+      const end = this.formatDate(value.end, false);
+      // Remove HTML encoding temporarily to avoid double encoding
+      const startText = start.replace(/&[^;]+;/g, m => {
+        const map: any = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#039;': "'" };
+        return map[m] || m;
+      });
+      const endText = end.replace(/&[^;]+;/g, m => {
+        const map: any = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#039;': "'" };
+        return map[m] || m;
+      });
+      return this.escapeHtml(`${startText} to ${endText}`);
+    }
+    return this.escapeHtml(JSON.stringify(value));
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   public get isInProgressAIMessage(): boolean {
@@ -997,6 +1118,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
       // Parse JSON string to AgentResponseForm object
       const form = JSON.parse(rawData);
+
+      // Debug logging to help diagnose form display issues
+      if (form && form.questions && form.questions.length > 0) {
+        console.log('ResponseForm parsed successfully:', {
+          messageId: this.message.ID,
+          title: form.title,
+          questionCount: form.questions.length,
+          isLastMessage: this.isLastMessageInConversation,
+          isOwner: this.isConversationOwner,
+          willDisplay: this.isLastMessageInConversation && this.isConversationOwner
+        });
+      }
+
       return form || null;
     } catch (error) {
       console.error('Failed to parse response form:', error, 'Raw data:', this.message.ResponseForm);
@@ -1024,17 +1158,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Handle agent response form submission
+   * Converts form data to the new @{_mode:"form",...} format
    */
   public onFormSubmitted(formData: Record<string, any>): void {
-    // Convert form data to a message string
-    const message = Object.entries(formData)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(', ');
+    const form = this.responseForm;
+    if (!form) {
+      console.error('No response form available for submission');
+      return;
+    }
 
-    // Emit as a suggested response with the form data
+    // Build fields array with proper labels and type metadata
+    const fields = Object.entries(formData).map(([questionId, value]) => {
+      const question = form.questions.find(q => q.id === questionId);
+      const questionType = typeof question?.type === 'string' ? question.type : question?.type?.type;
+
+      return {
+        name: questionId,
+        value: value,
+        label: question?.label || questionId,
+        type: questionType // Include type for proper formatting
+      };
+    });
+
+    // Create formatted message using ConversationUtility
+    const formMessage = ConversationUtility.CreateFormResponse(
+      'formSubmit', // Generic action name
+      fields,
+      form.title
+    );
+
+    // Emit the formatted message
     this.suggestedResponseSelected.emit({
-      text: message,
-      customInput: JSON.stringify(formData)
+      text: formMessage,
+      customInput: undefined // No longer needed with new format
     });
   }
 

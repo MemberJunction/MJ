@@ -37,7 +37,8 @@ import {
     MessageLifecycleEvent,
     AgentChatMessage,
     AgentChatMessageMetadata,
-    AIModelSelectionInfo
+    AIModelSelectionInfo,
+    ConversationUtility
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -566,6 +567,11 @@ export class BaseAgent {
                 onProgress: this.wrapProgressCallback(params.onProgress)
             };
 
+            // Convert UI markup in conversation messages to plain text if requested (default: true)
+            if (params.convertUIMarkupToPlainText !== false) {
+                this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
+            }
+
             await this.initializeStartingPayload(wrappedParams);
 
             // Check for cancellation at start
@@ -876,6 +882,42 @@ export class BaseAgent {
         this._injectedMemory = { notes, examples };
 
         return { notes, examples };
+    }
+
+    /**
+     * Converts UI markup (@{...} syntax) in user messages to plain text.
+     * This prevents agents from being confused by UI-specific JSON syntax and reduces token usage.
+     *
+     * Modifies the messages in-place, converting:
+     * - Mentions: @{_mode:"mention",...} → "@Agent Name" or "@User Name"
+     * - Form responses: @{_mode:"form",...} → "Field1: Value1, Field2: Value2"
+     *
+     * @param messages - The conversation messages array to convert (modified in-place)
+     */
+    protected convertUIMarkupInMessages(messages: ChatMessage[]): void {
+        if (!messages || messages.length === 0) {
+            return;
+        }
+
+        for (const message of messages) {
+            // Only convert user messages (skip system and assistant messages)
+            if (message.role !== 'user') {
+                continue;
+            }
+
+            // Handle string content
+            if (typeof message.content === 'string') {
+                message.content = ConversationUtility.ToPlainText(message.content);
+            }
+            // Handle content blocks (for multimodal messages)
+            else if (Array.isArray(message.content)) {
+                for (const block of message.content) {
+                    if (block.type === 'text' && typeof block.content === 'string') {
+                        block.content = ConversationUtility.ToPlainText(block.content);
+                    }
+                }
+            }
+        }
     }
 
     /**

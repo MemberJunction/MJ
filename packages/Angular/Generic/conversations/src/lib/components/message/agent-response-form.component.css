@@ -24,7 +24,7 @@
 .response-form {
   background: #f9f9f9;
   border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 20px;
   margin-top: 12px;
 }
@@ -55,6 +55,10 @@
 
 .submit-button {
   min-width: 120px;
+}
+
+.submit-button i.fa {
+  margin-right: 6px;
 }
 
 .submit-button .k-icon {

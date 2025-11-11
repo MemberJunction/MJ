@@ -703,6 +703,42 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * ```
      */
     testRunId?: string;
+
+    /**
+     * Optional flag to convert UI markup (@{...} syntax) in user messages to plain text
+     * before passing to the agent.
+     *
+     * When true (default), special UI syntax like mentions (@{_mode:"mention",...}) and
+     * form responses (@{_mode:"form",...}) are converted to human-readable plain text:
+     * - Mentions: "@Agent Name" or "@User Name"
+     * - Forms: "Field1: Value1, Field2: Value2"
+     *
+     * When false, the raw @{...} JSON is preserved in conversation history.
+     *
+     * This prevents agents from:
+     * - Getting confused by UI-specific JSON syntax
+     * - Wasting tokens on markup that doesn't provide useful context
+     * - Trying to replicate or interpret UI-specific formatting
+     *
+     * @default true
+     *
+     * @example
+     * ```typescript
+     * // Default behavior - convert to plain text
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,  // "@{_mode:"mention",...}" becomes "@Agent Name"
+     * };
+     *
+     * // Preserve raw markup (not recommended)
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   convertUIMarkupToPlainText: false,  // Keep raw @{...} syntax
+     * };
+     * ```
+     */
+    convertUIMarkupToPlainText?: boolean;
 }
 
 /**

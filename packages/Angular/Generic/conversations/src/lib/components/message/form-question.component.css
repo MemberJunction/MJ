@@ -28,6 +28,41 @@
   width: 100%;
 }
 
+.question-dropdown {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  background-color: white;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  padding-right: 32px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.question-dropdown:hover {
+  border-color: #9ca3af;
+}
+
+.question-dropdown:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.question-dropdown:disabled {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .question-textarea {
   resize: vertical;
   min-height: 60px;
@@ -85,4 +120,55 @@
 /* Required field styling */
 .form-question.required .question-label {
   font-weight: 600;
+}
+
+/* Slider styling */
+.question-slider-container {
+  width: 100%;
+}
+
+.question-slider {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.slider-value {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #10b981;
+  padding: 4px 0;
+}
+
+/* Date range styling */
+.question-daterange {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.daterange-start,
+.daterange-end {
+  flex: 1;
+  min-width: 150px;
+}
+
+.daterange-separator {
+  font-weight: 500;
+  color: #666;
+  white-space: nowrap;
+}
+
+/* Mobile adjustments for date range */
+@media (max-width: 480px) {
+  .question-daterange {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .daterange-separator {
+    text-align: center;
+    padding: 4px 0;
+  }
 }

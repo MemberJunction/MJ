@@ -1206,3 +1206,138 @@
     font-size: 11px;
   }
 }
+
+/* Form Response Pills */
+:host ::ng-deep .form-response-pill {
+  margin: 0 3px;
+  transition: all 0.2s ease;
+}
+
+/* Single field form - inline pill (similar to mention badges) */
+:host ::ng-deep .form-response-pill.single-field {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* Multi-field form - card-style (block display) */
+:host ::ng-deep .form-response-pill.multi-field {
+  display: block;
+  max-width: 500px;
+  margin: 8px 0;
+}
+
+:host ::ng-deep .form-response-pill.single-field i {
+  font-size: 11px;
+  opacity: 0.95;
+}
+
+:host ::ng-deep .form-response-pill.single-field strong {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* Multi-field form - card-style pill */
+:host ::ng-deep .form-response-pill .pill-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 12px 12px 0 0;
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-bottom: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+:host ::ng-deep .form-response-pill .pill-header i {
+  font-size: 12px;
+  opacity: 0.95;
+}
+
+:host ::ng-deep .form-response-pill .pill-fields {
+  padding: 10px 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+}
+
+:host ::ng-deep .form-response-pill .pill-field {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 13px;
+  align-items: center;
+}
+
+:host ::ng-deep .form-response-pill .pill-field:not(:last-child) {
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+:host ::ng-deep .form-response-pill .field-label {
+  font-weight: 600;
+  color: #059669;
+  text-align: right;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .form-response-pill .pill-field strong {
+  font-weight: 600;
+  color: #059669;
+  margin-right: 6px;
+}
+
+:host ::ng-deep .form-response-pill .field-item {
+  padding: 4px 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+:host ::ng-deep .form-response-pill .field-item:not(:last-child) {
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+:host ::ng-deep .form-response-pill .field-name {
+  font-weight: 600;
+  color: #059669;
+  margin-right: 6px;
+}
+
+:host ::ng-deep .form-response-pill .field-value {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+/* Hover effect for form pills */
+:host ::ng-deep .form-response-pill.single-field:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+:host ::ng-deep .form-response-pill.multi-field:hover {
+  transform: translateY(-1px);
+}
+
+:host ::ng-deep .form-response-pill.multi-field:hover .pill-header {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+}
