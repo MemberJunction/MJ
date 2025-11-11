@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.118.0
+
+### Patch Changes
+
+- Updated dependencies [264c57a]
+- Updated dependencies [096ece6]
+- Updated dependencies [78721d8]
+  - @memberjunction/core-entities@2.118.0
+  - @memberjunction/core-entities-server@2.118.0
+  - @memberjunction/core@2.118.0
+  - @memberjunction/aiengine@2.118.0
+  - @memberjunction/actions@2.118.0
+  - @memberjunction/sqlserver-dataprovider@2.118.0
+  - @memberjunction/ai@2.118.0
+  - @memberjunction/ai-provider-bundle@2.118.0
+  - @memberjunction/global@2.118.0
+
 ## 2.117.0
 
 ### Minor Changes

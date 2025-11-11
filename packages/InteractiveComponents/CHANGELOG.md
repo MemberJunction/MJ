@@ -1,5 +1,17 @@
 # @memberjunction/interactive-component-types
 
+## 2.118.0
+
+### Minor Changes
+
+- 096ece6: migration
+
+### Patch Changes
+
+- Updated dependencies [78721d8]
+  - @memberjunction/core@2.118.0
+  - @memberjunction/ai-vectors-memory@2.118.0
+
 ## 2.117.0
 
 ### Patch Changes

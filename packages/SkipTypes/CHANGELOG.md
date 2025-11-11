@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.118.0
+
+### Patch Changes
+
+- Updated dependencies [096ece6]
+- Updated dependencies [78721d8]
+  - @memberjunction/interactive-component-types@2.118.0
+  - @memberjunction/core@2.118.0
+  - @memberjunction/data-context@2.118.0
+
 ## 2.117.0
 
 ### Patch Changes

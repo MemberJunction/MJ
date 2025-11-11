@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.118.0
+
+### Minor Changes
+
+- 78721d8: Migration to minor version.
+
+### Patch Changes
+
+- @memberjunction/global@2.118.0
+
 ## 2.117.0
 
 ### Minor Changes

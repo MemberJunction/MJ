@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 2.118.0
+
+### Patch Changes
+
+- Updated dependencies [264c57a]
+- Updated dependencies [096ece6]
+- Updated dependencies [78721d8]
+  - @memberjunction/core-entities@2.118.0
+  - @memberjunction/core@2.118.0
+  - @memberjunction/ng-shared@2.118.0
+  - @memberjunction/graphql-dataprovider@2.118.0
+  - @memberjunction/ng-container-directives@2.118.0
+  - @memberjunction/global@2.118.0
+
 ## 2.117.0
 
 ### Patch Changes

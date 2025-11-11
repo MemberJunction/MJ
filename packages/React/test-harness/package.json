@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/react-test-harness",
-  "version": "2.117.0",
+  "version": "2.118.0",
   "description": "React component test harness for MemberJunction using Playwright",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,9 +21,9 @@
     "ts-node-dev": "^2.0.0"
   },
   "dependencies": {
-    "@memberjunction/core": "2.117.0",
-    "@memberjunction/react-runtime": "2.117.0",
-    "@memberjunction/interactive-component-types": "2.117.0",
+    "@memberjunction/core": "2.118.0",
+    "@memberjunction/react-runtime": "2.118.0",
+    "@memberjunction/interactive-component-types": "2.118.0",
     "@playwright/test": "^1.40.0",
     "playwright": "^1.40.0",
     "commander": "^11.1.0",
