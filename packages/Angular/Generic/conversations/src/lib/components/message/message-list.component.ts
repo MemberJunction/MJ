@@ -44,6 +44,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public retryMessage = new EventEmitter<ConversationDetailEntity>();
+  @Output() public testFeedbackMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public replyInThread = new EventEmitter<ConversationDetailEntity>();
   @Output() public viewThread = new EventEmitter<ConversationDetailEntity>();
@@ -264,6 +265,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.editClicked.subscribe((msg: ConversationDetailEntity) => this.editMessage.emit(msg));
           instance.deleteClicked.subscribe((msg: ConversationDetailEntity) => this.deleteMessage.emit(msg));
           instance.retryClicked.subscribe((msg: ConversationDetailEntity) => this.retryMessage.emit(msg));
+          instance.testFeedbackClicked.subscribe((msg: ConversationDetailEntity) => this.testFeedbackMessage.emit(msg));
           instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
           instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
           instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));

@@ -1,0 +1,12 @@
+{
+  "entity": "Applications",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "relatedEntities": {
+      "Application Entities": {
+        "entity": "Application Entities",
+        "foreignKey": "ApplicationID"
+      }
+    }
+  }
+}

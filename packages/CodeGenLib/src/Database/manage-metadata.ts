@@ -2337,9 +2337,10 @@ NumberedRows AS (
             await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity`, false);
          } else {
             // Insert new setting
+            const newId = uuidv4();
             const insertSQL = `
                INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES (NEWID(), '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
             `;
             await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity`, false);
          }

@@ -54,10 +54,12 @@ Deterministic workflow agent type that:
   - Support for Action, Sub-Agent, and Prompt loop bodies
 
 ### AgentRunner
-Simple orchestrator that:
+Orchestrator that provides multiple execution modes:
 - Loads agent metadata from database
 - Instantiates correct agent class using ClassFactory
 - Executes agents with provided context
+- **RunAgent**: Core execution method for direct agent invocation
+- **RunAgentInConversation**: Integrated execution with conversation and artifact management
 
 ### PayloadManager
 Advanced payload access control for hierarchical agent execution:
@@ -105,6 +107,181 @@ const followUpResult = await runner.RunAgent({
     lastRunId: result.agentRun.ID,
     autoPopulateLastRunPayload: true // Automatically use previous run's final payload
 });
+```
+
+### RunAgentInConversation - Integrated Conversation & Artifact Management
+
+The `RunAgentInConversation` method provides a complete workflow for executing agents within a conversation context, automatically handling conversation creation, artifact generation, and linking:
+
+```typescript
+import { AgentRunner } from '@memberjunction/ai-agents';
+import { UserInfo } from '@memberjunction/core';
+
+const runner = new AgentRunner();
+
+// Execute agent with automatic conversation and artifact management
+const result = await runner.RunAgentInConversation({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user
+}, {
+    // Optional: Use existing conversation
+    conversationId: 'existing-conversation-id',
+
+    // Optional: Use existing conversation detail (skips creation)
+    conversationDetailId: 'existing-detail-id',
+
+    // Required if conversationDetailId not provided
+    userMessage: 'Analyze the sales data for Q4',
+
+    // Optional: Control artifact creation (default: true)
+    createArtifacts: true,
+
+    // Optional: Source artifact for versioning (continuity/refinement)
+    sourceArtifactId: 'base-artifact-id',
+
+    // Optional: Custom conversation name
+    conversationName: 'Q4 Sales Analysis'
+});
+
+// Result includes everything you need
+console.log('Agent result:', result.agentResult);
+console.log('Conversation ID:', result.conversationId);
+console.log('Detail ID:', result.conversationDetailId);
+if (result.artifactInfo) {
+    console.log('Artifact created:', result.artifactInfo.artifactId);
+    console.log('Version:', result.artifactInfo.versionNumber);
+}
+```
+
+#### What RunAgentInConversation Does
+
+The method provides a complete workflow:
+
+1. **Conversation Management**
+   - Creates new conversation if not provided
+   - Uses existing conversation if `conversationId` provided
+   - Skips creation entirely if `conversationDetailId` provided
+
+2. **Conversation Detail Creation**
+   - Creates conversation detail record for user message
+   - Automatically handles message ordering via `__mj_CreatedAt`
+   - Skipped if `conversationDetailId` already provided
+
+3. **Agent Execution**
+   - Runs agent with conversation context
+   - Links agent run to conversation detail
+   - Passes through all execution parameters (callbacks, data, context, etc.)
+
+4. **Artifact Processing** (if `createArtifacts !== false`)
+   - Creates artifacts from agent payload
+   - Handles intelligent versioning:
+     - Uses `sourceArtifactId` if provided (explicit continuity)
+     - Otherwise checks for previous artifacts on this conversation detail
+     - Creates new artifact version or entirely new artifact as appropriate
+   - Respects agent's `ArtifactCreationMode` configuration
+   - Links artifacts to conversation details via junction table
+   - Extracts artifact names from payload attributes
+
+#### Artifact Versioning Logic
+
+The method implements smart artifact versioning:
+
+```typescript
+// Priority 1: Explicit source artifact (agent continuity/refinement)
+{
+    sourceArtifactId: 'artifact-to-refine'
+    // Creates version 2, 3, 4, etc. of the specified artifact
+}
+
+// Priority 2: Previous artifact on this conversation detail (fallback)
+// Automatically finds last artifact linked to the conversation detail
+// Creates next version of that artifact
+
+// Priority 3: No previous artifact
+// Creates entirely new artifact with version 1
+```
+
+#### Respecting Agent Configuration
+
+The method honors agent-level settings:
+
+- **`ArtifactCreationMode === 'Never'`**: Skips artifact creation entirely
+- **`ArtifactCreationMode === 'System Only'`**: Creates artifact with `Visibility='System Only'`
+- **`DefaultArtifactTypeID`**: Uses agent's preferred artifact type (defaults to JSON type)
+
+#### Use Cases
+
+**GraphQL Resolvers** - Simplify agent execution endpoints:
+```typescript
+// Before: Manually manage conversations, artifacts, notifications
+// After: One method call handles everything
+const result = await runner.RunAgentInConversation({...}, {
+    conversationDetailId: args.conversationDetailId,
+    createArtifacts: args.createArtifacts,
+    sourceArtifactId: args.sourceArtifactId
+});
+```
+
+**Interactive Chat Interfaces** - Maintain conversation context:
+```typescript
+// First message - creates conversation
+const firstResult = await runner.RunAgentInConversation({...}, {
+    userMessage: 'Analyze sales data',
+    createArtifacts: true
+});
+
+// Follow-up message - uses existing conversation
+const followUp = await runner.RunAgentInConversation({...}, {
+    conversationId: firstResult.conversationId,
+    userMessage: 'Show me the trends',
+    createArtifacts: true
+});
+```
+
+**Agent Refinement Workflows** - Iterate on artifacts:
+```typescript
+// Initial generation
+const initial = await runner.RunAgentInConversation({...}, {
+    userMessage: 'Create a report',
+    createArtifacts: true
+});
+
+// Refinement - creates version 2 of same artifact
+const refined = await runner.RunAgentInConversation({...}, {
+    userMessage: 'Make it more concise',
+    createArtifacts: true,
+    sourceArtifactId: initial.artifactInfo.artifactId
+});
+```
+
+#### Benefits
+
+- **Single Responsibility**: One method handles entire workflow
+- **Flexible**: Works with new or existing conversations
+- **Intelligent**: Smart artifact versioning without manual tracking
+- **Clean Code**: Moves business logic out of transport layers (GraphQL, REST)
+- **Type Safe**: Full TypeScript typing for results
+- **Auditable**: All artifacts linked to conversation details
+
+#### Helper Methods
+
+`RunAgentInConversation` uses these public helper methods (available for custom workflows):
+
+```typescript
+// Get maximum version number for an artifact
+const maxVersion = await runner.GetMaxVersionForArtifact(artifactId, user);
+
+// Find previous artifact for a conversation detail
+const previousArtifact = await runner.FindPreviousArtifactForMessage(detailId, user);
+
+// Process agent artifacts manually
+const artifactInfo = await runner.ProcessAgentArtifacts(
+    agentResult,
+    conversationDetailId,
+    sourceArtifactId,
+    user
+);
 ```
 
 ## Iterative Operations (v2.112+)
@@ -1040,6 +1217,206 @@ return {
 };
 ```
 
+### Conversation Message Mapping for Actions and Sub-Agents
+
+The framework includes a **ConversationMessageResolver** utility that enables flexible conversation message referencing in action input mappings and sub-agent configurations. This is particularly useful for passing conversation context to knowledge base assistants, chatbots, or analysis agents.
+
+#### Basic Usage with Actions
+
+**In Flow Agent Step Configuration** (`ActionInputMapping`):
+```typescript
+// Pass full conversation history to an action
+{
+    "ActionInputMapping": {
+        "ConversationMessages": "conversation.all"
+    }
+}
+```
+
+**In Loop Agent Response**:
+```typescript
+{
+    "taskComplete": false,
+    "nextStep": {
+        "type": "Actions",
+        "actions": [{
+            "name": "Betty",  // Knowledge base assistant
+            "params": {
+                "ConversationMessages": "conversation.all"
+            }
+        }]
+    }
+}
+```
+
+#### Supported Conversation Patterns
+
+The `ConversationMessageResolver` supports powerful pattern-based message selection:
+
+**1. All Messages**:
+```typescript
+"ConversationMessages": "conversation.all"
+// Returns entire conversation history
+```
+
+**2. Role-Based Selection**:
+```typescript
+// Last N user messages
+"ConversationMessages": "conversation.user.last[5]"
+
+// Last N assistant messages
+"ConversationMessages": "conversation.assistant.last[3]"
+
+// Last N system messages
+"ConversationMessages": "conversation.system.last[1]"
+```
+
+**3. All Messages of a Role**:
+```typescript
+// All user messages
+"ConversationMessages": "conversation.user.all"
+
+// All assistant messages
+"ConversationMessages": "conversation.assistant.all"
+```
+
+**4. Single Last Message by Role**:
+```typescript
+// Just the last user message
+"ConversationMessages": "conversation.user.last"
+
+// Just the last assistant message
+"ConversationMessages": "conversation.assistant.last"
+```
+
+#### Use Cases
+
+**Knowledge Base Assistants** - Pass full conversation history for context-aware responses:
+```typescript
+// In Knowledge Base Research Agent step
+{
+    "StepType": "Action",
+    "ActionID": "betty-action-id",
+    "ActionInputMapping": {
+        "ConversationMessages": "conversation.all"  // Betty sees full context
+    }
+}
+```
+
+**Sentiment Analysis** - Analyze just user messages:
+```typescript
+{
+    "ActionInputMapping": {
+        "messagesToAnalyze": "conversation.user.last[10]",
+        "includeSentiment": true
+    }
+}
+```
+
+**Context Summarization** - Summarize recent conversation:
+```typescript
+{
+    "ActionInputMapping": {
+        "recentMessages": "conversation.all",  // or "conversation.last[20]" if supported
+        "summarizeAs": "bullet_points"
+    }
+}
+```
+
+**Follow-up Question Generation** - Based on assistant responses:
+```typescript
+{
+    "ActionInputMapping": {
+        "previousResponses": "conversation.assistant.last[3]",
+        "generateFollowUps": true
+    }
+}
+```
+
+#### Sub-Agent Usage
+
+Sub-agents automatically receive the parent's conversation context, but you can control which messages are passed:
+
+**In Loop Agent** (via agent prompt instructions):
+```typescript
+// The agent's system prompt can instruct:
+"When invoking sub-agents, you can specify which conversation messages to pass using the ConversationMessages parameter in your action input mappings."
+```
+
+**In Flow Agent** (via SubAgentConfiguration):
+```typescript
+// Configure sub-agent relationships with conversation context
+{
+    "AgentID": "parent-agent-id",
+    "SubAgentID": "knowledge-base-research-agent-id",
+    "SubAgentOutputMapping": { "*": "knowledgeBaseResearch" },
+    "SubAgentContextPaths": ["*"]  // Full context by default
+}
+```
+
+#### How It Works
+
+The resolver operates during the parameter mapping phase:
+
+1. **Detection**: Identifies `conversation.` prefixed strings in action/sub-agent parameters
+2. **Pattern Matching**: Parses the pattern (role, selector, count)
+3. **Message Filtering**: Extracts matching messages from conversation history
+4. **Type Validation**: Ensures the target parameter expects an array of messages
+5. **Injection**: Replaces the pattern with actual message objects
+
+**Example Resolution**:
+```typescript
+// Input mapping configuration
+{
+    "ConversationMessages": "conversation.user.last[3]"
+}
+
+// Conversation history
+[
+    { role: 'system', content: 'You are a helpful assistant' },
+    { role: 'user', content: 'What is MemberJunction?' },
+    { role: 'assistant', content: 'MemberJunction is...' },
+    { role: 'user', content: 'How do agents work?' },
+    { role: 'assistant', content: 'Agents work by...' },
+    { role: 'user', content: 'Can you give an example?' }
+]
+
+// Resolved parameter value (last 3 user messages)
+[
+    { role: 'user', content: 'What is MemberJunction?' },
+    { role: 'user', content: 'How do agents work?' },
+    { role: 'user', content: 'Can you give an example?' }
+]
+```
+
+#### Benefits
+
+- **Context-Aware Actions**: Actions receive relevant conversation history
+- **Flexible Filtering**: Select exactly which messages are needed
+- **Declarative Configuration**: No custom code needed in action implementations
+- **Type Safety**: Resolver validates parameter types at runtime
+- **Performance**: Only selected messages are passed, reducing token usage
+- **Composability**: Works seamlessly with Flow and Loop agents
+
+#### Integration with Betty Knowledge Base Action
+
+A prime example of this feature is the Betty action for knowledge base queries:
+
+```typescript
+// Betty action accepts ConversationMessages parameter
+{
+    "name": "Betty",
+    "params": {
+        "ConversationMessages": "conversation.all"  // Full conversation context
+    }
+}
+
+// Betty uses the conversation history to provide context-aware responses
+// and can reference earlier questions/answers in its knowledge base queries
+```
+
+This enables knowledge base agents to maintain conversation context across multiple queries, improving response relevance and follow-up question handling.
+
 ## Agent Permissions System
 
 The agent framework includes a comprehensive ACL-based permissions system that controls who can view, run, edit, and delete agents.
@@ -1506,7 +1883,7 @@ Paths are the edges connecting your workflow nodes. They determine the flow:
 }
 ```
 
-**Action Output Mapping** (`ActionOutputMapping`) - Maps action results back to payload:
+**Action Output Mapping** (`ActionOutputMapping`) - Maps action results back to payload or special fields:
 
 ```typescript
 // In AIAgentStep.ActionOutputMapping
@@ -1514,12 +1891,41 @@ Paths are the edges connecting your workflow nodes. They determine the flow:
     "userId": "payload.customer.id",                  // Map specific output param
     "orderTotal": "payload.order.total",              // Nested path in payload
     "metadata": "payload.action.lastResult",          // Arbitrary nesting
-    "*": "payload.rawResults.fullData"                // Wildcard = entire result
+    "*": "payload.rawResults.fullData",               // Wildcard = entire result
+    "responseText": "$message",                       // Special field - user message
+    "analysisDetails": "$reasoning",                  // Special field - reasoning
+    "confidenceScore": "$confidence"                  // Special field - confidence
 }
 
 // Case-insensitive output parameter matching
 // If action returns { UserId: "123" }, it matches "userId" in mapping
 ```
+
+**Special Fields** (Flow Agents Only):
+
+Use the `$` prefix to map action outputs to special response fields instead of the payload:
+
+- **`$message`**: Maps to the user-facing message in the final Success step
+- **`$reasoning`**: Optional reasoning/explanation shown with the response
+- **`$confidence`**: Optional confidence score (number) for the response
+
+**Example - Betty Knowledge Base Agent:**
+```typescript
+// Betty action returns: { BettyResponse: "The answer is...", BettyReferences: [...] }
+{
+    "BettyResponse": "$message",      // Shows directly to user
+    "BettyReferences": "references"   // Stored in payload
+}
+
+// When flow completes, user sees Betty's response as the message
+// No LLM processing needed - deterministic, single-step flow
+```
+
+**Special Field Benefits:**
+- ✅ Eliminates need for LLM to format final response
+- ✅ Enables deterministic flows with dynamic user messages
+- ✅ Clearly separates UI content from payload data
+- ✅ No namespace pollution - can still have `message` in payload
 
 #### 5. Prompt Result Merging
 

@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 
 @Component({
   selector: 'mj-collection-artifact-card',
@@ -84,7 +85,10 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
   canShare: boolean = false;
   canEdit: boolean = false;
 
-  constructor(private artifactPermissionService: ArtifactPermissionService) {}
+  constructor(
+    private artifactPermissionService: ArtifactPermissionService,
+    private artifactIconService: ArtifactIconService
+  ) {}
 
   async ngOnInit(): Promise<void> {
     await this.loadPermissions();
@@ -118,16 +122,12 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
     }
   }
 
+  /**
+   * Get the icon for this artifact using the centralized icon service.
+   * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
+   */
   getIconClass(): string {
-    const type = this.artifact.Type?.toLowerCase() || '';
-
-    if (type.includes('code')) return 'fa-code';
-    if (type.includes('markdown')) return 'fa-file-lines';
-    if (type.includes('html')) return 'fa-file-code';
-    if (type.includes('json')) return 'fa-brackets-curly';
-    if (type.includes('text')) return 'fa-file-alt';
-
-    return 'fa-file';
+    return this.artifactIconService.getArtifactIcon(this.artifact);
   }
 
   onSelect(): void {

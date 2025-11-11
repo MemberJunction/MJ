@@ -120,6 +120,27 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
+    <!-- MJ: AI Agent Configurations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentConfigurations"
+        sectionName="MJ: AI Agent Configurations"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentConfigurations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Configurations','AIConfigurationID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Configurations')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentConfigurations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIAgentConfigurations', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: AI Agent Prompts Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJAIAgentPrompts"

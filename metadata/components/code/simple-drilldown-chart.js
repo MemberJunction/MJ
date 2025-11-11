@@ -1,5 +1,4 @@
 function SimpleDrilldownChart({
-  entityName,
   data,
   groupBy,
   valueField,
@@ -7,6 +6,8 @@ function SimpleDrilldownChart({
   chartType = 'auto',
   title,
   gridFields,
+  entityName,
+  entityPrimaryKeys,
   showDrilldown = true,
   drilldownHeight = 300,
   showSingleRecordView = false,
@@ -62,16 +63,20 @@ function SimpleDrilldownChart({
   };
   
   // Handle row selection in grid
-  const handleRowClick = (record) => {
-    setSelectedRecord(record);
-    
+  const handleRowClick = (event) => {
+    // event has shape: { record: object, cancel: boolean }
+    setSelectedRecord(event.record);
+
     // Bubble up the row selection event
     if (onRowSelected) {
       onRowSelected({
-        record,
+        record: event.record,
         segment: selectedSegment
       });
     }
+
+    // Don't prevent default OpenEntityRecord behavior
+    // (leave event.cancel as false to allow DataGrid to open record if entityPrimaryKeys provided)
   };
   
   // Filter data for selected segment
@@ -216,8 +221,9 @@ function SimpleDrilldownChart({
           }}>
             {DataGrid ? (
               <DataGrid
-                entityName={entityName}
                 data={getDrilldownData()}
+                entityName={entityName}
+                entityPrimaryKeys={entityPrimaryKeys}
                 columns={getGridFields()}
                 sorting={true}
                 paging={true}

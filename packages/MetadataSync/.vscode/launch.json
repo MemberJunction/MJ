@@ -54,6 +54,29 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "Push to Directory (with exclude)",
+      "program": "${workspaceFolder}/bin/run.js",
+      "args": ["push", "--dir", "${input:pushDirectory}", "--exclude", "${input:pushExclude}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "MetadataSync CLI (Custom)",
       "program": "${workspaceFolder}/bin/run.js",
       "args": ["${input:command}", "${input:arg1}", "${input:arg2}", "${input:arg3}", "${input:arg4}"],
@@ -87,6 +110,12 @@
       "type": "promptString",
       "description": "Directory to push (relative to MetadataSync folder)",
       "default": "demo/ai-prompts"
+    },
+    {
+      "id": "pushExclude",
+      "type": "promptString",
+      "description": "Directories to exclude (comma-separated, blank to exclude none)",
+      "default": "actions"
     },
     {
       "id": "command",

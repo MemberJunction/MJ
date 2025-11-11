@@ -5,18 +5,22 @@ import { UserInfo } from '@memberjunction/core';
 
 /**
  * Service for parsing @mentions from message text
+ * Supports both JSON format and legacy text format
  */
 @Injectable({
   providedIn: 'root'
 })
 export class MentionParserService {
-  // Regex to match @mentions - supports names with spaces if quoted: @"Agent Name" or @AgentName
-  private readonly MENTION_REGEX = /@"([^"]+)"|@(\S+)/g;
+  // Regex to match JSON mentions: @{type:"agent",id:"uuid",name:"Name",configId:"uuid",config:"High"}
+  private readonly JSON_MENTION_REGEX = /@\{[^}]+\}/g;
+  // Regex to match legacy @mentions - supports names with spaces if quoted: @"Agent Name" or @AgentName
+  private readonly LEGACY_MENTION_REGEX = /@"([^"]+)"|@(\S+)/g;
 
   constructor() {}
 
   /**
    * Parse mentions from message text
+   * Supports both JSON format (@{type:"agent",id:"uuid",...}) and legacy text format (@AgentName)
    * @param text The message text to parse
    * @param availableAgents List of available agents for matching
    * @param availableUsers List of available users for matching (optional)
@@ -28,33 +32,67 @@ export class MentionParserService {
     availableUsers?: UserInfo[]
   ): MentionParseResult {
     const mentions: Mention[] = [];
-    const matches = Array.from(text.matchAll(this.MENTION_REGEX));
 
-    for (const match of matches) {
-      // Extract the mention name (either quoted or unquoted)
-      const mentionName = match[1] || match[2];
-      if (!mentionName) continue;
+    // First, try to parse JSON mentions (new format)
+    const jsonMatches = Array.from(text.matchAll(this.JSON_MENTION_REGEX));
 
-      // Try to match against agents first
-      const agent = this.findAgent(mentionName, availableAgents);
-      if (agent) {
-        mentions.push({
-          type: 'agent',
-          id: agent.ID,
-          name: agent.Name || 'Unknown'
-        });
-        continue;
+    for (const match of jsonMatches) {
+      try {
+        // Extract JSON string (remove @ prefix)
+        const jsonStr = match[0].substring(1); // Remove '@'
+        const mentionData = JSON.parse(jsonStr);
+
+        // Validate required fields
+        if (mentionData.type && mentionData.id && mentionData.name) {
+          const mention: Mention = {
+            type: mentionData.type,
+            id: mentionData.id,
+            name: mentionData.name
+          };
+
+          // Add configuration if present (for agents)
+          if (mentionData.configId) {
+            mention.configurationId = mentionData.configId;
+          }
+
+          mentions.push(mention);
+        }
+      } catch (error) {
+        console.warn('Failed to parse JSON mention:', match[0], error);
+        // Continue to next match
       }
+    }
 
-      // Try to match against users
-      if (availableUsers) {
-        const user = this.findUser(mentionName, availableUsers);
-        if (user) {
+    // If no JSON mentions found, fall back to legacy text format
+    if (mentions.length === 0) {
+      const legacyMatches = Array.from(text.matchAll(this.LEGACY_MENTION_REGEX));
+
+      for (const match of legacyMatches) {
+        // Extract the mention name (either quoted or unquoted)
+        const mentionName = match[1] || match[2];
+        if (!mentionName) continue;
+
+        // Try to match against agents first
+        const agent = this.findAgent(mentionName, availableAgents);
+        if (agent) {
           mentions.push({
-            type: 'user',
-            id: user.ID,
-            name: user.Name
+            type: 'agent',
+            id: agent.ID,
+            name: agent.Name || 'Unknown'
           });
+          continue;
+        }
+
+        // Try to match against users
+        if (availableUsers) {
+          const user = this.findUser(mentionName, availableUsers);
+          if (user) {
+            mentions.push({
+              type: 'user',
+              id: user.ID,
+              name: user.Name
+            });
+          }
         }
       }
     }
@@ -123,6 +161,7 @@ export class MentionParserService {
   /**
    * Validate mentions - check if all mentions are valid
    * Returns array of invalid mention names
+   * Supports both JSON and legacy mention formats
    */
   validateMentions(
     text: string,
@@ -130,17 +169,46 @@ export class MentionParserService {
     availableUsers?: UserInfo[]
   ): string[] {
     const invalidMentions: string[] = [];
-    const matches = Array.from(text.matchAll(this.MENTION_REGEX));
 
-    for (const match of matches) {
-      const mentionName = match[1] || match[2];
-      if (!mentionName) continue;
+    // Check JSON mentions first
+    const jsonMatches = Array.from(text.matchAll(this.JSON_MENTION_REGEX));
+    if (jsonMatches.length > 0) {
+      for (const match of jsonMatches) {
+        try {
+          const jsonStr = match[0].substring(1);
+          const mentionData = JSON.parse(jsonStr);
+          const mentionName = mentionData.name;
 
-      const isAgent = this.findAgent(mentionName, availableAgents) !== null;
-      const isUser = availableUsers ? this.findUser(mentionName, availableUsers) !== null : false;
+          if (mentionData.type === 'agent') {
+            const isAgent = this.findAgent(mentionName, availableAgents) !== null;
+            if (!isAgent) {
+              invalidMentions.push(mentionName);
+            }
+          } else if (mentionData.type === 'user') {
+            const isUser = availableUsers ? this.findUser(mentionName, availableUsers) !== null : false;
+            if (!isUser) {
+              invalidMentions.push(mentionName);
+            }
+          }
+        } catch (error) {
+          // Invalid JSON mention
+          invalidMentions.push(match[0]);
+        }
+      }
+    } else {
+      // Fall back to legacy format
+      const matches = Array.from(text.matchAll(this.LEGACY_MENTION_REGEX));
 
-      if (!isAgent && !isUser) {
-        invalidMentions.push(mentionName);
+      for (const match of matches) {
+        const mentionName = match[1] || match[2];
+        if (!mentionName) continue;
+
+        const isAgent = this.findAgent(mentionName, availableAgents) !== null;
+        const isUser = availableUsers ? this.findUser(mentionName, availableUsers) !== null : false;
+
+        if (!isAgent && !isUser) {
+          invalidMentions.push(mentionName);
+        }
       }
     }
 
@@ -149,9 +217,25 @@ export class MentionParserService {
 
   /**
    * Extract all mention names from text (raw strings)
+   * Supports both JSON and legacy mention formats
    */
   extractMentionNames(text: string): string[] {
-    const matches = Array.from(text.matchAll(this.MENTION_REGEX));
+    // Check JSON mentions first
+    const jsonMatches = Array.from(text.matchAll(this.JSON_MENTION_REGEX));
+    if (jsonMatches.length > 0) {
+      return jsonMatches.map(match => {
+        try {
+          const jsonStr = match[0].substring(1);
+          const mentionData = JSON.parse(jsonStr);
+          return mentionData.name;
+        } catch (error) {
+          return '';
+        }
+      }).filter(Boolean);
+    }
+
+    // Fall back to legacy format
+    const matches = Array.from(text.matchAll(this.LEGACY_MENTION_REGEX));
     return matches.map(match => match[1] || match[2]).filter(Boolean);
   }
 

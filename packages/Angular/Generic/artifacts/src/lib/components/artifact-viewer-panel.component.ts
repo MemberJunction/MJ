@@ -9,6 +9,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 import { ArtifactViewerTab } from './base-artifact-viewer.component';
 import { marked } from 'marked';
+import { ArtifactIconService } from '../services/artifact-icon.service';
 
 @Component({
   selector: 'mj-artifact-viewer-panel',
@@ -26,10 +27,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() contextCollectionId?: string; // If viewing in collection, which collection
   @Input() canShare?: boolean; // Whether user can share this artifact
   @Input() canEdit?: boolean; // Whether user can edit this artifact
+  @Input() isMaximized: boolean = false; // Whether the panel is currently maximized
   @Output() closed = new EventEmitter<void>();
   @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
   @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
+  @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -126,7 +129,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   constructor(
     private notificationService: MJNotificationService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private artifactIconService: ArtifactIconService
   ) {}
 
   async ngOnInit() {
@@ -826,6 +830,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     this.shareRequested.emit(this.artifactId);
   }
 
+  onMaximizeToggle(): void {
+    this.maximizeToggled.emit();
+  }
+
   /**
    * Resolves the DriverClass for an artifact type by traversing up the parent hierarchy.
    * Returns the first DriverClass found, or null if none found in the hierarchy.
@@ -978,5 +986,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     } catch (error) {
       console.error('Error tracking artifact usage:', error);
     }
+  }
+
+  /**
+   * Get the icon for this artifact using the centralized icon service.
+   * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
+   */
+  public getArtifactIcon(): string {
+    if (!this.artifact) return 'fa-file';
+    return this.artifactIconService.getArtifactIcon(this.artifact);
   }
 }

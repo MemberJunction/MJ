@@ -1,0 +1,211 @@
+[
+  {
+    "fields": {
+      "Name": "Betty",
+      "Description": "Query your organization's knowledge base assistant for information about company policies, procedures, documentation, and institutional knowledge. Betty provides context-aware responses with optional reference links to supporting materials.",
+      "Type": "Custom",
+      "DriverClass": "BettyAction",
+      "CategoryID": "@lookup:Action Categories.Name=AI",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-book-open-reader",
+      "UserPrompt": null,
+      "Code": null,
+      "CodeApprovalStatus": "Approved",
+      "CodeComments": null
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserPrompt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Direct question for Betty. Use this for simple queries. For context-aware conversations, use ConversationMessages instead.",
+            "IsRequired": false,
+            "DefaultValue": null
+          },
+          "primaryKey": {
+            "ID": "F278F4D5-E306-4701-8E08-983209B223EE"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.802Z",
+            "checksum": "df4144626306b3dfe4e9c2405dc4ca3cd54099198dbad5fa1df3f05a74a1b526"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConversationMessages",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Full conversation history for context-aware responses. Array of ChatMessage objects with role and content properties. Preferred over UserPrompt for multi-turn conversations.",
+            "IsRequired": false,
+            "DefaultValue": null
+          },
+          "primaryKey": {
+            "ID": "5C625DB6-143E-45C4-A2CE-62DB5DB28EA5"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.814Z",
+            "checksum": "f5cd4ba3fbda60ead9e9db3d1ac7355995403210d8e30717f6badac669c2e01c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BettyResponse",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Betty's text response to the query",
+            "IsRequired": false,
+            "DefaultValue": null
+          },
+          "primaryKey": {
+            "ID": "721AC2CE-943A-4229-8D45-279C3442FA1E"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.826Z",
+            "checksum": "4f103ec6546fe13b954c4d3ba9ff62bcff273c93606e1a8672daba5e5c723373"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BettyReferences",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Optional array of reference objects with title and link properties, providing supporting documentation for Betty's response",
+            "IsRequired": false,
+            "DefaultValue": null
+          },
+          "primaryKey": {
+            "ID": "8EF809B9-F40A-4FB4-9B3A-010A9A432FEE"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.840Z",
+            "checksum": "6a95e45156a101dad7946d7ceeb420ff6ff41a24879d2e620b15563ec7b9ee0f"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Betty successfully returned a knowledge base response"
+          },
+          "primaryKey": {
+            "ID": "68901F60-945D-47D5-BA7C-0D91663FD625"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.859Z",
+            "checksum": "8b8bf1fc653e0c3a3f52e6e5995384f47568ecbf37e04ff1cac866acbe39cd16"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Invalid parameter format (ConversationMessages must be an array or parameter validation failed)"
+          },
+          "primaryKey": {
+            "ID": "AFD190C9-CEB8-410D-BDFF-AE0570ACFD68"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.871Z",
+            "checksum": "1bd29d0b11ced5b5203003cb97dc2c6d1b367049399f646abd1d13516bbe0d11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Either UserPrompt or ConversationMessages parameter is required"
+          },
+          "primaryKey": {
+            "ID": "7F96DDE9-93D1-4AB9-B749-1C96D8FD0D8A"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.882Z",
+            "checksum": "3ebbbb8ad635aa24707312670c3b46b591c01078044a250b84e285748a23148b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Betty API key not found. Set AI_VENDOR_API_KEY__BETTYBOTLLM environment variable"
+          },
+          "primaryKey": {
+            "ID": "D7942D95-D653-4590-978D-CA16CD175126"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.892Z",
+            "checksum": "e30bcbae261b77f934ac5e1375eb50ca6cacac5330d97fbb0fc42cb47cd6cf47"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BETTY_ERROR",
+            "IsSuccess": false,
+            "Description": "Betty knowledge base service returned an error"
+          },
+          "primaryKey": {
+            "ID": "C3E04B83-5EF4-48F0-8A8B-3BF7121B7269"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.902Z",
+            "checksum": "ac6fd86895d8d08abccb6fcddce65f7f606285d9b61ec4128f48c67528d971f7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_RESPONSE",
+            "IsSuccess": false,
+            "Description": "Betty did not return a response for the query"
+          },
+          "primaryKey": {
+            "ID": "7BC5A130-9B43-4EF5-A71E-A9F6CE1939A6"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.911Z",
+            "checksum": "c790e62200f2644b3b26fe6a7fdbf9e8b83bc30c0990d88200099567d8ad9a2d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to query Betty due to an unexpected error"
+          },
+          "primaryKey": {
+            "ID": "BE78FDB8-1AA2-47EC-8568-402635549237"
+          },
+          "sync": {
+            "lastModified": "2025-11-10T00:28:09.928Z",
+            "checksum": "8e28e258866c83950c007c38dcc20428697e043fc8c2a0f8e8e64c68316060a6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+    },
+    "sync": {
+      "lastModified": "2025-11-10T00:28:09.730Z",
+      "checksum": "42962428904ca6fe140baf87e832c38da96f76b34013565ff432bcf6697df38f"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -10,7 +10,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, BaseAgentSuggestedResponse } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
@@ -60,7 +60,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
   @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
-  @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentRunId?: string}>(); // Emits when message completes (success or error)
+  @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentId?: string}>(); // Emits when message completes (success or error)
   @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
@@ -447,6 +447,22 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     isFirstMessage: boolean
   ): Promise<void> {
     console.log('🎯 Direct @mention detected, bypassing Sage');
+
+    // The agentMention already has configurationId from JSON parsing
+    // If it wasn't in JSON (legacy format), try to get from chip data
+    if (!agentMention.configurationId) {
+      const chipData = this.inputBox?.getMentionChipsData() || [];
+      const agentChip = chipData.find(chip => chip.id === agentMention.id && chip.type === 'agent');
+      if (agentChip?.presetId) {
+        agentMention.configurationId = agentChip.presetId;
+        console.log(`🎯 Using configuration preset from chip: ${agentChip.presetName} (${agentChip.presetId})`);
+      }
+    }
+
+    if (agentMention.configurationId) {
+      console.log(`🎯 Agent mention has configuration ID: ${agentMention.configurationId}`);
+    }
+
     await this.executeRouteWithNaming(
       () => this.invokeAgentDirectly(messageDetail, agentMention, this.conversationId),
       messageDetail.Message,
@@ -789,7 +805,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         hasMessage: !!result.agentRun.Message,
         payloadKeys: result.payload ? Object.keys(result.payload) : [],
         payload: result.payload, // Full payload for debugging,
-        suggestedResponses: result.suggestedResponses
+        responseForm: result.responseForm,
+        actionableCommands: result.actionableCommands,
+        automaticCommands: result.automaticCommands
       });
 
       // Stage 2: Check for task graph (multi-step orchestration)
@@ -810,14 +828,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
         }
       }
-      // Stage 4: Direct chat response from Sage
+      // Stage 4: Direct chat response from Agent
       else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
-        // Mark message as completing BEFORE setting final content (prevents race condition)
-        this.markMessageComplete(conversationManagerMessage);
-
         // Normal chat response
         // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.suggestedResponses );
+        // Note: updateConversationDetail will call markMessageComplete() for us
+        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result);
 
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         // Server already created artifacts - just emit event to trigger UI reload
@@ -855,7 +871,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           conversationManagerMessage.HiddenToUser = false;
 
           // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.suggestedResponses);
+          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result);
 
           this.messageSent.emit(conversationManagerMessage);
 
@@ -871,7 +887,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           conversationManagerMessage.HiddenToUser = true;
 
           // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-          await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete');
+          await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete', result);
 
           this.messageSent.emit(conversationManagerMessage);
 
@@ -993,11 +1009,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
 
     try {
-      // Get environment ID from user
-      const environmentId = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+      // Get default environment ID (MJ standard environment used across all installations)
+      const environmentId = EnvironmentEntityExtended.DefaultEnvironmentID;
 
-      // Get session ID for PubSub
-      const sessionId = (GraphQLDataProvider.Instance as any).sessionId || '';
+      // Get session ID for PubSub subscriptions
+      const sessionId = GraphQLDataProvider.Instance.sessionId || '';
       
       // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
       const mutation = `
@@ -1103,7 +1119,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
   }
 
-  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', suggestedResponses?: BaseAgentSuggestedResponse[]): Promise<void> {
+  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', result?: ExecuteAgentResult): Promise<void> {
     // Mark as completing FIRST if status is Complete or Error
     // This ensures task cleanup happens even if we return early due to guard clause
     if (status === 'Complete' || status === 'Error') {
@@ -1119,11 +1135,19 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const maxAttempts = 2;
     let attempts = 0, done = false;
     while (attempts < maxAttempts && !done) {
+      // Set response form and command fields before saving
+      if (result?.responseForm) {
+        convoDetail.ResponseForm = JSON.stringify(result.responseForm);
+      }
+      if (result?.actionableCommands) {
+        convoDetail.ActionableCommands = JSON.stringify(result.actionableCommands);
+      }
+      if (result?.automaticCommands) {
+        convoDetail.AutomaticCommands = JSON.stringify(result.automaticCommands);
+      }
+
       convoDetail.Message = message;
       convoDetail.Status = status;
-      if (suggestedResponses !== undefined) {
-        convoDetail.SuggestedResponses = JSON.stringify(suggestedResponses);  
-      }
 
       await convoDetail.Save();
 
@@ -1262,7 +1286,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (agentResult && agentResult.success) {
         // Update message with result
-        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', agentResult.suggestedResponses);
+        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', agentResult);
 
         // Server created artifacts - emit event to trigger UI reload
         if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
@@ -1368,7 +1392,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           agentResponseMessage.AgentID = subResult.agentRun.AgentID;
         }
 
-        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult.suggestedResponses);
+        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult);
 
         // Server created artifacts - emit event to trigger UI reload
         if (subResult.payload && Object.keys(subResult.payload).length > 0) {
@@ -1415,7 +1439,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
             agentResponseMessage.AgentID = retryResult.agentRun.AgentID;
           }
 
-          await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+          await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', retryResult);
 
           // Server created artifacts - emit event to trigger UI reload
           if (retryResult.payload && Object.keys(retryResult.payload).length > 0) {
@@ -1673,7 +1697,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         previousPayload, // Pass previous payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
-        artifactInfo?.versionId
+        artifactInfo?.versionId,
+        agentMention.configurationId // Pass configuration preset ID
       );
 
       // Remove from active tasks
@@ -1697,7 +1722,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         }
         // Stage 3: Normal chat response
         else {
-          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result.suggestedResponses)
+          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result)
 
           // Server created artifacts - emit event to trigger UI reload
           if (result.payload && Object.keys(result.payload).length > 0) {
@@ -1760,6 +1785,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     let previousPayload: any = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
+    let previousConfigurationId: string | undefined = undefined;
 
     // Use targetArtifactVersionId if specified (from intent check)
     if (targetArtifactVersionId) {
@@ -1813,40 +1839,49 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
     }
 
+    // Find the last AI message from this agent (needed for both payload and configuration)
+    const lastAIMessage = this.conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+
+    // Extract configuration from previous agent run (for configuration continuity)
+    if (lastAIMessage && this.agentRunsByDetailId) {
+      const previousAgentRun = this.agentRunsByDetailId.get(lastAIMessage.ID);
+      if (previousAgentRun?.ConfigurationID) {
+        previousConfigurationId = previousAgentRun.ConfigurationID;
+        console.log(`🎯 Using configuration from previous agent run: ${previousConfigurationId}`);
+      } else {
+        console.log('📝 No configuration found on previous agent run, will use agent default');
+      }
+    }
+
     // Fall back to most recent artifact if no target specified or target not found
-    if (!previousPayload) {
+    if (!previousPayload && lastAIMessage) {
       console.log('📦 Using most recent artifact from last agent message');
 
-      // Find the last AI message from this same agent
-      const lastAIMessage = this.conversationHistory
-        .slice()
-        .reverse()
-        .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
+      let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
+      if (!artifacts || artifacts.length === 0) {
+        artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
+      }
 
-      if (lastAIMessage) {
-        // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
-        let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
-        if (!artifacts || artifacts.length === 0) {
-          artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
-        }
-
-        if (artifacts && artifacts.length > 0) {
-          try {
-            // Use the first artifact (should only be one OUTPUT per message)
-            const artifact = artifacts[0];
-            const version = await artifact.getVersion();
-            if (version.Content) {
-              previousPayload = JSON.parse(version.Content);
-              previousArtifactInfo = {
-                artifactId: artifact.artifactId,
-                versionId: artifact.artifactVersionId,
-                versionNumber: artifact.versionNumber
-              };
-              console.log('📦 Loaded most recent artifact as payload', previousArtifactInfo);
-            }
-          } catch (error) {
-            console.warn('⚠️ Could not parse artifact content:', error);
+      if (artifacts && artifacts.length > 0) {
+        try {
+          // Use the first artifact (should only be one OUTPUT per message)
+          const artifact = artifacts[0];
+          const version = await artifact.getVersion();
+          if (version.Content) {
+            previousPayload = JSON.parse(version.Content);
+            previousArtifactInfo = {
+              artifactId: artifact.artifactId,
+              versionId: artifact.artifactVersionId,
+              versionNumber: artifact.versionNumber
+            };
+            console.log('📦 Loaded most recent artifact as payload', previousArtifactInfo);
           }
+        } catch (error) {
+          console.warn('⚠️ Could not parse artifact content:', error);
         }
       }
     }
@@ -1896,7 +1931,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         previousPayload, // Pass previous OUTPUT artifact payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         previousArtifactInfo?.artifactId,
-        previousArtifactInfo?.versionId
+        previousArtifactInfo?.versionId,
+        previousConfigurationId // Pass configuration from previous agent run for continuity
       );
 
       // Remove from active tasks
@@ -1904,7 +1940,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (result && result.success) {
         // Update the response message with agent result
-        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result.suggestedResponses);
+        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result);
 
         // Server created artifacts (handles versioning) - emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
@@ -2050,7 +2086,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     // Emit completion event to parent so it can refresh agent run data
     this.messageComplete.emit({
       conversationDetailId: conversationDetail.ID,
-      agentRunId: (conversationDetail as any).AgentRunID
+      agentId: conversationDetail.AgentID || undefined
     });
   }
 

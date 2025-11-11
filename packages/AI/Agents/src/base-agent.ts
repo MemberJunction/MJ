@@ -37,13 +37,15 @@ import {
     MessageLifecycleEvent,
     AgentChatMessage,
     AgentChatMessageMetadata,
-    AIModelSelectionInfo
+    AIModelSelectionInfo,
+    ConversationUtility
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
+import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
 
@@ -211,6 +213,45 @@ export class BaseAgent {
      */
     public get AgentRun(): AIAgentRunEntityExtended | null {
         return this._agentRun;
+    }
+
+    /**
+     * Gets the available configuration presets for an agent.
+     * Returns semantic presets like "Fast", "Balanced", "High Quality" that users can choose from.
+     * These are actual presets stored in the database with specific AIConfiguration references.
+     *
+     * @param agentId - The ID of the agent to get presets for
+     * @returns Array of configuration presets sorted by Priority, or empty array if none configured
+     *
+     * @example
+     * ```typescript
+     * const agent = new ResearchAgent();
+     * const presets = agent.GetConfigurationPresets('agent-uuid-here');
+     * // Returns presets defined in database: [
+     * //   { Name: 'Fast', DisplayName: 'Quick Draft', AIConfigurationID: 'fast-config-uuid', IsDefault: true },
+     * //   { Name: 'HighQuality', DisplayName: 'Maximum Detail', AIConfigurationID: 'frontier-uuid', IsDefault: false }
+     * // ]
+     * // Note: If no presets configured, returns empty array - agent will use default behavior
+     * ```
+     */
+    public GetConfigurationPresets(agentId: string) {
+        if (!agentId) {
+            return [];
+        }
+        return AIEngine.Instance.GetAgentConfigurationPresets(agentId);
+    }
+
+    /**
+     * Gets the default configuration preset for an agent.
+     *
+     * @param agentId - The ID of the agent to get the default preset for
+     * @returns The default preset, or undefined if none configured
+     */
+    public GetDefaultConfigurationPreset(agentId: string) {
+        if (!agentId) {
+            return undefined;
+        }
+        return AIEngine.Instance.GetDefaultAgentConfigurationPreset(agentId);
     }
 
     /**
@@ -526,6 +567,11 @@ export class BaseAgent {
                 onProgress: this.wrapProgressCallback(params.onProgress)
             };
 
+            // Convert UI markup in conversation messages to plain text if requested (default: true)
+            if (params.convertUIMarkupToPlainText !== false) {
+                this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
+            }
+
             await this.initializeStartingPayload(wrappedParams);
 
             // Check for cancellation at start
@@ -836,6 +882,42 @@ export class BaseAgent {
         this._injectedMemory = { notes, examples };
 
         return { notes, examples };
+    }
+
+    /**
+     * Converts UI markup (@{...} syntax) in user messages to plain text.
+     * This prevents agents from being confused by UI-specific JSON syntax and reduces token usage.
+     *
+     * Modifies the messages in-place, converting:
+     * - Mentions: @{_mode:"mention",...} → "@Agent Name" or "@User Name"
+     * - Form responses: @{_mode:"form",...} → "Field1: Value1, Field2: Value2"
+     *
+     * @param messages - The conversation messages array to convert (modified in-place)
+     */
+    protected convertUIMarkupInMessages(messages: ChatMessage[]): void {
+        if (!messages || messages.length === 0) {
+            return;
+        }
+
+        for (const message of messages) {
+            // Only convert user messages (skip system and assistant messages)
+            if (message.role !== 'user') {
+                continue;
+            }
+
+            // Handle string content
+            if (typeof message.content === 'string') {
+                message.content = ConversationUtility.ToPlainText(message.content);
+            }
+            // Handle content blocks (for multimodal messages)
+            else if (Array.isArray(message.content)) {
+                for (const block of message.content) {
+                    if (block.type === 'text' && typeof block.content === 'string') {
+                        block.content = ConversationUtility.ToPlainText(block.content);
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -3436,7 +3518,12 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.Data = JSON.stringify(params.data);
         }
         this._agentRun.Verbose = params.verbose || false;
-        
+
+        // Set TestRunID if provided
+        if (params.testRunId) {
+            this._agentRun.TestRunID = params.testRunId;
+        }
+
         // Save the agent run
         if (!await this._agentRun.Save()) {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
@@ -4826,7 +4913,8 @@ The context is now within limits. Please retry your request with the recovered c
 
             const contextMessage = this.prepareRelatedSubAgentContextMessage(
                 previousDecision.newPayload as unknown as Record<string, unknown>,
-                contextPaths
+                contextPaths,
+                params
             );
 
             if (contextMessage && (params.verbose === true || IsVerboseLoggingEnabled())) {
@@ -5122,17 +5210,23 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Prepares a context message containing parent payload data for related sub-agent.
-     * Extracts specified paths from parent payload and formats them as a user message
-     * to provide LLM context to the sub-agent.
+     * Extracts specified paths from parent payload or conversation messages and formats
+     * them as a user message to provide LLM context to the sub-agent.
+     *
+     * Supports both payload paths and conversation message paths:
+     * - Payload paths: "fieldName", "nested.field", etc.
+     * - Conversation paths: "conversation.all", "conversation.user.last", "conversation.all.last[5]", etc.
      *
      * @param parentPayload - Parent agent's current payload
      * @param contextPaths - Array of paths to extract, or ["*"] for entire payload
+     * @param params - Execution parameters with conversation messages
      * @returns ChatMessage with formatted context, or null if no paths specified or no data found
      * @private
      */
     private prepareRelatedSubAgentContextMessage(
         parentPayload: Record<string, unknown>,
-        contextPaths: string[]
+        contextPaths: string[],
+        params?: ExecuteAgentParams
     ): ChatMessage | null {
         if (!contextPaths || contextPaths.length === 0) {
             return null;
@@ -5146,11 +5240,20 @@ The context is now within limits. Please retry your request with the recovered c
             };
         }
 
-        // Extract specific paths
+        // Extract specific paths (supports both payload paths and conversation paths)
         const contextData: Record<string, unknown> = {};
 
         for (const path of contextPaths) {
-            const value = this.getValueFromPath(parentPayload, path);
+            let value: unknown;
+
+            // Check if this is a conversation reference
+            if (ConversationMessageResolver.isConversationReference(path) && params?.conversationMessages) {
+                value = ConversationMessageResolver.resolve(path, params.conversationMessages);
+            } else {
+                // Regular payload path
+                value = this.getValueFromPath(parentPayload, path);
+            }
+
             if (value !== undefined) {
                 contextData[path] = value;
             }
@@ -5552,7 +5655,9 @@ The context is now within limits. Please retry your request with the recovered c
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
             newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
-            suggestedResponses: previousDecision.suggestedResponses
+            responseForm: previousDecision.responseForm,
+            actionableCommands: previousDecision.actionableCommands,
+            automaticCommands: previousDecision.automaticCommands
         };
     }
 
@@ -6360,7 +6465,9 @@ The context is now within limits. Please retry your request with the recovered c
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
             agentRun: this._agentRun!,
-            suggestedResponses: finalStep.suggestedResponses,
+            responseForm: finalStep.responseForm,
+            actionableCommands: finalStep.actionableCommands,
+            automaticCommands: finalStep.automaticCommands,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined

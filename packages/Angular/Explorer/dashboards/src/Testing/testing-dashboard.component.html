@@ -1,0 +1,70 @@
+<div class="testing-dashboard-container">
+  <div kendoDialogContainer></div>
+
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+        <div class="loading-text">Loading Testing Dashboard...</div>
+      </div>
+    </div>
+  }
+
+  @if (!isLoading) {
+    <div class="dashboard-content-wrapper">
+      <div class="testing-dashboard-nav">
+        @for (navItem of navigationConfig; track $index) {
+          <div
+            class="nav-item"
+            [class.active]="navItem.selected"
+            (click)="onTabChange(navigationItems[$index])"
+          >
+            <i [class]="navItem.icon"></i>
+            <span>{{ navItem.text }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="dashboard-content">
+        @if (activeTab === 'overview' && hasVisited('overview')) {
+          <app-testing-overview
+            [initialState]="overviewState"
+            (stateChange)="onOverviewStateChange($event)"
+          ></app-testing-overview>
+        }
+
+        @if (activeTab === 'execution' && hasVisited('execution')) {
+          <app-testing-execution
+            [initialState]="executionState"
+            (stateChange)="onExecutionStateChange($event)"
+          ></app-testing-execution>
+        }
+
+        @if (activeTab === 'analytics' && hasVisited('analytics')) {
+          <app-testing-analytics
+            [initialState]="analyticsState"
+            (stateChange)="onAnalyticsStateChange($event)"
+          ></app-testing-analytics>
+        }
+
+        @if (activeTab === 'version' && hasVisited('version')) {
+          <app-testing-version-comparison
+            [initialState]="versionState"
+            (stateChange)="onVersionStateChange($event)"
+          ></app-testing-version-comparison>
+        }
+
+        @if (activeTab === 'feedback' && hasVisited('feedback')) {
+          <app-testing-feedback
+            [initialState]="feedbackState"
+            (stateChange)="onFeedbackStateChange($event)"
+          ></app-testing-feedback>
+        }
+      </div>
+    </div>
+  }
+</div>

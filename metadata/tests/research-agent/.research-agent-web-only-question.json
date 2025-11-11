@@ -1,0 +1,74 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Research Agent - Potato Soup Recipe Comparison",
+    "Description": "Tests the Research Agent's ability to answer questions using only web research, without requiring database access. Validates that the Web Research Agent is invoked appropriately and Database Research Agent is not used unnecessarily. Uses a fun, practical query to test web research capabilities.",
+    "InputDefinition": {
+      "userMessage": "Find me 3 examples of great potato soup recipes and then compare them in detail in a report. I want to see the differences in ingredients, cooking methods, and flavor profiles."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Response includes exactly 3 distinct potato soup recipes",
+        "Each recipe's ingredients are clearly listed",
+        "Cooking methods for each recipe are explained",
+        "Detailed comparison highlights differences between the recipes",
+        "Report includes analysis of flavor profiles or variations",
+        "Response is well-structured with clear sections for each recipe and the comparison"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Research Agent",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 0.2
+        },
+        {
+          "type": "schema-validate",
+          "weight": 0.15
+        },
+        {
+          "type": "trace-validate-sub-agents",
+          "weight": 0.25,
+          "config": {
+            "requiredAgents": [
+              "Web Research Agent"
+            ],
+            "forbiddenAgents": [
+              "Database Research Agent"
+            ],
+            "minIterations": 1
+          }
+        },
+        {
+          "type": "llm-judge",
+          "weight": 0.4,
+          "config": {
+            "criteria": [
+              "Response includes exactly 3 distinct potato soup recipes",
+              "Each recipe's ingredients are clearly listed",
+              "Cooking methods for each recipe are explained",
+              "Detailed comparison highlights differences between the recipes",
+              "Report includes analysis of flavor profiles or variations",
+              "Response is well-structured with clear sections for each recipe and the comparison"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "trace-no-errors": 0.2,
+        "schema-validate": 0.15,
+        "trace-validate-sub-agents": 0.25,
+        "llm-judge": 0.4
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A5189586-8248-4641-98ED-BC1B3B2969B2"
+  },
+  "sync": {
+    "lastModified": "2025-11-10T03:26:07.340Z",
+    "checksum": "50f27e77e12dfd7e9e2206265428de4665d43c7d06199cb1d75d49cdd1a0216e"
+  }
+}

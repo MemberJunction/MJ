@@ -23,6 +23,14 @@ export default class Status extends Command {
   static flags = {
     dir: Flags.string({ description: 'Specific entity directory to check status' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level differences' }),
+    include: Flags.string({
+      description: 'Only process these directories (comma-separated, supports patterns)',
+      multiple: false
+    }),
+    exclude: Flags.string({
+      description: 'Skip these directories (comma-separated, supports patterns)',
+      multiple: false
+    }),
   };
   
   async run(): Promise<void> {
@@ -53,13 +61,19 @@ export default class Status extends Command {
         spinner.stop();
       }
       
+      // Parse include/exclude filters
+      const includeFilter = flags.include ? flags.include.split(',').map(s => s.trim()) : undefined;
+      const excludeFilter = flags.exclude ? flags.exclude.split(',').map(s => s.trim()) : undefined;
+
       // Create status service and execute
       const statusService = new StatusService(syncEngine);
-      
+
       spinner.start('Checking status...');
-      
+
       const result = await statusService.checkStatus({
-        dir: flags.dir
+        dir: flags.dir,
+        include: includeFilter,
+        exclude: excludeFilter
       }, {
         onProgress: (message: string) => {
           spinner.start(message);

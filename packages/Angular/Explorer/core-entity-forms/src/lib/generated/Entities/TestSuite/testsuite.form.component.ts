@@ -1,0 +1,28 @@
+import { Component } from '@angular/core';
+import { TestSuiteEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-user-view-grid"
+
+@RegisterClass(BaseFormComponent, 'MJ: Test Suites') // Tell MemberJunction about this class
+@Component({
+    selector: 'gen-testsuite-form',
+    templateUrl: './testsuite.form.component.html'
+})
+export class TestSuiteFormComponent extends BaseFormComponent {
+    public record!: TestSuiteEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'mJTestSuites', sectionName: 'MJ: Test Suites', isExpanded: false },
+            { sectionKey: 'mJTestSuiteRuns', sectionName: 'MJ: Test Suite Runs', isExpanded: false },
+            { sectionKey: 'mJTestSuiteTests', sectionName: 'MJ: Test Suite Tests', isExpanded: false }
+        ]);
+    }
+}
+
+export function LoadTestSuiteFormComponent() {
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
+}

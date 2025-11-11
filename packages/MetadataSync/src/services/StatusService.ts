@@ -7,6 +7,8 @@ import { findEntityDirectories } from '../lib/provider-utils';
 
 export interface StatusOptions {
   dir?: string;
+  include?: string[]; // Only process these directories (whitelist, supports patterns)
+  exclude?: string[]; // Skip these directories (blacklist, supports patterns)
 }
 
 export interface StatusCallbacks {
@@ -42,7 +44,19 @@ export class StatusService {
     summary: StatusResult;
     details: EntityStatusResult[];
   }> {
-    const entityDirs = findEntityDirectories(process.cwd(), options.dir);
+    // Validate that include and exclude are not used together
+    if (options.include && options.exclude) {
+      throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
+    }
+
+    const entityDirs = findEntityDirectories(
+      process.cwd(),
+      options.dir,
+      undefined,
+      undefined,
+      options.include,
+      options.exclude
+    );
     
     if (entityDirs.length === 0) {
       throw new Error('No entity directories found');

@@ -14,9 +14,7 @@ export class ContentTypeAttributeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'attributeMetadata', sectionName: 'Attribute Metadata', isExpanded: false },
-            { sectionKey: 'extractionPrompt', sectionName: 'Extraction Prompt', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }

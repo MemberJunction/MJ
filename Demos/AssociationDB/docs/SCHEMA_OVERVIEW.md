@@ -1,647 +1,588 @@
-# Association Sample Database - Schema Overview
+# Association Sample Database - Complete Schema Overview
 
-Complete documentation of all schemas, tables, and relationships in the Association Sample Database.
+Comprehensive documentation of all 58 tables across the Cheese Industry Association database.
 
-## 🏗️ Architecture
+## 🏗️ Database Architecture
 
-The database uses a **multi-schema architecture** with clear domain separation:
+### Overview
 
+```mermaid
+erDiagram
+    MEMBER ||--o{ MEMBERSHIP : "has"
+    MEMBER ||--o{ EVENT_REGISTRATION : "registers for"
+    MEMBER ||--o{ ENROLLMENT : "enrolls in"
+    MEMBER ||--o{ CERTIFICATION : "earns"
+    MEMBER ||--o{ FORUM_POST : "creates"
+    MEMBER ||--o{ RESOURCE_BOOKMARK : "bookmarks"
+    MEMBER ||--o{ ADVOCACY_ACTION : "takes"
+
+    ORGANIZATION ||--o{ MEMBER : "employs"
+
+    EVENT ||--o{ EVENT_SESSION : "contains"
+    EVENT ||--o{ EVENT_REGISTRATION : "has"
+
+    COURSE ||--o{ ENROLLMENT : "has"
+    ENROLLMENT ||--o{ CERTIFICATE : "produces"
+
+    COMPETITION ||--o{ COMPETITION_ENTRY : "receives"
+    COMPETITION ||--o{ COMPETITION_JUDGE : "assigns"
+    PRODUCT ||--o{ COMPETITION_ENTRY : "enters"
+
+    LEGISLATIVE_BODY ||--o{ LEGISLATIVE_ISSUE : "manages"
+    LEGISLATIVE_ISSUE ||--o{ POLICY_POSITION : "has"
+    LEGISLATIVE_ISSUE ||--o{ ADVOCACY_ACTION : "tracks"
+
+    FORUM ||--o{ FORUM_THREAD : "contains"
+    FORUM_THREAD ||--o{ FORUM_POST : "has"
+
+    RESOURCE_CATEGORY ||--o{ RESOURCE : "contains"
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     MEMBERSHIP (Core)                        │
-│  Organizations, Members, Membership Types, Memberships       │
-└──────────────────┬──────────────────────────────────────────┘
-                   │ Referenced by all other domains
-        ┌──────────┼──────────┬──────────┬──────────┐
-        ▼          ▼          ▼          ▼          ▼
-    ┌───────┐  ┌────────┐ ┌────────┐ ┌──────────┐ ┌───────────┐
-    │EVENTS │  │LEARNING│ │FINANCE │ │MARKETING │ │  EMAIL    │
-    └───────┘  └────────┘ └────────┘ └──────────┘ └───────────┘
 
-        ┌──────────┬──────────┐
-        ▼          ▼
-    ┌──────────┐ ┌───────────┐
-    │CHAPTERS  │ │GOVERNANCE │
-    └──────────┘ └───────────┘
+### Schema Organization
+
+All 58 tables reside in the **`AssociationDemo`** schema, organized into 13 logical domains:
+
+| Domain | Tables | Purpose |
+|--------|--------|---------|
+| **Core Membership** | 4 | Member profiles, organizations, membership types and records |
+| **Events** | 3 | Conferences, workshops, sessions, registrations |
+| **Learning** | 3 | Courses, enrollments, certificates |
+| **Finance** | 3 | Invoices, line items, payments |
+| **Marketing** | 3 | Campaigns, segments, targeting |
+| **Email** | 3 | Templates, sends, click tracking |
+| **Chapters** | 3 | Geographic/interest groups, membership, leadership |
+| **Governance** | 4 | Committees, board positions, assignments |
+| **Forums** | 8 | Discussion forums, threads, posts, moderation |
+| **Resources** | 6 | Knowledge base, categories, downloads, bookmarks |
+| **Certifications** | 6 | Professional credentials, CE credits, renewals |
+| **Products & Awards** | 6 | Product catalog, competitions, judging, awards |
+| **Legislative** | 6 | Legislative tracking, advocacy, policy positions |
+
+---
+
+## 📋 Phase 0: Core Domains (26 Tables)
+
+### Core Membership Domain (4 tables)
+
+Foundation for all other domains.
+
+```mermaid
+erDiagram
+    ORGANIZATION ||--o{ MEMBER : "employs"
+    MEMBER ||--o{ MEMBERSHIP : "has records"
+    MEMBERSHIP_TYPE ||--o{ MEMBERSHIP : "defines"
+
+    ORGANIZATION {
+        uniqueidentifier ID PK
+        nvarchar Name
+        nvarchar Industry
+        int EmployeeCount
+        decimal AnnualRevenue
+    }
+
+    MEMBER {
+        uniqueidentifier ID PK
+        nvarchar Email UK
+        nvarchar FirstName
+        nvarchar LastName
+        uniqueidentifier OrganizationID FK
+        date JoinDate
+    }
+
+    MEMBERSHIP_TYPE {
+        uniqueidentifier ID PK
+        nvarchar Name
+        decimal AnnualDues
+        int RenewalPeriodMonths
+    }
+
+    MEMBERSHIP {
+        uniqueidentifier ID PK
+        uniqueidentifier MemberID FK
+        uniqueidentifier MembershipTypeID FK
+        nvarchar Status
+        date StartDate
+        date EndDate
+    }
 ```
 
-## 📊 Schemas
+**Key Tables:**
+- **Organization**: 40 cheese producers, retailers, suppliers
+- **Member**: 2,000 industry professionals
+- **MembershipType**: 8 types (Individual, Corporate, Student, etc.)
+- **Membership**: 2,500+ records including renewal history
 
-### 1. Membership Schema
+### Events Domain (3 tables)
 
-**Purpose**: Core member and organization data - foundation for all other domains
+```mermaid
+erDiagram
+    EVENT ||--o{ EVENT_SESSION : "contains"
+    EVENT ||--o{ EVENT_REGISTRATION : "has"
+    MEMBER ||--o{ EVENT_REGISTRATION : "registers"
 
-#### Tables
+    EVENT {
+        uniqueidentifier ID PK
+        nvarchar Name
+        nvarchar EventType
+        datetime StartDate
+        datetime EndDate
+        decimal CEUCredits
+        nvarchar Status
+    }
 
-##### membership.Organization
-Organizations that members belong to or represent.
+    EVENT_SESSION {
+        uniqueidentifier ID PK
+        uniqueidentifier EventID FK
+        nvarchar Name
+        nvarchar SpeakerName
+        nvarchar SessionType
+        decimal CEUCredits
+    }
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(255) | Organization name |
-| Industry | NVARCHAR(100) | Industry classification |
-| EmployeeCount | INT | Number of employees |
-| AnnualRevenue | DECIMAL(15,2) | Annual revenue in USD |
-| Website | NVARCHAR(500) | Organization website |
-| Description | NVARCHAR(MAX) | Organization description |
-| YearFounded | INT | Year founded |
-| City, State, Country | NVARCHAR | Location information |
-| Phone | NVARCHAR(50) | Contact phone |
+    EVENT_REGISTRATION {
+        uniqueidentifier ID PK
+        uniqueidentifier EventID FK
+        uniqueidentifier MemberID FK
+        nvarchar Status
+        datetime CheckInTime
+        bit CEUAwarded
+    }
+```
 
-**Sample Count**: 40 organizations across technology, healthcare, finance, consulting, and international sectors
+**Data**: 21 events, 85 sessions, 1,400+ registrations
 
-##### membership.MembershipType
-Types of memberships available.
+### Learning Domain (3 tables)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(100) | Membership type name |
-| Description | NVARCHAR(MAX) | Type description |
-| AnnualDues | DECIMAL(10,2) | Annual membership cost |
-| RenewalPeriodMonths | INT | Renewal period (typically 12) |
-| IsActive | BIT | Whether type is currently offered |
-| AllowAutoRenew | BIT | Allow automatic renewal |
-| RequiresApproval | BIT | Requires approval to join |
-| Benefits | NVARCHAR(MAX) | Description of benefits |
-| DisplayOrder | INT | Sort order for display |
+```mermaid
+erDiagram
+    COURSE ||--o{ ENROLLMENT : "has"
+    ENROLLMENT ||--o{ CERTIFICATE : "produces"
+    MEMBER ||--o{ ENROLLMENT : "enrolls"
+    COURSE ||--o| COURSE : "requires prerequisite"
 
-**Sample Count**: 8 types (Individual, Student, Corporate, Lifetime, Retired, Early Career, International, Honorary)
+    COURSE {
+        uniqueidentifier ID PK
+        nvarchar Code UK
+        nvarchar Title
+        nvarchar Category
+        nvarchar Level
+        decimal CEUCredits
+    }
 
-##### membership.Member
-Individual members of the association.
+    ENROLLMENT {
+        uniqueidentifier ID PK
+        uniqueidentifier CourseID FK
+        uniqueidentifier MemberID FK
+        nvarchar Status
+        int ProgressPercentage
+        decimal FinalScore
+        bit Passed
+    }
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Email | NVARCHAR(255) | Member email (unique) |
-| FirstName | NVARCHAR(100) | First name |
-| LastName | NVARCHAR(100) | Last name |
-| Title | NVARCHAR(100) | Job title |
-| OrganizationID | UNIQUEIDENTIFIER | FK to Organization (nullable) |
-| Industry | NVARCHAR(100) | Industry sector |
-| JobFunction | NVARCHAR(100) | Primary job function |
-| YearsInProfession | INT | Years of experience |
-| JoinDate | DATE | Date joined association |
-| City, State, Country | NVARCHAR | Location |
-| Phone | NVARCHAR(50) | Contact phone |
-| LinkedInURL | NVARCHAR(500) | LinkedIn profile |
+    CERTIFICATE {
+        uniqueidentifier ID PK
+        uniqueidentifier EnrollmentID FK
+        nvarchar CertificateNumber UK
+        date IssuedDate
+        nvarchar VerificationCode
+    }
+```
 
-**Sample Count**: 500 members with realistic names, titles, and distribution across organizations
+**Data**: 60 courses, 900 enrollments, 650+ certificates
 
-##### membership.Membership
-Individual membership records (includes renewal history).
+### Finance, Marketing, Email Domains (9 tables)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| MembershipTypeID | UNIQUEIDENTIFIER | FK to MembershipType |
-| Status | NVARCHAR(20) | Active, Expired, Cancelled, Pending, Lapsed |
-| StartDate | DATE | Membership start date |
-| EndDate | DATE | Membership end date |
-| RenewalDate | DATE | Date renewed (if applicable) |
-| AutoRenew | BIT | Automatic renewal enabled |
-
-**Sample Count**: 625 records (includes renewal history for long-term members)
-
----
-
-### 2. Events Schema
-
-**Purpose**: Conference, webinar, workshop, and meeting management
-
-#### Tables
-
-##### events.Event
-Events organized by the association.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(255) | Event name |
-| EventType | NVARCHAR(50) | Conference, Webinar, Workshop, Chapter Meeting, Virtual Summit, Networking |
-| StartDate | DATETIME | Event start date/time |
-| EndDate | DATETIME | Event end date/time |
-| Timezone | NVARCHAR(50) | Timezone |
-| Location | NVARCHAR(255) | Physical location (if applicable) |
-| IsVirtual | BIT | Whether event is virtual |
-| VirtualPlatform | NVARCHAR(100) | Zoom, Teams, etc. |
-| MeetingURL | NVARCHAR(500) | Virtual meeting URL |
-| ChapterID | UNIQUEIDENTIFIER | Associated chapter (if applicable) |
-| Capacity | INT | Maximum attendees |
-| RegistrationOpenDate | DATETIME | Registration opens |
-| RegistrationCloseDate | DATETIME | Registration closes |
-| RegistrationFee | DECIMAL(10,2) | Base registration fee |
-| MemberPrice | DECIMAL(10,2) | Member pricing |
-| NonMemberPrice | DECIMAL(10,2) | Non-member pricing |
-| CEUCredits | DECIMAL(4,2) | Continuing education credits |
-| Description | NVARCHAR(MAX) | Event description |
-| Status | NVARCHAR(20) | Draft, Published, Registration Open, Sold Out, In Progress, Completed, Cancelled |
-
-**Sample Count**: 35 events (5 annual conferences 2020-2024, virtual summits, workshops, webinars, networking)
-
-##### events.EventSession
-Individual sessions within multi-track events.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| EventID | UNIQUEIDENTIFIER | FK to Event |
-| Name | NVARCHAR(255) | Session name |
-| Description | NVARCHAR(MAX) | Session description |
-| StartTime | DATETIME | Session start |
-| EndTime | DATETIME | Session end |
-| Room | NVARCHAR(100) | Room/location |
-| SpeakerName | NVARCHAR(255) | Speaker name |
-| SessionType | NVARCHAR(50) | Keynote, Workshop, Panel, etc. |
-| Capacity | INT | Session capacity |
-| CEUCredits | DECIMAL(4,2) | Credits for this session |
-
-**Sample Count**: 85 sessions across major conferences
-
-##### events.EventRegistration
-Member registrations and attendance tracking.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| EventID | UNIQUEIDENTIFIER | FK to Event |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| RegistrationDate | DATETIME | When registered |
-| RegistrationType | NVARCHAR(50) | Early Bird, Standard, Late |
-| Status | NVARCHAR(20) | Registered, Waitlisted, Attended, No Show, Cancelled |
-| CheckInTime | DATETIME | Actual check-in time |
-| InvoiceID | UNIQUEIDENTIFIER | Related invoice |
-| CEUAwarded | BIT | Whether CEU credits were awarded |
-| CEUAwardedDate | DATETIME | When credits awarded |
-| CancellationDate | DATETIME | If cancelled |
-| CancellationReason | NVARCHAR(MAX) | Cancellation reason |
-
-**Sample Count**: 1,400+ registrations with realistic attendance patterns
+**Finance**: Invoice generation, line items, payment processing
+**Marketing**: Campaign management, segmentation, targeting
+**Email**: Template library, sends, engagement tracking
 
 ---
 
-### 3. Learning Schema
+## 📋 Phase 1: Community Forums (8 Tables)
 
-**Purpose**: Learning management system (LMS) for courses and certifications
+Knowledge sharing and member engagement.
 
-#### Tables
+```mermaid
+erDiagram
+    FORUM ||--o{ FORUM_THREAD : "contains"
+    FORUM_THREAD ||--o{ FORUM_POST : "has"
+    FORUM_POST ||--o{ FORUM_POST_REACTION : "receives"
+    MEMBER ||--o{ FORUM_THREAD : "creates"
+    MEMBER ||--o{ FORUM_POST : "authors"
+    MEMBER ||--o{ FORUM_POST_REACTION : "reacts"
 
-##### learning.Course
-Educational courses and certification programs.
+    FORUM {
+        uniqueidentifier ID PK
+        nvarchar Name
+        nvarchar Description
+        int DisplayOrder
+        bit IsActive
+    }
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Code | NVARCHAR(50) | Unique course code |
-| Title | NVARCHAR(255) | Course title |
-| Description | NVARCHAR(MAX) | Course description |
-| Category | NVARCHAR(100) | Course category |
-| Level | NVARCHAR(20) | Beginner, Intermediate, Advanced, Expert |
-| DurationHours | DECIMAL(5,2) | Estimated duration |
-| CEUCredits | DECIMAL(4,2) | Continuing education credits |
-| Price | DECIMAL(10,2) | Standard price |
-| MemberPrice | DECIMAL(10,2) | Member pricing |
-| IsActive | BIT | Currently offered |
-| PublishedDate | DATE | When published |
-| InstructorName | NVARCHAR(255) | Instructor name |
-| PrerequisiteCourseID | UNIQUEIDENTIFIER | FK to prerequisite course |
-| ThumbnailURL | NVARCHAR(500) | Course thumbnail |
-| LearningObjectives | NVARCHAR(MAX) | Learning objectives |
+    FORUM_THREAD {
+        uniqueidentifier ID PK
+        uniqueidentifier ForumID FK
+        uniqueidentifier CreatedByMemberID FK
+        nvarchar Title
+        nvarchar Status
+        bit IsPinned
+        bit IsLocked
+    }
 
-**Sample Count**: 60 courses across Cloud, Security, Data Science, DevOps, Leadership, Software Development, Business
+    FORUM_POST {
+        uniqueidentifier ID PK
+        uniqueidentifier ThreadID FK
+        uniqueidentifier AuthorMemberID FK
+        nvarchar Content
+        bit IsModerated
+    }
+```
 
-##### learning.Enrollment
-Member course enrollments and progress.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| CourseID | UNIQUEIDENTIFIER | FK to Course |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| EnrollmentDate | DATETIME | When enrolled |
-| StartDate | DATETIME | When started |
-| CompletionDate | DATETIME | When completed |
-| ExpirationDate | DATETIME | Enrollment expiration |
-| Status | NVARCHAR(20) | Enrolled, In Progress, Completed, Failed, Withdrawn, Expired |
-| ProgressPercentage | INT | 0-100% |
-| LastAccessedDate | DATETIME | Last access |
-| TimeSpentMinutes | INT | Total time spent |
-| FinalScore | DECIMAL(5,2) | Final assessment score |
-| PassingScore | DECIMAL(5,2) | Required passing score (default 70) |
-| Passed | BIT | Whether passed |
-| InvoiceID | UNIQUEIDENTIFIER | Related invoice |
-
-**Sample Count**: 900 enrollments with realistic completion rates (72% completed)
-
-##### learning.Certificate
-Completion certificates issued to members.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| EnrollmentID | UNIQUEIDENTIFIER | FK to Enrollment |
-| CertificateNumber | NVARCHAR(50) | Unique certificate number |
-| IssuedDate | DATE | Issue date |
-| ExpirationDate | DATE | Expiration (if applicable) |
-| CertificatePDFURL | NVARCHAR(500) | PDF download URL |
-| VerificationCode | NVARCHAR(100) | Unique verification code |
-
-**Sample Count**: 650+ certificates for completed courses
+**Features:**
+- 5 specialized forums (Cheese Making, Raw Milk, Business, Equipment, Events)
+- Thread management (pinned, locked, closed)
+- Post moderation and reactions (like, helpful, expert)
+- Member reputation tracking
+- 50 threads, 200+ posts
 
 ---
 
-### 4. Finance Schema
+## 📋 Phase 2: Resource Library (6 Tables)
 
-**Purpose**: Financial management including invoicing and payments
+Centralized knowledge base and document repository.
 
-#### Tables
+```mermaid
+erDiagram
+    RESOURCE_CATEGORY ||--o{ RESOURCE : "contains"
+    RESOURCE ||--o{ RESOURCE_DOWNLOAD : "tracks"
+    RESOURCE ||--o{ RESOURCE_BOOKMARK : "bookmarked"
+    MEMBER ||--o{ RESOURCE_DOWNLOAD : "downloads"
+    MEMBER ||--o{ RESOURCE_BOOKMARK : "bookmarks"
 
-##### finance.Invoice
-Invoices for dues, events, courses, etc.
+    RESOURCE_CATEGORY {
+        uniqueidentifier ID PK
+        nvarchar Name
+        nvarchar Description
+        int DisplayOrder
+    }
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| InvoiceNumber | NVARCHAR(50) | Unique invoice number |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| InvoiceDate | DATE | Invoice date |
-| DueDate | DATE | Payment due date |
-| SubTotal | DECIMAL(12,2) | Subtotal before tax/discounts |
-| Tax | DECIMAL(12,2) | Tax amount |
-| Discount | DECIMAL(12,2) | Discount amount |
-| Total | DECIMAL(12,2) | Total amount |
-| AmountPaid | DECIMAL(12,2) | Amount paid to date |
-| Balance | DECIMAL(12,2) | Remaining balance |
-| Status | NVARCHAR(20) | Draft, Sent, Partial, Paid, Overdue, Cancelled, Refunded |
-| Notes | NVARCHAR(MAX) | Invoice notes |
-| PaymentTerms | NVARCHAR(100) | Payment terms |
+    RESOURCE {
+        uniqueidentifier ID PK
+        uniqueidentifier CategoryID FK
+        nvarchar Title
+        nvarchar ResourceType
+        nvarchar FileURL
+        int DownloadCount
+    }
 
-**Sample Count**: Programmatically generated for all memberships, events, and courses
+    RESOURCE_DOWNLOAD {
+        uniqueidentifier ID PK
+        uniqueidentifier ResourceID FK
+        uniqueidentifier MemberID FK
+        datetime DownloadDate
+    }
 
-##### finance.InvoiceLineItem
-Detailed line items on invoices.
+    RESOURCE_BOOKMARK {
+        uniqueidentifier ID PK
+        uniqueidentifier ResourceID FK
+        uniqueidentifier MemberID FK
+        datetime BookmarkedDate
+    }
+```
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| InvoiceID | UNIQUEIDENTIFIER | FK to Invoice |
-| Description | NVARCHAR(500) | Line item description |
-| ItemType | NVARCHAR(50) | Membership Dues, Event Registration, Course Enrollment, Merchandise, Donation, Other |
-| Quantity | INT | Quantity (default 1) |
-| UnitPrice | DECIMAL(10,2) | Price per unit |
-| Amount | DECIMAL(12,2) | Total line amount |
-| TaxAmount | DECIMAL(12,2) | Tax for this line |
-| RelatedEntityType | NVARCHAR(100) | Type of related entity |
-| RelatedEntityID | UNIQUEIDENTIFIER | ID of related entity |
+**Content Types:**
+- Best Practice Guides
+- Research Papers
+- Regulatory Templates
+- Industry Reports
+- Video Tutorials
+- Webinar Recordings
 
-**Sample Count**: Multiple line items per invoice
-
-##### finance.Payment
-Payment transactions.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| InvoiceID | UNIQUEIDENTIFIER | FK to Invoice |
-| PaymentDate | DATETIME | Payment initiated |
-| Amount | DECIMAL(12,2) | Payment amount |
-| PaymentMethod | NVARCHAR(50) | Credit Card, ACH, Check, Wire, PayPal, Stripe, Cash |
-| TransactionID | NVARCHAR(255) | External transaction ID |
-| Status | NVARCHAR(20) | Pending, Completed, Failed, Refunded, Cancelled |
-| ProcessedDate | DATETIME | When processed |
-| FailureReason | NVARCHAR(MAX) | Failure reason if failed |
-| Notes | NVARCHAR(MAX) | Payment notes |
-
-**Sample Count**: Generated for paid invoices with realistic success/failure rates
+**Data**: 100 resources across 10 categories
 
 ---
 
-### 5. Marketing Schema
+## 📋 Phase 3: Certifications (6 Tables)
 
-**Purpose**: Marketing campaign management and member segmentation
+Professional credential management and continuing education.
 
-#### Tables
+```mermaid
+erDiagram
+    ACCREDITING_BODY ||--o{ CERTIFICATION_TYPE : "offers"
+    CERTIFICATION_TYPE ||--o{ CERTIFICATION : "defines"
+    CERTIFICATION ||--o{ CONTINUING_EDUCATION : "requires"
+    CERTIFICATION ||--o{ CERTIFICATION_RENEWAL : "renews"
+    MEMBER ||--o{ CERTIFICATION : "earns"
 
-##### marketing.Segment
-Member segments for targeted marketing.
+    ACCREDITING_BODY {
+        uniqueidentifier ID PK
+        nvarchar Name
+        nvarchar Acronym
+        nvarchar Description
+        nvarchar Website
+    }
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(255) | Segment name |
-| Description | NVARCHAR(MAX) | Segment description |
-| SegmentType | NVARCHAR(50) | Static, Dynamic, One-Time |
-| FilterCriteria | NVARCHAR(MAX) | Criteria for dynamic segments |
-| IsActive | BIT | Whether segment is active |
-| CreatedDate | DATE | Creation date |
-| MemberCount | INT | Number of members in segment |
+    CERTIFICATION_TYPE {
+        uniqueidentifier ID PK
+        uniqueidentifier AccreditingBodyID FK
+        nvarchar Name
+        int ValidityYears
+        decimal CEURequiredForRenewal
+    }
 
-**Sample Count**: 80 segments (demographic, behavioral, engagement-based)
+    CERTIFICATION {
+        uniqueidentifier ID PK
+        uniqueidentifier MemberID FK
+        uniqueidentifier CertificationTypeID FK
+        nvarchar Status
+        date DateEarned
+        date DateExpires
+    }
 
-##### marketing.Campaign
-Marketing campaigns.
+    CONTINUING_EDUCATION {
+        uniqueidentifier ID PK
+        uniqueidentifier CertificationID FK
+        nvarchar ActivityType
+        decimal CEUCredits
+        date CompletionDate
+    }
+```
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(255) | Campaign name |
-| CampaignType | NVARCHAR(50) | Email, Event Promotion, Membership Drive, Webinar Series, Survey, Newsletter |
-| Description | NVARCHAR(MAX) | Campaign description |
-| StartDate | DATE | Campaign start |
-| EndDate | DATE | Campaign end |
-| Status | NVARCHAR(20) | Draft, Scheduled, Active, Paused, Completed, Cancelled |
-| Budget | DECIMAL(10,2) | Campaign budget |
-| GoalType | NVARCHAR(100) | Type of goal |
-| GoalValue | NVARCHAR(255) | Goal value |
-| ActualResults | NVARCHAR(MAX) | Actual results achieved |
+**Certifications:**
+- American Cheese Society (ACS)
+- Wisconsin Master Cheesemaker
+- American Dairy Science Association (ADSA)
+- Food Safety Modernization Act (FSMA)
 
-**Sample Count**: 45 campaigns across various types and goals
-
-##### marketing.CampaignMember
-Member assignments to campaigns.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| CampaignID | UNIQUEIDENTIFIER | FK to Campaign |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| SegmentID | UNIQUEIDENTIFIER | FK to Segment |
-| Status | NVARCHAR(20) | Sent, Engaged, Converted, Bounced, Opted Out |
-| AddedDate | DATETIME | When added to campaign |
-| ResponseDate | DATETIME | When responded |
-| ConversionDate | DATETIME | When converted |
-
-**Sample Count**: Programmatically generated based on segments and campaigns
+**Data**: 413 certifications, 85 CE records, 19 renewals
 
 ---
 
-### 6. Email Schema
+## 📋 Phase 4: Products & Awards (6 Tables)
 
-**Purpose**: Email communications and engagement tracking
+Product showcase and competition management.
 
-#### Tables
+```mermaid
+erDiagram
+    PRODUCT_CATEGORY ||--o{ PRODUCT : "categorizes"
+    PRODUCT ||--o{ COMPETITION_ENTRY : "enters"
+    COMPETITION ||--o{ COMPETITION_ENTRY : "receives"
+    COMPETITION ||--o{ COMPETITION_JUDGE : "assigns"
+    COMPETITION_ENTRY ||--o| PRODUCT_AWARD : "wins"
+    MEMBER ||--o{ PRODUCT : "produces"
 
-##### email.EmailTemplate
-Reusable email templates.
+    PRODUCT {
+        uniqueidentifier ID PK
+        uniqueidentifier MemberID FK
+        uniqueidentifier CategoryID FK
+        nvarchar Name
+        nvarchar CheeseType
+        nvarchar MilkSource
+        int AgeMonths
+        bit IsAwardWinner
+    }
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(255) | Template name |
-| Subject | NVARCHAR(500) | Email subject line |
-| BodyHTML | NVARCHAR(MAX) | HTML email body |
-| BodyText | NVARCHAR(MAX) | Plain text version |
-| TemplateType | NVARCHAR(50) | Marketing, Transactional, Newsletter |
-| IsActive | BIT | Whether active |
-| CreatedDate | DATE | Creation date |
-| LastUsedDate | DATE | Last used |
+    COMPETITION {
+        uniqueidentifier ID PK
+        nvarchar Name
+        nvarchar Description
+        date StartDate
+        date EndDate
+        nvarchar Status
+    }
 
-**Sample Count**: 30 templates for various purposes
+    COMPETITION_ENTRY {
+        uniqueidentifier ID PK
+        uniqueidentifier CompetitionID FK
+        uniqueidentifier ProductID FK
+        decimal Score
+        nvarchar Award
+    }
 
-##### email.EmailSend
-Individual email sends to members.
+    COMPETITION_JUDGE {
+        uniqueidentifier ID PK
+        uniqueidentifier CompetitionID FK
+        uniqueidentifier MemberID FK
+        nvarchar Organization
+        nvarchar Credentials
+    }
+```
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| EmailTemplateID | UNIQUEIDENTIFIER | FK to EmailTemplate |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| CampaignID | UNIQUEIDENTIFIER | FK to Campaign (if part of campaign) |
-| SentDate | DATETIME | When sent |
-| DeliveredDate | DATETIME | When delivered |
-| OpenedDate | DATETIME | First open |
-| ClickedDate | DATETIME | First click |
-| BouncedDate | DATETIME | If bounced |
-| BounceReason | NVARCHAR(MAX) | Bounce reason |
-| UnsubscribedDate | DATETIME | If unsubscribed |
-| Status | NVARCHAR(20) | Sent, Delivered, Opened, Clicked, Bounced, Failed |
+**Competitions:**
+- American Cheese Society Competition
+- World Championship Cheese Contest
+- International Cheese & Dairy Awards
+- Good Food Awards
+- US Championship Cheese Contest
 
-**Sample Count**: Thousands of sends with realistic engagement (25% open, 5% click rates)
-
-##### email.EmailClick
-Click tracking for links in emails.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| EmailSendID | UNIQUEIDENTIFIER | FK to EmailSend |
-| ClickDate | DATETIME | When clicked |
-| LinkURL | NVARCHAR(MAX) | URL clicked |
-| UserAgent | NVARCHAR(500) | Browser/device info |
-
-**Sample Count**: Generated for clicked emails
-
----
-
-### 7. Chapters Schema
-
-**Purpose**: Geographic and special interest chapter management
-
-#### Tables
-
-##### chapters.Chapter
-Local chapters and special interest groups.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(255) | Chapter name |
-| ChapterType | NVARCHAR(50) | Geographic, Special Interest, Industry |
-| Region | NVARCHAR(100) | Geographic region |
-| City, State, Country | NVARCHAR | Location |
-| FoundedDate | DATE | When founded |
-| IsActive | BIT | Whether active |
-| MeetingFrequency | NVARCHAR(100) | How often meets |
-| Description | NVARCHAR(MAX) | Chapter description |
-
-**Sample Count**: 15 chapters (geographic and special interest)
-
-##### chapters.ChapterMembership
-Chapter member assignments.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| ChapterID | UNIQUEIDENTIFIER | FK to Chapter |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| JoinDate | DATE | When joined chapter |
-| Status | NVARCHAR(20) | Active, Inactive, Lapsed |
-| Role | NVARCHAR(100) | Member role in chapter |
-
-**Sample Count**: 275+ chapter memberships
-
-##### chapters.ChapterOfficer
-Chapter leadership positions.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| ChapterID | UNIQUEIDENTIFIER | FK to Chapter |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| Position | NVARCHAR(100) | President, Vice President, Secretary, Treasurer, etc. |
-| StartDate | DATE | Term start |
-| EndDate | DATE | Term end |
-| IsActive | BIT | Currently serving |
-
-**Sample Count**: 45 officers (3 per chapter)
+**Data**: 110 products, 110 entries, 29 judges (11 organizations), 43 awards
 
 ---
 
-### 8. Governance Schema
+## 📋 Phase 5: Legislative Tracking (6 Tables)
 
-**Purpose**: Committee and board management
+Government relations and advocacy management.
 
-#### Tables
+```mermaid
+erDiagram
+    LEGISLATIVE_BODY ||--o{ LEGISLATIVE_ISSUE : "manages"
+    LEGISLATIVE_BODY ||--o{ GOVERNMENT_CONTACT : "employs"
+    LEGISLATIVE_ISSUE ||--o{ POLICY_POSITION : "defines"
+    LEGISLATIVE_ISSUE ||--o{ ADVOCACY_ACTION : "tracks"
+    LEGISLATIVE_ISSUE ||--o{ REGULATORY_COMMENT : "receives"
+    MEMBER ||--o{ ADVOCACY_ACTION : "performs"
 
-##### governance.Committee
-Association committees and task forces.
+    LEGISLATIVE_BODY {
+        uniqueidentifier ID PK
+        nvarchar Name
+        nvarchar BodyType
+        nvarchar Level
+        nvarchar State
+    }
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| Name | NVARCHAR(255) | Committee name |
-| CommitteeType | NVARCHAR(50) | Standing, Ad Hoc, Task Force |
-| Purpose | NVARCHAR(MAX) | Committee purpose/charter |
-| MeetingFrequency | NVARCHAR(100) | How often meets |
-| IsActive | BIT | Whether active |
-| FormedDate | DATE | When formed |
-| DisbandedDate | DATE | When disbanded (if applicable) |
-| ChairMemberID | UNIQUEIDENTIFIER | FK to Member (committee chair) |
-| MaxMembers | INT | Maximum committee size |
+    LEGISLATIVE_ISSUE {
+        uniqueidentifier ID PK
+        uniqueidentifier LegislativeBodyID FK
+        nvarchar Title
+        nvarchar IssueType
+        nvarchar BillNumber
+        nvarchar Status
+        nvarchar ImpactLevel
+        nvarchar Category
+    }
 
-**Sample Count**: 12 committees (standing, ad hoc, task forces)
+    POLICY_POSITION {
+        uniqueidentifier ID PK
+        uniqueidentifier LegislativeIssueID FK
+        nvarchar Position
+        nvarchar PositionStatement
+        date AdoptedDate
+        nvarchar Priority
+    }
 
-##### governance.CommitteeMembership
-Committee member assignments.
+    ADVOCACY_ACTION {
+        uniqueidentifier ID PK
+        uniqueidentifier LegislativeIssueID FK
+        uniqueidentifier MemberID FK
+        nvarchar ActionType
+        date ActionDate
+        nvarchar Description
+    }
+```
 
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| CommitteeID | UNIQUEIDENTIFIER | FK to Committee |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| Role | NVARCHAR(100) | Chair, Vice Chair, Member |
-| StartDate | DATE | Service start |
-| EndDate | DATE | Service end |
-| IsActive | BIT | Currently serving |
-| AppointedBy | NVARCHAR(255) | Who appointed |
+**Legislative Bodies:**
+- Federal: US Senate, House, FDA, USDA
+- State: Wisconsin, California, Vermont
 
-**Sample Count**: Programmatically generated (5-8 per committee)
+**Key Issues:**
+- Raw milk cheese aging requirements (FDA)
+- Food labeling modernization
+- Dairy pricing reform
+- Import/export tariffs
+- Environmental regulations
+- Animal welfare standards
 
-##### governance.BoardPosition
-Board of directors positions.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| PositionTitle | NVARCHAR(100) | President, VP, Treasurer, Secretary, Director |
-| PositionOrder | INT | Display order |
-| Description | NVARCHAR(MAX) | Position description |
-| TermLengthYears | INT | Length of term |
-| IsOfficer | BIT | Whether this is an officer position |
-| IsActive | BIT | Whether position exists |
-
-**Sample Count**: 9 positions (4 officers + 5 directors)
-
-##### governance.BoardMember
-Current and historical board members.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | UNIQUEIDENTIFIER | Primary key |
-| BoardPositionID | UNIQUEIDENTIFIER | FK to BoardPosition |
-| MemberID | UNIQUEIDENTIFIER | FK to Member |
-| StartDate | DATE | Service start |
-| EndDate | DATE | Service end |
-| IsActive | BIT | Currently serving |
-| ElectionDate | DATE | When elected |
-
-**Sample Count**: 9 current board members
+**Data**: 10 bodies, 12 issues, 7 positions, 10 contacts, 150 actions, 1 comment
 
 ---
 
-## 🔗 Key Relationships
+## 🔗 Cross-Domain Relationships
 
-### Foreign Key Relationships
+### Member-Centric View
 
-**Membership (Core)**
-- None (foundation schema)
+Every domain connects to the Member table:
 
-**Events**
-- Event → Chapter (optional)
-- EventSession → Event
-- EventRegistration → Event
-- EventRegistration → Member
+```mermaid
+graph TD
+    M[Member] --> MS[Membership]
+    M --> ER[Event Registration]
+    M --> EN[Enrollment]
+    M --> C[Certification]
+    M --> FP[Forum Post]
+    M --> RB[Resource Bookmark]
+    M --> P[Product]
+    M --> AA[Advocacy Action]
+    M --> CM[Chapter Membership]
+    M --> COM[Committee Membership]
+    M --> I[Invoice]
+    M --> ES[Email Send]
 
-**Learning**
-- Course → Course (prerequisite, self-referencing)
-- Enrollment → Course
-- Enrollment → Member
-- Certificate → Enrollment
+    style M fill:#ffcccc
+```
 
-**Finance**
-- Invoice → Member
-- InvoiceLineItem → Invoice
-- InvoiceLineItem → [Various] (polymorphic via RelatedEntityType/ID)
-- Payment → Invoice
+### Financial Flow
 
-**Marketing**
-- CampaignMember → Campaign
-- CampaignMember → Member
-- CampaignMember → Segment
+```mermaid
+graph LR
+    MS[Membership] --> I[Invoice]
+    ER[Event Registration] --> I
+    EN[Course Enrollment] --> I
+    I --> ILI[Invoice Line Item]
+    I --> P[Payment]
 
-**Email**
-- EmailSend → EmailTemplate
-- EmailSend → Member
-- EmailSend → Campaign (optional)
-- EmailClick → EmailSend
-
-**Chapters**
-- ChapterMembership → Chapter
-- ChapterMembership → Member
-- ChapterOfficer → Chapter
-- ChapterOfficer → Member
-
-**Governance**
-- Committee → Member (chair)
-- CommitteeMembership → Committee
-- CommitteeMembership → Member
-- BoardMember → BoardPosition
-- BoardMember → Member
+    style I fill:#ffffcc
+```
 
 ---
 
 ## 📐 Design Patterns
 
-### Evergreen Dates
-All dates calculated relative to `@EndDate` (current date) using `DATEADD()` functions.
+### 1. Evergreen Dates
+All dates calculated relative to `GETDATE()` using `DATEADD()`:
+```sql
+JoinDate = DATEADD(YEAR, -2, @EndDate)  -- 2 years ago
+```
 
-### Polymorphic Relationships
-Used in finance.InvoiceLineItem via `RelatedEntityType` and `RelatedEntityID` to reference different source records.
+### 2. Status Enumerations
+CHECK constraints define allowed values:
+```sql
+Status NVARCHAR(20) CHECK (Status IN ('Active', 'Lapsed', 'Cancelled'))
+```
 
-### Audit Trails
-Renewal history maintained via multiple membership records per member.
+### 3. Soft Deletes
+`IsActive` flags instead of hard deletes:
+```sql
+IsActive BIT DEFAULT 1
+```
 
-### Soft Deletes
-`IsActive` flags used throughout instead of hard deletes.
+### 4. Audit Trails
+Renewal history via multiple membership records per member
 
-### Status Enumerations
-CHECK constraints define allowed status values for consistency.
-
-### Programmatic Generation
-High-volume data (registrations, enrollments, email sends) generated using CROSS JOIN and NEWID() for randomization.
-
----
-
-## 🎯 Indexing Strategy
-
-**Primary Keys**: All tables use UNIQUEIDENTIFIER with NEWSEQUENTIALID() default
-**Foreign Keys**: MemberJunction CodeGen will create indexes automatically
-**Unique Constraints**: InvoiceNumber, CertificateNumber, CourseCode
-**Common Query Indexes**: Status fields, date fields, type fields
+### 5. Polymorphic Relationships
+`RelatedEntityType` + `RelatedEntityID` in InvoiceLineItem
 
 ---
 
-For sample queries and usage examples, see [SAMPLE_QUERIES.md](SAMPLE_QUERIES.md).
+## 🎯 Key Indexing Strategy
+
+**Primary Keys**: All tables use `UNIQUEIDENTIFIER` with `NEWSEQUENTIALID()`
+
+**Foreign Keys**: Automatically indexed by MemberJunction CodeGen
+
+**Unique Constraints**:
+- InvoiceNumber
+- CertificateNumber
+- CourseCode
+- Email (Member)
+
+**Common Filters**: Status fields, date ranges, type fields
+
+---
+
+## 📊 Table Summary
+
+| Phase | Tables | Purpose | Records |
+|-------|--------|---------|---------|
+| **Core** | 26 | Base association management | 5,000+ |
+| **Phase 1** | 8 | Community forums | 250+ |
+| **Phase 2** | 6 | Resource library | 300+ |
+| **Phase 3** | 6 | Certifications | 500+ |
+| **Phase 4** | 6 | Products & awards | 300+ |
+| **Phase 5** | 6 | Legislative tracking | 200+ |
+| **TOTAL** | **58** | Complete association system | **10,000+** |
+
+---
+
+For sample queries, see [SAMPLE_QUERIES.md](SAMPLE_QUERIES.md)
+
+For business scenarios, see [BUSINESS_SCENARIOS.md](BUSINESS_SCENARIOS.md)

@@ -9,7 +9,7 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
+import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -18,11 +18,13 @@ import { CollectionStateService } from '../../services/collection-state.service'
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
+import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 
 /**
  * Top-level workspace component for conversations
@@ -89,7 +91,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   @Output() conversationChanged = new EventEmitter<ConversationEntity>();
   @Output() artifactOpened = new EventEmitter<ArtifactEntity>();
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationChanged = new EventEmitter<{
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
@@ -98,6 +99,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     taskId?: string;
   }>();
   @Output() newConversationStarted = new EventEmitter<void>();
+  @Output() actionableCommandExecuted = new EventEmitter<ActionableCommand>();
+  @Output() automaticCommandExecuted = new EventEmitter<AutomaticCommand>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -126,6 +129,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Resize state - Artifact Panel
   public artifactPanelWidth: number = 40; // Default 40% width
+  public isArtifactPanelMaximized: boolean = false;
+  private artifactPanelWidthBeforeMaximize: number = 40; // Store width before maximizing
   private isArtifactPanelResizing: boolean = false;
   private artifactPanelResizeStartX: number = 0;
   private artifactPanelResizeStartWidth: number = 0;
@@ -151,6 +156,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private streamingService: ConversationStreamingService,
+    private uiCommandHandler: UICommandHandlerService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -161,6 +167,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // This establishes the single PubSub connection for all conversations
     this.streamingService.initialize();
     console.log('✅ Global streaming service initialized');
+
+    // Subscribe to command events from UI Command Handler service
+    // These will be bubbled up to the host application
+    this.uiCommandHandler.actionableCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(command => {
+        this.onActionableCommand(command);
+      });
+
+    this.uiCommandHandler.automaticCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(command => {
+        this.onAutomaticCommand(command);
+      });
 
     // Check initial mobile state
     this.checkMobileView();
@@ -177,12 +197,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
 
-    // CRITICAL: Initialize AI Engine FIRST before rendering any UI
+    // CRITICAL: Initialize engines FIRST before rendering any UI
     // The isWorkspaceReady flag blocks all child components from rendering
-    // until agents are fully loaded and ready
+    // until engines are fully loaded and ready
     try {
-      await AIEngineBase.Instance.Config(false);
+      // Load both engines in parallel - ArtifactMetadataEngine is lightweight (just artifact types)
+      // Using Promise.all ensures optimal performance with no additional delay
+      await Promise.all([
+        AIEngineBase.Instance.Config(false),
+        ArtifactMetadataEngine.Instance.Config(false)
+      ]);
+
       console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+      console.log('✅ Artifact Metadata Engine initialized with',
+        ArtifactMetadataEngine.Instance.ArtifactTypes?.length || 0, 'artifact types');
 
       // Initialize mention autocomplete service immediately after AI engine
       // This ensures the cache is built from the fully-loaded agent list
@@ -194,7 +222,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.cdr.detectChanges();
       console.log('✅ Workspace ready - UI can now render');
     } catch (error) {
-      console.error('❌ Failed to initialize AI Engine:', error);
+      console.error('❌ Failed to initialize engines:', error);
       // Still mark as ready so UI isn't blocked forever
       this.isWorkspaceReady = true;
       this.cdr.detectChanges();
@@ -656,6 +684,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
+  /**
+   * Toggle maximize/restore state for artifact panel
+   */
+  toggleMaximizeArtifactPanel(): void {
+    if (this.isArtifactPanelMaximized) {
+      // Restore to previous width
+      this.artifactPanelWidth = this.artifactPanelWidthBeforeMaximize;
+      this.isArtifactPanelMaximized = false;
+    } else {
+      // Maximize - store current width and set to 100%
+      this.artifactPanelWidthBeforeMaximize = this.artifactPanelWidth;
+      this.artifactPanelWidth = 100;
+      this.isArtifactPanelMaximized = true;
+    }
+  }
+
   onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     console.log('✨ Workspace received rename event:', event);
     // Trigger animation in sidebar by setting the ID
@@ -668,19 +712,30 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
-    // Pass the event up to the parent component (chat-wrapper in explorer-core)
-    this.openEntityRecord.emit(event);
+    // Convert to actionable command and emit
+    const firstKeyValue = event.compositeKey.KeyValuePairs[0]?.Value || '';
+    const command: ActionableCommand = {
+      type: 'open:resource',
+      label: `Open ${event.entityName}`,
+      resourceType: 'Record',
+      entityName: event.entityName,
+      resourceId: firstKeyValue,
+      mode: 'view'
+    };
+    this.actionableCommandExecuted.emit(command);
   }
 
   onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
-    // Convert from tasks format (recordId) to workspace format (compositeKey)
-    const compositeKey = new CompositeKey([
-      new KeyValuePair('ID', event.recordId)
-    ]);
-    this.openEntityRecord.emit({
+    // Convert to actionable command and emit
+    const command: ActionableCommand = {
+      type: 'open:resource',
+      label: `Open ${event.entityName}`,
+      resourceType: 'Record',
       entityName: event.entityName,
-      compositeKey
-    });
+      resourceId: event.recordId,
+      mode: 'view'
+    };
+    this.actionableCommandExecuted.emit(command);
   }
 
   onTaskClicked(task: TaskEntity): void {
@@ -834,5 +889,23 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     if (this.activeArtifactId) {
       await this.loadArtifactPermissions(this.activeArtifactId);
     }
+  }
+
+  /**
+   * Handle actionable command execution from child components
+   * Bubbles up to host application for handling
+   */
+  onActionableCommand(command: ActionableCommand): void {
+    console.log('📤 Bubbling up actionable command:', command);
+    this.actionableCommandExecuted.emit(command);
+  }
+
+  /**
+   * Handle automatic command execution from child components
+   * Bubbles up to host application for handling
+   */
+  onAutomaticCommand(command: AutomaticCommand): void {
+    console.log('📤 Bubbling up automatic command:', command);
+    this.automaticCommandExecuted.emit(command);
   }
 }

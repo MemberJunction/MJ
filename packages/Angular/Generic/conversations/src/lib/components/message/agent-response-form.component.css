@@ -1,0 +1,131 @@
+.agent-response-form {
+  margin-top: 16px;
+  display: inline-block;
+  max-width: min(800px, 100%);
+  min-width: 400px;
+  width: auto;
+}
+
+/* Simple Choice Mode */
+.simple-choice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.choice-button {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.choice-button i {
+  margin-right: 6px;
+}
+
+/* Full Form Mode - Styled to match response cards but clearly active */
+.response-form {
+  background: rgba(16, 185, 129, 0.03);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 0;
+  margin-top: 12px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+  overflow: hidden;
+}
+
+.form-title {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-title::before {
+  content: "\f044";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.form-description {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.08);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+  font-style: italic;
+}
+
+.form-questions {
+  padding: 16px;
+  background: white;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  background: rgba(16, 185, 129, 0.05);
+  border-top: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.submit-button {
+  min-width: 120px;
+}
+
+.submit-button i.fa {
+  margin-right: 6px;
+}
+
+.submit-button .k-icon {
+  margin-right: 6px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+  .agent-response-form {
+    min-width: 300px;
+  }
+
+  .form-questions {
+    padding: 12px;
+  }
+
+  .simple-choice-buttons {
+    flex-direction: column;
+  }
+
+  .choice-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 400px) {
+  .agent-response-form {
+    min-width: 100%;
+  }
+
+  .form-title {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+
+  .form-description {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+}

@@ -15,9 +15,9 @@ export class ContentItemFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'sourceInformation', sectionName: 'Source Information', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: false },
             { sectionKey: 'contentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
             { sectionKey: 'contentItemTags', sectionName: 'Content Item Tags', isExpanded: false }
         ]);

@@ -15,9 +15,9 @@ export class ContentSourceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'connectionDetails', sectionName: 'Connection Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'contentClassification', sectionName: 'Content Classification', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'connectionDetails', sectionName: 'Connection Details', isExpanded: false },
             { sectionKey: 'contentItems', sectionName: 'Content Items', isExpanded: false },
             { sectionKey: 'contentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },
             { sectionKey: 'contentSourceParams', sectionName: 'Content Source Params', isExpanded: false }

@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Content Type Specification Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="contentTypeSpecification"
-        sectionName="Content Type Specification"
-        icon="fa fa-tag"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -29,6 +29,16 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="AIModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="MinTags"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -39,6 +49,22 @@
             [ShowLabel]="true"
             FieldName="MaxTags"
             Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -54,44 +80,8 @@
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
-            FieldName="AIModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="AIModel"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"

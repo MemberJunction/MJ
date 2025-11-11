@@ -322,6 +322,9 @@ export class ConversationAgentService {
    * @param conversationDetailId The ID of the conversation detail record to link to the agent run
    * @param payload Optional payload to pass to the agent (e.g., previous OUTPUT artifact for continuity)
    * @param onProgress Optional callback for receiving progress updates during execution
+   * @param sourceArtifactId Optional source artifact ID for versioning
+   * @param sourceArtifactVersionId Optional source artifact version ID for versioning
+   * @param agentConfigurationPresetId Optional ID of the AIAgentConfiguration preset (will be mapped to AIConfigurationID)
    * @returns The agent's execution result, or null if agent not found
    */
   async invokeSubAgent(
@@ -334,7 +337,8 @@ export class ConversationAgentService {
     payload?: any,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
-    sourceArtifactVersionId?: string
+    sourceArtifactVersionId?: string,
+    agentConfigurationPresetId?: string
   ): Promise<ExecuteAgentResult | null> {
     if (!this._aiClient) {
       const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
@@ -357,7 +361,24 @@ export class ConversationAgentService {
         return null;
       }
 
-      console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload });
+      console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });
+
+      // Map AIAgentConfiguration preset ID to actual AIConfiguration ID
+      let aiConfigurationId: string | undefined = undefined;
+      if (agentConfigurationPresetId) {
+        // Get the preset from AIEngineBase to extract the AIConfigurationID
+        const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
+        // check by preset ID or AIConfigurationID - since sometimes we have the actual
+        // configuration ID. Since both UUID no collisions should ever be possible.
+        const preset = presets.find(p => p.ID === agentConfigurationPresetId || p.AIConfigurationID === agentConfigurationPresetId);
+
+        if (preset) {
+          aiConfigurationId = preset.AIConfigurationID || undefined;
+          console.log(`🎯 Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`);
+        } else {
+          console.warn(`⚠️ Agent configuration preset ${agentConfigurationPresetId} not found for agent ${agent.ID}`);
+        }
+      }
 
       // Build conversation messages for the sub-agent
       // Note: conversationHistory already includes the current message
@@ -374,6 +395,7 @@ export class ConversationAgentService {
           invocationReason: reasoning
         },
         ...(payload ? { payload } : {}),
+        ...(aiConfigurationId ? { configurationId: aiConfigurationId } : {}),
         onProgress: onProgress
       };
 

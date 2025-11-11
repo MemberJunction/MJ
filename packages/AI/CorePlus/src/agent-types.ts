@@ -14,8 +14,10 @@ import { AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } f
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
-import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse } from './agent-payload-change-request';
+import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
+import { AgentResponseForm } from './response-forms';
+import { ActionableCommand, AutomaticCommand } from './ui-commands';
 
 /**
  * Universal ForEach loop configuration used by all agent types.
@@ -226,10 +228,24 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     /** Message to send to user when step is 'chat' */
     message?: string;
     /**
-     * Optional, when step is 'chat' or 'success', a list of suggested responses
-     * to show the user for quick selection in a UI.
+     * Optional response form to collect structured user input.
+     * When present, the UI will render appropriate input controls based on question types.
+     * Use for collecting information from users during agent execution.
+     * @since 2.116.0
      */
-    suggestedResponses?: BaseAgentSuggestedResponse[];
+    responseForm?: AgentResponseForm;
+    /**
+     * Optional actionable commands shown as clickable buttons/links.
+     * Typically used after completing work to provide easy navigation to created/modified resources.
+     * @since 2.116.0
+     */
+    actionableCommands?: ActionableCommand[];
+    /**
+     * Optional automatic commands executed immediately when received.
+     * Used for refreshing data, showing notifications, and updating UI state.
+     * @since 2.116.0
+     */
+    automaticCommands?: AutomaticCommand[];
     /** Index of the message to expand when step is 'expand-message' */
     messageIndex?: number;
     /** Reason for expanding the message when step is 'expand-message' */
@@ -274,10 +290,26 @@ export type ExecuteAgentResult<P = any> = {
      */
     payloadArtifactTypeID?: string;
     /**
-     * Optional suggested responses to show the user for quick selection in a UI.
-     * Populated when the agent's final step is 'Chat' or 'Success' and includes suggested responses.
+     * Optional response form to collect structured user input.
+     * When present, the UI will render appropriate input controls based on question types.
+     * Populated from the agent's final step.
+     * @since 2.116.0
      */
-    suggestedResponses?: BaseAgentSuggestedResponse[];
+    responseForm?: AgentResponseForm;
+    /**
+     * Optional actionable commands shown as clickable buttons/links.
+     * Typically used after completing work to provide easy navigation to created/modified resources.
+     * Populated from the agent's final step.
+     * @since 2.116.0
+     */
+    actionableCommands?: ActionableCommand[];
+    /**
+     * Optional automatic commands executed immediately when received.
+     * Used for refreshing data, showing notifications, and updating UI state.
+     * Populated from the agent's final step.
+     * @since 2.116.0
+     */
+    automaticCommands?: AutomaticCommand[];
     /**
      * Optional memory context that was injected into the agent execution.
      * Includes the notes and examples that were retrieved and used for context.
@@ -654,6 +686,59 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * ```
      */
     absoluteMaxIterations?: number;
+
+    /**
+     * Optional test run ID to associate with this agent execution.
+     * When provided, this value is stored in the TestRunID column within
+     * the AIAgentRun record, linking the agent run to a specific test run
+     * from the MemberJunction testing framework for tracking and reporting purposes.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   testRunId: '12345678-1234-1234-1234-123456789012',  // Link to test run
+     * };
+     * ```
+     */
+    testRunId?: string;
+
+    /**
+     * Optional flag to convert UI markup (@{...} syntax) in user messages to plain text
+     * before passing to the agent.
+     *
+     * When true (default), special UI syntax like mentions (@{_mode:"mention",...}) and
+     * form responses (@{_mode:"form",...}) are converted to human-readable plain text:
+     * - Mentions: "@Agent Name" or "@User Name"
+     * - Forms: "Field1: Value1, Field2: Value2"
+     *
+     * When false, the raw @{...} JSON is preserved in conversation history.
+     *
+     * This prevents agents from:
+     * - Getting confused by UI-specific JSON syntax
+     * - Wasting tokens on markup that doesn't provide useful context
+     * - Trying to replicate or interpret UI-specific formatting
+     *
+     * @default true
+     *
+     * @example
+     * ```typescript
+     * // Default behavior - convert to plain text
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,  // "@{_mode:"mention",...}" becomes "@Agent Name"
+     * };
+     *
+     * // Preserve raw markup (not recommended)
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   convertUIMarkupToPlainText: false,  // Keep raw @{...} syntax
+     * };
+     * ```
+     */
+    convertUIMarkupToPlainText?: boolean;
 }
 
 /**

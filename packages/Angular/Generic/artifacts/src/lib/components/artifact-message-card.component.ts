@@ -3,6 +3,7 @@ import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-enti
 import { UserInfo, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { ArtifactIconService } from '../services/artifact-icon.service';
 
 /**
  * Artifact message card component - displays a simple info bar for artifacts in conversation messages.
@@ -192,7 +193,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor() {}
+  constructor(private artifactIconService: ArtifactIconService) {}
 
   async ngOnInit(): Promise<void> {
     // If entities are provided, use them directly
@@ -308,20 +309,13 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
     return codeExtensions.some(ext => name.endsWith(ext));
   }
 
+  /**
+   * Get the icon for this artifact using the centralized icon service.
+   * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
+   */
   public getArtifactIcon(): string {
     if (!this._artifact) return 'fa-file';
-
-    const name = this._artifact.Name?.toLowerCase() || '';
-    const type = this._artifact.Type?.toLowerCase() || '';
-
-    if (type.includes('code') || this.isCodeArtifact) return 'fa-file-code';
-    if (type.includes('report')) return 'fa-chart-line';
-    if (type.includes('dashboard')) return 'fa-chart-bar';
-    if (type.includes('document') || name.endsWith('.md')) return 'fa-file-lines';
-    if (name.endsWith('.json')) return 'fa-file-code';
-    if (name.endsWith('.html')) return 'fa-file-code';
-
-    return 'fa-file';
+    return this.artifactIconService.getArtifactIcon(this._artifact);
   }
 
   public getTypeBadgeColor(): string {

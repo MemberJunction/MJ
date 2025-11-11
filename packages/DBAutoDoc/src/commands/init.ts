@@ -1,155 +1,178 @@
-import { Command, Flags } from '@oclif/core';
-import { input, password, confirm } from '@inquirer/prompts';
-import ora from 'ora';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { DatabaseConnection } from '../database/connection';
-import { StateManager } from '../state/state-manager';
+/**
+ * Init command - Initialize new project
+ */
+
+import { Command } from '@oclif/core';
+import inquirer from 'inquirer';
 import chalk from 'chalk';
+import { ConfigLoader } from '../utils/config-loader.js';
+import { DatabaseConnection } from '../database/Database.js';
 
 export default class Init extends Command {
-  static description = 'Initialize database documentation project';
+  static description = 'Initialize a new DBAutoDoc project';
 
-  static examples = [
-    '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --interactive',
-  ];
-
-  static flags = {
-    interactive: Flags.boolean({
-      description: 'Interactive setup',
-      default: true,
-    }),
-    connection: Flags.string({
-      description: 'Connection string (skip prompts)',
-    }),
-  };
+  static examples = ['$ db-auto-doc init'];
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(Init);
+    this.log(chalk.blue('DBAutoDoc Initialization\n'));
 
-    this.log(chalk.blue.bold('\n🚀 SQL Server Database Documentation Generator\n'));
-
-    try {
-      let server: string;
-      let database: string;
-      let user: string;
-      let pwd: string;
-
-      if (flags.interactive && !flags.connection) {
-        server = await input({
-          message: 'Database server:',
-          default: 'localhost',
-        });
-
-        database = await input({
-          message: 'Database name:',
-          validate: (val) => (val ? true : 'Database name required'),
-        });
-
-        user = await input({
-          message: 'Username:',
-          default: 'sa',
-        });
-
-        pwd = await password({
-          message: 'Password:',
-          mask: '*',
-        });
-      } else if (flags.connection) {
-        // Parse connection string (simplified)
-        server = process.env.DB_SERVER || 'localhost';
-        database = process.env.DB_DATABASE || '';
-        user = process.env.DB_USER || 'sa';
-        pwd = process.env.DB_PASSWORD || '';
-      } else {
-        server = process.env.DB_SERVER || 'localhost';
-        database = process.env.DB_DATABASE || '';
-        user = process.env.DB_USER || 'sa';
-        pwd = process.env.DB_PASSWORD || '';
+    // Database configuration
+    const dbAnswers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'server',
+        message: 'SQL Server host:',
+        default: 'localhost'
+      },
+      {
+        type: 'input',
+        name: 'database',
+        message: 'Database name:',
+        validate: (input: string) => input.length > 0 || 'Database name is required'
+      },
+      {
+        type: 'input',
+        name: 'user',
+        message: 'Username:',
+        default: 'sa'
+      },
+      {
+        type: 'password',
+        name: 'password',
+        message: 'Password:',
+        mask: '*'
+      },
+      {
+        type: 'confirm',
+        name: 'encrypt',
+        message: 'Use encryption?',
+        default: true
+      },
+      {
+        type: 'confirm',
+        name: 'trustServerCertificate',
+        message: 'Trust server certificate?',
+        default: false
       }
+    ]);
 
-      // Test connection
-      const spinner = ora('Testing database connection...').start();
+    // Test connection
+    this.log(chalk.yellow('\nTesting database connection...'));
+    const dbConfig = {
+      provider: 'sqlserver' as const,
+      host: dbAnswers.server,
+      database: dbAnswers.database,
+      user: dbAnswers.user,
+      password: dbAnswers.password,
+      encrypt: dbAnswers.encrypt,
+      trustServerCertificate: dbAnswers.trustServerCertificate
+    };
+    const db = new DatabaseConnection(dbConfig);
+    const testResult = await db.test();
+    await db.close();
 
-      const connection = new DatabaseConnection({
-        server,
-        database,
-        user,
-        password: pwd,
-        encrypt: true,
-        trustServerCertificate: true,
-      });
-
-      const connected = await connection.test();
-
-      if (!connected) {
-        spinner.fail('Connection failed');
-        this.exit(1);
-      }
-
-      spinner.succeed('Connection successful');
-
-      // Create .env file
-      const envPath = path.join(process.cwd(), '.env');
-      const envContent = `
-# Database Connection
-DB_SERVER=${server}
-DB_DATABASE=${database}
-DB_USER=${user}
-DB_PASSWORD=${pwd}
-DB_ENCRYPT=true
-DB_TRUST_SERVER_CERTIFICATE=true
-
-# AI Configuration
-AI_PROVIDER=openai
-AI_MODEL=gpt-4
-AI_API_KEY=your-api-key-here
-`.trim();
-
-      await fs.writeFile(envPath, envContent);
-      this.log(chalk.green('✓ Created .env file'));
-
-      // Create state file
-      const stateManager = new StateManager();
-      await stateManager.reset(server, database);
-      this.log(chalk.green('✓ Created db-doc-state.json'));
-
-      // Ask seed questions
-      if (flags.interactive) {
-        const addSeed = await confirm({
-          message: 'Would you like to provide seed context?',
-          default: true,
-        });
-
-        if (addSeed) {
-          const purpose = await input({
-            message: 'Overall database purpose:',
-          });
-
-          const domains = await input({
-            message: 'Business domains (comma-separated):',
-          });
-
-          const state = stateManager.getState();
-          state.seedContext = {
-            overallPurpose: purpose,
-            businessDomains: domains.split(',').map((d: string) => d.trim()),
-          };
-          await stateManager.save();
-
-          this.log(chalk.green('✓ Saved seed context'));
-        }
-      }
-
-      this.log(chalk.green.bold('\n✅ Initialization complete!\n'));
-      this.log('Next steps:');
-      this.log('  1. Edit .env and add your AI API key');
-      this.log('  2. Run: db-auto-doc analyze');
-
-      await connection.close();
-    } catch (error: any) {
-      this.error(error.message);
+    if (!testResult.success) {
+      this.error(`Connection failed: ${testResult.message}`);
+      return;
     }
+
+    this.log(chalk.green('✓ Database connection successful!\n'));
+
+    // AI configuration
+    const aiAnswers = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'provider',
+        message: 'AI Provider:',
+        choices: ['openai', 'anthropic', 'groq']
+      },
+      {
+        type: 'input',
+        name: 'model',
+        message: 'Model name:',
+        default: (answers: any) => {
+          if (answers.provider === 'openai') return 'gpt-4-turbo-preview';
+          if (answers.provider === 'anthropic') return 'claude-3-opus-20240229';
+          if (answers.provider === 'groq') return 'mixtral-8x7b-32768';
+          return '';
+        }
+      },
+      {
+        type: 'password',
+        name: 'apiKey',
+        message: 'API Key:',
+        mask: '*',
+        validate: (input: string) => input.length > 0 || 'API key is required'
+      }
+    ]);
+
+    // Optional seed context
+    const contextAnswers = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'addContext',
+        message: 'Add seed context for better analysis?',
+        default: true
+      },
+      {
+        type: 'input',
+        name: 'overallPurpose',
+        message: 'Database overall purpose (e.g., "E-commerce platform"):',
+        when: (answers: any) => answers.addContext
+      },
+      {
+        type: 'input',
+        name: 'businessDomains',
+        message: 'Business domains (comma-separated, e.g., "Sales, Inventory, Billing"):',
+        when: (answers: any) => answers.addContext
+      },
+      {
+        type: 'input',
+        name: 'industryContext',
+        message: 'Industry context (e.g., "Healthcare", "Finance"):',
+        when: (answers: any) => answers.addContext
+      }
+    ]);
+
+    // Create configuration
+    const config = ConfigLoader.createDefault();
+
+    // Update with user inputs
+    config.database = {
+      server: dbAnswers.server,
+      port: 1433,
+      database: dbAnswers.database,
+      user: dbAnswers.user,
+      password: dbAnswers.password,
+      encrypt: dbAnswers.encrypt,
+      trustServerCertificate: dbAnswers.trustServerCertificate,
+      connectionTimeout: 30000
+    };
+
+    config.ai = {
+      provider: aiAnswers.provider as any,
+      model: aiAnswers.model,
+      apiKey: aiAnswers.apiKey,
+      temperature: 0.1,
+      maxTokens: 4000
+    };
+
+    if (contextAnswers.addContext) {
+      (config as unknown as Record<string, unknown>)['seedContext'] = {
+        overallPurpose: contextAnswers.overallPurpose || undefined,
+        businessDomains: contextAnswers.businessDomains
+          ? contextAnswers.businessDomains.split(',').map((d: string) => d.trim())
+          : undefined,
+        industryContext: contextAnswers.industryContext || undefined
+      };
+    }
+
+    // Save configuration
+    await ConfigLoader.save(config, './config.json');
+
+    this.log(chalk.green('\n✓ Configuration saved to config.json'));
+    this.log(chalk.blue('\nNext steps:'));
+    this.log('  1. Run: db-auto-doc analyze');
+    this.log('  2. Run: db-auto-doc export --sql --markdown');
   }
 }

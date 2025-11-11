@@ -7,14 +7,22 @@ export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
 export { GraphQLActionClient } from './graphQLActionClient';
 export { GraphQLAIClient } from './graphQLAIClient';
-export type { 
-    RunAIPromptParams, 
-    RunAIPromptResult,  
+export type {
+    RunAIPromptParams,
+    RunAIPromptResult,
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
     EmbedTextResult
 } from './graphQLAIClient';
+export { GraphQLTestingClient } from './graphQLTestingClient';
+export type {
+    RunTestParams,
+    RunTestResult,
+    RunTestSuiteParams,
+    RunTestSuiteResult,
+    TestExecutionProgress
+} from './graphQLTestingClient';
 export { GraphQLComponentRegistryClient } from './GraphQLComponentRegistryClient';
 export type {
     GetRegistryComponentParams,

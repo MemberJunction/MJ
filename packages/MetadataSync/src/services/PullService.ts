@@ -18,6 +18,8 @@ export interface PullOptions {
   targetDir?: string;
   updateExistingRecords?: boolean;
   createNewFileIfNotFound?: boolean;
+  include?: string[]; // Only process these directories (whitelist, supports patterns)
+  exclude?: string[]; // Skip these directories (blacklist, supports patterns)
 }
 
 export interface PullCallbacks {
@@ -52,6 +54,11 @@ export class PullService {
   }
   
   async pull(options: PullOptions, callbacks?: PullCallbacks): Promise<PullResult> {
+    // Validate that include and exclude are not used together
+    if (options.include && options.exclude) {
+      throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
+    }
+
     // Clear any previous batch operations
     this.fileWriteBatch.clear();
     this.createdBackupFiles = [];

@@ -1132,6 +1132,48 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: Test Run Feedbacks Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJTestRunFeedbacks"
+        sectionName="MJ: Test Run Feedbacks"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJTestRunFeedbacks')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Run Feedbacks','ReviewerUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Run Feedbacks')"
+                [AllowLoad]="IsSectionExpanded('mJTestRunFeedbacks')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJTestRunFeedbacks', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Test Suite Runs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJTestSuiteRuns"
+        sectionName="MJ: Test Suite Runs"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJTestSuiteRuns')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Runs','RunByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Suite Runs')"
+                [AllowLoad]="IsSectionExpanded('mJTestSuiteRuns')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJTestSuiteRuns', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- Resource Links Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="resourceLinks"
@@ -1316,6 +1358,27 @@
                 [AllowLoad]="IsSectionExpanded('mJScheduledJobs')"
                 [EditMode]="GridEditMode()"
                 (dataLoaded)="SetSectionRowCount('mJScheduledJobs', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Test Runs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJTestRuns"
+        sectionName="MJ: Test Runs"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJTestRuns')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Runs','RunByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Runs')"
+                [AllowLoad]="IsSectionExpanded('mJTestRuns')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJTestRuns', $event.totalRowCount)"
                 >
             </mj-user-view-grid>
         </div>

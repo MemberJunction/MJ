@@ -119,6 +119,33 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "MetadataSync CLI - Push (with exclude)",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
+      "args": ["sync", "push", "--dir", "${input:metadataSyncDirectory}", "--exclude", "${input:metadataSyncExclude}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "MetadataSync CLI - Pull",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
       "args": [
@@ -342,6 +369,12 @@
       "type": "promptString",
       "description": "Directory to push (e.g., 'metadata' for all, 'metadata/actions' for specific entity)",
       "default": "metadata"
+    },
+    {
+      "id": "metadataSyncExclude",
+      "type": "promptString",
+      "description": "Directories to exclude (comma-separated, blank to exclude none)",
+      "default": "actions"
     },
     {
       "id": "metadataSyncPullDirectory",

@@ -1,0 +1,68 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Research Agent - Mixed DB and Web Question",
+    "Description": "Tests the Research Agent's ability to orchestrate both Database Research Agent and Web Research Agent to answer questions requiring internal data analysis combined with external benchmarking. Validates proper sub-agent coordination.",
+    "InputDefinition": {
+      "userMessage": "Compare the AI models we have in our database to the leading AI models available now, and prepare a detailed report suggesting any improvements we should make to the AI Model catalog we have."
+    },
+    "ExpectedOutcomes": {
+      "judgeValidationCriteria": [
+        "Findings show evidence of both database analysis and web research",
+        "Comparisons section effectively synthesizes internal and external data"
+      ]
+    },
+    "Configuration": {
+      "agentId": "@lookup:AI Agents.Name=Research Agent",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 0.15
+        },
+        {
+          "type": "schema-validate",
+          "weight": 0.15
+        },
+        {
+          "type": "trace-validate-sub-agents",
+          "weight": 0.3,
+          "config": {
+            "requiredAgents": [
+              "Database Research Agent",
+              "Web Research Agent"
+            ],
+            "minIterations": 1
+          }
+        },
+        {
+          "type": "llm-judge",
+          "weight": 0.4,
+          "config": {
+            "criteria": [
+              "Response includes actual internal metrics (DAU rate, session duration, feature adoption)",
+              "Response includes external industry benchmarks for comparison",
+              "Clear comparison is made between internal metrics and industry standards",
+              "Response identifies whether company is above/below average in each area",
+              "Findings show evidence of both database analysis and web research",
+              "Comparisons section effectively synthesizes internal and external data"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "trace-no-errors": 0.15,
+        "schema-validate": 0.15,
+        "trace-validate-sub-agents": 0.3,
+        "llm-judge": 0.4
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
+  },
+  "sync": {
+    "lastModified": "2025-11-11T11:33:01.665Z",
+    "checksum": "5b16a17d21cb5257f36b0e296465c8f56ef987db313025c0b291d0ab6fea591d"
+  }
+}

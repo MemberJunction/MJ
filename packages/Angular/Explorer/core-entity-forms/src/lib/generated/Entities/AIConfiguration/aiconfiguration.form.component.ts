@@ -18,6 +18,7 @@ export class AIConfigurationFormComponent extends BaseFormComponent {
             { sectionKey: 'basicInformation', sectionName: 'Basic Information', isExpanded: true },
             { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentConfigurations', sectionName: 'MJ: AI Agent Configurations', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'MJ: AI Agent Prompts', isExpanded: false },
             { sectionKey: 'mJAIConfigurationParams', sectionName: 'MJ: AI Configuration Params', isExpanded: false },
             { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
