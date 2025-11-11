@@ -714,12 +714,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Convert to actionable command and emit
     const firstKeyValue = event.compositeKey.KeyValuePairs[0]?.Value || '';
-    const resourceId = `${event.entityName}:${firstKeyValue}`;
     const command: ActionableCommand = {
       type: 'open:resource',
       label: `Open ${event.entityName}`,
       resourceType: 'Record',
-      resourceId: resourceId,
+      entityName: event.entityName,
+      resourceId: firstKeyValue,
       mode: 'view'
     };
     this.actionableCommandExecuted.emit(command);
@@ -727,12 +727,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
     // Convert to actionable command and emit
-    const resourceId = `${event.entityName}:${event.recordId}`;
     const command: ActionableCommand = {
       type: 'open:resource',
       label: `Open ${event.entityName}`,
       resourceType: 'Record',
-      resourceId: resourceId,
+      entityName: event.entityName,
+      resourceId: event.recordId,
       mode: 'view'
     };
     this.actionableCommandExecuted.emit(command);

@@ -188,17 +188,16 @@ export class ChatWrapperComponent implements OnInit {
 
     if (command.type === 'open:resource') {
       // Handle opening MJ resources using SharedService
-      const { resourceType, resourceId, mode } = command;
+      const { resourceType, resourceId, entityName, mode } = command;
 
       if (resourceType === 'Record') {
         // Open entity record using SharedService
-        // Extract entity name and ID from resourceId
-        // Format expected: "EntityName:ID" or just "ID"
-        const parts = resourceId.split(':');
-        const entityName = parts.length > 1 ? parts[0] : 'Unknown';
-        const id = parts.length > 1 ? parts[1] : resourceId;
+        if (!entityName) {
+          console.error('entityName is required for Record type commands');
+          return;
+        }
 
-        const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: id }]);
+        const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: resourceId }]);
         SharedService.Instance.OpenEntityRecord(entityName, compositeKey);
       } else {
         // For other resource types (Dashboard, Report, Form, View), navigate using Router

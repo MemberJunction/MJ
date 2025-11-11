@@ -51,6 +51,7 @@ export type ActionableCommand =
  *   "label": "Open Customer Record",
  *   "icon": "fa-user",
  *   "resourceType": "Record",
+ *   "entityName": "Customers",
  *   "resourceId": "customer-123",
  *   "mode": "view"
  * }
@@ -89,8 +90,17 @@ export interface OpenResourceCommand {
     resourceType: ResourceType;
 
     /**
+     * Entity name (required for Record type).
+     * The exact entity name as defined in MJ metadata.
+     * Examples: "Customers", "MJ: AI Agent Runs", "Contacts"
+     * Only used when resourceType is 'Record'.
+     */
+    entityName?: string;
+
+    /**
      * ID of the resource to open.
-     * This should be the actual ID value, not a template.
+     * For Record type: Just the ID value (entityName is separate)
+     * For other types: The resource identifier (dashboard ID, report ID, etc.)
      */
     resourceId: string;
 
