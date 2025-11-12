@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/cli
 
+## 2.118.0
+
+### Minor Changes
+
+- a49a7a8: migration
+
+### Patch Changes
+
+- Updated dependencies [a2901ff]
+- Updated dependencies [a49a7a8]
+- Updated dependencies [41c5b8d]
+- Updated dependencies [78721d8]
+- Updated dependencies [1bb5c29]
+  - @memberjunction/db-auto-doc@2.118.0
+  - @memberjunction/testing-cli@2.118.0
+  - @memberjunction/metadata-sync@2.118.0
+  - @memberjunction/core@2.118.0
+  - @memberjunction/ai-cli@2.118.0
+  - @memberjunction/codegen-lib@2.118.0
+  - @memberjunction/sqlserver-dataprovider@2.118.0
+
 ## 2.117.0
 
 ### Patch Changes

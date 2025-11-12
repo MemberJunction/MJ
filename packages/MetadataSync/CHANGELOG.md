@@ -1,5 +1,24 @@
 # @memberjunction/metadata-sync
 
+## 2.118.0
+
+### Minor Changes
+
+- 1bb5c29: migration
+
+### Patch Changes
+
+- 41c5b8d: Implement comprehensive reverse dependency deletion system with cascading delete support, deletion auditing, and three-phase transaction processing. Records marked for deletion now trigger automatic dependency analysis, generate detailed audit reports, and are deleted in safe topological order. Deletion timestamps are written to metadata files after successful database operations. Includes protection against auto-creating records marked for deletion and automatic cleanup of SQL log files on user cancellation.
+- Updated dependencies [264c57a]
+- Updated dependencies [096ece6]
+- Updated dependencies [78721d8]
+  - @memberjunction/core-entities@2.118.0
+  - @memberjunction/core-entities-server@2.118.0
+  - @memberjunction/core@2.118.0
+  - @memberjunction/graphql-dataprovider@2.118.0
+  - @memberjunction/sqlserver-dataprovider@2.118.0
+  - @memberjunction/global@2.118.0
+
 ## 2.117.0
 
 ### Patch Changes

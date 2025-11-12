@@ -1,5 +1,30 @@
 # @memberjunction/ng-dashboards
 
+## 2.118.0
+
+### Minor Changes
+
+- 096ece6: migration
+
+### Patch Changes
+
+- Updated dependencies [264c57a]
+- Updated dependencies [a49a7a8]
+- Updated dependencies [096ece6]
+- Updated dependencies [78721d8]
+- Updated dependencies [1bb5c29]
+  - @memberjunction/ng-core-entity-forms@2.118.0
+  - @memberjunction/core-entities@2.118.0
+  - @memberjunction/testing-engine-base@2.118.0
+  - @memberjunction/core@2.118.0
+  - @memberjunction/ng-shared@2.118.0
+  - @memberjunction/ng-action-gallery@2.118.0
+  - @memberjunction/ng-ai-test-harness@2.118.0
+  - @memberjunction/ng-notifications@2.118.0
+  - @memberjunction/graphql-dataprovider@2.118.0
+  - @memberjunction/templates-base-types@2.118.0
+  - @memberjunction/ng-container-directives@2.118.0
+
 ## 2.117.0
 
 ### Patch Changes

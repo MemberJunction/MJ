@@ -1,6 +1,7 @@
 function DataGrid({
-  entityName,
   data,
+  entityName,
+  entityPrimaryKeys,
   columns, // Array of column definitions: [{field: 'Name', header: 'Product Name', render: fn, width: '200px', sortable: true}]
   sorting = true,
   paging = true,
@@ -51,6 +52,8 @@ function DataGrid({
     if (entityName && utilities?.md?.Entities) {
       const entity = utilities.md.Entities.find(e => e.Name === entityName);
       setEntityInfo(entity || null);
+    } else {
+      setEntityInfo(null);
     }
   }, [entityName, utilities]);
   
@@ -660,12 +663,56 @@ function DataGrid({
   const handleTableChange = (pag, filters, sorter) => {
     if (sorter && onSortChanged) {
       setSortConfig(sorter);
-      onSortChanged({ 
+      onSortChanged({
         sortState: {
           column: sorter.field,
           direction: sorter.order === 'ascend' ? 'asc' : 'desc'
         }
       });
+    }
+  };
+
+  // Handle row click with cancelable event pattern
+  const handleRowClick = (record) => {
+    // Create event object with cancel property (cancelable event pattern)
+    const rowClickEvent = {
+      record: record,
+      cancel: false
+    };
+
+    // Always call onRowClick first if provided (allows custom handling + optional cancellation)
+    if (onRowClick) {
+      onRowClick(rowClickEvent);
+    }
+
+    // If the event was cancelled, don't execute default behavior
+    if (rowClickEvent.cancel) {
+      return;
+    }
+
+    // Default behavior: If entityName and entityPrimaryKeys are provided, open the record
+    if (entityName && entityPrimaryKeys && Array.isArray(entityPrimaryKeys) && entityPrimaryKeys.length > 0 && callbacks?.OpenEntityRecord) {
+      try {
+        // Build the key-value pairs for OpenEntityRecord
+        const keyValues = entityPrimaryKeys.map(fieldName => ({
+          FieldName: fieldName,
+          Value: record[fieldName]
+        }));
+
+        // Check that all primary key values exist
+        const hasAllKeys = keyValues.every(kv => kv.Value != null);
+        if (hasAllKeys) {
+          callbacks.OpenEntityRecord(entityName, keyValues);
+        } else {
+          console.warn('[DataGrid] Cannot open record: missing primary key values', {
+            entityName,
+            entityPrimaryKeys,
+            record
+          });
+        }
+      } catch (err) {
+        console.error('[DataGrid] Error opening record:', err);
+      }
     }
   };
   
@@ -742,13 +789,9 @@ function DataGrid({
         }}
         size="middle"
         onRow={(record) => ({
-          onClick: () => {
-            if (onRowClick) {
-              onRowClick(record);
-            }
-          },
+          onClick: () => handleRowClick(record),
           style: {
-            cursor: onRowClick ? 'pointer' : 'default'
+            cursor: (onRowClick || (entityName && entityPrimaryKeys && callbacks?.OpenEntityRecord)) ? 'pointer' : 'default'
           }
         })}
       />

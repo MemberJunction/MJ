@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-betty-bot
 
+## 2.118.0
+
+### Minor Changes
+
+- a2901ff: migration
+- 7dcfd9c: migration
+
+### Patch Changes
+
+- @memberjunction/ai@2.118.0
+- @memberjunction/global@2.118.0
+
 ## 2.117.0
 
 ### Patch Changes
