@@ -31,8 +31,8 @@ export class AgentExecutionProgress {
     @Field()
     currentStep: string;
 
-    @Field()
-    percentage: number;
+    @Field({ nullable: true })
+    percentage?: number;
 
     @Field()
     message: string;
@@ -42,6 +42,9 @@ export class AgentExecutionProgress {
 
     @Field({ nullable: true })
     agentType?: string;
+
+    @Field({ nullable: true })
+    stepCount?: number;
 }
 
 @ObjectType()
@@ -232,7 +235,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     percentage: progress.percentage,
                     message: progress.message,
                     agentName: (progress.metadata as any)?.agentName || undefined,
-                    agentType: (progress.metadata as any)?.agentType || undefined
+                    agentType: (progress.metadata as any)?.agentType || undefined,
+                    stepCount: (progress.metadata as any)?.stepCount || undefined
                 },
                 timestamp: new Date()
             };

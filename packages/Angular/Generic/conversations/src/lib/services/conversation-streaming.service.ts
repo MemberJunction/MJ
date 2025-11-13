@@ -15,6 +15,7 @@ export interface MessageProgressUpdate {
   taskName?: string;
   conversationDetailId: string;
   metadata?: any;
+  stepCount?: number;
 }
 
 /**
@@ -281,6 +282,7 @@ export class ConversationStreamingService implements OnDestroy {
       const conversationDetailId = agentRun?.ConversationDetailID;
       const message = progress?.message;
       const percentComplete = progress?.percentage;
+      const stepCount = progress?.stepCount;
 
       if (!message) {
         console.warn('[ConversationStreamingService] ⚠️  No message content in agent progress update');
@@ -306,7 +308,8 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName: agentRun?.Agent || 'Agent',
         conversationDetailId,
-        metadata: { agentRun, progress }
+        metadata: { agentRun, progress },
+        stepCount
       };
 
       // Invoke all registered callbacks for this specific message

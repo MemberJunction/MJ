@@ -356,11 +356,11 @@ export type NextStepDetails <P = any> =
 export type AgentExecutionProgressCallback = (progress: {
     /** Current step in the agent execution process */
     step: 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization';
-    /** Progress percentage (0-100) */
-    percentage: number;
+    /** @deprecated Progress percentage (0-100) - Use metadata.stepCount instead for actual progress tracking */
+    percentage?: number;
     /** Human-readable status message */
     message: string;
-    /** Additional metadata about the current step */
+    /** Additional metadata about the current step. Use metadata.stepCount for accurate step tracking. */
     metadata?: Record<string, unknown>;
     /** When this progress message should be displayed */
     displayMode?: 'live' | 'historical' | 'both';

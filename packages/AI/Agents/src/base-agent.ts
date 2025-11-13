@@ -583,8 +583,8 @@ export class BaseAgent {
             // Report initialization progress
             wrappedParams.onProgress?.({
                 step: 'initialization',
-                percentage: 0,
-                message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`)
+                message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`),
+                metadata: { stepCount: 0 }
             });
 
             // Initialize execution tracking
@@ -615,8 +615,8 @@ export class BaseAgent {
             // Report validation progress
             wrappedParams.onProgress?.({
                 step: 'validation',
-                percentage: 10,
-                message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts')
+                message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts'),
+                metadata: { stepCount: 0 }
             });
 
             // Create and track validation step
@@ -668,8 +668,7 @@ export class BaseAgent {
             // Report finalization progress
             wrappedParams.onProgress?.({
                 step: 'finalization',
-                percentage: 95,
-                metadata: { result: executionResult },
+                metadata: { result: executionResult, stepCount: executionResult.stepCount },
                 message: this.formatHierarchicalMessage('Finalizing agent execution')
             });
 
@@ -749,7 +748,7 @@ export class BaseAgent {
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
-            const nextStep = await this.executeNextStep<P>(params, config, currentNextStep);
+            const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
             
             // Check if we should continue or terminate
@@ -3172,7 +3171,8 @@ The context is now within limits. Please retry your request with the recovered c
         subAgent: AIAgentEntityExtended,
         stepEntity: AIAgentRunStepEntityExtended,
         payload?: SR,
-        contextMessage?: ChatMessage
+        contextMessage?: ChatMessage,
+        stepCount: number = 0
     ): Promise<ExecuteAgentResult<SR>> {
         try {
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
@@ -3822,9 +3822,10 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {Promise<BaseAgentNextStep<P>>}
      */
     protected async executeNextStep<P = any>(
-        params: ExecuteAgentParams, 
-        config: AgentConfiguration, 
-        previousDecision: BaseAgentNextStep<P> | null
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep<P> | null,
+        stepCount: number = 0
     ): Promise<BaseAgentNextStep<P>> {
         
         // Determine what to execute
@@ -3838,7 +3839,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
             
             // Default behavior - run the initial prompt
-            return await this.executePromptStep(params, config);
+            return await this.executePromptStep(params, config, undefined, stepCount);
         }
         
         // First, ask agent type if it wants to handle the next step in a custom way
@@ -3858,11 +3859,11 @@ The context is now within limits. Please retry your request with the recovered c
                     const currentStepCount = this._agentRun?.Steps?.length || 0;
                     this.executeExpandMessageStep(previousDecision, params, currentStepCount);
                 }
-                return await this.executePromptStep(params, config, previousDecision);
+                return await this.executePromptStep(params, config, previousDecision, stepCount);
             case 'Sub-Agent':
-                return await this.processSubAgentStep<P, P>(params, previousDecision!);
+                return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
-                return await this.executeActionsStep(params, previousDecision, undefined);
+                return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
@@ -3913,7 +3914,7 @@ The context is now within limits. Please retry your request with the recovered c
                         return fallbackStep;
                     } else {
                         // Agent type wants default behavior (e.g., Loop agents process with prompt)
-                        return await this.executePromptStep(params, config, previousDecision);
+                        return await this.executePromptStep(params, config, previousDecision, stepCount);
                     }
                 }
             case 'Failed':
@@ -3978,7 +3979,7 @@ The context is now within limits. Please retry your request with the recovered c
                         return fallbackStep;
                     } else {
                         // Agent type wants default behavior (e.g., Loop agents retry with prompt)
-                        return await this.executePromptStep(params, config, previousDecision);
+                        return await this.executePromptStep(params, config, previousDecision, stepCount);
                     }
                 }
             case 'ForEach':
@@ -4004,9 +4005,10 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async executePromptStep<P = any>(
-        params: ExecuteAgentParams, 
+        params: ExecuteAgentParams,
         config: AgentConfiguration,
-        previousDecision?: BaseAgentNextStep
+        previousDecision?: BaseAgentNextStep,
+        stepCount: number = 0
     ): Promise<BaseAgentNextStep<P>> {
         // Ask the agent type if it has a custom prompt for this step
         const promptToUse = await this.AgentTypeInstance.GetPromptForStep(params, config, previousDecision?.newPayload || previousDecision?.previousPayload, this.AgentTypeState, previousDecision);
@@ -4038,12 +4040,12 @@ The context is now within limits. Please retry your request with the recovered c
                 
             params.onProgress?.({
                 step: 'prompt_execution',
-                percentage: 30,
                 message: this.formatHierarchicalMessage(promptMessage),
-                metadata: { 
+                metadata: {
                     promptId: promptId,
                     isRetry,
-                    promptName: promptName
+                    promptName: promptName,
+                    stepCount: stepCount + 1
                 },
                 displayMode: 'live' // Only show in live mode
             });
@@ -4173,8 +4175,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Report decision processing progress
             params.onProgress?.({
                 step: 'decision_processing',
-                percentage: 70,
                 message: this.formatHierarchicalMessage('Analyzing response and determining next steps'),
+                metadata: { stepCount: stepCount + 1 },
                 displayMode: 'both' // Show in both live and historical modes
             });
             
@@ -4440,7 +4442,8 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
         parentStepId?: string,
-        subAgentPayloadOverride?: any
+        subAgentPayloadOverride?: any,
+        stepCount: number = 0
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
@@ -4451,12 +4454,12 @@ The context is now within limits. Please retry your request with the recovered c
         // Report sub-agent execution progress with descriptive context
         params.onProgress?.({
             step: 'subagent_execution',
-            percentage: 60,
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
-            metadata: { 
+            metadata: {
                 agentName: params.agent.Name,
                 subAgentName: subAgentRequest.name,
-                reason: subAgentRequest.message
+                reason: subAgentRequest.message,
+                stepCount: stepCount + 1
             }
         });
         
@@ -4509,7 +4512,8 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentEntity,
                 stepEntity,
                 scopedPayload as SR,
-                undefined // No context message for child sub-agents
+                undefined, // No context message for child sub-agents
+                stepCount
             );
             
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
@@ -4753,7 +4757,8 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
         parentStepId?: string,
-        subAgentPayloadOverride?: any
+        subAgentPayloadOverride?: any,
+        stepCount: number = 0
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         const name = subAgentRequest?.name;
@@ -4777,7 +4782,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         if (childAgent) {
             // This is a child agent - use direct payload coupling
-            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision, parentStepId, subAgentPayloadOverride);
+            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision, parentStepId, subAgentPayloadOverride, stepCount);
         }
 
         // Check for related agent
@@ -4794,7 +4799,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (relatedAgent && relatedAgent.Name.trim().toLowerCase() === name.trim().toLowerCase()) {
                 // This is a related agent - use message-based coupling
-                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship, parentStepId, subAgentPayloadOverride);
+                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship, parentStepId, subAgentPayloadOverride, stepCount);
             }
         }
 
@@ -4827,7 +4832,8 @@ The context is now within limits. Please retry your request with the recovered c
         subAgentEntity: AIAgentEntityExtended,
         relationship: AIAgentRelationshipEntity,
         parentStepId?: string,
-        subAgentPayloadOverride?: SR
+        subAgentPayloadOverride?: SR,
+        stepCount: number = 0
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
 
@@ -4928,7 +4934,8 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentEntity,
                 stepEntity,
                 initialSubAgentPayload, // Mapped payload from parent (or undefined if no mapping)
-                contextMessage // Context message with parent payload data (or undefined if no context paths)
+                contextMessage, // Context message with parent payload data (or undefined if no context paths)
+                stepCount
             );
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
@@ -5291,7 +5298,8 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep,
         parentStepId: string,
-        addConversationMessage: boolean = true
+        addConversationMessage: boolean = true,
+        stepCount: number = 0
     ): Promise<BaseAgentNextStep> {
         
         try {
@@ -5342,11 +5350,11 @@ The context is now within limits. Please retry your request with the recovered c
                 
             params.onProgress?.({
                 step: 'action_execution',
-                percentage: 50,
                 message: this.formatHierarchicalMessage(progressMessage),
-                metadata: { 
+                metadata: {
                     actionCount: actions.length,
-                    actionNames: actions.map(a => a.name)
+                    actionNames: actions.map(a => a.name),
+                    stepCount: stepCount + 1
                 },
                 displayMode: 'live' // Only show in live mode
             });
