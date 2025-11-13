@@ -6068,6 +6068,13 @@ export class MJAIAgentNote_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    SourceConversationDetail?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SourceAIAgentRun?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     Company?: string;
         
@@ -8990,6 +8997,10 @@ export class MJAIResultCache_ {
     @MaxLength(200)
     Configuration?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PromptRun?: string;
+        
 }
 
 //****************************************************************************
@@ -10300,6 +10311,10 @@ export class MJEmployeeCompanyIntegration_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(162)
+    Employee?: string;
+        
     @Field() 
     @MaxLength(510)
     CompanyIntegration: string;
@@ -10464,6 +10479,10 @@ export class MJEmployeeRole_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(162)
+    Employee?: string;
+        
     @Field() 
     @MaxLength(100)
     Role: string;
@@ -10615,6 +10634,10 @@ export class MJEmployeeSkill_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(162)
+    Employee?: string;
         
     @Field() 
     @MaxLength(100)
@@ -16426,6 +16449,14 @@ export class MJErrorLog_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    CompanyIntegrationRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(900)
+    CompanyIntegrationRunDetail?: string;
+        
 }
 
 //****************************************************************************
@@ -17685,6 +17716,10 @@ export class MJCompanyIntegrationRunAPILog_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    CompanyIntegrationRun: string;
         
 }
 
@@ -19277,6 +19312,10 @@ export class MJRecordChange_ {
     @Field() 
     @MaxLength(200)
     User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ReplayRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -23823,6 +23862,9 @@ export class MJReport_ {
     Conversation?: string;
         
     @Field({nullable: true}) 
+    ConversationDetail?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(510)
     DataContext?: string;
         
@@ -27350,6 +27392,10 @@ export class MJRecordMergeDeletionLog_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(900)
+    RecordMergeLog: string;
         
 }
 
@@ -31887,6 +31933,14 @@ export class MJDuplicateRunDetailMatch_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(1000)
+    DuplicateRunDetail: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(900)
+    RecordMergeLog?: string;
+        
 }
 
 //****************************************************************************
@@ -32696,6 +32750,10 @@ export class MJDuplicateRunDetail_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    DuplicateRun: string;
+        
     @Field(() => [MJDuplicateRunDetailMatch_])
     DuplicateRunDetailMatches_DuplicateRunDetailIDArray: MJDuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
     
@@ -33472,6 +33530,10 @@ export class MJEntityActionInvocation_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(850)
+    EntityAction: string;
         
     @Field() 
     @MaxLength(510)
@@ -34465,6 +34527,13 @@ export class MJEntityActionFilter_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(850)
+    EntityAction: string;
+        
+    @Field() 
+    ActionFilter: string;
         
 }
 
@@ -37007,6 +37076,10 @@ export class MJCommunicationLog_ {
     @MaxLength(510)
     CommunicationProviderMessageType: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    CommunicationRun?: string;
+        
 }
 
 //****************************************************************************
@@ -38113,6 +38186,10 @@ export class MJTemplateParam_ {
     @MaxLength(510)
     Entity?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TemplateContent?: string;
+        
 }
 
 //****************************************************************************
@@ -38500,6 +38577,10 @@ export class MJRecommendation_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    RecommendationRun: string;
         
     @Field() 
     @MaxLength(510)
@@ -39051,6 +39132,9 @@ export class MJRecommendationItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    Recommendation: string;
+        
+    @Field() 
     @MaxLength(510)
     DestinationEntity: string;
         
@@ -39395,6 +39479,10 @@ export class MJEntityCommunicationField_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    EntityCommunicationMessageType: string;
         
 }
 
@@ -40078,6 +40166,10 @@ export class MJEntityActionParam_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(850)
+    EntityAction: string;
         
     @Field() 
     @MaxLength(510)
@@ -44640,6 +44732,13 @@ export class MJAIAgentExample_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    SourceConversationDetail?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SourceAIAgentRun?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     EmbeddingModel?: string;
         
@@ -44893,11 +44992,11 @@ export class MJTestSuite_ {
     @Field(() => [MJTestSuite_])
     MJ_TestSuites_ParentIDArray: MJTestSuite_[]; // Link to MJ_TestSuites
     
-    @Field(() => [MJTestSuiteRun_])
-    MJ_TestSuiteRuns_SuiteIDArray: MJTestSuiteRun_[]; // Link to MJ_TestSuiteRuns
-    
     @Field(() => [MJTestSuiteTest_])
     MJ_TestSuiteTests_SuiteIDArray: MJTestSuiteTest_[]; // Link to MJ_TestSuiteTests
+    
+    @Field(() => [MJTestSuiteRun_])
+    MJ_TestSuiteRuns_SuiteIDArray: MJTestSuiteRun_[]; // Link to MJ_TestSuiteRuns
     
 }
 
@@ -45028,17 +45127,6 @@ export class MJTestSuiteResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTestSuiteRun_])
-    async MJ_TestSuiteRuns_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Test Suite Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteRuns] WHERE [SuiteID]='${mjtestsuite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Runs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJTestSuiteTest_])
     async MJ_TestSuiteTests_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Suite Tests', userPayload);
@@ -45047,6 +45135,17 @@ export class MJTestSuiteResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteTests] WHERE [SuiteID]='${mjtestsuite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Tests', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Tests', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestSuiteRun_])
+    async MJ_TestSuiteRuns_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Suite Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteRuns] WHERE [SuiteID]='${mjtestsuite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Runs', rows);
         return result;
     }
         
@@ -46642,6 +46741,9 @@ export class MJConversationDetailRating_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    ConversationDetail: string;
         
     @Field() 
     @MaxLength(200)
@@ -51446,6 +51548,14 @@ detailed information about what validation rules failed.`})
     Comments?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(510)
+    AgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(16)
     RootParentID?: string;
         
@@ -51717,6 +51827,9 @@ export class MJConversationDetailArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    ConversationDetail: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     ArtifactVersion?: string;
@@ -51936,6 +52049,9 @@ export class MJTask_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Project?: string;
+        
+    @Field({nullable: true}) 
+    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)

@@ -389,6 +389,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let name = content.name;
     let iconClass = '';
     let logoURL = '';
+    let configPresetName = '';
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
@@ -397,6 +398,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         name = agent.Name;
         iconClass = agent.IconClass || '';
         logoURL = agent.LogoURL || '';
+
+        // Check for configuration preset (only show if non-default)
+        if (content.configId && AIEngineBase.Instance) {
+          const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(content.id, true);
+          if (presets && presets.length > 0) {
+            const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
+            const isNonDefault = content.configId !== defaultPreset?.ID;
+
+            // Only include preset name if it's not the default
+            if (isNonDefault && content.config) {
+              configPresetName = content.config;
+            }
+          }
+        }
       }
     } else if (content.type === 'user' && users) {
       const user = users.find(u => u.ID === content.id);
@@ -406,13 +421,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const escapedName = this.escapeHtml(name);
     const typeClass = content.type === 'agent' ? 'agent' : 'user';
 
+    // Build preset indicator HTML if present
+    const presetIndicator = configPresetName
+      ? `<span class="preset-indicator">${this.escapeHtml(configPresetName)}</span>`
+      : '';
+
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}</span>`;
+      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}</span>`;
+      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}">${escapedName}</span>`;
+      return `<span class="mention-badge ${typeClass}">${escapedName}${presetIndicator}</span>`;
     }
   }
 
@@ -1118,18 +1138,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
       // Parse JSON string to AgentResponseForm object
       const form = JSON.parse(rawData);
-
-      // Debug logging to help diagnose form display issues
-      if (form && form.questions && form.questions.length > 0) {
-        console.log('ResponseForm parsed successfully:', {
-          messageId: this.message.ID,
-          title: form.title,
-          questionCount: form.questions.length,
-          isLastMessage: this.isLastMessageInConversation,
-          isOwner: this.isConversationOwner,
-          willDisplay: this.isLastMessageInConversation && this.isConversationOwner
-        });
-      }
 
       return form || null;
     } catch (error) {
