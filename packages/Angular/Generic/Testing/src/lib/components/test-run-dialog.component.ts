@@ -944,8 +944,13 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    // Get engine instance and load metadata
+    // Get engine instance and ensure it's configured
     this.engine = TestEngineBase.Instance;
+
+    // Ensure the engine is configured
+    if (!this.engine.Loaded) {
+      await this.engine.Config(false);
+    }
 
     // Load tests and suites from cache
     this.allTests = this.engine.Tests.filter(t => t.Status === 'Active');

@@ -40,6 +40,7 @@
     "@memberjunction/actions-base": "2.118.0",
     "@memberjunction/ng-ai-test-harness": "2.118.0",
     "@memberjunction/ng-action-gallery": "2.118.0",
+    "@memberjunction/ng-testing": "2.118.0",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",

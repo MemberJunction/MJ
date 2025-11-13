@@ -24,7 +24,7 @@
         </div>
       </ng-template>    
     </kendo-drawer>
-    <kendo-drawer-content>
+    <kendo-drawer-content kendoDialogContainer>
 
       <mj-tabstrip #mjTabstrip (TabClosed)="handleTabClosed($event)" (TabSelected)="handleTabSelected($event)" (TabContextMenu)="handleTabContextMenu($event)" (ResizeContainer)="sharedService.InvokeManualResize()">
         <mj-tab [TabCloseable]="false">
