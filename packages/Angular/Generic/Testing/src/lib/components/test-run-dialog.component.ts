@@ -21,26 +21,54 @@ interface ProgressUpdate {
   template: `
       <div class="test-run-dialog">
         @if (!isRunning && !hasCompleted) {
-          <!-- Selection Mode -->
-          <div class="selection-mode">
-            <div class="mode-tabs">
-              <button
-                class="mode-tab"
-                [class.active]="runMode === 'test'"
-                (click)="setRunMode('test')"
-              >
-                <i class="fa-solid fa-flask"></i>
-                <span>Single Test</span>
-              </button>
-              <button
-                class="mode-tab"
-                [class.active]="runMode === 'suite'"
-                (click)="setRunMode('suite')"
-              >
-                <i class="fa-solid fa-layer-group"></i>
-                <span>Test Suite</span>
-              </button>
+          <!-- Pre-selected Mode - Compact Header -->
+          @if (isPreselected) {
+            <div class="preselected-header">
+              <div class="preselected-info">
+                <div class="preselected-icon">
+                  <i class="fa-solid" [class.fa-flask]="runMode === 'test'" [class.fa-layer-group]="runMode === 'suite'"></i>
+                </div>
+                <div class="preselected-content">
+                  <div class="preselected-label">{{ runMode === 'test' ? 'Test' : 'Test Suite' }}</div>
+                  <div class="preselected-name">{{ preselectedName }}</div>
+                </div>
+              </div>
+              <div class="options-compact">
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="verbose" />
+                  <span>Verbose</span>
+                </label>
+                @if (runMode === 'suite') {
+                  <label class="checkbox-label">
+                    <input type="checkbox" [(ngModel)]="parallel" />
+                    <span>Parallel</span>
+                  </label>
+                }
+              </div>
             </div>
+          }
+
+          <!-- Selection Mode - Full UI -->
+          @if (!isPreselected) {
+            <div class="selection-mode">
+              <div class="mode-tabs">
+                <button
+                  class="mode-tab"
+                  [class.active]="runMode === 'test'"
+                  (click)="setRunMode('test')"
+                >
+                  <i class="fa-solid fa-flask"></i>
+                  <span>Single Test</span>
+                </button>
+                <button
+                  class="mode-tab"
+                  [class.active]="runMode === 'suite'"
+                  (click)="setRunMode('suite')"
+                >
+                  <i class="fa-solid fa-layer-group"></i>
+                  <span>Test Suite</span>
+                </button>
+              </div>
 
             @if (runMode === 'test') {
               <div class="selection-panel">
@@ -138,19 +166,20 @@ interface ProgressUpdate {
               </div>
             }
 
-            <div class="options-panel">
-              <label class="checkbox-label">
-                <input type="checkbox" [(ngModel)]="verbose" />
-                <span>Verbose logging</span>
-              </label>
-              @if (runMode === 'suite') {
+              <div class="options-panel">
                 <label class="checkbox-label">
-                  <input type="checkbox" [(ngModel)]="parallel" />
-                  <span>Run tests in parallel</span>
+                  <input type="checkbox" [(ngModel)]="verbose" />
+                  <span>Verbose logging</span>
                 </label>
-              }
+                @if (runMode === 'suite') {
+                  <label class="checkbox-label">
+                    <input type="checkbox" [(ngModel)]="parallel" />
+                    <span>Run tests in parallel</span>
+                  </label>
+                }
+              </div>
             </div>
-          </div>
+          }
         }
 
         @if (isRunning || hasCompleted) {
@@ -328,6 +357,64 @@ interface ProgressUpdate {
       background: #ccc;
       cursor: not-allowed;
       opacity: 0.6;
+    }
+
+    /* Preselected Mode - Compact Header */
+    .preselected-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      margin: 20px 20px 0 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .preselected-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .preselected-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #2196f3, #21cbf3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .preselected-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .preselected-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .preselected-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .options-compact {
+      display: flex;
+      gap: 16px;
+      align-items: center;
     }
 
     /* Selection Mode */
@@ -902,6 +989,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   verbose = true;
   parallel = false;
 
+  // Pre-selection mode - when launched from a specific test/suite
+  isPreselected = false;
+  preselectedName = '';
+
   // Data
   allTests: TestEntity[] = [];
   allSuites: TestSuiteEntity[] = [];
@@ -955,6 +1046,17 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     // Load tests and suites from cache
     this.allTests = this.engine.Tests.filter(t => t.Status === 'Active');
     this.allSuites = this.engine.TestSuites.filter(s => s.Status === 'Active');
+
+    // Check if we have a pre-selected test or suite
+    if (this.selectedTestId) {
+      this.isPreselected = true;
+      const test = this.allTests.find(t => t.ID === this.selectedTestId);
+      this.preselectedName = test ? test.Name : 'Test';
+    } else if (this.selectedSuiteId) {
+      this.isPreselected = true;
+      const suite = this.allSuites.find(s => s.ID === this.selectedSuiteId);
+      this.preselectedName = suite ? suite.Name : 'Test Suite';
+    }
 
     this.filterItems();
     this.cdr.markForCheck();
