@@ -89,17 +89,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   async ngOnInit() {
-    // Debug logging for message initialization
-    console.log('MessageItem ngOnInit:', {
-      messageId: this.message.ID,
-      hasResponseForm: !!this.message.ResponseForm,
-      responseFormRaw: this.message.ResponseForm,
-      isLastMessage: this.isLastMessage,
-      isConversationOwner: this.isConversationOwner
-    });
-
-    // No longer need to load artifacts per message - they are preloaded in chat area
-
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
   }
@@ -975,7 +964,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (result.Success) {
         this.detailTasks = result.Results || [];
         this.tasksLoaded = true;
-        console.log(`📋 Loaded ${this.detailTasks.length} tasks for conversation detail ${this.message.ID}`);
       }
     } catch (error) {
       console.error('Failed to load tasks for conversation detail:', error);
@@ -1219,6 +1207,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private async executeAutomaticCommands(): Promise<void> {
     try {
+      if (!this.isLastMessage) 
+        return; // we only do this when the message is the last one in the conversation
+
+      // TODO - IMPORTANT
+      // BELOW, after doing the commands, 
+      // we need to mark the message as haveing completed its automatic commands to avoid re-running on reload
+
+
       // For now, check if the property exists (will be added to schema)
       const rawData = (this.message as any).AutomaticCommands;
       if (!rawData) return;
