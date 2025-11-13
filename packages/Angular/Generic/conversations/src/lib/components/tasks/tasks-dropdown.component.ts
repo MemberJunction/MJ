@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angu
 import { UserInfo } from '@memberjunction/core';
 import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.service';
 import { ConversationStateService } from '../../services/conversation-state.service';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -48,7 +49,12 @@ import { takeUntil } from 'rxjs/operators';
               <div class="task-status-indicator active"></div>
               <div class="task-content">
                 <div class="task-title">
-                  <i class="fas fa-robot"></i>
+                  <img *ngIf="getAgentLogoUrl(task.agentName)"
+                       [src]="getAgentLogoUrl(task.agentName)"
+                       class="agent-logo"
+                       [alt]="task.agentName" />
+                  <i *ngIf="!getAgentLogoUrl(task.agentName)"
+                     [class]="getAgentIconClass(task.agentName)"></i>
                   {{ task.agentName }}
                 </div>
                 <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
@@ -69,7 +75,12 @@ import { takeUntil } from 'rxjs/operators';
               <div class="task-status-indicator active"></div>
               <div class="task-content">
                 <div class="task-title">
-                  <i class="fas fa-robot"></i>
+                  <img *ngIf="getAgentLogoUrl(task.agentName)"
+                       [src]="getAgentLogoUrl(task.agentName)"
+                       class="agent-logo"
+                       [alt]="task.agentName" />
+                  <i *ngIf="!getAgentLogoUrl(task.agentName)"
+                     [class]="getAgentIconClass(task.agentName)"></i>
                   {{ task.agentName }}
                   <span class="go-btn">
                     <i class="fas fa-arrow-right"></i>
@@ -283,6 +294,13 @@ import { takeUntil } from 'rxjs/operators';
     .task-title i {
       color: #3B82F6;
       font-size: 12px;
+    }
+
+    .task-title .agent-logo {
+      width: 14px;
+      height: 14px;
+      object-fit: contain;
+      flex-shrink: 0;
     }
 
     .go-btn {
@@ -552,5 +570,38 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
       return status;
     }
     return status.substring(0, maxLength) + '...';
+  }
+
+  /**
+   * Get agent icon class by looking up agent in AIEngineBase cache
+   * Similar to message-item component's aiAgentInfo getter
+   */
+  getAgentIconClass(agentName: string): string {
+    // Look up agent from AIEngineBase cache by name
+    if (AIEngineBase.Instance?.Agents) {
+      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+      if (agent?.IconClass) {
+        return agent.IconClass;
+      }
+    }
+
+    // Default fallback icon
+    return 'fas fa-robot';
+  }
+
+  /**
+   * Get agent logo URL by looking up agent in AIEngineBase cache
+   * Returns null if no logo URL is available
+   */
+  getAgentLogoUrl(agentName: string): string | null {
+    // Look up agent from AIEngineBase cache by name
+    if (AIEngineBase.Instance?.Agents) {
+      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+      if (agent?.LogoURL) {
+        return agent.LogoURL;
+      }
+    }
+
+    return null;
   }
 }

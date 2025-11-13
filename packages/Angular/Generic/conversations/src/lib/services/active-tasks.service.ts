@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 export interface ActiveTask {
   id: string;
   agentName: string;
+  agentId?: string; // The agent ID for looking up icon/metadata
   status: string;
   relatedMessageId: string;
   conversationDetailId?: string;  // The ConversationDetail that tracks this task
