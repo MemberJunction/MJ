@@ -7137,6 +7137,21 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Resolves a value from context using variable references - extracts from LoopAgentType
+     *
+     * This method handles both scalar and complex object iterations in ForEach/While loops.
+     *
+     * Examples:
+     *
+     * Scalar array iteration:
+     *   candidateEntities = ["Users", "Companies", "Invoices"]
+     *   itemVariable = "entityName"
+     *   Template: "{{entityName}}" → resolves to "Users", then "Companies", then "Invoices"
+     *
+     * Object array iteration:
+     *   users = [{name: "Alice", age: 30}, {name: "Bob", age: 25}]
+     *   itemVariable = "user"
+     *   Template: "{{user.name}}" → resolves to "Alice", then "Bob"
+     *   Template: "{{user}}" → resolves to entire object {name: "Alice", age: 30}
      */
     protected resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
         // check to see if value is wrapped in a nunjucks style template like {{variable}} and
@@ -7148,14 +7163,28 @@ The context is now within limits. Please retry your request with the recovered c
             value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
         }
 
-        // first check itemVariable name
+        // Check itemVariable reference (the custom loop variable name like "entityName" or "user")
+        // This handles both direct references and path-based property access
         const ivToLower = itemVariable?.trim().toLowerCase();
-        if (value?.toLowerCase().startsWith(`${ivToLower}.`)) {
+        const valueLower = value?.toLowerCase();
+
+        // CRITICAL: Check for exact match FIRST (handles scalar arrays and direct object references)
+        // Example: {{entityName}} where context.item = "Users" (scalar)
+        // Example: {{user}} where context.item = {name: "Alice", age: 30} (object)
+        if (valueLower === ivToLower) {
+            return context.item;  // Return the current iteration item (scalar or object)
+        }
+
+        // Check for path notation (handles property access on object arrays)
+        // Example: {{entityName.property}} - won't work for scalars but handles objects
+        // Example: {{user.name}} where context.item = {name: "Alice"} → returns "Alice"
+        if (valueLower?.startsWith(`${ivToLower}.`)) {
             const path = value.substring(ivToLower.length + 1);
             return this.getValueFromPath(context.item, path);
         }
 
-        // Check for direct context variable references
+        // Check for direct context variable references (index, payload, data, etc.)
+        // These are the fixed context properties set up by the loop execution
         for (const [varName, varValue] of Object.entries(context)) {
             if (value === varName) {
                 return varValue;
@@ -7167,7 +7196,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        // Static value
+        // Static value - no variable reference found, return as literal string
         return value;
     }
 

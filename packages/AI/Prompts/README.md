@@ -34,27 +34,135 @@ params.effortLevel = 85; // High effort for thorough analysis
 const result = await AIPromptRunner.RunPrompt(params);
 ```
 
-### 🛡️ Intelligent Failover Support
-Automatic failover when AI providers experience outages, rate limits, or service degradation. The system intelligently switches between models and vendors to ensure reliable prompt execution.
+### 🛡️ Model Selection & Intelligent Failover
 
-#### Failover Strategies
-- **SameModelDifferentVendor**: Try the same model from different providers
-- **NextBestModel**: Switch to alternative models based on power rankings
-- **PowerRank**: Use the global model power ranking for selection
+The AI Prompts system provides sophisticated model selection with instant failover across models and vendors. Configure explicit model/vendor priorities using `AIPromptModel` records, and the system automatically tries all candidates in order when errors occur.
 
-#### Configuration
-```typescript
-const promptWithFailover = {
-    Name: "Critical Analysis",
-    FailoverStrategy: "SameModelDifferentVendor",
-    FailoverMaxAttempts: 3,
-    FailoverDelaySeconds: 2,
-    FailoverModelStrategy: "PreferSameModel",
-    FailoverErrorScope: "All"  // or "NetworkOnly", "RateLimitOnly", "ServiceErrorOnly"
-};
+#### Selection Strategies
+
+**`SelectionStrategy='Specific'`** (Recommended for production)
+- Use explicit `AIPromptModel` configuration for complete control
+- Configuration-specific models tried before universal fallbacks
+- Priority determines order (higher number = tried first)
+- Instant failover to next candidate on any error
+
+**`SelectionStrategy='ByPower'`**
+- Automatically selects models based on `PowerRank`
+- Use `PowerPreference`: `Highest`, `Lowest`, or `Balanced`
+
+**`SelectionStrategy='Default'`**
+- Uses model type filtering and power ranking
+
+#### Model Ranking Algorithm (Specific Strategy)
+
+When using `SelectionStrategy='Specific'`, candidates are prioritized using clear, predictable rules:
+
+```mermaid
+sequenceDiagram
+    participant User as User Request
+    participant Engine as AIPromptRunner
+    participant DB as AIPromptModel Table
+    participant Exec as Execution
+
+    User->>Engine: Execute Prompt with ConfigurationID
+    Engine->>DB: Get AIPromptModel records
+    DB-->>Engine: Return all records for prompt
+
+    Note over Engine: Filter Phase
+    Engine->>Engine: Keep: ConfigurationID match OR NULL
+    Engine->>Engine: Exclude: Different ConfigurationID
+
+    Note over Engine: Sort Phase (2-level)
+    Engine->>Engine: 1. Config-match before Universal
+    Engine->>Engine: 2. Priority DESC within group
+
+    Note over Engine: Expand Phase
+    loop For each AIPromptModel
+        alt VendorID specified
+            Engine->>Engine: Create 1 candidate (Model+Vendor)
+        else VendorID is NULL
+            Engine->>Engine: Create N candidates (all vendors)
+            Engine->>Engine: Sort by AIModelVendor.Priority DESC
+        end
+    end
+
+    Engine->>Exec: Try candidates in order
+
+    loop Instant Failover
+        Exec->>Exec: Try Candidate N
+        alt Success
+            Exec-->>User: Return result
+        else Recoverable Error
+            Exec->>Exec: Try Candidate N+1 (instant)
+        else Fatal Error
+            Exec-->>User: Fail immediately
+        end
+    end
 ```
 
-**Note**: Prompts with `AIModelTypeID = NULL` can use any available model during failover, while prompts with a specific type ID are restricted to models of that type.
+#### Configuration Rules
+
+**Priority Precedence:**
+1. **Configuration-specific** models (matching `ConfigurationID`) - Always tried first
+2. **Universal** models (`ConfigurationID = NULL`) - Fallback options
+3. Within each group: **Higher Priority number** tried first
+
+**Configuration Filtering:**
+- If `ConfigurationID` provided: Use matching config + universal (NULL) models
+- If NO `ConfigurationID`: Use ONLY universal (NULL) models
+- Models with DIFFERENT `ConfigurationID` are EXCLUDED
+
+**Vendor Expansion:**
+- `AIPromptModel.VendorID` specified → Single candidate (exact model+vendor)
+- `AIPromptModel.VendorID = NULL` → Multiple candidates (all vendors for that model, sorted by `AIModelVendor.Priority DESC`)
+
+#### Example Configuration
+
+```sql
+-- Example: Production prompt with config-specific and universal fallbacks
+INSERT INTO AIPromptModel (PromptID, ModelID, VendorID, ConfigurationID, Priority, Status) VALUES
+  -- Config-specific models (tried first, regardless of priority number)
+  (@promptId, @gpt4Id,    @openaiId,     @prodConfigId, 5,  'Active'),
+  (@promptId, @gpt4Id,    @azureId,      @prodConfigId, 3,  'Active'),
+
+  -- Universal fallbacks (tried after config-specific, despite higher priority numbers)
+  (@promptId, @claudeId,  @anthropicId,  NULL,          10, 'Active'),
+  (@promptId, @geminiId,  @googleId,     NULL,          8,  'Active');
+
+-- Example: Multi-vendor support for same model
+INSERT INTO AIPromptModel (PromptID, ModelID, VendorID, ConfigurationID, Priority, Status) VALUES
+  (@promptId, @gpt4Id,    NULL,          @prodConfigId, 10, 'Active');
+  -- VendorID=NULL expands to all vendors (OpenAI, Azure, Groq)
+  -- Vendors sorted by AIModelVendor.Priority
+```
+
+**Execution order for above config with ConfigurationID=@prodConfigId:**
+1. GPT-4/OpenAI (Config match, Priority 5)
+2. GPT-4/Azure (Config match, Priority 3)
+3. GPT-4/OpenAI (From VendorID=NULL expansion, highest AIModelVendor.Priority)
+4. GPT-4/Azure (From VendorID=NULL expansion)
+5. GPT-4/Groq (From VendorID=NULL expansion, lowest AIModelVendor.Priority)
+6. Claude/Anthropic (Universal fallback, Priority 10)
+7. Gemini/Google (Universal fallback, Priority 8)
+
+#### Failover Behavior
+
+**Instant Failover** - No delays between candidates
+- Authentication errors → Filters out all candidates from failed vendor
+- Fatal errors → Stops immediately
+- Recoverable errors → Tries next candidate instantly
+
+**Validation Retry** - After all candidates exhausted
+- If all candidates fail, retries entire list with delays
+- Uses `AIPrompt.MaxRetries` and `RetryDelayMode` (Fixed/Linear/Exponential)
+
+**Error Handling:**
+```typescript
+// SelectionStrategy='Specific' with no candidates throws error
+if (strategy === 'Specific' && candidates.length === 0) {
+  throw new Error('Please configure AIPromptModel records for this prompt');
+}
+```
 
 ### 🎯 Dynamic Hierarchical Template Composition
 

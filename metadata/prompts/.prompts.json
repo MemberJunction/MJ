@@ -184,6 +184,14 @@
             "lastModified": "2025-09-02T21:21:18.931Z",
             "checksum": "13b7855903f6035517539a84aa482e4ee114165c18c0ff33c79b98ca6640f847"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 21
+          } 
         }
       ]
     },

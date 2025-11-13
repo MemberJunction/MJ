@@ -116,7 +116,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     // If there's an initial message to send (from empty state), send it automatically
     if (this.initialMessage) {
-      console.log('📨 MessageInputComponent received initialMessage:', this.initialMessage);
       setTimeout(() => {
         this.sendMessageWithText(this.initialMessage!);
       }, 100);
@@ -153,8 +152,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       return;
     }
 
-    console.log(`🔌 Reconnecting to ${this.inProgressMessageIds.length} in-progress messages for streaming updates`);
-
     // Unregister any previously registered callbacks for this component
     this.unregisterAllCallbacks();
 
@@ -169,8 +166,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       // Register with streaming service
       this.streamingService.registerMessageCallback(messageId, callback);
     }
-
-    console.log(`✅ Registered ${this.registeredCallbacks.size} message callbacks with streaming service`);
   }
 
   /**
@@ -259,8 +254,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    * Handle text submitted from the input box
    */
   async onTextSubmitted(text: string): Promise<void> {
-    console.log('[MessageInput] onTextSubmitted called with text:', text);
-
     // Use the text parameter directly since the box component already cleared its value
     if (!text || !text.trim()) {
       console.log('[MessageInput] Empty text, aborting');
@@ -270,7 +263,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     this.isSending = true;
     try {
       const messageDetail = await this.createMessageDetailFromText(text.trim());
-      console.log('[MessageInput] Created message detail:', messageDetail.Message);
 
       const saved = await messageDetail.Save();
 
@@ -446,8 +438,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     agentMention: Mention,
     isFirstMessage: boolean
   ): Promise<void> {
-    console.log('🎯 Direct @mention detected, bypassing Sage');
-
     // The agentMention already has configurationId from JSON parsing
     // If it wasn't in JSON (legacy format), try to get from chip data
     if (!agentMention.configurationId) {
@@ -455,12 +445,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       const agentChip = chipData.find(chip => chip.id === agentMention.id && chip.type === 'agent');
       if (agentChip?.presetId) {
         agentMention.configurationId = agentChip.presetId;
-        console.log(`🎯 Using configuration preset from chip: ${agentChip.presetName} (${agentChip.presetId})`);
       }
     }
 
     if (agentMention.configurationId) {
-      console.log(`🎯 Agent mention has configuration ID: ${agentMention.configurationId}`);
+      //console.log(`🎯 Agent mention has configuration ID: ${agentMention.configurationId}`);
     }
 
     await this.executeRouteWithNaming(
@@ -479,15 +468,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
-    console.log('🔍 Previous agent found, checking continuity intent...');
-
     const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
 
     if (intentResult.decision === 'YES') {
-      console.log('✅ Intent check: YES - continuing with previous agent', {
-        reasoning: intentResult.reasoning,
-        targetArtifactVersionId: intentResult.targetArtifactVersionId
-      });
       await this.executeRouteWithNaming(
         () => this.continueWithAgent(
           messageDetail,
@@ -499,9 +482,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         isFirstMessage
       );
     } else {
-      console.log(`🤖 Intent check: ${intentResult.decision} - routing through Sage for evaluation`, {
-        reasoning: intentResult.reasoning
-      });
       await this.executeRouteWithNaming(
         () => this.processMessageThroughAgent(messageDetail, mentionResult),
         messageDetail.Message,
@@ -518,7 +498,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
-    console.log('🤖 No agent context, using Sage');
     await this.executeRouteWithNaming(
       () => this.processMessageThroughAgent(messageDetail, mentionResult),
       messageDetail.Message,
@@ -634,7 +613,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   ): Promise<boolean> {
     // Never modify completed or errored messages
     if (detail.Status === 'Complete' || detail.Status === 'Error') {
-      console.log(`[${context}] 🛡️ Blocked save - message is ${detail.Status}`);
       return false;
     }
 
@@ -721,11 +699,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       } catch (error) {
         console.warn('Failed to save progress update to ConversationDetail:', error);
       }
-
-      console.log(`[${agentName}] Progress: ${progress.step} - ${progress.message} (${progress.percentage}%)`, {
-        agentRunId: progressAgentRunId,
-        conversationDetailId: conversationDetail.ID
-      });
     };
   }
 
@@ -799,20 +772,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         return;
       }
 
-      console.log('🤖 Sage Response:', {
-        finalStep: result.agentRun.FinalStep,
-        hasPayload: !!result.payload,
-        hasMessage: !!result.agentRun.Message,
-        payloadKeys: result.payload ? Object.keys(result.payload) : [],
-        payload: result.payload, // Full payload for debugging,
-        responseForm: result.responseForm,
-        actionableCommands: result.actionableCommands,
-        automaticCommands: result.automaticCommands
-      });
-
       // Stage 2: Check for task graph (multi-step orchestration)
       if (result.payload?.taskGraph) {
-        console.log('📋 Task graph detected, starting task orchestration');
         await this.handleTaskGraphExecution(userMessage, result, this.conversationId, conversationManagerMessage);
         // Remove CM from active tasks
         if (taskId) {
@@ -845,7 +806,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
             conversationDetailId: conversationManagerMessage.ID,
             name: ''
           });
-          console.log('🎨 Server created artifact, UI will reload to show it');
           this.messageSent.emit(conversationManagerMessage);
         }
 
@@ -863,8 +823,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       else {
         // Check if there's a message to display even without payload/taskGraph
         if (result.agentRun.Message) {
-          console.log('💬 Sage provided a message without payload');
-
           // Mark message as completing BEFORE setting final content
           this.markMessageComplete(conversationManagerMessage);
 
@@ -878,8 +836,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           // Clean up completion timestamp after delay
           this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
         } else {
-          console.log('🔇 Sage chose to observe silently');
-
           // Mark message as completing
           this.markMessageComplete(conversationManagerMessage);
 
@@ -941,11 +897,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const reasoning = taskGraph.reasoning || 'Executing multi-step workflow';
     const taskCount = taskGraph.tasks?.length || 0;
 
-    console.log(`📋 Task graph execution requested: ${workflowName}`, {
-      reasoning,
-      taskCount
-    });
-
     // Deduplicate tasks by tempId (LLM sometimes returns duplicates)
     const seenTempIds = new Set<string>();
     const uniqueTasks = taskGraph.tasks.filter((task: any) => {
@@ -958,7 +909,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     });
 
     const uniqueTaskCount = uniqueTasks.length;
-    console.log(`Filtered to ${uniqueTaskCount} unique tasks (${taskCount - uniqueTaskCount} duplicates removed)`);
 
     const isSingleTask = uniqueTaskCount === 1;
 
@@ -1047,17 +997,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, variables);
 
-      console.log('📊 ExecuteTaskGraph result:', {
-        hasExecuteTaskGraph: !!result?.ExecuteTaskGraph,
-        success: result?.ExecuteTaskGraph?.success,
-        resultsCount: result?.ExecuteTaskGraph?.results?.length,
-        result: result
-      });
-
       // Step 4: Update task execution message with results
       // ExecuteGQL returns data directly (not wrapped in {data, errors})
       if (result?.ExecuteTaskGraph?.success) {
-        console.log('✅ Task graph execution completed successfully');
         await this.updateConversationDetail(taskExecutionMessage, `✅ **${workflowName}** completed successfully`, 'Complete');
       } else {
         const errorMsg = result?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
@@ -1789,8 +1731,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     // Use targetArtifactVersionId if specified (from intent check)
     if (targetArtifactVersionId) {
-      console.log('🎯 Using target artifact version from intent check:', targetArtifactVersionId);
-
       // Find the artifact in pre-loaded data (check both user-visible and system artifacts)
       for (const [detailId, artifacts] of (this.artifactsByDetailId?.entries() || [])) {
         const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
@@ -1983,8 +1923,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    */
   private async nameConversation(message: string): Promise<void> {
     try {
-      console.log('🏷️ Naming conversation based on first message...');
-
       // Load the Name Conversation prompt to get its ID
       await AIEngineBase.Instance.Config(false);
       const p = AIEngineBase.Instance.Prompts.find(pr => pr.Name === 'Name Conversation');
@@ -2017,16 +1955,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           const { name, description } = parsed;
 
           if (name) {
-            console.log('✅ Generated conversation name:', { name, description });
-
             // Update the conversation name and description in database AND state immediately
             await this.conversationState.saveConversation(
               this.conversationId,
               { Name: name, Description: description || '' },
               this.currentUser
             );
-
-            console.log('💾 Conversation name updated in database and UI');
 
             // Emit event for animation in conversation list
             this.conversationRenamed.emit({

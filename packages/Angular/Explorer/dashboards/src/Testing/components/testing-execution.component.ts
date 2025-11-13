@@ -5,7 +5,7 @@ import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { CompositeKey } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestingInstrumentationService, TestRunSummary } from '../services/testing-instrumentation.service';
-import { TestRunDialogComponent } from './widgets/test-run-dialog.component';
+import { TestRunDialogComponent } from '@memberjunction/ng-testing';
 
 interface ExecutionListItem {
   id: string;

@@ -4,7 +4,9 @@ import { takeUntil, map } from 'rxjs/operators';
 import { CompositeKey } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestingInstrumentationService, FeedbackPending, FeedbackStats } from '../services/testing-instrumentation.service';
-import { TestStatus } from './widgets/test-status-badge.component';
+import { TestStatusBadgeComponent } from '@memberjunction/ng-testing';
+
+type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Pending';
 
 interface FeedbackFilter {
   status: 'all' | 'pending' | 'reviewed';

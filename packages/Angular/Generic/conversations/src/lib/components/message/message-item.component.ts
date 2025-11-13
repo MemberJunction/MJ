@@ -89,17 +89,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   async ngOnInit() {
-    // Debug logging for message initialization
-    console.log('MessageItem ngOnInit:', {
-      messageId: this.message.ID,
-      hasResponseForm: !!this.message.ResponseForm,
-      responseFormRaw: this.message.ResponseForm,
-      isLastMessage: this.isLastMessage,
-      isConversationOwner: this.isConversationOwner
-    });
-
-    // No longer need to load artifacts per message - they are preloaded in chat area
-
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
   }
@@ -389,6 +378,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let name = content.name;
     let iconClass = '';
     let logoURL = '';
+    let configPresetName = '';
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
@@ -397,6 +387,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         name = agent.Name;
         iconClass = agent.IconClass || '';
         logoURL = agent.LogoURL || '';
+
+        // Check for configuration preset (only show if non-default)
+        if (content.configId && AIEngineBase.Instance) {
+          const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(content.id, true);
+          if (presets && presets.length > 0) {
+            const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
+            const isNonDefault = content.configId !== defaultPreset?.ID;
+
+            // Only include preset name if it's not the default
+            if (isNonDefault && content.config) {
+              configPresetName = content.config;
+            }
+          }
+        }
       }
     } else if (content.type === 'user' && users) {
       const user = users.find(u => u.ID === content.id);
@@ -406,13 +410,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const escapedName = this.escapeHtml(name);
     const typeClass = content.type === 'agent' ? 'agent' : 'user';
 
+    // Build preset indicator HTML if present
+    const presetIndicator = configPresetName
+      ? `<span class="preset-indicator">${this.escapeHtml(configPresetName)}</span>`
+      : '';
+
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}</span>`;
+      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}</span>`;
+      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}">${escapedName}</span>`;
+      return `<span class="mention-badge ${typeClass}">${escapedName}${presetIndicator}</span>`;
     }
   }
 
@@ -955,7 +964,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (result.Success) {
         this.detailTasks = result.Results || [];
         this.tasksLoaded = true;
-        console.log(`📋 Loaded ${this.detailTasks.length} tasks for conversation detail ${this.message.ID}`);
       }
     } catch (error) {
       console.error('Failed to load tasks for conversation detail:', error);
@@ -1119,18 +1127,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       // Parse JSON string to AgentResponseForm object
       const form = JSON.parse(rawData);
 
-      // Debug logging to help diagnose form display issues
-      if (form && form.questions && form.questions.length > 0) {
-        console.log('ResponseForm parsed successfully:', {
-          messageId: this.message.ID,
-          title: form.title,
-          questionCount: form.questions.length,
-          isLastMessage: this.isLastMessageInConversation,
-          isOwner: this.isConversationOwner,
-          willDisplay: this.isLastMessageInConversation && this.isConversationOwner
-        });
-      }
-
       return form || null;
     } catch (error) {
       console.error('Failed to parse response form:', error, 'Raw data:', this.message.ResponseForm);
@@ -1211,6 +1207,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private async executeAutomaticCommands(): Promise<void> {
     try {
+      if (!this.isLastMessage) 
+        return; // we only do this when the message is the last one in the conversation
+
+      // TODO - IMPORTANT
+      // BELOW, after doing the commands, 
+      // we need to mark the message as haveing completed its automatic commands to avoid re-running on reload
+
+
       // For now, check if the property exists (will be added to schema)
       const rawData = (this.message as any).AutomaticCommands;
       if (!rawData) return;

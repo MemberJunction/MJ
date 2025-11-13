@@ -1719,7 +1719,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     const hasScrollableContent = element.scrollHeight > element.clientHeight + 50;
     const atBottom = scrollDifference <= buffer;
 
-    this.showScrollToBottomIcon = !atBottom && hasScrollableContent;
+    const newValue = !atBottom && hasScrollableContent;
+
+    // Only update if value changed to prevent unnecessary change detection
+    if (this.showScrollToBottomIcon !== newValue) {
+      this.showScrollToBottomIcon = newValue;
+      this.cdr.detectChanges();
+    }
   }
 
   scrollToBottomNow(retryCount: number = 0): void {
