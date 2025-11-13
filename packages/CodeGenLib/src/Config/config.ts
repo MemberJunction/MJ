@@ -439,9 +439,10 @@ export let currentWorkingDirectory: string = process.cwd();
 
 /** Parse and validate the configuration file */
 const configParsing = configInfoSchema.safeParse(configSearchResult?.config);
-if (!configParsing.success) {
-  LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
-}
+// Don't log errors at module load - commands that need config will validate explicitly
+// if (!configParsing.success) {
+//   LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
+// }
 
 /**
  * Parsed configuration object with fallback to empty object if parsing fails
@@ -462,9 +463,10 @@ export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
   const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
-  if (!maybeConfig.success) {
-    LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
-  }
+  // Don't log errors - let the calling code handle validation failures
+  // if (!maybeConfig.success) {
+  //   LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
+  // }
 
   const config = maybeConfig.success ? maybeConfig.data : configInfo;
 

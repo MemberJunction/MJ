@@ -20,7 +20,7 @@ export default class DbDocReset extends Command {
     const { flags } = await this.parse(DbDocReset);
 
     // Load DBAutoDoc command dynamically
-    const { default: ResetCommand } = await import('@memberjunction/db-auto-doc/dist/commands/reset.js');
+    const { default: ResetCommand } = await import('@memberjunction/db-auto-doc/dist/commands/reset');
 
     // Build args array for DBAutoDoc command
     const args: string[] = [];

@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
 import { Flyway } from 'node-flyway';
-import { config, getFlywayConfig } from '../../config';
+import { getValidatedConfig, getFlywayConfig } from '../../config';
 import ora from 'ora-classic';
 
 export default class Clean extends Command {
@@ -22,9 +22,7 @@ export default class Clean extends Command {
     const parsed = await this.parse(Clean);
     this.flags = parsed.flags;
 
-    if (!config) {
-      this.error('No configuration found');
-    }
+    const config = getValidatedConfig();
 
     const flywayConfig = await getFlywayConfig(config);
     const flyway = new Flyway(flywayConfig);
