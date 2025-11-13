@@ -3206,7 +3206,17 @@ The context is now within limits. Please retry your request with the recovered c
                 conversationMessages: subAgentMessages,
                 contextUser: params.contextUser,
                 cancellationToken: params.cancellationToken,
-                onProgress:  params.onProgress,
+                onProgress: params.onProgress ? (progress) => {
+                    // Override subagent's stepCount with parent's current step to maintain consistency
+                    const parentStepCount = stepCount + 1;
+                    params.onProgress?.({
+                        ...progress,
+                        metadata: {
+                            ...progress.metadata,
+                            stepCount: parentStepCount
+                        }
+                    });
+                } : undefined,
                 onStreaming: params.onStreaming,
                 parentAgentHierarchy: this._agentHierarchy,
                 parentDepth: this._depth,
