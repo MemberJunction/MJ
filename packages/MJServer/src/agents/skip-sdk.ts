@@ -427,6 +427,16 @@ export class SkipSDK {
                 defaultValue: p.DefaultValue,
                 createdAt: p.__mj_CreatedAt,
                 updatedAt: p.__mj_UpdatedAt
+            })),
+            entities: q.Entities.map((e) => ({
+                id: e.ID,
+                queryID: e.QueryID,
+                entityID: e.EntityID,
+                entityName: e.Entity,
+                detectionMethod: e.DetectionMethod,
+                autoDetectConfidenceScore: e.AutoDetectConfidenceScore,
+                createdAt: e.__mj_CreatedAt,
+                updatedAt: e.__mj_UpdatedAt
             }))
         }));
     }
