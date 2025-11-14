@@ -264,27 +264,27 @@ VALUES
 -- ============================================================================
 
 
--- Key Members with Full Details (Mix of real executives from public companies and fictional members)
+-- Key Members with Full Details (Cheese industry professionals across various roles)
 INSERT INTO [AssociationDemo].[Member] (ID, Email, FirstName, LastName, Title, OrganizationID, Industry, JobFunction, YearsInProfession, JoinDate, City, State, Country, Phone, LinkedInURL)
 VALUES
-    -- Real Executives from Public Companies
-    (@Member_SarahChen, 'satya.nadella@microsoft.com', 'Satya', 'Nadella', 'Chairman and Chief Executive Officer', @Org_TechVentures, 'Cloud & AI', 'Executive', 33, DATEADD(DAY, -1825, @EndDate), 'Redmond', 'WA', 'United States', '425-882-8080', 'https://linkedin.com/in/satyanadella'),
-    (@Member_MichaelJohnson, 'marc.benioff@salesforce.com', 'Marc', 'Benioff', 'Chair and Chief Executive Officer', @Org_CloudScale, 'Cloud Software', 'Executive', 40, DATEADD(DAY, -1950, @EndDate), 'San Francisco', 'CA', 'United States', '415-901-7000', 'https://linkedin.com/in/marcbenioff'),
-    (@Member_EmilyRodriguez, 'jensen.huang@nvidia.com', 'Jensen', 'Huang', 'Founder, President and Chief Executive Officer', @Org_DataDriven, 'AI & Semiconductors', 'Executive', 30, DATEADD(DAY, -1680, @EndDate), 'Santa Clara', 'CA', 'United States', '408-486-2000', 'https://linkedin.com/in/jensenh'),
-    (@Member_DavidKim, 'nikesh.arora@paloaltonetworks.com', 'Nikesh', 'Arora', 'Chairman and Chief Executive Officer', @Org_CyberShield, 'Cybersecurity', 'Executive', 35, DATEADD(DAY, -1460, @EndDate), 'Santa Clara', 'CA', 'United States', '408-753-4000', 'https://linkedin.com/in/nikesharora'),
-    (@Member_JessicaLee, 'safra.catz@oracle.com', 'Safra', 'Catz', 'Chief Executive Officer', @Org_HealthTech, 'Enterprise Software', 'Executive', 25, DATEADD(DAY, -1280, @EndDate), 'Austin', 'TX', 'United States', '650-506-7000', 'https://linkedin.com/in/safracatz'),
-    (@Member_RobertBrown, 'bill.mcdermott@servicenow.com', 'Bill', 'McDermott', 'Chairman and Chief Executive Officer', @Org_FinancialEdge, 'Enterprise Software', 'Executive', 40, DATEADD(DAY, -1825, @EndDate), 'Santa Clara', 'CA', 'United States', '408-501-8550', 'https://linkedin.com/in/williammcdermott'),
-    (@Member_LisaAnderson, 'tobi.lutke@shopify.com', 'Tobi', 'Lütke', 'Founder and Chief Executive Officer', @Org_RetailInnovate, 'E-Commerce', 'Executive', 20, DATEADD(DAY, -1095, @EndDate), 'Ottawa', 'Ontario', 'Canada', '+1-888-746-7439', 'https://linkedin.com/in/tobi'),
-    (@Member_JamesPatel, 'shantanu.narayen@adobe.com', 'Shantanu', 'Narayen', 'Chairman and Chief Executive Officer', @Org_EduTech, 'Digital Media Software', 'Executive', 32, DATEADD(DAY, -1680, @EndDate), 'San Jose', 'CA', 'United States', '408-536-6000', 'https://linkedin.com/in/shantanunarayen'),
-    (@Member_MariaGarcia, 'aneel.bhusri@workday.com', 'Aneel', 'Bhusri', 'Co-Founder and Executive Chairman', @Org_ManufacturePro, 'Enterprise Cloud', 'Executive', 25, DATEADD(DAY, -1460, @EndDate), 'Pleasanton', 'CA', 'United States', '925-951-9000', 'https://linkedin.com/in/aneelbhusri'),
-    (@Member_JohnSmith, 'frank.slootman@snowflake.com', 'Frank', 'Slootman', 'Chairman and Chief Executive Officer', @Org_LogisticsPrime, 'Data Cloud', 'Executive', 40, DATEADD(DAY, -1280, @EndDate), 'Bozeman', 'MT', 'United States', '844-766-9355', 'https://linkedin.com/in/frankslootman'),
+    -- Industry Leaders and Executives
+    (@Member_SarahChen, 'sarah.chen@greatlakescheese.com', 'Sarah', 'Chen', 'CEO', @Org_TechVentures, 'Cheese Production', 'Executive', 28, DATEADD(DAY, -1825, @EndDate), 'Cleveland', 'OH', 'United States', '216-555-2005', 'https://linkedin.com/in/sarachen'),
+    (@Member_MichaelJohnson, 'michael.johnson@goldenstatecreamery.com', 'Michael', 'Johnson', 'President', @Org_CloudScale, 'Cheese Production', 'Executive', 32, DATEADD(DAY, -1950, @EndDate), 'Modesto', 'CA', 'United States', '209-555-2004', 'https://linkedin.com/in/michaeljohnson'),
+    (@Member_EmilyRodriguez, 'emily.rodriguez@alpinecreamery.com', 'Emily', 'Rodriguez', 'VP of Operations', @Org_DataDriven, 'Cheese Production', 'Executive', 22, DATEADD(DAY, -1680, @EndDate), 'Monroe', 'WI', 'United States', '608-555-2001', 'https://linkedin.com/in/emilyrodriguez'),
+    (@Member_DavidKim, 'david.kim@cascadecheese.com', 'David', 'Kim', 'Master Cheesemaker', @Org_CyberShield, 'Cheese Production', 'Cheese Production', 25, DATEADD(DAY, -1460, @EndDate), 'Tillamook', 'OR', 'United States', '503-555-2002', 'https://linkedin.com/in/davidkim'),
+    (@Member_JessicaLee, 'jessica.lee@vermontartisan.com', 'Jessica', 'Lee', 'Head Cheesemaker', @Org_HealthTech, 'Cheese Production', 'Cheese Production', 18, DATEADD(DAY, -1280, @EndDate), 'Burlington', 'VT', 'United States', '802-555-2003', 'https://linkedin.com/in/jessicalee'),
+    (@Member_RobertBrown, 'robert.brown@mozzarellamasters.com', 'Robert', 'Brown', 'VP of Sales', @Org_FinancialEdge, 'Cheese Production', 'Executive', 30, DATEADD(DAY, -1825, @EndDate), 'Buffalo', 'NY', 'United States', '716-555-2011', 'https://linkedin.com/in/robertbrown'),
+    (@Member_LisaAnderson, 'lisa.anderson@sunrisedairy.com', 'Lisa', 'Anderson', 'Dairy Farm Owner', @Org_RetailInnovate, 'Dairy Farming', 'Dairy Farming', 35, DATEADD(DAY, -1095, @EndDate), 'Lancaster', 'PA', 'United States', '717-555-3001', 'https://linkedin.com/in/lisaanderson'),
+    (@Member_JamesPatel, 'james.patel@nationalcheese.com', 'James', 'Patel', 'Distribution Manager', @Org_EduTech, 'Food Distribution', 'Distribution', 20, DATEADD(DAY, -1680, @EndDate), 'Chicago', 'IL', 'United States', '312-555-4001', 'https://linkedin.com/in/jamespatel'),
+    (@Member_MariaGarcia, 'maria.garcia@thecheeseshop.com', 'Maria', 'Garcia', 'Store Manager', @Org_ManufacturePro, 'Specialty Retail', 'Retail', 15, DATEADD(DAY, -1460, @EndDate), 'Burlington', 'VT', 'United States', '802-555-5001', 'https://linkedin.com/in/mariagarcia'),
+    (@Member_JohnSmith, 'john.smith@swissvalley.com', 'John', 'Smith', 'Quality Assurance Director', @Org_LogisticsPrime, 'Cheese Production', 'Quality Control', 28, DATEADD(DAY, -1280, @EndDate), 'Davenport', 'IA', 'United States', '563-555-2008', 'https://linkedin.com/in/johnsmith'),
 
-    -- Fictional Members (mix of different roles and experience levels)
-    (@Member_AlexTaylor, 'alex.taylor@university.edu', 'Alex', 'Taylor', 'Graduate Student', NULL, 'Computer Science', 'Student', 2, DATEADD(DAY, -180, @EndDate), 'Cambridge', 'MA', 'United States', '617-555-1011', 'https://linkedin.com/in/alextaylor'),
-    (@Member_RachelWilson, 'rachel.wilson@microsoft.com', 'Rachel', 'Wilson', 'Senior DevOps Engineer', @Org_TechVentures, 'Cloud & AI', 'DevOps', 7, DATEADD(DAY, -640, @EndDate), 'Redmond', 'WA', 'United States', '425-555-1012', 'https://linkedin.com/in/rachelwilson'),
-    (@Member_KevinMartinez, 'kevin.martinez@salesforce.com', 'Kevin', 'Martinez', 'Principal Cloud Architect', @Org_CloudScale, 'Cloud Software', 'Cloud Architecture', 13, DATEADD(DAY, -1200, @EndDate), 'San Francisco', 'CA', 'United States', '415-555-1013', 'https://linkedin.com/in/kevinmartinez'),
-    (@Member_AmandaClark, 'amanda.clark@nvidia.com', 'Amanda', 'Clark', 'Machine Learning Engineer', @Org_DataDriven, 'AI & Semiconductors', 'Machine Learning', 6, DATEADD(DAY, -550, @EndDate), 'Santa Clara', 'CA', 'United States', '408-555-1014', 'https://linkedin.com/in/amandaclark'),
-    (@Member_DanielNguyen, 'daniel.nguyen@paloaltonetworks.com', 'Daniel', 'Nguyen', 'Security Operations Manager', @Org_CyberShield, 'Cybersecurity', 'Security Operations', 9, DATEADD(DAY, -820, @EndDate), 'Santa Clara', 'CA', 'United States', '408-555-1015', 'https://linkedin.com/in/danielnguyen');
+    -- Mid-Career Professionals
+    (@Member_AlexTaylor, 'alex.taylor@university.edu', 'Alex', 'Taylor', 'Graduate Student - Food Science', NULL, 'Food Science', 'Student', 2, DATEADD(DAY, -180, @EndDate), 'Madison', 'WI', 'United States', '608-555-1011', 'https://linkedin.com/in/alextaylor'),
+    (@Member_RachelWilson, 'rachel.wilson@briebeyond.com', 'Rachel', 'Wilson', 'Aging Specialist', @Org_TechVentures, 'Cheese Production', 'Cheese Production', 12, DATEADD(DAY, -640, @EndDate), 'Petaluma', 'CA', 'United States', '707-555-2006', 'https://linkedin.com/in/rachelwilson'),
+    (@Member_KevinMartinez, 'kevin.martinez@coastalcreamery.com', 'Kevin', 'Martinez', 'Production Manager', @Org_CloudScale, 'Cheese Production', 'Operations', 16, DATEADD(DAY, -1200, @EndDate), 'Charleston', 'SC', 'United States', '843-555-2017', 'https://linkedin.com/in/kevinmartinez'),
+    (@Member_AmandaClark, 'amanda.clark@greenpastures.com', 'Amanda', 'Clark', 'Herd Manager', @Org_DataDriven, 'Dairy Farming', 'Dairy Farming', 10, DATEADD(DAY, -550, @EndDate), 'Tillamook', 'OR', 'United States', '503-555-3002', 'https://linkedin.com/in/amandaclark'),
+    (@Member_DanielNguyen, 'daniel.nguyen@parmesanpalace.com', 'Daniel', 'Nguyen', 'Food Safety Manager', @Org_CyberShield, 'Cheese Production', 'Food Safety', 14, DATEADD(DAY, -820, @EndDate), 'Denver', 'CO', 'United States', '303-555-2012', 'https://linkedin.com/in/danielnguyen');
 
 
 -- Remaining 1,985 members generated programmatically with realistic distributions
@@ -321,36 +321,56 @@ INSERT INTO @LastNames VALUES
 ('Rivera'),('Campbell'),('Mitchell'),('Carter'),('Roberts');
 
 INSERT INTO @Titles VALUES
-('Software Engineer', 'Software Development', 2, 8),
-('Senior Software Engineer', 'Software Development', 5, 12),
-('Principal Engineer', 'Software Development', 10, 20),
-('Engineering Manager', 'Engineering Leadership', 8, 15),
-('Director of Engineering', 'Engineering Leadership', 12, 20),
-('VP of Engineering', 'Engineering Leadership', 15, 25),
-('Product Manager', 'Product Management', 3, 10),
-('Senior Product Manager', 'Product Management', 6, 15),
-('Data Scientist', 'Data Science', 2, 8),
-('Senior Data Scientist', 'Data Science', 5, 12),
-('Machine Learning Engineer', 'Machine Learning', 3, 10),
-('DevOps Engineer', 'DevOps', 2, 8),
-('Senior DevOps Engineer', 'DevOps', 5, 12),
-('Cloud Architect', 'Cloud Architecture', 6, 15),
-('Solutions Architect', 'Solutions Architecture', 5, 12),
-('Security Engineer', 'Security', 3, 10),
-('Security Architect', 'Security Architecture', 8, 15),
-('QA Engineer', 'Quality Assurance', 2, 8),
-('Senior QA Engineer', 'Quality Assurance', 5, 12),
-('UX Designer', 'Design', 2, 8),
-('Senior UX Designer', 'Design', 5, 12),
-('UI/UX Lead', 'Design', 8, 15),
-('Data Analyst', 'Data Analysis', 2, 6),
-('Business Analyst', 'Business Analysis', 3, 8),
-('Scrum Master', 'Agile', 3, 10),
-('Technical Lead', 'Technical Leadership', 6, 12),
-('Team Lead', 'Team Leadership', 5, 10),
-('CTO', 'Executive', 15, 30),
-('VP of Technology', 'Executive', 12, 25),
-('Chief Architect', 'Architecture', 15, 25);
+-- Cheese Production Roles
+('Master Cheesemaker', 'Cheese Production', 10, 30),
+('Head Cheesemaker', 'Cheese Production', 8, 20),
+('Cheesemaker', 'Cheese Production', 3, 10),
+('Assistant Cheesemaker', 'Cheese Production', 1, 5),
+('Production Manager', 'Operations', 5, 15),
+('Plant Manager', 'Operations', 8, 20),
+('Aging Specialist', 'Cheese Production', 5, 15),
+('Cheese Grader', 'Quality Control', 3, 10),
+('Quality Control Manager', 'Quality Control', 6, 15),
+('Quality Assurance Director', 'Quality Control', 10, 20),
+('Food Safety Manager', 'Food Safety', 5, 15),
+('Food Safety Director', 'Food Safety', 8, 20),
+('Lab Technician', 'Quality Control', 2, 8),
+('Microbiologist', 'Quality Control', 4, 12),
+-- Dairy Farming Roles
+('Dairy Farm Owner', 'Dairy Farming', 10, 40),
+('Farm Manager', 'Dairy Farming', 5, 15),
+('Herd Manager', 'Dairy Farming', 4, 12),
+('Milk Quality Supervisor', 'Dairy Farming', 3, 10),
+('Dairy Nutritionist', 'Dairy Farming', 5, 15),
+-- Sales & Marketing Roles
+('Sales Manager', 'Sales', 4, 12),
+('Regional Sales Director', 'Sales', 8, 18),
+('Account Executive', 'Sales', 2, 8),
+('Territory Sales Representative', 'Sales', 1, 6),
+('Export Manager', 'Sales', 6, 15),
+('Marketing Director', 'Marketing', 8, 18),
+('Brand Manager', 'Marketing', 4, 10),
+-- Retail Roles
+('Cheese Buyer', 'Retail', 3, 10),
+('Cheese Monger', 'Retail', 2, 8),
+('Store Manager', 'Retail', 4, 12),
+('Department Manager', 'Retail', 3, 10),
+-- Distribution Roles
+('Distribution Manager', 'Distribution', 5, 15),
+('Logistics Coordinator', 'Distribution', 2, 8),
+('Supply Chain Manager', 'Distribution', 6, 15),
+('Warehouse Manager', 'Distribution', 4, 12),
+-- Executive Roles
+('CEO', 'Executive', 15, 40),
+('President', 'Executive', 12, 35),
+('VP of Operations', 'Executive', 10, 25),
+('VP of Sales', 'Executive', 10, 25),
+('Operations Director', 'Operations', 8, 20),
+-- Other Roles
+('R&D Manager', 'Research & Development', 6, 15),
+('Product Development Specialist', 'Research & Development', 4, 12),
+('Packaging Manager', 'Operations', 5, 12),
+('Customer Service Manager', 'Customer Service', 4, 12);
 
 INSERT INTO @Cities VALUES
 ('Austin', 'TX', 'United States'),('Seattle', 'WA', 'United States'),
@@ -367,56 +387,101 @@ INSERT INTO @Cities VALUES
 ('London', NULL, 'United Kingdom'),('Singapore', NULL, 'Singapore'),
 ('Sydney', 'NSW', 'Australia');
 
--- Generate 1,985 additional members
+-- Create organization list with weighted distribution for member assignment
+DECLARE @OrgList TABLE (
+    OrgID UNIQUEIDENTIFIER,
+    OrgIndustry NVARCHAR(100),
+    EmailDomain NVARCHAR(100),
+    RowNum INT IDENTITY(1,1),
+    MemberWeight INT  -- How many members this org should have
+);
+
+-- Insert cheese industry organizations with weights based on size
+INSERT INTO @OrgList (OrgID, OrgIndustry, EmailDomain, MemberWeight)
+SELECT
+    o.ID,
+    o.Industry,
+    LOWER(REPLACE(REPLACE(REPLACE(REPLACE(o.Name, ' ', ''), ',', ''), '.', ''), '''', '')) + '.com',
+    CASE
+        -- Large producers get more members (10-25 each)
+        WHEN o.EmployeeCount > 200 THEN 20
+        -- Medium producers (5-15 each)
+        WHEN o.EmployeeCount > 100 THEN 10
+        -- Medium companies (5-10 each)
+        WHEN o.EmployeeCount > 50 THEN 7
+        -- Small farms and retailers (2-5 each)
+        WHEN o.EmployeeCount > 20 THEN 3
+        -- Very small operations (1-2 each)
+        ELSE 2
+    END
+FROM [AssociationDemo].[Organization] o
+WHERE o.Industry IN ('Cheese Production', 'Dairy Farming', 'Food Distribution', 'Specialty Retail');
+
+-- Generate 1,985 additional members with diverse organization distribution
+-- Use row numbers to ensure each row gets a different random org assignment
+WITH NumberedMembers AS (
+    SELECT TOP 1985
+        ROW_NUMBER() OVER (ORDER BY NEWID()) as MemberNum,
+        fn.FirstName,
+        ln.LastName,
+        t.Title,
+        t.JobFunction,
+        t.YearsMin,
+        t.YearsMax,
+        c.City,
+        c.State,
+        c.Country
+    FROM @FirstNames fn
+    CROSS JOIN @LastNames ln
+    CROSS JOIN @Titles t
+    CROSS JOIN @Cities c
+    ORDER BY NEWID()
+),
+NumberedOrgs AS (
+    SELECT
+        OrgID,
+        OrgIndustry,
+        EmailDomain,
+        ROW_NUMBER() OVER (ORDER BY NEWID()) as OrgNum,
+        COUNT(*) OVER () as TotalOrgs
+    FROM @OrgList
+)
 INSERT INTO [AssociationDemo].[Member] (ID, Email, FirstName, LastName, Title, OrganizationID, Industry, JobFunction, YearsInProfession, JoinDate, City, State, Country)
-SELECT TOP 1985
+SELECT
     NEWID(),
-    LOWER(fn.FirstName + '.' + ln.LastName + CAST(ABS(CHECKSUM(NEWID()) % 1000) AS NVARCHAR(10)) + '@' +
-        CASE ABS(CHECKSUM(NEWID()) % 10)
-            WHEN 0 THEN 'techventures.com'
-            WHEN 1 THEN 'cloudscale.io'
-            WHEN 2 THEN 'example.com'
-            WHEN 3 THEN 'company.com'
-            WHEN 4 THEN 'tech.io'
-            WHEN 5 THEN 'software.com'
-            WHEN 6 THEN 'solutions.com'
-            WHEN 7 THEN 'consulting.com'
-            WHEN 8 THEN 'systems.com'
-            ELSE 'services.com'
+    LOWER(m.FirstName + '.' + m.LastName + CAST(ABS(CHECKSUM(NEWID()) % 1000) AS NVARCHAR(10)) + '@' +
+        COALESCE(o.EmailDomain,
+            CASE ABS(CHECKSUM(NEWID()) % 5)
+                WHEN 0 THEN 'cheeselover.com'
+                WHEN 1 THEN 'dairymail.com'
+                WHEN 2 THEN 'cheesemaker.net'
+                WHEN 3 THEN 'artisancheese.com'
+                ELSE 'fromagerie.com'
+            END
+        )
+    ),
+    m.FirstName,
+    m.LastName,
+    m.Title,
+    CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 85 THEN o.OrgID ELSE NULL END, -- 85% have organization
+    COALESCE(o.OrgIndustry,
+        CASE ABS(CHECKSUM(NEWID()) % 6)
+            WHEN 0 THEN 'Cheese Production'
+            WHEN 1 THEN 'Dairy Farming'
+            WHEN 2 THEN 'Food Distribution'
+            WHEN 3 THEN 'Specialty Retail'
+            WHEN 4 THEN 'Food Safety & Quality'
+            ELSE 'Dairy Equipment & Supplies'
         END
     ),
-    fn.FirstName,
-    ln.LastName,
-    t.Title,
-    CASE WHEN ABS(CHECKSUM(NEWID()) % 100) < 70 THEN o.ID ELSE NULL END, -- 70% have organization
-    CASE ABS(CHECKSUM(NEWID()) % 12)
-        WHEN 0 THEN 'Software & SaaS'
-        WHEN 1 THEN 'Cloud Infrastructure'
-        WHEN 2 THEN 'Data & AI'
-        WHEN 3 THEN 'Cybersecurity'
-        WHEN 4 THEN 'Healthcare Technology'
-        WHEN 5 THEN 'FinTech'
-        WHEN 6 THEN 'Consulting'
-        WHEN 7 THEN 'Education Technology'
-        WHEN 8 THEN 'Manufacturing Software'
-        WHEN 9 THEN 'Logistics & Supply Chain'
-        WHEN 10 THEN 'Retail Technology'
-        ELSE 'Technology Services'
-    END,
-    t.JobFunction,
-    t.YearsMin + ABS(CHECKSUM(NEWID()) % (t.YearsMax - t.YearsMin + 1)),
+    m.JobFunction,
+    m.YearsMin + ABS(CHECKSUM(NEWID()) % (m.YearsMax - m.YearsMin + 1)),
     DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 1825), @EndDate), -- Join dates spread over 5 years
-    c.City,
-    c.State,
-    c.Country
-FROM @FirstNames fn
-CROSS JOIN @LastNames ln
-CROSS JOIN @Titles t
-CROSS JOIN @Cities c
-CROSS APPLY (
-    SELECT TOP 1 ID FROM [AssociationDemo].[Organization] ORDER BY NEWID()
-) o
-ORDER BY NEWID();
+    m.City,
+    m.State,
+    m.Country
+FROM NumberedMembers m
+LEFT JOIN NumberedOrgs o ON o.OrgNum = ((m.MemberNum - 1) % o.TotalOrgs) + 1;
 
 
 -- ============================================================================

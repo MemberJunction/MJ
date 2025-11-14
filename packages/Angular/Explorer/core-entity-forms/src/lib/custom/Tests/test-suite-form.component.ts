@@ -7,6 +7,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestSuiteFormComponent } from '../../generated/Entities/TestSuite/testsuite.form.component';
+import { TestingDialogService } from '@memberjunction/ng-testing';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suites')
 @Component({
@@ -33,7 +34,8 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef
+    protected cdr: ChangeDetectorRef,
+    private testingDialogService: TestingDialogService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -94,7 +96,9 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   }
 
   async runSuite() {
-    console.log('Run suite:', this.record.ID);
+    if (this.record?.ID) {
+      this.testingDialogService.OpenSuiteDialog(this.record.ID);
+    }
   }
 }
 

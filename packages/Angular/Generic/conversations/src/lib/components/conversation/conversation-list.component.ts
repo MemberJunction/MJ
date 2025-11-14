@@ -176,14 +176,14 @@ import { takeUntil } from 'rxjs/operators';
             }
           </div>
           <div class="selection-actions">
-            <button class="btn-cancel" (click)="toggleSelectionMode()">
-              Cancel
-            </button>
             <button class="btn-delete-bulk"
                     (click)="bulkDeleteConversations()"
                     [disabled]="selectedConversationIds.size === 0">
               <i class="fas fa-trash"></i>
               Delete ({{ selectedConversationIds.size }})
+            </button>
+            <button class="btn-cancel" (click)="toggleSelectionMode()">
+              Cancel
             </button>
           </div>
         </div>

@@ -184,6 +184,21 @@
             "lastModified": "2025-09-02T21:21:18.931Z",
             "checksum": "13b7855903f6035517539a84aa482e4ee114165c18c0ff33c79b98ca6640f847"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 21
+          },
+          "primaryKey": {
+            "ID": "948CD28C-B524-4823-8459-1268F8451606"
+          },
+          "sync": {
+            "lastModified": "2025-11-13T23:20:08.768Z",
+            "checksum": "680e3d0979535bf37c35a9d9e94365e4480b905ea28c594c184b1214e9f08225"
+          }
         }
       ]
     },
@@ -191,8 +206,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-11-11T19:04:53.527Z",
-      "checksum": "a57938dc51c3fe93c0c7f5b9801a99ba2dd4659dab68c86077f71b1d3cbbda49"
+      "lastModified": "2025-11-13T23:20:08.228Z",
+      "checksum": "a7c42ac54427b9121116fb169b5e330e7a8eb4ad77910deb70eea096b89c60f8"
     }
   },
   {

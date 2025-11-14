@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { Flyway } from 'node-flyway';
 import ora from 'ora-classic';
-import { config, getFlywayConfig } from '../../config';
+import { getValidatedConfig, getFlywayConfig } from '../../config';
 
 export default class Migrate extends Command {
   static description = 'Migrate MemberJunction database to latest version';
@@ -19,9 +19,7 @@ export default class Migrate extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(Migrate);
 
-    if (!config) {
-      this.error('No configuration found');
-    }
+    const config = getValidatedConfig();
 
     const flywayConfig = await getFlywayConfig(config, flags.tag);
     const flyway = new Flyway(flywayConfig);

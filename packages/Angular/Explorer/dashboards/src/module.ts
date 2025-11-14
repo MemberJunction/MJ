@@ -72,14 +72,11 @@ import { TestingExecutionComponent } from './Testing/components/testing-executio
 import { TestingAnalyticsComponent } from './Testing/components/testing-analytics.component';
 import { TestingVersionComparisonComponent } from './Testing/components/testing-version-comparison.component';
 import { TestingFeedbackComponent } from './Testing/components/testing-feedback.component';
-import { TestStatusBadgeComponent } from './Testing/components/widgets/test-status-badge.component';
-import { ScoreIndicatorComponent } from './Testing/components/widgets/score-indicator.component';
-import { CostDisplayComponent } from './Testing/components/widgets/cost-display.component';
 import { SuiteTreeComponent, SuiteTreeNodeComponent } from './Testing/components/widgets/suite-tree.component';
 import { OracleBreakdownTableComponent } from './Testing/components/widgets/oracle-breakdown-table.component';
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
-import { TestRunDialogComponent } from './Testing/components/widgets/test-run-dialog.component';
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
+import { TestingModule } from '@memberjunction/ng-testing';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -133,14 +130,10 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     TestingAnalyticsComponent,
     TestingVersionComparisonComponent,
     TestingFeedbackComponent,
-    TestStatusBadgeComponent,
-    ScoreIndicatorComponent,
-    CostDisplayComponent,
     SuiteTreeComponent,
     SuiteTreeNodeComponent,
     OracleBreakdownTableComponent,
-    TestRunDetailPanelComponent,
-    TestRunDialogComponent
+    TestRunDetailPanelComponent
   ],
   imports: [
     CommonModule,
@@ -165,7 +158,8 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     SplitterModule,
     TabStripModule,
     PanelBarModule,
-    MJNotificationsModule
+    MJNotificationsModule,
+    TestingModule
   ],
   providers: [
     AIInstrumentationService,

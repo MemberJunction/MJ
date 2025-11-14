@@ -8,6 +8,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestFormComponent } from '../../generated/Entities/Test/test.form.component';
+import { TestingDialogService } from '@memberjunction/ng-testing';
 
 interface ParsedJSON {
   inputDefinition?: any;
@@ -50,7 +51,8 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef
+    protected cdr: ChangeDetectorRef,
+    private testingDialogService: TestingDialogService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -231,8 +233,9 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   }
 
   async runTest() {
-    // TODO: Implement test execution
-    console.log('Run test:', this.record.ID);
+    if (this.record?.ID) {
+      this.testingDialogService.OpenTestDialog(this.record.ID);
+    }
   }
 
   async refresh() {

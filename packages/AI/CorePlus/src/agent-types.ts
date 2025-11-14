@@ -356,11 +356,11 @@ export type NextStepDetails <P = any> =
 export type AgentExecutionProgressCallback = (progress: {
     /** Current step in the agent execution process */
     step: 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization';
-    /** Progress percentage (0-100) */
-    percentage: number;
+    /** @deprecated Progress percentage (0-100) - Use metadata.stepCount instead for actual progress tracking */
+    percentage?: number;
     /** Human-readable status message */
     message: string;
-    /** Additional metadata about the current step */
+    /** Additional metadata about the current step. Use metadata.stepCount for accurate step tracking. */
     metadata?: Record<string, unknown>;
     /** When this progress message should be displayed */
     displayMode?: 'live' | 'historical' | 'both';
@@ -432,6 +432,12 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
     parentAgentHierarchy?: string[];
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+    /**
+     * Optional parent step counts from root to immediate parent agent.
+     * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).
+     * @internal - Managed automatically by agent execution framework
+     */
+    parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: AIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */

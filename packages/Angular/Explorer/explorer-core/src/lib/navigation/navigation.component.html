@@ -1,4 +1,4 @@
-<div class="navigation-wrap" [ngClass]="{'waiting': loader}"  #drawerWrapper>
+<div class="navigation-wrap" [ngClass]="{'waiting': loader}"  #drawerWrapper kendoDialogContainer>
   <kendo-loader *ngIf="loading" type="converging-spinner" ></kendo-loader>
   <kendo-drawer-container *ngIf="!loading" >
     <kendo-drawer
@@ -24,7 +24,7 @@
         </div>
       </ng-template>    
     </kendo-drawer>
-    <kendo-drawer-content>
+    <kendo-drawer-content kendoDialogContainer>
 
       <mj-tabstrip #mjTabstrip (TabClosed)="handleTabClosed($event)" (TabSelected)="handleTabSelected($event)" (TabContextMenu)="handleTabContextMenu($event)" (ResizeContainer)="sharedService.InvokeManualResize()">
         <mj-tab [TabCloseable]="false">

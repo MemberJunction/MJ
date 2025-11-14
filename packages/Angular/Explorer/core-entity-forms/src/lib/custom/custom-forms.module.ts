@@ -35,6 +35,7 @@ import { AgentPermissionsDialogComponent } from "./AIAgents/agent-permissions-di
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
+import { TestingModule } from "@memberjunction/ng-testing";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
@@ -153,6 +154,7 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
         CheckBoxModule,
         AITestHarnessModule,
         ActionGalleryModule,
+        TestingModule,
         MJIntegratedFlowEditorComponent
     ],
     exports: [

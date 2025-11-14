@@ -15,6 +15,7 @@ export interface MessageProgressUpdate {
   taskName?: string;
   conversationDetailId: string;
   metadata?: any;
+  stepCount?: number;
 }
 
 /**
@@ -58,7 +59,6 @@ export class ConversationStreamingService implements OnDestroy {
     private activeTasks: ActiveTasksService,
     private dataCache: DataCacheService
   ) {
-    console.log('[ConversationStreamingService] Service created');
   }
 
   /**
@@ -67,11 +67,9 @@ export class ConversationStreamingService implements OnDestroy {
    */
   public initialize(): void {
     if (this.initialized) {
-      console.log('[ConversationStreamingService] Already initialized, skipping');
       return;
     }
 
-    console.log('[ConversationStreamingService] Initializing global PubSub subscription...');
 
     try {
       const dataProvider = GraphQLDataProvider.Instance;
@@ -87,7 +85,6 @@ export class ConversationStreamingService implements OnDestroy {
           this.scheduleReconnection();
         },
         complete: () => {
-          console.log('[ConversationStreamingService] PubSub connection closed');
           this.connectionStatus$.next('disconnected');
           this.scheduleReconnection();
         }
@@ -95,8 +92,6 @@ export class ConversationStreamingService implements OnDestroy {
 
       this.initialized = true;
       this.connectionStatus$.next('connected');
-      console.log('[ConversationStreamingService] Successfully initialized');
-
     } catch (error) {
       console.error('[ConversationStreamingService] Failed to initialize:', error);
       this.connectionStatus$.next('error');
@@ -132,8 +127,6 @@ export class ConversationStreamingService implements OnDestroy {
     const existing = this.callbackRegistry.get(conversationDetailId) || [];
     existing.push(callback);
     this.callbackRegistry.set(conversationDetailId, existing);
-
-    console.log(`[ConversationStreamingService] Registered callback for message ${conversationDetailId} (total callbacks: ${existing.length})`);
   }
 
   /**
@@ -154,10 +147,8 @@ export class ConversationStreamingService implements OnDestroy {
 
       if (filtered.length > 0) {
         this.callbackRegistry.set(conversationDetailId, filtered);
-        console.log(`[ConversationStreamingService] Unregistered specific callback for message ${conversationDetailId} (remaining: ${filtered.length})`);
       } else {
         this.callbackRegistry.delete(conversationDetailId);
-        console.log(`[ConversationStreamingService] Unregistered last callback for message ${conversationDetailId}`);
       }
     } else {
       // Remove all callbacks for this message
@@ -165,7 +156,7 @@ export class ConversationStreamingService implements OnDestroy {
       this.callbackRegistry.delete(conversationDetailId);
 
       if (hadCallbacks) {
-        console.log(`[ConversationStreamingService] Unregistered all callbacks for message ${conversationDetailId}`);
+        // console.log(`[ConversationStreamingService] Unregistered all callbacks for message ${conversationDetailId}`);
       }
     }
   }
@@ -227,12 +218,12 @@ export class ConversationStreamingService implements OnDestroy {
       // Extract progress information from status object
       const { taskName, message, percentComplete, metadata, conversationDetailId } = statusObj.data || {};
 
-      console.log(`[ConversationStreamingService] 📥 Received progress update:`, {
-        taskName,
-        hasMessage: !!message,
-        conversationDetailId,
-        registeredCallbacks: Array.from(this.callbackRegistry.keys())
-      });
+      // console.log(`[ConversationStreamingService] 📥 Received progress update:`, {
+      //   taskName,
+      //   hasMessage: !!message,
+      //   conversationDetailId,
+      //   registeredCallbacks: Array.from(this.callbackRegistry.keys())
+      // });
 
       if (!message) {
         console.warn('[ConversationStreamingService] ⚠️  No message content in progress update');
@@ -273,7 +264,7 @@ export class ConversationStreamingService implements OnDestroy {
         }
       }
 
-      console.log(`[ConversationStreamingService] ✅ Routed progress update to message ${conversationDetailId} (${callbacks.length} callback(s))`);
+      // console.log(`[ConversationStreamingService] ✅ Routed progress update to message ${conversationDetailId} (${callbacks.length} callback(s))`);
 
     } catch (error) {
       console.error('[ConversationStreamingService] Error routing task progress:', error);
@@ -291,13 +282,7 @@ export class ConversationStreamingService implements OnDestroy {
       const conversationDetailId = agentRun?.ConversationDetailID;
       const message = progress?.message;
       const percentComplete = progress?.percentage;
-
-      console.log(`[ConversationStreamingService] 📥 Received agent progress update:`, {
-        agentName: agentRun?.Agent,
-        hasMessage: !!message,
-        conversationDetailId,
-        registeredCallbacks: Array.from(this.callbackRegistry.keys())
-      });
+      const stepCount = progress?.stepCount;
 
       if (!message) {
         console.warn('[ConversationStreamingService] ⚠️  No message content in agent progress update');
@@ -323,7 +308,8 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName: agentRun?.Agent || 'Agent',
         conversationDetailId,
-        metadata: { agentRun, progress }
+        metadata: { agentRun, progress },
+        stepCount
       };
 
       // Invoke all registered callbacks for this specific message
@@ -335,8 +321,6 @@ export class ConversationStreamingService implements OnDestroy {
           // Continue with other callbacks even if one fails
         }
       }
-
-      console.log(`[ConversationStreamingService] ✅ Routed agent progress to message ${conversationDetailId} (${callbacks.length} callback(s))`);
 
     } catch (error) {
       console.error('[ConversationStreamingService] Error routing agent progress:', error);
@@ -351,7 +335,6 @@ export class ConversationStreamingService implements OnDestroy {
       clearTimeout(this.reconnectionTimeout);
     }
 
-    console.log('[ConversationStreamingService] Scheduling reconnection in 5 seconds...');
     this.connectionStatus$.next('reconnecting');
 
     this.reconnectionTimeout = setTimeout(() => {
@@ -365,8 +348,6 @@ export class ConversationStreamingService implements OnDestroy {
    * Cleanup when service is destroyed
    */
   ngOnDestroy(): void {
-    console.log('[ConversationStreamingService] Service destroying, cleaning up...');
-
     if (this.reconnectionTimeout) {
       clearTimeout(this.reconnectionTimeout);
     }
