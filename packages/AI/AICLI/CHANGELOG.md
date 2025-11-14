@@ -1,5 +1,30 @@
 # @memberjunction/ai-cli
 
+## 2.119.0
+
+### Patch Changes
+
+- 0a133df: Agent Conversation UI Improvement
+- Updated dependencies [7dd7cca]
+- Updated dependencies [62790f4]
+- Updated dependencies [0a133df]
+- Updated dependencies [efc6451]
+  - @memberjunction/core@2.119.0
+  - @memberjunction/ai-agents@2.119.0
+  - @memberjunction/ai-prompts@2.119.0
+  - @memberjunction/core-actions@2.119.0
+  - @memberjunction/actions@2.119.0
+  - @memberjunction/core-entities@2.119.0
+  - @memberjunction/core-entities-server@2.119.0
+  - @memberjunction/sqlserver-dataprovider@2.119.0
+  - @memberjunction/ai@2.119.0
+  - @memberjunction/ai-anthropic@2.119.0
+  - @memberjunction/ai-betty-bot@2.119.0
+  - @memberjunction/ai-cerebras@2.119.0
+  - @memberjunction/ai-groq@2.119.0
+  - @memberjunction/ai-mistral@2.119.0
+  - @memberjunction/ai-openai@2.119.0
+
 ## 2.118.0
 
 ### Patch Changes

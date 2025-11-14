@@ -1,5 +1,27 @@
 # @memberjunction/ai-agents
 
+## 2.119.0
+
+### Minor Changes
+
+- 62790f4: migration
+
+### Patch Changes
+
+- 0a133df: Agent Conversation UI Improvement
+- Updated dependencies [7dd7cca]
+- Updated dependencies [0a133df]
+- Updated dependencies [efc6451]
+  - @memberjunction/core@2.119.0
+  - @memberjunction/ai-core-plus@2.119.0
+  - @memberjunction/ai-prompts@2.119.0
+  - @memberjunction/aiengine@2.119.0
+  - @memberjunction/actions-base@2.119.0
+  - @memberjunction/actions@2.119.0
+  - @memberjunction/core-entities@2.119.0
+  - @memberjunction/ai@2.119.0
+  - @memberjunction/global@2.119.0
+
 ## 2.118.0
 
 ### Minor Changes

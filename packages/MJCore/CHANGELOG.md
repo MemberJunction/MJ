@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.119.0
+
+### Minor Changes
+
+- 7dd7cca: Migration
+
+### Patch Changes
+
+- @memberjunction/global@2.119.0
+
 ## 2.118.0
 
 ### Minor Changes
