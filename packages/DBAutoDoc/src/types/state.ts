@@ -4,6 +4,7 @@
  */
 
 import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
+import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
 
 export interface DatabaseDocumentation {
   version: string;
@@ -58,6 +59,19 @@ export interface SeedContext {
 export interface AnalysisPhases {
   keyDetection?: RelationshipDiscoveryPhase; // Primary key and foreign key detection
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
+  sampleQueryGeneration?: SampleQueryGenerationPhase; // Sample query generation for AI agents
+}
+
+/**
+ * Sample query generation phase results
+ */
+export interface SampleQueryGenerationPhase {
+  startedAt: string;
+  completedAt?: string;
+  status: 'running' | 'completed' | 'failed';
+  queries: SampleQuery[];
+  summary: SampleQueryGenerationSummary;
+  errorMessage?: string;
 }
 
 export interface SchemaDefinition {

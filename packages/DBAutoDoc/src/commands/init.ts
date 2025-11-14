@@ -134,6 +134,31 @@ export default class Init extends Command {
       }
     ]);
 
+    // Sample query generation options
+    const queryAnswers = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'enableSampleQueries',
+        message: 'Generate sample queries for each table?',
+        default: false
+      },
+      {
+        type: 'number',
+        name: 'queriesPerTable',
+        message: 'Number of queries to generate per table:',
+        default: 5,
+        when: (answers: any) => answers.enableSampleQueries,
+        validate: (input: number) => input > 0 || 'Must be greater than 0'
+      },
+      {
+        type: 'number',
+        name: 'maxExecutionTime',
+        message: 'Max execution time for query validation (ms):',
+        default: 30000,
+        when: (answers: any) => answers.enableSampleQueries
+      }
+    ]);
+
     // Create configuration
     const config = ConfigLoader.createDefault();
 
@@ -164,6 +189,19 @@ export default class Init extends Command {
           ? contextAnswers.businessDomains.split(',').map((d: string) => d.trim())
           : undefined,
         industryContext: contextAnswers.industryContext || undefined
+      };
+    }
+
+    // Add sample query generation config if enabled
+    if (queryAnswers.enableSampleQueries) {
+      config.analysis.sampleQueryGeneration = {
+        enabled: true,
+        queriesPerTable: queryAnswers.queriesPerTable || 5,
+        maxExecutionTime: queryAnswers.maxExecutionTime || 30000,
+        includeMultiQueryPatterns: true,
+        validateAlignment: true,
+        tokenBudget: 100000,
+        maxRowsInSample: 10
       };
     }
 

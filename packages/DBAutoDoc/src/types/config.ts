@@ -50,6 +50,17 @@ export interface AnalysisConfig {
   sanityChecks: SanityCheckConfig;
   guardrails?: GuardrailsConfig;
   relationshipDiscovery?: RelationshipDiscoveryConfig;
+  sampleQueryGeneration?: SampleQueryGenerationConfig;
+}
+
+export interface SampleQueryGenerationConfig {
+  enabled: boolean;                     // Enable sample query generation (default: false)
+  queriesPerTable: number;              // Number of queries to generate per table (default: 5)
+  maxExecutionTime: number;             // Max time to execute validation queries in ms (default: 30000)
+  includeMultiQueryPatterns: boolean;   // Generate related query patterns (default: true)
+  validateAlignment: boolean;           // Validate alignment between related queries (default: true)
+  tokenBudget: number;                  // Token budget for query generation phase (default: 100000)
+  maxRowsInSample: number;              // Max rows to return in sample results (default: 10)
 }
 
 export interface RelationshipDiscoveryConfig {
