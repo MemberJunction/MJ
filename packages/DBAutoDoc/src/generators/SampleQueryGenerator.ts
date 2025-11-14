@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import * as fs from 'fs/promises';
 import {
   SampleQuery,
   SampleQueryGenerationResult,
@@ -78,7 +79,9 @@ export class SampleQueryGenerator {
     private driver: BaseAutoDocDriver,
     private model: string,
     private effortLevel?: number,
-    private maxTokens: number = 16000  // Default from typical AI config
+    private maxTokens: number = 16000,  // Default from typical AI config
+    private outputFilePath?: string,  // Optional path for incremental query writes
+    private summaryFilePath?: string  // Optional path for incremental summary writes
   ) {}
 
   public async generateQueries(
@@ -159,6 +162,11 @@ export class SampleQueryGenerator {
           existingQueries.concat(queries)
         );
         queries.push(...tableQueries);
+
+        // Write incrementally after each table if output path is provided
+        if ((this.outputFilePath || this.summaryFilePath) && tableQueries.length > 0) {
+          await this.writeIncrementalOutput(existingQueries.concat(queries));
+        }
       } catch (error) {
         LogError(
           `[SampleQueryGenerator] Failed to generate queries for ${focusTable.name}: ${(error as Error).message}`
@@ -616,5 +624,59 @@ export class SampleQueryGenerator {
       summary.queriesByComplexity[query.complexity] =
         (summary.queriesByComplexity[query.complexity] || 0) + 1;
     }
+  }
+
+  /**
+   * Write queries and summary to files incrementally after each table completes
+   * This allows users to cancel the run and still see completed queries and progress
+   */
+  private async writeIncrementalOutput(queries: SampleQuery[]): Promise<void> {
+    try {
+      // Write queries if path is provided
+      if (this.outputFilePath) {
+        await fs.writeFile(
+          this.outputFilePath,
+          JSON.stringify(queries, null, 2),
+          'utf-8'
+        );
+        LogStatus(`[SampleQueryGenerator] Wrote ${queries.length} queries to ${this.outputFilePath}`);
+      }
+
+      // Calculate and write summary if path is provided
+      if (this.summaryFilePath) {
+        const summary = this.calculateSummary(queries);
+        await fs.writeFile(
+          this.summaryFilePath,
+          JSON.stringify(summary, null, 2),
+          'utf-8'
+        );
+        LogStatus(`[SampleQueryGenerator] Updated summary: ${summary.totalQueriesGenerated} queries, ${summary.queriesValidated} validated`);
+      }
+    } catch (error) {
+      LogError(`[SampleQueryGenerator] Failed to write incremental output: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Calculate summary statistics from current set of queries
+   */
+  private calculateSummary(queries: SampleQuery[]): SampleQueryGenerationSummary {
+    const summary: SampleQueryGenerationSummary = {
+      totalQueriesGenerated: queries.length,
+      queriesValidated: queries.filter(q => q.validated).length,
+      queriesFailed: queries.filter(q => !q.validated).length,
+      totalExecutionTime: Date.now() - this.startTime,
+      tokensUsed: this.totalTokensUsed,
+      estimatedCost: this.totalCost,
+      averageConfidence: queries.length > 0
+        ? queries.reduce((sum, q) => sum + q.confidence, 0) / queries.length
+        : 0,
+      queriesByType: {} as Record<QueryType, number>,
+      queriesByPattern: {} as Record<QueryPattern, number>,
+      queriesByComplexity: {} as Record<QueryComplexity, number>
+    };
+
+    this.aggregateQueryMetrics(queries, summary);
+    return summary;
   }
 }

@@ -374,7 +374,11 @@ export class AnalysisOrchestrator {
     const effortLevel = this.config.ai.effortLevel || 75;
     const maxTokens = this.config.ai.maxTokens || 16000;
 
-    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, effortLevel, maxTokens);
+    // Determine output file paths for incremental writes
+    const queriesPath = path.join(runFolder, 'sample-queries.json');
+    const summaryPath = path.join(runFolder, 'sample-queries-summary.json');
+
+    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, effortLevel, maxTokens, queriesPath, summaryPath);
 
     try {
       const result = await generator.generateQueries(state.schemas);
@@ -388,10 +392,17 @@ export class AnalysisOrchestrator {
           summary: result.summary
         };
 
-        const queriesPath = path.join(runFolder, 'sample-queries.json');
+        // Save queries and summary (final write to ensure we have the complete set)
+        // Note: Both were already written incrementally during generation
         await fs.writeFile(
           queriesPath,
           JSON.stringify(result.queries, null, 2),
+          'utf-8'
+        );
+
+        await fs.writeFile(
+          summaryPath,
+          JSON.stringify(result.summary, null, 2),
           'utf-8'
         );
 

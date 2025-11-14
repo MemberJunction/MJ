@@ -119,6 +119,10 @@ export default class GenerateQueries extends Command {
       const effortLevel = config.ai.effortLevel || 75;
       const maxTokens = config.ai.maxTokens || 16000;  // Use config value or default
 
+      // Determine output file paths for incremental writes
+      const queriesPath = path.join(outputDir, 'sample-queries.json');
+      const summaryPath = path.join(outputDir, 'sample-queries-summary.json');
+
       // Create generator
       spinner.start('Generating sample queries');
       const generator = new SampleQueryGenerator(
@@ -127,7 +131,9 @@ export default class GenerateQueries extends Command {
         db.getDriver(),
         model,
         effortLevel,
-        maxTokens
+        maxTokens,
+        queriesPath,  // Pass queries output path for incremental writes
+        summaryPath   // Pass summary output path for incremental writes
       );
 
       // Generate queries
@@ -136,16 +142,14 @@ export default class GenerateQueries extends Command {
       await db.close();
 
       if (result.success) {
-        // Save queries
-        const queriesPath = path.join(outputDir, 'sample-queries.json');
+        // Save queries and summary (final write to ensure we have the complete set)
+        // Note: Both were already written incrementally during generation
         await fs.writeFile(
           queriesPath,
           JSON.stringify(result.queries, null, 2),
           'utf-8'
         );
 
-        // Save summary
-        const summaryPath = path.join(outputDir, 'sample-queries-summary.json');
         await fs.writeFile(
           summaryPath,
           JSON.stringify(result.summary, null, 2),
