@@ -1,0 +1,83 @@
+<header class="header">
+  <!-- Logo / App Switcher -->
+  <!-- TODO: Click logo to show app switcher dropdown with all registered apps -->
+  <!-- This allows user to switch between Conversations, CRM, Settings, etc. -->
+  <div class="logo" (click)="ToggleAppSwitcher()" title="Switch Apps">
+    <span class="logo-text">MJ</span>
+  </div>
+
+  <!-- TODO: App Switcher Dropdown (not implemented in prototype)
+  <div class="app-switcher-dropdown" *ngIf="showAppSwitcher">
+    <div *ngFor="let app of GetAllApps()"
+         class="app-switcher-item"
+         (click)="OnNavigate(app.Route); ToggleAppSwitcher()">
+      <i [class]="app.Icon"></i>
+      <span>{{ app.Name }}</span>
+    </div>
+  </div>
+  -->
+
+  <!-- App Indicator -->
+  <div class="app-indicator" *ngIf="activeApp">
+    <i [class]="activeApp.Icon"></i>
+    <span>{{ activeApp.Name }}</span>
+  </div>
+
+  <!-- Navigation Items (List style) -->
+  <nav class="nav-list" *ngIf="navigationType === 'list' && navItems.length > 0">
+    <a
+      *ngFor="let item of navItems"
+      [routerLink]="item.Route"
+      routerLinkActive="active"
+      class="nav-item"
+    >
+      <i [class]="item.Icon" *ngIf="item.Icon"></i>
+      <span>{{ item.Label }}</span>
+      <span class="badge" *ngIf="item.Badge">{{ item.Badge }}</span>
+    </a>
+  </nav>
+
+  <!-- Breadcrumb (Alternative style) -->
+  <nav class="breadcrumb" *ngIf="navigationType === 'breadcrumb' && breadcrumbs.length > 0">
+    <ng-container *ngFor="let crumb of breadcrumbs; let last = last">
+      <span class="separator" *ngIf="!last">›</span>
+      <a
+        *ngIf="crumb.Route"
+        [routerLink]="crumb.Route"
+        class="breadcrumb-item"
+      >
+        <i [class]="crumb.Icon" *ngIf="crumb.Icon"></i>
+        {{ crumb.Label }}
+      </a>
+      <span *ngIf="!crumb.Route" class="breadcrumb-item current">
+        <i [class]="crumb.Icon" *ngIf="crumb.Icon"></i>
+        {{ crumb.Label }}
+      </span>
+    </ng-container>
+  </nav>
+
+  <div class="spacer"></div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="icon-btn" (click)="OnSearch()" title="Search">
+      <i class="fa-solid fa-search"></i>
+    </button>
+
+    <button class="icon-btn" title="Notifications">
+      <i class="fa-solid fa-bell"></i>
+    </button>
+
+    <div class="user-menu">
+      <button class="avatar-btn" (click)="ToggleUserMenu()">
+        <i class="fa-solid fa-user"></i>
+      </button>
+      <div class="dropdown" *ngIf="showUserMenu">
+        <div class="dropdown-item" (click)="OnNavigate('/settings'); ToggleUserMenu()">
+          <i class="fa-solid fa-gear"></i>
+          Settings
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
