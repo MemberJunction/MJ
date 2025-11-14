@@ -1,8 +1,92 @@
 # MJ Explorer UX Prototype - Visual Overview
 
+## Recent Work: Golden Layout Integration (Complete)
+
+### What We Accomplished
+
+Successfully integrated Golden Layout v2.6.0 into the prototype, providing a professional tabbed interface with advanced layout capabilities.
+
+### Key Issues Resolved
+
+1. **Infinite Navigation Loop** ✅
+   - **Problem**: Browser console showed "Throttling navigation to prevent the browser from hanging" every 5-10 seconds
+   - **Root Cause**: Circular dependency in navigation flow (router events → SetActiveApp → activeTabId change → router.navigate → repeat)
+   - **Fix**: Removed router.events subscription in app.component.ts that was creating the circular dependency
+   - **Files**: [app.component.ts](explorer-prototype/src/app/app.component.ts:37-48)
+
+2. **Cross-App Content Contamination** ✅
+   - **Problem**: Settings app showing Conversations content when clicked from Conversations user menu
+   - **Root Cause**: Navigate() method didn't detect cross-app navigation boundaries
+   - **Fix**: Added `getAppIdForRoute()` helper and cross-app detection logic to call `SetActiveApp()` instead of navigating within current app
+   - **Files**: [shell.service.ts](explorer-prototype/src/app/core/services/shell.service.ts:136-143)
+
+3. **VSCode-Style Temporary Tabs** ✅
+   - **Problem**: Multiple temporary tabs could exist globally, which was confusing
+   - **Design Decision**: One temporary tab per application (not globally)
+   - **Fix**: Modified Navigate() to scope temporary tab search to current app only
+   - **Files**: [shell.service.ts](explorer-prototype/src/app/core/services/shell.service.ts:154)
+
+### Current Golden Layout Features
+
+- **Tab Management**: Tabs render with Golden Layout's tab bar
+- **Tab Switching**: Click tabs to switch between views
+- **Tab Closing**: X button closes tabs properly
+- **Component Rendering**: Angular components dynamically created and rendered in tabs
+- **App Isolation**: Each app maintains its own set of tabs
+- **VSCode Behavior**: Temporary tabs get replaced until made permanent (double-click)
+
+### Known Issues / TODO
+
+1. **Tab UX Improvements** (In Progress)
+   - Tabs are very small and hard to click
+   - Need CSS overrides to increase tab height, padding, font size
+
+2. **Cursor Styling** (Pending)
+   - Mouse shows text caret over clickable elements
+   - Should show pointer cursor for all clickable items
+
+3. **Golden Layout Persistence** (Pending)
+   - Currently only tab existence is saved to localStorage
+   - Layout configuration (split panes, positions) not persisted
+   - On refresh, all tabs appear in default single-stack layout
+
+### Technical Implementation
+
+**Golden Layout VirtualLayout API Integration:**
+```typescript
+// tab-container.component.ts
+private bindComponentEvent(container, itemConfig) {
+  // Dynamically create Angular component
+  const componentRef = createComponent(componentType, {
+    environmentInjector: this.environmentInjector
+  });
+
+  // Attach to Angular change detection
+  this.appRef.attachView(componentRef.hostView);
+
+  // Handle tab events (show, destroy)
+  container.on('show', () => this.shellService.SetActiveTab(tabId));
+  container.on('destroy', () => this.shellService.CloseTab(tabId));
+}
+```
+
+**Navigation Flow:**
+1. User clicks nav item → `Navigate(route)` called
+2. Check if route belongs to different app → `SetActiveApp()` if yes
+3. Check if route already open → activate existing tab
+4. Check if active tab is temporary → replace content if yes
+5. Otherwise → open new temporary tab
+
+### Files Modified
+
+- `src/app/app.component.ts` - Removed router.events subscription causing infinite loop
+- `src/app/core/services/shell.service.ts` - Added cross-app detection, one temp tab per app
+- `src/app/shell/tab-container/tab-container.component.ts` - Golden Layout integration with Angular component creation
+- `src/app/shell/header/header.component.ts` - Navigation triggering, app switching
+
 ## What We Built
 
-A clean, lightweight Angular prototype demonstrating the new shell/plugin architecture with smart header navigation.
+A clean, lightweight Angular prototype demonstrating the new shell/plugin architecture with smart header navigation and Golden Layout tabbed interface.
 
 ## Visual Mockups vs Actual Prototype
 

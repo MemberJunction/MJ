@@ -133,6 +133,15 @@ export class ShellService {
       return;
     }
 
+    // Determine which app this route belongs to
+    const targetAppId = this.getAppIdForRoute(route);
+
+    // If route belongs to a different app, switch apps
+    if (targetAppId && targetAppId !== activeApp.Id) {
+      this.SetActiveApp(targetAppId);
+      return;
+    }
+
     // Check if route is already open in an existing tab
     const existingTab = currentTabs.find(t => t.Route === route && t.AppId === activeApp.Id);
     if (existingTab) {
@@ -141,10 +150,11 @@ export class ShellService {
       return;
     }
 
-    // Find the current active tab
-    const activeTab = currentTabs.find(t => t.Id === activeTabId);
+    // Find the current active tab for this app
+    const activeTab = currentTabs.find(t => t.Id === activeTabId && t.AppId === activeApp.Id);
 
     // If active tab is temporary (not permanent), replace its content
+    // This ensures one temporary tab per app, not globally
     if (activeTab && !activeTab.IsPermanent) {
       activeTab.Route = route;
       activeTab.Title = this.getTitleFromRoute(route);
@@ -161,6 +171,14 @@ export class ShellService {
         Route: route
       });
     }
+  }
+
+  // Helper to determine which app a route belongs to
+  private getAppIdForRoute(route: string): string | null {
+    if (route.startsWith('/conversations')) return 'conversations';
+    if (route.startsWith('/settings')) return 'settings';
+    if (route.startsWith('/crm')) return 'crm';
+    return null;
   }
 
   // Toggle tab between temporary and permanent
@@ -211,5 +229,14 @@ export class ShellService {
     if (activeTabId && tabs.some(t => t.Id === activeTabId)) {
       this.activeTabId$.next(activeTabId);
     }
+  }
+
+  // Golden Layout state persistence
+  SaveLayoutConfig(config: any): void {
+    this.storage.Save('layoutConfig', config);
+  }
+
+  LoadLayoutConfig(): any | null {
+    return this.storage.Load<any>('layoutConfig');
   }
 }
