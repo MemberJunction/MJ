@@ -2050,6 +2050,7 @@ NumberedRows AS (
                ef.ID,
                ef.Name,
                ef.Type,
+               ef.Category,
                ef.AllowsNull,
                ef.IsPrimaryKey,
                ef.IsUnique,
@@ -2161,6 +2162,12 @@ NumberedRows AS (
          const layoutAnalysis = await ag.generateFormLayout({
             Name: entity.Name,
             Description: entity.Description,
+            SchemaName: entity.SchemaName,
+            VirtualEntity: entity.VirtualEntity,
+            TrackRecordChanges: entity.TrackRecordChanges,
+            AuditRecordAccess: entity.AuditRecordAccess,
+            UserFormGenerated: entity.UserFormGenerated,
+            Settings: entity.Settings,
             Fields: fields
          }, currentUser);
 
@@ -2344,6 +2351,23 @@ NumberedRows AS (
             `;
             await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity`, false);
          }
+      }
+
+      // Apply entity importance analysis to ApplicationEntity records if provided
+      if (result.entityImportance) {
+         const defaultForNewUser = result.entityImportance.defaultForNewUser ? 1 : 0;
+
+         // Update all ApplicationEntity records for this entity
+         const updateAppEntitySQL = `
+            UPDATE [${mj_core_schema()}].ApplicationEntity
+            SET DefaultForNewUser = ${defaultForNewUser},
+                __mj_UpdatedAt = GETUTCDATE()
+            WHERE EntityID = '${entityId}'
+         `;
+         await this.LogSQLAndExecute(pool, updateAppEntitySQL, `Set DefaultForNewUser=${defaultForNewUser} for entity based on AI analysis (category: ${result.entityImportance.entityCategory}, confidence: ${result.entityImportance.confidence})`, false);
+
+         logStatus(`  ✓ Entity importance: ${result.entityImportance.entityCategory} (defaultForNewUser: ${result.entityImportance.defaultForNewUser}, confidence: ${result.entityImportance.confidence})`);
+         logStatus(`    Reasoning: ${result.entityImportance.reasoning}`);
       }
    }
 

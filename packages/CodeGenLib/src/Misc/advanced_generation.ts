@@ -30,6 +30,14 @@ export type TransitiveJoinResult = {
     confidence: 'high' | 'medium' | 'low';
 }
 
+export type EntityImportanceInfo = {
+    defaultForNewUser: boolean;
+    entityCategory: 'primary' | 'supporting' | 'reference' | 'junction' | 'system';
+    confidence: 'high' | 'medium' | 'low';
+    reasoning: string;
+    recommendedSequence?: number;
+}
+
 export type FormLayoutResult = {
     entityIcon?: string;
     fieldCategories: Array<{
@@ -41,6 +49,7 @@ export type FormLayoutResult = {
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
     categoryIcons?: Record<string, string>;
+    entityImportance?: EntityImportanceInfo;
 }
 
 /**
@@ -202,7 +211,58 @@ export class AdvancedGeneration {
     }
 
     /**
+     * Extract existing category information from an entity
+     * This looks at ALL fields that have categories assigned, not just locked ones,
+     * so the LLM can see and reuse existing categories when categorizing new fields
+     */
+    private getExistingCategoryInfo(entity: any): {
+        categories: string[];
+        fieldsByCategory: Record<string, string[]>;
+        icons: Record<string, string> | null;
+    } {
+        // Get ALL fields that have categories assigned (not just locked ones)
+        // This ensures the LLM sees existing categories and reuses them
+        const categorizedFields = entity.Fields.filter(
+            (f: any) => f.Category != null && f.Category.trim() !== ''
+        );
+
+        // Extract unique category names
+        const categorySet = new Set<string>();
+        for (const field of categorizedFields) {
+            if (field.Category) {
+                categorySet.add(field.Category);
+            }
+        }
+        const categories = Array.from(categorySet);
+
+        // Group fields by category
+        const fieldsByCategory: Record<string, string[]> = {};
+        for (const field of categorizedFields) {
+            if (!fieldsByCategory[field.Category]) {
+                fieldsByCategory[field.Category] = [];
+            }
+            fieldsByCategory[field.Category].push(field.Name);
+        }
+
+        // Load category icons from EntitySettings
+        let icons: Record<string, string> | null = null;
+        const iconSetting = entity.Settings?.find(
+            (s: any) => s.Name === 'FieldCategoryIcons'
+        );
+        if (iconSetting?.Value) {
+            try {
+                icons = JSON.parse(iconSetting.Value);
+            } catch (e) {
+                // Invalid JSON, ignore
+            }
+        }
+
+        return { categories, fieldsByCategory, icons };
+    }
+
+    /**
      * Form Layout Generation - create semantic field categories with icons
+     * Also analyzes entity importance for default visibility in applications
      */
     public async generateFormLayout(
         entity: any,
@@ -215,11 +275,20 @@ export class AdvancedGeneration {
         try {
             const prompt = await this.getPromptEntity('CodeGen: Form Layout Generation', contextUser);
 
+            // Extract existing category information
+            const existingInfo = this.getExistingCategoryInfo(entity);
+            const hasExistingCategories = existingInfo.categories.length > 0;
+
             const params = new AIPromptParams();
             params.prompt = prompt;
             params.data = {
                 entityName: entity.Name,
                 entityDescription: entity.Description,
+                schemaName: entity.SchemaName,
+                virtualEntity: entity.VirtualEntity ?? false,
+                trackRecordChanges: entity.TrackRecordChanges ?? false,
+                auditRecordAccess: entity.AuditRecordAccess ?? false,
+                userFormGenerated: entity.UserFormGenerated ?? false,
                 fields: entity.Fields.map((f: any) => ({
                     Name: f.Name,
                     Type: f.Type,
@@ -227,14 +296,40 @@ export class AdvancedGeneration {
                     IsPrimaryKey: f.IsPrimaryKey,
                     IsForeignKey: f.EntityIDFieldName != null,
                     RelatedEntity: f.RelatedEntityName,
-                    Description: f.Description
-                }))
+                    Description: f.Description,
+                    // Include existing category information for ALL fields
+                    ExistingCategory: f.Category || null,
+                    // HasExistingCategory=true means locked (don't update), false means can update
+                    HasExistingCategory: !f.AutoUpdateCategory && f.Category != null,
+                    IsNewField: f.AutoUpdateCategory === true && !f.Category
+                })),
+                // Pass existing category metadata
+                existingCategories: existingInfo.categories,
+                fieldsByCategory: existingInfo.fieldsByCategory,
+                hasExistingCategories: hasExistingCategories
             };
             params.contextUser = contextUser;
 
             const result = await this.executePrompt<FormLayoutResult>(params);
 
             if (result.success && result.result) {
+                // Merge icons instead of replacing - preserve existing custom icons
+                if (result.result.categoryIcons && existingInfo.icons) {
+                    result.result.categoryIcons = {
+                        ...existingInfo.icons,  // Preserve existing
+                        ...result.result.categoryIcons  // Add new (overwrites if same key)
+                    };
+                }
+
+                // Log entity importance analysis if available
+                if (result.result.entityImportance) {
+                    // LogStatus(
+                    //     `Entity importance for ${entity.Name}: ${result.result.entityImportance.entityCategory} ` +
+                    //     `(defaultForNewUser: ${result.result.entityImportance.defaultForNewUser}, ` +
+                    //     `confidence: ${result.result.entityImportance.confidence})`
+                    // );
+                }
+
                 return result.result;
             } else {
                 LogError('AdvancedGeneration', `Form layout generation failed: ${result.errorMessage}`);
