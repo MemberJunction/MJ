@@ -53,4 +53,5 @@ export interface TabState {
   Title: string;
   Route: string;
   Data?: any;
+  IsPermanent?: boolean; // VSCode-style: false = temporary (gets replaced), true = permanent (stays)
 }

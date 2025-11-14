@@ -33,20 +33,6 @@ export class AppComponent implements OnInit {
     this.shellService.RegisterApp(this.settingsApp);
     this.shellService.RegisterApp(this.crmApp);
 
-    // Track route changes and set active app
-    this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd))
-      .subscribe((event: any) => {
-        const url = event.urlAfterRedirects;
-        if (url.startsWith('/conversations')) {
-          this.shellService.SetActiveApp('conversations');
-        } else if (url.startsWith('/settings')) {
-          this.shellService.SetActiveApp('settings');
-        } else if (url.startsWith('/crm')) {
-          this.shellService.SetActiveApp('crm');
-        }
-      });
-
     // Create initial tab only if no tabs exist (prevent duplicates on refresh)
     if (!this.shellService.HasTabs()) {
       this.shellService.OpenTab({

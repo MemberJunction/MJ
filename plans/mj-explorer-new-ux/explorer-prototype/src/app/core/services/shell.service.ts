@@ -36,11 +36,37 @@ export class ShellService {
     const app = this.apps.get(appId);
     if (app) {
       this.activeApp$.next(app);
+
+      // Check if there are any tabs for this app
+      const appTabs = this.tabs$.value.filter(t => t.AppId === appId);
+
+      // If no tabs exist for this app, open the default tab
+      if (appTabs.length === 0) {
+        const navItems = app.GetNavItems();
+        const defaultRoute = navItems[0]?.Route || `/${appId}`;
+        const defaultTitle = navItems[0]?.Label || app.Name;
+
+        this.OpenTab({
+          AppId: appId,
+          Title: defaultTitle,
+          Route: defaultRoute
+        });
+        // Router navigation will be handled by OpenTab's activeTabId change
+      } else {
+        // Find the last active tab for this app, or use the first one
+        const lastActiveTab = appTabs[appTabs.length - 1];
+        this.SetActiveTab(lastActiveTab.Id);
+        // Router navigation will be handled by tab activation in tab-container
+      }
     }
   }
 
   GetActiveApp(): Observable<IApp | null> {
     return this.activeApp$.asObservable();
+  }
+
+  GetAllApps(): IApp[] {
+    return Array.from(this.apps.values());
   }
 
   // Tab Management
@@ -51,7 +77,8 @@ export class ShellService {
       AppId: request.AppId,
       Title: request.Title,
       Route: request.Route,
-      Data: request.Data
+      Data: request.Data,
+      IsPermanent: false // New tabs start as temporary
     };
 
     const currentTabs = this.tabs$.value;
@@ -95,9 +122,64 @@ export class ShellService {
     return this.tabs$.value.length > 0;
   }
 
-  // Navigation
+  // Navigation - VSCode-style behavior
   Navigate(route: string): void {
-    this.router.navigate([route]);
+    const currentTabs = this.tabs$.value;
+    const activeTabId = this.activeTabId$.value;
+    const activeApp = this.activeApp$.value;
+
+    if (!activeApp) {
+      this.router.navigate([route]);
+      return;
+    }
+
+    // Check if route is already open in an existing tab
+    const existingTab = currentTabs.find(t => t.Route === route && t.AppId === activeApp.Id);
+    if (existingTab) {
+      // Just activate the existing tab - router will be updated by tab-container subscription
+      this.SetActiveTab(existingTab.Id);
+      return;
+    }
+
+    // Find the current active tab
+    const activeTab = currentTabs.find(t => t.Id === activeTabId);
+
+    // If active tab is temporary (not permanent), replace its content
+    if (activeTab && !activeTab.IsPermanent) {
+      activeTab.Route = route;
+      activeTab.Title = this.getTitleFromRoute(route);
+      this.tabs$.next([...currentTabs]); // Trigger update which will recreate content
+      this.saveTabsToStorage();
+      // Navigate directly since we're just updating the current tab's content
+      this.router.navigate([route]);
+    } else {
+      // Active tab is permanent or no active tab, open new temporary tab
+      // OpenTab will set activeTabId which triggers router navigation in tab-container
+      this.OpenTab({
+        AppId: activeApp.Id,
+        Title: this.getTitleFromRoute(route),
+        Route: route
+      });
+    }
+  }
+
+  // Toggle tab between temporary and permanent
+  ToggleTabPermanent(tabId: string): void {
+    const currentTabs = this.tabs$.value;
+    const tab = currentTabs.find(t => t.Id === tabId);
+    if (tab) {
+      tab.IsPermanent = !tab.IsPermanent;
+      this.tabs$.next([...currentTabs]);
+      this.saveTabsToStorage();
+    }
+  }
+
+  // Helper to extract title from route
+  private getTitleFromRoute(route: string): string {
+    // Extract the last segment and capitalize
+    const segments = route.split('/').filter(s => s);
+    const lastSegment = segments[segments.length - 1] || 'Home';
+    return lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);
   }
 
   // Search handling

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { ShellService } from '../../core/services/shell.service';
@@ -52,16 +52,43 @@ export class HeaderComponent implements OnInit {
     this.shellService.Navigate(route);
   }
 
+  isNavItemActive(route: string): boolean {
+    // Check if there's an active tab with this route
+    const activeTabs = this.shellService['tabs$'].value;
+    const activeTabId = this.shellService['activeTabId$'].value;
+    const activeTab = activeTabs.find(t => t.Id === activeTabId);
+    return activeTab?.Route === route;
+  }
+
   ToggleAppSwitcher(): void {
-    // TODO: Show dropdown menu with all registered apps
-    // User clicks logo → Shows list of all apps
-    // Click app → Navigate to that app's default route
     this.showAppSwitcher = !this.showAppSwitcher;
+    const apps = this.GetAllApps();
+    console.log('App switcher toggled:', this.showAppSwitcher, 'Apps:', apps.map(a => a.Name));
   }
 
   GetAllApps(): IApp[] {
-    // TODO: Get all registered apps from ShellService
-    // return this.shellService.GetAllApps();
-    return [];
+    return this.shellService.GetAllApps();
+  }
+
+  SwitchToApp(app: IApp): void {
+    this.showAppSwitcher = false;
+    // SetActiveApp now handles opening default tab if needed
+    this.shellService.SetActiveApp(app.Id);
+  }
+
+  @HostListener('document:click', ['$event'])
+  OnClickOutside(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const clickedInside = target.closest('.logo-container');
+
+    if (!clickedInside && this.showAppSwitcher) {
+      this.showAppSwitcher = false;
+    }
+
+    // Also close user menu if clicked outside
+    const clickedUserMenu = target.closest('.user-menu');
+    if (!clickedUserMenu && this.showUserMenu) {
+      this.showUserMenu = false;
+    }
   }
 }

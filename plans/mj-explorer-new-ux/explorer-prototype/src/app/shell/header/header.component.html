@@ -1,21 +1,21 @@
 <header class="header">
   <!-- Logo / App Switcher -->
-  <!-- TODO: Click logo to show app switcher dropdown with all registered apps -->
-  <!-- This allows user to switch between Conversations, CRM, Settings, etc. -->
-  <div class="logo" (click)="ToggleAppSwitcher()" title="Switch Apps">
-    <span class="logo-text">MJ</span>
-  </div>
+  <div class="logo-container">
+    <div class="logo" (click)="ToggleAppSwitcher()" title="Switch Apps">
+      <span class="logo-text">MJ</span>
+    </div>
 
-  <!-- TODO: App Switcher Dropdown (not implemented in prototype)
-  <div class="app-switcher-dropdown" *ngIf="showAppSwitcher">
-    <div *ngFor="let app of GetAllApps()"
-         class="app-switcher-item"
-         (click)="OnNavigate(app.Route); ToggleAppSwitcher()">
-      <i [class]="app.Icon"></i>
-      <span>{{ app.Name }}</span>
+    <!-- App Switcher Dropdown -->
+    <div class="app-switcher-dropdown" *ngIf="showAppSwitcher">
+      <div *ngFor="let app of GetAllApps()"
+           class="app-switcher-item"
+           [class.active]="activeApp?.Id === app.Id"
+           (click)="SwitchToApp(app)">
+        <i [class]="app.Icon"></i>
+        <span>{{ app.Name }}</span>
+      </div>
     </div>
   </div>
-  -->
 
   <!-- App Indicator -->
   <div class="app-indicator" *ngIf="activeApp">
@@ -27,9 +27,9 @@
   <nav class="nav-list" *ngIf="navigationType === 'list' && navItems.length > 0">
     <a
       *ngFor="let item of navItems"
-      [routerLink]="item.Route"
-      routerLinkActive="active"
+      (click)="OnNavigate(item.Route)"
       class="nav-item"
+      [class.active]="isNavItemActive(item.Route)"
     >
       <i [class]="item.Icon" *ngIf="item.Icon"></i>
       <span>{{ item.Label }}</span>

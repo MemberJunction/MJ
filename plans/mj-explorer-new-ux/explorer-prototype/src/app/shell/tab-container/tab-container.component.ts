@@ -77,8 +77,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
           const tab = tabs.find((t: TabState) => t.Id === tabId);
           if (tab && this.layout) {
             this.focusTab(tabId);
-            // Update URL for deep linking
-            this.router.navigate([tab.Route], { skipLocationChange: false });
+            // Update URL for deep linking only if it's different
+            const currentUrl = this.router.url;
+            if (currentUrl !== tab.Route) {
+              this.router.navigate([tab.Route], { skipLocationChange: false });
+            }
           }
         }
       })
@@ -106,7 +109,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private initializeGoldenLayout(): void {
     const container = this.layoutContainerRef.nativeElement;
-    console.log('🚀 Initializing Golden Layout, container:', container);
 
     const config: LayoutConfig = {
       root: {
@@ -123,16 +125,13 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.layout.loadLayout(config);
     this.isInitialized = true;
-    console.log('✅ Golden Layout initialized');
 
     // Set initial size explicitly
     const rect = container.getBoundingClientRect();
-    console.log('📐 Container dimensions:', rect.width, 'x', rect.height);
     this.layout.setSize(rect.width, rect.height);
 
     // Add existing tabs
     const tabs = this.shellService['tabs$'].value;
-    console.log('📋 Adding existing tabs:', tabs);
     tabs.forEach((tab: TabState) => this.addTabToLayout(tab));
 
     // Force layout update after adding tabs
@@ -140,7 +139,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       if (this.layout) {
         const rect = container.getBoundingClientRect();
         this.layout.setSize(rect.width, rect.height);
-        console.log('🔄 Layout size updated after adding tabs');
       }
     }, 100);
 
@@ -158,7 +156,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     itemConfig: ResolvedComponentItemConfig
   ): ComponentContainer.BindableComponent {
     const state = itemConfig.componentState as TabComponentState;
-    console.log('🎨 Binding component for tab:', state);
 
     // Create container div for this tab's content
     const element = document.createElement('div');
@@ -166,19 +163,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     element.style.width = '100%';
     element.style.height = '100%';
     element.style.overflow = 'auto';
-    element.style.padding = '20px';
-    element.style.background = 'white';
-    element.style.border = '2px solid red';  // Debug: make it visible!
-
-    // Add debug text FIRST to verify element is visible
-    element.innerHTML = `<div style="padding: 20px; background: yellow; color: black; font-size: 24px; font-weight: bold;">
-      DEBUG: Tab Content Container for ${state.title}
-      <br>Route: ${state.route}
-    </div>`;
 
     // Get the component type for this route
     const componentType = this.getComponentForRoute(state.route);
-    console.log('📦 Component type for route', state.route, ':', componentType);
 
     if (componentType) {
       try {
@@ -192,25 +179,20 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // Append component's DOM to our container
         const componentElement = componentRef.location.nativeElement;
-
-        // Clear debug text and add actual component
-        element.innerHTML = '';
         element.appendChild(componentElement);
 
         // Store reference for cleanup
         this.componentRefs.set(state.tabId, componentRef);
-        console.log('✅ Component created and attached successfully');
       } catch (error) {
-        console.error('❌ Error creating component:', error);
-        element.innerHTML = `<div style="padding: 20px; color: red; background: pink;">
+        console.error('Error creating component:', error);
+        element.innerHTML = `<div style="padding: 20px; color: red;">
           <h2>Error creating component</h2>
           <p>${error}</p>
         </div>`;
       }
     } else {
       // Fallback content if component not found
-      console.warn('⚠️ No component found for route:', state.route);
-      element.innerHTML = `<div style="padding: 20px; color: #666; background: lightblue;">
+      element.innerHTML = `<div style="padding: 20px; color: #666;">
         <h2>${state.title}</h2>
         <p>Route: ${state.route}</p>
         <p>Component not found in ROUTE_COMPONENT_MAP</p>
@@ -222,7 +204,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // IMPORTANT: Append element to container's element
     container.element.appendChild(element);
-    console.log('📍 Element appended to container.element');
 
     // Handle tab close
     container.on('destroy', () => {
@@ -238,13 +219,55 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Handle tab activation
     container.on('show', () => {
       this.shellService.SetActiveTab(state.tabId);
-      this.router.navigate([state.route], { skipLocationChange: false });
+      // Router navigation handled by activeTabId subscription
     });
+
+    // Handle double-click on tab header to toggle permanent status
+    // We need to wait for the tab element to be created, then attach the listener
+    setTimeout(() => {
+      const tabElement = this.findTabElement(container);
+      if (tabElement) {
+        tabElement.addEventListener('dblclick', (e: Event) => {
+          e.stopPropagation();
+          this.shellService.ToggleTabPermanent(state.tabId);
+          this.updateTabStyle(tabElement, state.tabId);
+        });
+        // Set initial style based on permanent status
+        this.updateTabStyle(tabElement, state.tabId);
+      }
+    }, 100);
 
     return {
       component: element,
       virtual: false  // Actual content renders in tabs!
     };
+  }
+
+  private findTabElement(container: ComponentContainer): HTMLElement | null {
+    // Golden Layout tab elements have the class 'lm_tab'
+    // Find the tab that corresponds to this container
+    const allTabs = document.querySelectorAll('.lm_tab');
+    for (let i = 0; i < allTabs.length; i++) {
+      const tab = allTabs[i] as HTMLElement;
+      // The tab title should match our container title
+      const titleElement = tab.querySelector('.lm_title');
+      if (titleElement && titleElement.textContent === container.title) {
+        return tab;
+      }
+    }
+    return null;
+  }
+
+  private updateTabStyle(tabElement: HTMLElement, tabId: string): void {
+    const tabs = this.shellService['tabs$'].value;
+    const tab = tabs.find(t => t.Id === tabId);
+    if (tab?.IsPermanent) {
+      tabElement.style.fontStyle = 'normal';
+      tabElement.style.fontWeight = '600';
+    } else {
+      tabElement.style.fontStyle = 'italic';
+      tabElement.style.fontWeight = '400';
+    }
   }
 
   private unbindComponentEvent(container: ComponentContainer): void {
@@ -305,13 +328,83 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Add new tabs
     newTabs.forEach(tab => this.addTabToLayout(tab));
 
+    // Check for tabs with updated routes (temporary tab content replacement)
+    currentItems.forEach((item: any) => {
+      const state = item.container?.state as TabComponentState | undefined;
+      if (state?.tabId) {
+        const updatedTab = tabs.find(t => t.Id === state.tabId);
+        if (updatedTab && (updatedTab.Route !== state.route || updatedTab.Title !== state.title)) {
+          // Tab content has changed - need to recreate the component
+          this.recreateTabContent(item, updatedTab);
+        }
+      }
+    });
+
     // Remove closed tabs
     currentItems.forEach((item: any) => {
       const state = item.container?.state as TabComponentState | undefined;
       if (state?.tabId && !tabs.find(t => t.Id === state.tabId)) {
-        item.remove();
+        try {
+          item.remove();
+        } catch (error) {
+          console.warn('Failed to remove item:', state.tabId, error);
+        }
       }
     });
+  }
+
+  private recreateTabContent(item: any, updatedTab: TabState): void {
+    const container = item.container;
+    if (!container) return;
+
+    // Update the state
+    const state = container.state as TabComponentState;
+    state.route = updatedTab.Route;
+    state.title = updatedTab.Title;
+
+    // Update the tab title
+    container.setTitle(updatedTab.Title);
+
+    // Clean up old component
+    const oldCompRef = this.componentRefs.get(state.tabId);
+    if (oldCompRef) {
+      this.appRef.detachView(oldCompRef.hostView);
+      oldCompRef.destroy();
+      this.componentRefs.delete(state.tabId);
+    }
+
+    // Clear the container
+    const containerElement = container.element;
+    while (containerElement.firstChild) {
+      containerElement.removeChild(containerElement.firstChild);
+    }
+
+    // Create new component
+    const element = document.createElement('div');
+    element.className = 'tab-content-container';
+    element.style.width = '100%';
+    element.style.height = '100%';
+    element.style.overflow = 'auto';
+
+    const componentType = this.getComponentForRoute(updatedTab.Route);
+    if (componentType) {
+      try {
+        const componentRef = createComponent(componentType, {
+          environmentInjector: this.environmentInjector
+        });
+        this.appRef.attachView(componentRef.hostView);
+        element.appendChild(componentRef.location.nativeElement);
+        this.componentRefs.set(state.tabId, componentRef);
+      } catch (error) {
+        console.error('Error recreating component:', error);
+        element.innerHTML = `<div style="padding: 20px; color: red;">
+          <h2>Error recreating component</h2>
+          <p>${error}</p>
+        </div>`;
+      }
+    }
+
+    containerElement.appendChild(element);
   }
 
   private addTabToLayout(tab: TabState): void {
