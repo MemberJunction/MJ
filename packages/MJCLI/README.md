@@ -451,6 +451,7 @@ mj dbdoc [COMMAND] [OPTIONS]
 Available dbdoc commands:
 - `init` - Initialize a new DBAutoDoc project
 - `analyze` - Analyze database and generate documentation
+- `generate-queries` - Generate sample SQL queries from existing analysis state
 - `export` - Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)
 - `status` - Show analysis status and progress
 - `reset` - Reset analysis state
@@ -471,6 +472,14 @@ mj dbdoc analyze --resume ./output/run-6/state.json
 
 # Use custom config
 mj dbdoc analyze --config ./my-config.json
+
+# Generate sample SQL queries from existing state
+mj dbdoc generate-queries --from-state ./output/run-1/state.json
+
+# Generate with custom settings
+mj dbdoc generate-queries --from-state ./output/run-1/state.json \
+  --queries-per-table 10 \
+  --output-dir ./queries
 
 # Export all formats
 mj dbdoc export --sql --markdown --html --csv --mermaid
@@ -503,6 +512,13 @@ mj dbdoc reset --force
 **Analyze Command:**
 - `-r, --resume <path>`: Resume from an existing state file
 - `-c, --config <path>`: Path to config file (default: ./config.json)
+
+**Generate Queries Command:**
+- `--from-state <path>`: Path to existing state.json file from previous analysis (required)
+- `--output-dir <path>`: Output directory for generated queries (optional)
+- `-c, --config <path>`: Path to config file for database connection and AI settings (default: ./config.json)
+- `--queries-per-table <number>`: Number of queries to generate per table (optional, overrides config)
+- `--max-execution-time <ms>`: Maximum execution time for query validation in milliseconds (optional, overrides config)
 
 **Export Command:**
 - `-s, --state-file <path>`: Path to state JSON file
@@ -541,6 +557,7 @@ mj dbdoc reset --force
 
 **Advanced Features:**
 - 🔍 **Relationship Discovery** - Detect missing primary and foreign keys
+- 🎯 **Sample Query Generation** - Generate reference SQL queries for AI agent training with alignment tracking
 - 🛡️ **Granular Guardrails** - Multi-level resource controls
 - ⏸️ **Resume Capability** - Pause and resume from checkpoint
 - 📦 **Programmatic API** - Use as a library in your applications
@@ -552,6 +569,41 @@ mj dbdoc reset --force
 - CSV Exports (spreadsheet-ready)
 - Mermaid Diagrams (standalone ERD files)
 - Analysis Reports (detailed metrics)
+- Sample Queries (JSON with SQL, metadata, and alignment tracking)
+
+**Sample Query Generation:**
+
+DBAutoDoc can generate reference SQL queries that solve the **query alignment problem** where multi-query patterns (summary + detail) have inconsistent filtering logic. These "gold standard" queries include:
+- Explicit filtering rules for consistency
+- Alignment tracking via `relatedQueryIds`
+- Query patterns (Summary+Detail, Multi-Entity Drilldown, Time Series)
+- Validated, executable SQL
+- Perfect for few-shot prompting in AI agents like Skip
+
+Enable in config:
+```json
+{
+  "analysis": {
+    "sampleQueryGeneration": {
+      "enabled": true,
+      "queriesPerTable": 5,
+      "includeMultiQueryPatterns": true,
+      "validateAlignment": true
+    }
+  }
+}
+```
+
+Or generate separately from existing state:
+```bash
+mj dbdoc generate-queries --from-state ./output/run-1/state.json
+```
+
+**Use Cases:**
+- Training AI agents to generate consistent multi-query patterns
+- Creating reference examples for few-shot prompting
+- Documenting common query patterns for your database
+- Validating that related queries use consistent filtering logic
 
 ---
 

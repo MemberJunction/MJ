@@ -12,6 +12,7 @@ const MJ_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 const result = explorer.search(process.cwd());
 
+// Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
   dbHost: z.string().default('localhost'),
   dbDatabase: z.string(),
@@ -25,17 +26,55 @@ const mjConfigSchema = z.object({
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
 });
 
-const parsedConfig = mjConfigSchema.safeParse(result?.config);
-if (!parsedConfig.success) {
-  console.error('Error parsing config file', JSON.stringify(parsedConfig.error.issues, null, 2));
-}
-export const config = parsedConfig.success ? parsedConfig.data : undefined;
+// Schema for non-database commands (all fields optional)
+const mjConfigSchemaOptional = z.object({
+  dbHost: z.string().optional(),
+  dbDatabase: z.string().optional(),
+  dbPort: z.number({ coerce: true }).optional(),
+  codeGenLogin: z.string().optional(),
+  codeGenPassword: z.string().optional(),
+  migrationsLocation: z.string().optional().default('filesystem:./migrations'),
+  dbTrustServerCertificate: z.coerce.boolean().default(false),
+  coreSchema: z.string().optional().default('__mj'),
+  cleanDisabled: z.boolean().optional().default(true),
+  mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
+});
 
-export const updatedConfig = () => {
-  const maybeConfig = mjConfigSchema.safeParse(explorer.search(process.cwd())?.config);
-  if (!maybeConfig.success) {
-    console.error('Error parsing config file', JSON.stringify(maybeConfig.error.issues, null, 2));
+// Don't validate at module load - let commands decide when they need validated config
+export const config = result?.config as MJConfig | undefined;
+
+/**
+ * Get validated config for commands that require database connection.
+ * Throws error if config is invalid.
+ */
+export const getValidatedConfig = (): MJConfig => {
+  const parsedConfig = mjConfigSchema.safeParse(result?.config);
+  if (!parsedConfig.success) {
+    throw new Error(
+      `Invalid or missing mj.config.cjs file. Database commands require valid configuration.\n` +
+      `Missing fields: ${parsedConfig.error.issues.map(i => i.path.join('.')).join(', ')}`
+    );
   }
+  return parsedConfig.data;
+};
+
+/**
+ * Get optional config for commands that don't require database connection.
+ * Returns undefined if no config exists, or partial config if it exists.
+ */
+export const getOptionalConfig = (): Partial<MJConfig> | undefined => {
+  const parsedConfig = mjConfigSchemaOptional.safeParse(result?.config);
+  return parsedConfig.success ? parsedConfig.data : undefined;
+};
+
+/**
+ * Legacy function for backward compatibility with codegen.
+ * Validates and returns updated config.
+ * Returns undefined silently if config is invalid (command will handle the error).
+ */
+export const updatedConfig = (): MJConfig | undefined => {
+  const maybeConfig = mjConfigSchema.safeParse(explorer.search(process.cwd())?.config);
+  // Don't log errors here - let the calling command handle validation
   return maybeConfig.success ? maybeConfig.data : undefined;
 };
 

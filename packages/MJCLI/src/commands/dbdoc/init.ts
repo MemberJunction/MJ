@@ -9,7 +9,7 @@ export default class DbDocInit extends Command {
 
   async run(): Promise<void> {
     // Load DBAutoDoc command dynamically
-    const { default: InitCommand } = await import('@memberjunction/db-auto-doc/dist/commands/init.js');
+    const { default: InitCommand } = await import('@memberjunction/db-auto-doc/dist/commands/init');
 
     // Execute the DBAutoDoc init command
     await InitCommand.run([]);
