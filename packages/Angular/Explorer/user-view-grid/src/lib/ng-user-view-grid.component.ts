@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, Renderer2} from '@angular/core';
+import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, OnDestroy, Renderer2} from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
@@ -51,13 +51,20 @@ export type GridPendingRecordItem = {
   templateUrl: './ng-user-view-grid.component.html',
   styleUrls: ['./ng-user-view-grid.component.css']
 })
-export class UserViewGridComponent implements OnInit, AfterViewInit {
+export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
   title = 'UserViewGrid';
   /**
    * Parameters for running the view
    */
   @Input() Params: RunViewParams | undefined;
   @Input() BottomMargin: number = 0;
+  /**
+   * Height of the grid. Can be:
+   * - A number for fixed pixel height (e.g., 400)
+   * - 'auto' to fill available viewport space (use for standalone views)
+   * - undefined (default) uses 400px for backward compatibility
+   */
+  @Input() Height: number | 'auto' | undefined = undefined;
   @Input() InEditMode: boolean = false;
   @Input() EditMode: "None" | "Save" | "Queue" = "None"
   @Input() AutoNavigate: boolean = true;
@@ -121,6 +128,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public neverLoaded: boolean = true;
   public gridView: GridDataResult = { data: [], total: 0 };
   public gridHeight: number = 400;
+  private resizeListener: (() => void) | null = null;
 
   public _viewEntity: UserViewEntityExtended | undefined
   public  _entityInfo: EntityInfo | undefined;
@@ -630,7 +638,13 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   async ngAfterViewInit() {
     await ResourcePermissionEngine.Instance.Config();
-    //this.setGridHeight();
+
+    // Delay height calculation to ensure DOM is fully rendered
+    setTimeout(() => {
+      this.setGridHeight();
+      this.setupResizeListener();
+    }, 0);
+
     if (this.Params && this.AutoRefreshOnInit)
       this.Refresh(this.Params);
 
@@ -815,6 +829,13 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
       this.isLoading = false;
+
+      // Recalculate height after data loads to ensure proper sizing
+      if (this.Height === 'auto') {
+        setTimeout(() => {
+          this.calculateAutoHeight();
+        }, 0);
+      }
 
       // Emit dataLoaded event with row count and load time
       this.dataLoaded.emit({
@@ -1353,6 +1374,72 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     this.listEntities = this.sourceListEntities.filter((listEntity: ListEntity) => {
       return listEntity.Name.toLowerCase().includes(toLowerCase);
     });
+  }
+
+  /**
+   * Calculates and sets the grid height based on the Height input property.
+   * - If Height is a number, uses that exact pixel height
+   * - If Height is 'auto', calculates height to fill available viewport space
+   * - If Height is undefined, uses legacy default of 400px
+   */
+  protected setGridHeight(): void {
+    if (typeof this.Height === 'number') {
+      // Explicit numeric height provided
+      this.gridHeight = this.Height;
+    } else if (this.Height === 'auto') {
+      // Calculate height to fill viewport
+      this.calculateAutoHeight();
+    } else {
+      // Legacy default (backward compatible)
+      this.gridHeight = 400;
+    }
+  }
+
+  /**
+   * Calculates the auto height based on viewport and grid position
+   */
+  protected calculateAutoHeight(): void {
+    if (this.kendoGridElementRef?.nativeElement) {
+      const gridElement = this.kendoGridElementRef.nativeElement;
+      const rect = gridElement.getBoundingClientRect();
+      const gridTop = rect.top;
+      const windowHeight = window.innerHeight;
+      // Account for parent container bottom padding (10px from .single-view-wrap)
+      const calculatedHeight = windowHeight - gridTop - this.BottomMargin - 10;
+
+      // Ensure minimum height of 300px for usability
+      const newHeight = Math.max(calculatedHeight, 300);
+
+      // Only update if height actually changed to avoid unnecessary re-renders
+      if (this.gridHeight !== newHeight) {
+        this.gridHeight = newHeight;
+      }
+    } else {
+      // Grid element not yet available, use default
+      this.gridHeight = 400;
+    }
+  }
+
+  /**
+   * Sets up window resize listener to recalculate grid height dynamically
+   */
+  protected setupResizeListener(): void {
+    if (this.Height === 'auto') {
+      this.resizeListener = () => {
+        this.calculateAutoHeight();
+      };
+      window.addEventListener('resize', this.resizeListener);
+    }
+  }
+
+  /**
+   * Cleanup when component is destroyed
+   */
+  ngOnDestroy(): void {
+    if (this.resizeListener) {
+      window.removeEventListener('resize', this.resizeListener);
+      this.resizeListener = null;
+    }
   }
 }
  
