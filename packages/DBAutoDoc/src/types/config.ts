@@ -59,8 +59,9 @@ export interface SampleQueryGenerationConfig {
   maxExecutionTime: number;             // Max time to execute validation queries in ms (default: 30000)
   includeMultiQueryPatterns: boolean;   // Generate related query patterns (default: true)
   validateAlignment: boolean;           // Validate alignment between related queries (default: true)
-  tokenBudget: number;                  // Token budget for query generation phase (default: 100000)
+  tokenBudget: number;                  // Token budget for query generation phase (default: 100000, set to 0 for unlimited)
   maxRowsInSample: number;              // Max rows to return in sample results (default: 10)
+  maxTables?: number;                   // Max tables to generate queries for (default: 10, set to 0 for all tables)
 }
 
 export interface RelationshipDiscoveryConfig {

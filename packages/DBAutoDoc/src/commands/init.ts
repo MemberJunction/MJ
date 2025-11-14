@@ -152,6 +152,22 @@ export default class Init extends Command {
       },
       {
         type: 'number',
+        name: 'maxTables',
+        message: 'Max number of tables to generate queries for (0 = all tables):',
+        default: 10,
+        when: (answers: any) => answers.enableSampleQueries,
+        validate: (input: number) => input >= 0 || 'Must be 0 or greater'
+      },
+      {
+        type: 'number',
+        name: 'tokenBudget',
+        message: 'Token budget for query generation (0 = unlimited):',
+        default: 100000,
+        when: (answers: any) => answers.enableSampleQueries,
+        validate: (input: number) => input >= 0 || 'Must be 0 or greater'
+      },
+      {
+        type: 'number',
         name: 'maxExecutionTime',
         message: 'Max execution time for query validation (ms):',
         default: 30000,
@@ -200,8 +216,9 @@ export default class Init extends Command {
         maxExecutionTime: queryAnswers.maxExecutionTime || 30000,
         includeMultiQueryPatterns: true,
         validateAlignment: true,
-        tokenBudget: 100000,
-        maxRowsInSample: 10
+        tokenBudget: queryAnswers.tokenBudget !== undefined ? queryAnswers.tokenBudget : 100000,
+        maxRowsInSample: 10,
+        maxTables: queryAnswers.maxTables !== undefined ? queryAnswers.maxTables : 10
       };
     }
 

@@ -21,6 +21,7 @@ Automatically generate comprehensive documentation for SQL Server, MySQL, and Po
 
 ### Advanced Features
 - **🔍 Relationship Discovery** - Automatically detect missing primary and foreign keys using statistical analysis and LLM validation
+- **🎯 Sample Query Generation** - Generate reference SQL queries for AI agents with alignment tracking
 - **🛡️ Granular Guardrails** - Multi-level resource controls (run, phase, iteration limits)
 - **⏸️ Resume Capability** - Pause and resume analysis from checkpoint state files
 - **📦 Programmatic API** - Use as a library in your own applications
@@ -84,7 +85,90 @@ This will:
 - Perform sanity checks
 - Save state to `db-doc-state.json`
 
-### 3. Export
+### 3. Generate Sample Queries (Optional)
+
+Generate reference SQL queries for AI agent training:
+
+```bash
+# During analysis (if enabled in config)
+db-auto-doc analyze  # Automatically generates queries
+
+# Or generate separately from existing state
+db-auto-doc generate-queries --from-state ./output/run-1/state.json
+
+# With custom settings
+db-auto-doc generate-queries --from-state ./output/run-1/state.json \
+  --queries-per-table 10 \
+  --max-execution-time 60000 \
+  --output-dir ./queries
+```
+
+This generates:
+- **sample-queries.json**: Full query specifications with SQL, metadata, and alignment info
+- **sample-queries-summary.json**: Execution statistics, token usage, and cost breakdown
+
+**Configuration Options:**
+```json
+{
+  "analysis": {
+    "sampleQueryGeneration": {
+      "enabled": true,              // Enable sample query generation
+      "queriesPerTable": 5,         // Number of queries per table
+      "maxTables": 10,              // Max tables to process (0 = all tables)
+      "tokenBudget": 100000,        // Token limit (0 = unlimited)
+      "maxExecutionTime": 30000,    // Query validation timeout (ms)
+      "includeMultiQueryPatterns": true,  // Generate related query patterns
+      "validateAlignment": true,    // Validate alignment between queries
+      "maxRowsInSample": 10         // Sample result rows to capture
+    }
+  }
+}
+```
+
+**Key Configuration Settings:**
+- **`maxTables`**: Controls table selection
+  - `10` (default) - Generate queries for top 10 most important tables
+  - `0` - Generate queries for **all tables** with data
+  - Custom value - Generate queries for top N tables
+
+- **`tokenBudget`**: Controls LLM token usage and cost
+  - `100000` (default) - Limit to 100K tokens (~$0.50-1.00 with GPT-4o)
+  - `0` - **Unlimited** token budget (useful with `maxTables: 0`)
+  - Custom value - Set specific token limit for cost control
+
+**Example Configurations:**
+
+*Cost-conscious (default):*
+```json
+{
+  "maxTables": 10,
+  "tokenBudget": 100000
+}
+```
+
+*Medium coverage (~25 tables):*
+```json
+{
+  "maxTables": 25,
+  "tokenBudget": 500000
+}
+```
+
+*Complete coverage (all tables):*
+```json
+{
+  "maxTables": 0,
+  "tokenBudget": 0
+}
+```
+
+**Model Recommendations:**
+- ✅ **GPT-4o** - Best balance of speed, cost, and quality (~$6-10 for 50 tables)
+- ✅ **Claude 3.5 Sonnet** - High quality, good reasoning about alignment
+- ⚠️ **GPT-5** - Very slow (reasoning model), doesn't support JSON format, expensive
+- ⚠️ **Groq** - Fast and cheap but may struggle with complex alignment
+
+### 4. Export
 
 ```bash
 db-auto-doc export --sql --markdown --html --csv --mermaid
@@ -103,7 +187,7 @@ Optionally apply directly to database:
 db-auto-doc export --sql --apply
 ```
 
-### 4. Check Status
+### 5. Check Status
 
 ```bash
 db-auto-doc status
@@ -116,7 +200,7 @@ Shows:
 - Token usage, cost, and duration
 - Guardrail status and warnings
 
-### 5. Resume Analysis
+### 6. Resume Analysis
 
 ```bash
 db-auto-doc analyze --resume ./db-doc-state.json
@@ -156,6 +240,41 @@ For legacy databases missing primary/foreign key constraints, DBAutoDoc can:
 Triggered automatically when:
 - Tables lack primary key constraints
 - Insufficient foreign key relationships detected (below threshold)
+
+### Sample Query Generation
+
+DBAutoDoc can generate reference SQL queries for AI agents, solving the **query alignment problem** where multi-query patterns (summary + detail) have inconsistent filtering logic:
+
+**The Problem:**
+```sql
+-- Summary query
+SELECT COUNT(*) FROM Registrations  -- All registrations
+
+-- Detail query
+SELECT * FROM Registrations WHERE Status='Attended'  -- Only attended
+
+-- Result: Numbers don't match! Bad UX.
+```
+
+**The Solution:**
+DBAutoDoc generates "gold standard" reference queries with:
+- **Explicit Filtering Rules** - Documents filter logic for consistency
+- **Alignment Tracking** - Links related queries via `relatedQueryIds`
+- **Query Patterns** - Summary+Detail, Multi-Entity Drilldown, Time Series, etc.
+- **Validation** - Executes queries and validates results
+- **Few-Shot Training** - Use as examples for AI agent prompting
+
+**Two-Prompt Architecture:**
+1. **Planning Phase** - AI designs what queries to create (lightweight, ~4K tokens)
+2. **Generation Phase** - AI generates SQL for each query individually (~3K tokens each)
+
+This approach prevents JSON truncation issues while maintaining alignment context between related queries.
+
+**Use Cases:**
+- Training AI agents like Skip to generate consistent multi-query patterns
+- Creating reference examples for few-shot prompting
+- Documenting common query patterns for your database
+- Validating that related queries use consistent filtering logic
 
 ### Backpropagation
 
@@ -252,6 +371,15 @@ This rich context enables AI to make accurate inferences.
       "dependencyLevel": true,
       "schemaLevel": true,
       "crossSchema": true
+    },
+    "sampleQueryGeneration": {
+      "enabled": true,
+      "queriesPerTable": 5,
+      "maxExecutionTime": 30000,
+      "includeMultiQueryPatterns": true,
+      "validateAlignment": true,
+      "tokenBudget": 100000,
+      "maxRowsInSample": 10
     },
     "guardrails": {
       "enabled": true,
@@ -623,6 +751,16 @@ Typical costs (will vary by database size and complexity):
 
 **With Relationship Discovery**: Add 25-40% to token/cost estimates for databases with missing constraints.
 
+**With Sample Query Generation** (5 queries/table, GPT-4o):
+
+| Database Size | Tables | Additional Tokens | Additional Cost |
+|---------------|--------|-------------------|-----------------|
+| Small | 10-20 | ~100K | $0.50-1.00 |
+| Medium | 50-100 | ~500K | $2.50-5.00 |
+| Large | 200+ | ~2M | $10-20 |
+
+Note: Sample query generation uses ~6× more API calls than description generation (planning + individual SQL generation for each query), adding ~50% to total token usage.
+
 **Guardrails** help control costs by setting hard limits on token usage and runtime.
 
 ## Best Practices
@@ -637,6 +775,19 @@ Typical costs (will vary by database size and complexity):
 8. **Resume from checkpoints** - Save costs by continuing previous runs
 9. **Use appropriate models** - Balance cost vs. quality (GPT-4 vs. Groq)
 10. **Export multiple formats** - HTML for browsing, CSV for analysis, SQL for database
+
+### Sample Query Generation Best Practices
+
+1. **Use GPT-4o or Claude 3.5** - Best balance of quality, speed, and cost
+2. **Set token budget** - Prevents runaway costs (default: 100K tokens)
+3. **Start with 5 queries/table** - Good balance of coverage and cost
+4. **Enable alignment validation** - Ensures related queries use consistent logic
+5. **Review generated queries** - Verify SQL correctness before using for training
+6. **Use for few-shot prompting** - Include in AI agent system prompts as examples
+7. **Generate separately** - Use `generate-queries` command on existing state to avoid re-running full analysis
+8. **Focus on complex tables** - Skip simple lookup tables to save costs
+9. **Validate execution** - Enable `maxExecutionTime` to test queries run successfully
+10. **Document patterns** - Use generated queries to document common query patterns for your domain
 
 ## Troubleshooting
 

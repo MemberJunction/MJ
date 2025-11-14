@@ -172,9 +172,10 @@ export interface SampleQueryGenerationConfig {
   maxExecutionTime: number;
   includeMultiQueryPatterns: boolean;
   validateAlignment: boolean;
-  tokenBudget: number;
+  tokenBudget: number;  // Token budget for query generation phase (default: 100000, set to 0 for unlimited)
   queryTypes?: QueryType[];
   maxRowsInSample: number;
+  maxTables?: number;  // Max tables to generate queries for (default: 10, set to 0 for all tables)
 }
 
 export interface QueryGenerationContext {

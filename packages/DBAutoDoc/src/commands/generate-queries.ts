@@ -110,7 +110,8 @@ export default class GenerateQueries extends Command {
         includeMultiQueryPatterns: config.analysis.sampleQueryGeneration?.includeMultiQueryPatterns !== false,
         validateAlignment: config.analysis.sampleQueryGeneration?.validateAlignment !== false,
         tokenBudget: config.analysis.sampleQueryGeneration?.tokenBudget || 100000,
-        maxRowsInSample: config.analysis.sampleQueryGeneration?.maxRowsInSample || 10
+        maxRowsInSample: config.analysis.sampleQueryGeneration?.maxRowsInSample || 10,
+        maxTables: config.analysis.sampleQueryGeneration?.maxTables  // Optional, defaults to 10 in generator
       };
 
       // Use AI config from main settings

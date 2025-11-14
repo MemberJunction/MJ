@@ -146,7 +146,8 @@ export class SampleQueryGenerator {
     const importantTables = this.selectImportantTables(schema);
 
     for (const focusTable of importantTables) {
-      if (this.totalTokensUsed >= this.config.tokenBudget) {
+      // Check token budget (0 = unlimited)
+      if (this.config.tokenBudget > 0 && this.totalTokensUsed >= this.config.tokenBudget) {
         LogStatus(`[SampleQueryGenerator] Token budget reached, stopping query generation`);
         break;
       }
@@ -169,14 +170,24 @@ export class SampleQueryGenerator {
   }
 
   private selectImportantTables(schema: SchemaDefinition): TableDefinition[] {
-    return schema.tables
+    const tablesWithData = schema.tables
       .filter(t => t.rowCount > 0)
       .sort((a, b) => {
         const scoreA = this.calculateTableImportance(a);
         const scoreB = this.calculateTableImportance(b);
         return scoreB - scoreA;
-      })
-      .slice(0, Math.min(10, schema.tables.length));
+      });
+
+    // Determine how many tables to select
+    const maxTables = this.config.maxTables ?? 10;  // Default to 10 if not specified
+
+    // If maxTables is 0, return all tables with data
+    if (maxTables === 0) {
+      return tablesWithData;
+    }
+
+    // Otherwise, return the top N tables
+    return tablesWithData.slice(0, Math.min(maxTables, tablesWithData.length));
   }
 
   private calculateTableImportance(table: TableDefinition): number {
