@@ -199,13 +199,15 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // Build formatted progress message
         const taskName = progress.taskName || 'Task';
         const progressMessage = progress.message;
-        const percentComplete = progress.percentComplete;
+        // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
+        // Note: hierarchicalStep is nested inside metadata.progress from GraphQL
+        const stepDisplay = (progress.metadata as any)?.progress?.hierarchicalStep || progress.stepCount;
 
         let updatedMessage: string;
-        if (percentComplete != null) {
-          updatedMessage = `⏳ **${taskName}** (${percentComplete}%)\n\n${progressMessage}`;
+        if (stepDisplay != null) {
+          updatedMessage = `🔄 **${taskName}** • Step ${stepDisplay}\n\n${progressMessage}`;
         } else {
-          updatedMessage = `⏳ **${taskName}**\n\n${progressMessage}`;
+          updatedMessage = `🔄 **${taskName}**\n\n${progressMessage}`;
         }
 
         message.Message = updatedMessage;

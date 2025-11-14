@@ -1147,8 +1147,8 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         testId: this.selectedTestId!,
         verbose: this.verbose,
         onProgress: (progress) => {
-          // Update progress percentage
-          this.progress = progress.percentage;
+          // Update progress percentage (fallback to 0 if not provided)
+          this.progress = progress.percentage ?? 0;
 
           // Update progress steps based on current step
           this.updateProgressStep(progress.currentStep);
@@ -1196,8 +1196,8 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         verbose: this.verbose,
         parallel: this.parallel,
         onProgress: (progress) => {
-          // Update progress percentage
-          this.progress = progress.percentage;
+          // Update progress percentage (fallback to 0 if not provided)
+          this.progress = progress.percentage ?? 0;
 
           // Update progress steps based on current step
           this.updateProgressStep(progress.currentStep);
