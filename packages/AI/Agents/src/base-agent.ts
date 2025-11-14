@@ -96,6 +96,8 @@ type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0] & {
     agentHierarchy: string[];
     /** Depth of the current agent in the execution hierarchy */
     depth: number;
+    /** Hierarchical step string (e.g., "2.1.3" for nested agents) */
+    hierarchicalStep?: string;
 };
 
 /**
@@ -274,7 +276,15 @@ export class BaseAgent {
      */
     private _depth: number = 0;
 
-    
+    /**
+     * Parent step counts from root to immediate parent.
+     * Example: [2, 1] means root agent is at step 2, parent agent is at step 1.
+     * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).
+     * @private
+     */
+    private _parentStepCounts: number[] = [];
+
+
     /**
      * All progress steps including intermediate ones for complete execution tracking.
      * @private
@@ -386,26 +396,36 @@ export class BaseAgent {
      */
     private wrapProgressCallback(originalCallback?: AgentExecutionProgressCallback): AgentExecutionProgressCallback | undefined {
         if (!originalCallback) return undefined;
-        
+
         return (progress) => {
+            // Preserve hierarchical step if already calculated by a child agent
+            // Otherwise, build it using this agent's parent step counts
+            const hierarchicalStep = progress.metadata?.hierarchicalStep as string | undefined
+                ?? this.buildHierarchicalStep(
+                    progress.metadata?.stepCount as number,
+                    this._parentStepCounts
+                );
+
             // Capture all progress events
             this._allProgressSteps.push({
                 ...progress,
                 timestamp: new Date(),
                 agentHierarchy: this._agentHierarchy || [],
-                depth: this._depth || 0
+                depth: this._depth || 0,
+                hierarchicalStep
             });
-            
-            // Include agent run in metadata if available
+
+            // Include agent run and hierarchical step in metadata if available
             try {
                 const enhancedProgress = {
                     ...progress,
                     metadata: {
                         ...progress.metadata,
-                        agentRun: this._agentRun 
+                        agentRun: this._agentRun,
+                        hierarchicalStep
                     }
                 };
-            
+
                 // Call original callback with enhanced progress
                 originalCallback(enhancedProgress);
             }
@@ -584,7 +604,10 @@ export class BaseAgent {
             wrappedParams.onProgress?.({
                 step: 'initialization',
                 message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`),
-                metadata: { stepCount: 0 }
+                metadata: {
+                    stepCount: 0,
+                    hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
+                }
             });
 
             // Initialize execution tracking
@@ -616,7 +639,10 @@ export class BaseAgent {
             wrappedParams.onProgress?.({
                 step: 'validation',
                 message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts'),
-                metadata: { stepCount: 0 }
+                metadata: {
+                    stepCount: 0,
+                    hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
+                }
             });
 
             // Create and track validation step
@@ -668,7 +694,11 @@ export class BaseAgent {
             // Report finalization progress
             wrappedParams.onProgress?.({
                 step: 'finalization',
-                metadata: { result: executionResult, stepCount: executionResult.stepCount },
+                metadata: {
+                    result: executionResult,
+                    stepCount: executionResult.stepCount,
+                    hierarchicalStep: this.buildHierarchicalStep(executionResult.stepCount, this._parentStepCounts)
+                },
                 message: this.formatHierarchicalMessage('Finalizing agent execution')
             });
 
@@ -3199,27 +3229,20 @@ The context is now within limits. Please retry your request with the recovered c
             if (params.effortLevel !== undefined && params.effortLevel !== null) {
                 this.logStatus(`🎯 Propagating effort level ${params.effortLevel} to sub-agent '${subAgentRequest.name}'`, true, params);
             }
-            
+
+            const parentStepCountsToPass = [...this._parentStepCounts, stepCount + 1];
+
             // Execute the sub-agent with cancellation and streaming support
             const result = await runner.RunAgent<SC, SR>({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
                 contextUser: params.contextUser,
                 cancellationToken: params.cancellationToken,
-                onProgress: params.onProgress ? (progress) => {
-                    // Override subagent's stepCount with parent's current step to maintain consistency
-                    const parentStepCount = stepCount + 1;
-                    params.onProgress?.({
-                        ...progress,
-                        metadata: {
-                            ...progress.metadata,
-                            stepCount: parentStepCount
-                        }
-                    });
-                } : undefined,
+                onProgress: params.onProgress,
                 onStreaming: params.onStreaming,
                 parentAgentHierarchy: this._agentHierarchy,
                 parentDepth: this._depth,
+                parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
@@ -3551,10 +3574,11 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Initialize hierarchy tracking
-        this._agentHierarchy = params.parentAgentHierarchy 
+        this._agentHierarchy = params.parentAgentHierarchy
             ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
             : [params.agent.Name || 'Unknown Agent'];
         this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
+        this._parentStepCounts = params.parentStepCounts || [];
 
         // Reset execution chain and progress tracking
         this._allProgressSteps = [];
@@ -3801,8 +3825,34 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds hierarchical step string from parent and current step counts.
+     *
+     * Examples:
+     * - Root agent step 2: buildHierarchicalStep(2, []) => "2"
+     * - Sub-agent step 1 under root step 2: buildHierarchicalStep(1, [2]) => "2.1"
+     * - Nested sub-agent step 3: buildHierarchicalStep(3, [2, 1]) => "2.1.3"
+     * - Deep nesting: buildHierarchicalStep(5, [1, 2, 3, 4]) => "1.2.3.4.5"
+     *
+     * @param currentStep - Current agent's step number (1-based)
+     * @param parentSteps - Array of parent step counts from root to immediate parent
+     * @returns Formatted hierarchical step string, or undefined if currentStep is undefined/null
+     * @private
+     */
+    private buildHierarchicalStep(currentStep: number | undefined, parentSteps: number[]): string | undefined {
+        if (currentStep == null) return undefined;
+
+        if (parentSteps.length === 0) {
+            // Root agent - just return step number
+            return currentStep.toString();
+        }
+
+        // Nested agent - concatenate parent steps with current step
+        return [...parentSteps, currentStep].join('.');
+    }
+
+    /**
      * Gets human-readable reasoning for the next step decision.
-     * 
+     *
      * @private
      * @param {BaseAgentNextStep} nextStep - The next step decision
      * @returns {string} Human-readable reasoning
@@ -4044,10 +4094,12 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             // Report prompt execution progress with context
             const isRetry = !!previousDecision;
-            const promptMessage = isRetry 
+            const promptMessage = isRetry
                 ? `Running ${params.agent.Name} with context from ${previousDecision.retryReason || 'previous actions'}`
                 : `Running ${params.agent.Name}'s initial prompt...`;
-                
+
+            const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
+
             params.onProgress?.({
                 step: 'prompt_execution',
                 message: this.formatHierarchicalMessage(promptMessage),
@@ -4055,7 +4107,8 @@ The context is now within limits. Please retry your request with the recovered c
                     promptId: promptId,
                     isRetry,
                     promptName: promptName,
-                    stepCount: stepCount + 1
+                    stepCount: stepCount + 1,
+                    hierarchicalStep: hierarchicalStepToEmit
                 },
                 displayMode: 'live' // Only show in live mode
             });
@@ -4186,7 +4239,10 @@ The context is now within limits. Please retry your request with the recovered c
             params.onProgress?.({
                 step: 'decision_processing',
                 message: this.formatHierarchicalMessage('Analyzing response and determining next steps'),
-                metadata: { stepCount: stepCount + 1 },
+                metadata: {
+                    stepCount: stepCount + 1,
+                    hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
+                },
                 displayMode: 'both' // Show in both live and historical modes
             });
             
@@ -4469,7 +4525,8 @@ The context is now within limits. Please retry your request with the recovered c
                 agentName: params.agent.Name,
                 subAgentName: subAgentRequest.name,
                 reason: subAgentRequest.message,
-                stepCount: stepCount + 1
+                stepCount: stepCount + 1,
+                hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
             }
         });
         
@@ -4861,7 +4918,9 @@ The context is now within limits. Please retry your request with the recovered c
                 agentName: params.agent.Name,
                 subAgentName: subAgentRequest.name,
                 reason: subAgentRequest.message,
-                relationshipType: 'related'
+                relationshipType: 'related',
+                stepCount: stepCount + 1,
+                hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
             }
         });
 
@@ -5364,7 +5423,8 @@ The context is now within limits. Please retry your request with the recovered c
                 metadata: {
                     actionCount: actions.length,
                     actionNames: actions.map(a => a.name),
-                    stepCount: stepCount + 1
+                    stepCount: stepCount + 1,
+                    hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
                 },
                 displayMode: 'live' // Only show in live mode
             });

@@ -45,6 +45,9 @@ export class AgentExecutionProgress {
 
     @Field({ nullable: true })
     stepCount?: number;
+
+    @Field({ nullable: true })
+    hierarchicalStep?: string;
 }
 
 @ObjectType()
@@ -236,7 +239,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     message: progress.message,
                     agentName: (progress.metadata as any)?.agentName || undefined,
                     agentType: (progress.metadata as any)?.agentType || undefined,
-                    stepCount: (progress.metadata as any)?.stepCount || undefined
+                    stepCount: (progress.metadata as any)?.stepCount || undefined,
+                    hierarchicalStep: (progress.metadata as any)?.hierarchicalStep || undefined
                 },
                 timestamp: new Date()
             };

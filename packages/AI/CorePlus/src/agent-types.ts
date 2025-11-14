@@ -432,6 +432,12 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
     parentAgentHierarchy?: string[];
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+    /**
+     * Optional parent step counts from root to immediate parent agent.
+     * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).
+     * @internal - Managed automatically by agent execution framework
+     */
+    parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: AIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
