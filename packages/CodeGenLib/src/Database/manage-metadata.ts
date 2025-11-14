@@ -1870,7 +1870,8 @@ NumberedRows AS (
          }
       }
       catch (e) {
-         LogError(`Failed to create new entity ${newEntity?.TableName}`);
+         LogError(`Failed to create new entity ${newEntity?.TableName}`, null, e);
+         throw e; // Re-throw to ensure transaction rollback
       }
    }
 
