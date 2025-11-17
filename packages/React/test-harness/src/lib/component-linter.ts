@@ -2897,10 +2897,64 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
               }
-              
-              // Skip if no Parameters property
-              if (!parametersNode) return;
-              
+
+              // IMPORTANT: Validate query name existence FIRST, before checking Parameters
+              // This ensures we catch missing queries even when no Parameters are provided
+              if (queryName && componentSpec?.dataRequirements?.queries) {
+                const queryExists = componentSpec.dataRequirements.queries.some(q => q.name === queryName);
+                if (!queryExists) {
+                  const availableQueries = componentSpec.dataRequirements.queries.map(q => q.name).join(', ');
+                  violations.push({
+                    rule: 'runquery-parameters-validation',
+                    severity: 'high',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Query '${queryName}' not found in component spec. Available queries: ${availableQueries || 'none'}`,
+                    code: `QueryName: '${componentSpec.dataRequirements.queries[0]?.name || 'QueryNameFromSpec'}'`
+                  });
+                }
+              }
+
+              // Check if query requires parameters but Parameters property is missing
+              if (!parametersNode) {
+                // Find the query spec to check if it has required parameters
+                let specQuery: ComponentQueryDataRequirement | undefined;
+                if (componentSpec?.dataRequirements?.queries && queryName) {
+                  specQuery = componentSpec.dataRequirements.queries.find(q => q.name === queryName);
+                }
+
+                if (specQuery?.parameters && specQuery.parameters.length > 0) {
+                  // Check if any parameters are required
+                  // Note: isRequired field is being added to ComponentQueryParameterValue type
+                  const requiredParams = specQuery.parameters.filter(p => {
+                    // Check for explicit isRequired flag (when available)
+                    const hasRequiredFlag = (p as any).isRequired === true || (p as any).isRequired === '1';
+                    // Or infer required if value is '@runtime' (runtime parameters should be provided)
+                    const isRuntimeParam = p.value === '@runtime';
+                    return hasRequiredFlag || isRuntimeParam;
+                  });
+
+                  if (requiredParams.length > 0) {
+                    const paramNames = requiredParams.map(p => p.name).join(', ');
+                    const exampleParams = requiredParams
+                      .map(p => `  ${p.name}: ${p.testValue ? `'${p.testValue}'` : "'value'"}`)
+                      .join(',\n');
+
+                    violations.push({
+                      rule: 'runquery-parameters-validation',
+                      severity: 'high',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Query '${queryName}' requires parameters but RunQuery call is missing 'Parameters' property. Required: ${paramNames}`,
+                      code: `Parameters: {\n${exampleParams}\n}`
+                    });
+                  }
+                }
+
+                // Skip further parameter validation since there's no Parameters property
+                return;
+              }
+
               // Find the query in componentSpec if available
               let specQuery: ComponentQueryDataRequirement | undefined;
               if (componentSpec?.dataRequirements?.queries && queryName) {
@@ -3105,22 +3159,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   code: fixCode
                 });
               }
-              
-              // Additional check: Validate against spec queries list
-              if (queryName && componentSpec?.dataRequirements?.queries) {
-                const queryExists = componentSpec.dataRequirements.queries.some(q => q.name === queryName);
-                if (!queryExists) {
-                  const availableQueries = componentSpec.dataRequirements.queries.map(q => q.name).join(', ');
-                  violations.push({
-                    rule: 'runquery-parameters-validation',
-                    severity: 'high',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `Query '${queryName}' not found in component spec. Available queries: ${availableQueries || 'none'}`,
-                    code: `QueryName: '${componentSpec.dataRequirements.queries[0]?.name || 'QueryNameFromSpec'}'`
-                  });
-                }
-              }
+
+              // Note: Query name validation happens earlier (before Parameters check)
+              // to ensure we catch missing queries even when no Parameters are provided
             }
           }
         });
