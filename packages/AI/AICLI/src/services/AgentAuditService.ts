@@ -163,7 +163,7 @@ export class AgentAuditService {
     let filter = `StartedAt >= '${startDate.toISOString()}' AND StartedAt <= '${endDate.toISOString()}'`;
 
     if (options.agentName) {
-      filter += ` AND AgentName = '${options.agentName.replace(/'/g, "''")}'`;
+      filter += ` AND Agent LIKE '%${options.agentName.replace(/'/g, "''")}%'`;
     }
 
     if (options.status !== 'all') {
