@@ -303,21 +303,34 @@
                                         }
 
                                         <!-- Pagination Controls -->
-                                        @if (hasMoreExecutionHistory) {
+                                        @if (totalPages > 1) {
                                             <div class="pagination-controls">
                                                 <button kendoButton
                                                         fillMode="outline"
                                                         size="medium"
-                                                        (click)="loadMoreExecutionHistory()"
-                                                        [disabled]="isLoadingMoreExecutions"
-                                                        class="load-more-btn">
-                                                    @if (isLoadingMoreExecutions) {
+                                                        (click)="goToPreviousPage()"
+                                                        [disabled]="!hasPreviousPage || isLoadingPage"
+                                                        class="page-nav-btn">
+                                                    <i class="fa-solid fa-chevron-left"></i>
+                                                    Previous
+                                                </button>
+                                                <div class="page-info">
+                                                    @if (isLoadingPage) {
                                                         <i class="fa-solid fa-spinner fa-spin"></i>
                                                         Loading...
                                                     } @else {
-                                                        <i class="fa-solid fa-chevron-down"></i>
-                                                        Load More ({{ recentExecutions.length }} of {{ totalExecutionHistoryCount }})
+                                                        Page {{ executionHistoryCurrentPage }} of {{ totalPages }}
+                                                        <span class="record-count">({{ totalExecutionHistoryCount }} total)</span>
                                                     }
+                                                </div>
+                                                <button kendoButton
+                                                        fillMode="outline"
+                                                        size="medium"
+                                                        (click)="goToNextPage()"
+                                                        [disabled]="!hasNextPage || isLoadingPage"
+                                                        class="page-nav-btn">
+                                                    Next
+                                                    <i class="fa-solid fa-chevron-right"></i>
                                                 </button>
                                                 <button kendoButton
                                                         fillMode="flat"

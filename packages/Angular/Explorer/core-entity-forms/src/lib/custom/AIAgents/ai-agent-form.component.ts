@@ -229,7 +229,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Pagination state for execution history */
     public executionHistoryPageSize: number = 20;
     public executionHistoryCurrentPage: number = 1;
-    public isLoadingMoreExecutions: boolean = false;
+    public isLoadingPage: boolean = false;
+    /** Cache all loaded execution records for pagination */
+    private allLoadedExecutions: AIAgentRunEntityExtended[] = [];
     
     // === Loading States ===
     /** Main loading state for initial data load */
@@ -578,8 +580,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         // Reset pagination state on refresh
         if (forceRefresh) {
             this.executionHistoryCurrentPage = 1;
-            this.isLoadingMoreExecutions = false;
-            this.recentExecutions = [];
+            this.isLoadingPage = false;
+            this.allLoadedExecutions = [];
+            // Don't clear recentExecutions - keep existing data visible while loading
         }
 
         // Set loading state
@@ -696,6 +699,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 this.recentExecutions = results[2].Results as AIAgentRunEntityExtended[] || [];
                 this.totalExecutionHistoryCount = results[2].TotalRowCount;
 
+                // Initialize cache with first page of results
+                this.allLoadedExecutions = [...this.recentExecutions];
+
                 // Initialize filtered executions
                 this.filteredExecutions = [...this.recentExecutions];
             }
@@ -739,57 +745,115 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Loads the next page of execution history
+     * Navigates to the next page of execution history
      */
-    public async loadMoreExecutionHistory(): Promise<void> {
-        if (this.isLoadingMoreExecutions || !this.record?.ID) {
+    public async goToNextPage(): Promise<void> {
+        if (!this.hasNextPage || this.isLoadingPage || !this.record?.ID) {
             return;
         }
 
-        // Check if there are more results to load
-        if (this.recentExecutions.length >= this.totalExecutionHistoryCount) {
+        const nextPage = this.executionHistoryCurrentPage + 1;
+        await this.loadPage(nextPage);
+    }
+
+    /**
+     * Navigates to the previous page of execution history
+     */
+    public async goToPreviousPage(): Promise<void> {
+        if (!this.hasPreviousPage || this.isLoadingPage) {
             return;
         }
 
-        this.isLoadingMoreExecutions = true;
+        const previousPage = this.executionHistoryCurrentPage - 1;
+        await this.loadPage(previousPage);
+    }
+
+    /**
+     * Loads a specific page of execution history, using cache when available
+     */
+    private async loadPage(pageNumber: number): Promise<void> {
+        if (!this.record?.ID) {
+            return;
+        }
+
+        this.isLoadingPage = true;
         this.cdr.detectChanges();
 
         try {
-            this.executionHistoryCurrentPage++;
-            const startRow = (this.executionHistoryCurrentPage - 1) * this.executionHistoryPageSize;
+            const startIndex = (pageNumber - 1) * this.executionHistoryPageSize;
+            const endIndex = startIndex + this.executionHistoryPageSize;
 
-            const rv = new RunView();
-            const result = await rv.RunView<AIAgentRunEntityExtended>({
-                EntityName: 'MJ: AI Agent Runs',
-                Fields: [
-                    "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
-                    "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                    "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
-                ],
-                ExtraFilter: `AgentID='${this.record.ID}'`,
-                OrderBy: '__mj_CreatedAt DESC',
-                MaxRows: this.executionHistoryPageSize,
-                StartRow: startRow,
-                ResultType: 'entity_object'
-            });
+            // Check if we have this page in cache
+            const cachedPageData = this.allLoadedExecutions.slice(startIndex, endIndex);
+            const hasFullPageInCache = cachedPageData.length === this.executionHistoryPageSize;
+            const isLastPage = endIndex >= this.totalExecutionHistoryCount;
+            const hasPartialPageInCache = isLastPage && cachedPageData.length > 0 &&
+                                         cachedPageData.length === (this.totalExecutionHistoryCount - startIndex);
 
-            if (result.Success && result.Results) {
-                this.recentExecutions.push(...result.Results);
-                this.cdr.detectChanges();
+            if (hasFullPageInCache || hasPartialPageInCache) {
+                // We have the page in cache (either full page or complete last page)
+                this.executionHistoryCurrentPage = pageNumber;
+                this.recentExecutions = cachedPageData;
+                await this.applySearchFilter();
+            } else {
+                // Need to load from database
+                const rv = new RunView();
+                const result = await rv.RunView<AIAgentRunEntityExtended>({
+                    EntityName: 'MJ: AI Agent Runs',
+                    Fields: [
+                        "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
+                        "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
+                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                    ],
+                    ExtraFilter: `AgentID='${this.record.ID}'`,
+                    OrderBy: '__mj_CreatedAt DESC',
+                    MaxRows: this.executionHistoryPageSize,
+                    StartRow: startIndex > 0 ? startIndex : undefined,
+                    ResultType: 'entity_object'
+                });
+
+                if (result.Success && result.Results) {
+                    // Update cache - ensure we have enough space
+                    while (this.allLoadedExecutions.length < startIndex) {
+                        this.allLoadedExecutions.push(null as any);
+                    }
+
+                    // Insert the new results into cache
+                    this.allLoadedExecutions.splice(startIndex, result.Results.length, ...result.Results);
+
+                    this.executionHistoryCurrentPage = pageNumber;
+                    this.recentExecutions = result.Results;
+                    await this.applySearchFilter();
+                }
             }
         } catch (error) {
-            console.error('Error loading more execution history:', error);
+            console.error('Error loading page:', error);
         } finally {
-            this.isLoadingMoreExecutions = false;
+            this.isLoadingPage = false;
             this.cdr.detectChanges();
         }
     }
 
     /**
-     * Checks if there are more execution history records to load
+     * Checks if there is a next page available
      */
-    public get hasMoreExecutionHistory(): boolean {
-        return this.recentExecutions.length < this.totalExecutionHistoryCount;
+    public get hasNextPage(): boolean {
+        const maxPage = Math.ceil(this.totalExecutionHistoryCount / this.executionHistoryPageSize);
+        return this.executionHistoryCurrentPage < maxPage;
+    }
+
+    /**
+     * Checks if there is a previous page available
+     */
+    public get hasPreviousPage(): boolean {
+        return this.executionHistoryCurrentPage > 1;
+    }
+
+    /**
+     * Gets the total number of pages
+     */
+    public get totalPages(): number {
+        return Math.ceil(this.totalExecutionHistoryCount / this.executionHistoryPageSize);
     }
 
     /**
@@ -1567,18 +1631,78 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Filters execution history based on search text
+     * Handles search text changes - debounced to avoid excessive processing
      */
     public onExecutionSearchChange(): void {
+        // Debounce search to avoid excessive processing during typing
+        if (this._searchDebounceTimer) {
+            clearTimeout(this._searchDebounceTimer);
+        }
+
+        this._searchDebounceTimer = setTimeout(() => {
+            this.applySearchFilter();
+        }, 300);
+    }
+
+    private _searchDebounceTimer: any = null;
+
+    /**
+     * Applies search filter across all cached records and loads from database if needed
+     */
+    private async applySearchFilter(): Promise<void> {
         if (!this.executionSearchText || this.executionSearchText.trim() === '') {
-            // No search text - show all executions
+            // No search text - show current page's executions
             this.filteredExecutions = [...this.recentExecutions];
+            return;
+        }
+
+        const searchLower = this.executionSearchText.toLowerCase().trim();
+
+        // First, search across all cached records
+        const cachedMatches = this.allLoadedExecutions.filter(execution =>
+            execution && execution.ID.toLowerCase().includes(searchLower)
+        );
+
+        if (cachedMatches.length > 0) {
+            // Found matches in cache
+            this.filteredExecutions = cachedMatches;
         } else {
-            // Filter by Run ID (case-insensitive partial match)
-            const searchLower = this.executionSearchText.toLowerCase().trim();
-            this.filteredExecutions = this.recentExecutions.filter(execution =>
-                execution.ID.toLowerCase().includes(searchLower)
-            );
+            // No matches in cache - search database
+            await this.searchExecutionsFromDatabase(searchLower);
+        }
+    }
+
+    /**
+     * Searches execution history from database when not found in cache
+     */
+    private async searchExecutionsFromDatabase(searchText: string): Promise<void> {
+        if (!this.record?.ID) {
+            return;
+        }
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<AIAgentRunEntityExtended>({
+                EntityName: 'MJ: AI Agent Runs',
+                Fields: [
+                    "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
+                    "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
+                    "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                ],
+                ExtraFilter: `AgentID='${this.record.ID}' AND ID LIKE '%${searchText}%'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 100, // Limit search results
+                ResultType: 'entity_object'
+            });
+
+            if (result.Success && result.Results) {
+                this.filteredExecutions = result.Results;
+            } else {
+                this.filteredExecutions = [];
+            }
+        } catch (error) {
+            console.error('Error searching executions:', error);
+            this.filteredExecutions = [];
         }
     }
 
@@ -2707,7 +2831,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         // Reset pagination state
         this.executionHistoryCurrentPage = 1;
         this.totalExecutionHistoryCount = 0;
-        this.isLoadingMoreExecutions = false;
+        this.isLoadingPage = false;
+        this.allLoadedExecutions = [];
 
         // Clear maps and objects
         this._permissionCache.clear();
