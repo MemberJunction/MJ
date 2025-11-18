@@ -261,12 +261,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private updateTabStyle(tabElement: HTMLElement, tabId: string): void {
     const tabs = this.shellService['tabs$'].value;
     const tab = tabs.find(t => t.Id === tabId);
+    // VSCode behavior: only italic changes, font-weight stays constant
     if (tab?.IsPermanent) {
       tabElement.style.fontStyle = 'normal';
-      tabElement.style.fontWeight = '600';
     } else {
       tabElement.style.fontStyle = 'italic';
-      tabElement.style.fontWeight = '400';
     }
   }
 

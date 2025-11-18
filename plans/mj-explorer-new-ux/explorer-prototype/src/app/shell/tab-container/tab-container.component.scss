@@ -32,44 +32,79 @@
 
   // Make tabs larger and easier to click
   .lm_header {
-    height: 40px !important; // Increased from default ~28px
+    height: 36px !important;
     background: #f5f5f5 !important;
     border-bottom: 1px solid #e0e0e0 !important;
+    overflow: visible !important; // Allow active tab to overlap border
+  }
+
+  .lm_tabs {
+    height: 36px !important;
+  }
+
+  // Hide Golden Layout window controls (maximize/popout/close)
+  .lm_controls {
+    display: none !important;
   }
 
   .lm_tab {
-    padding: 8px 16px !important; // Increased padding
-    font-size: 14px !important; // Larger text
-    height: 40px !important;
-    line-height: 24px !important;
-    cursor: pointer !important; // Always show pointer cursor
-    user-select: none !important; // Prevent text selection
-    background: transparent !important;
+    padding: 0 16px !important;
+    font-size: 13px !important;
+    height: 37px !important; // 1px taller to overlap border
+    line-height: 36px !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    background: #f5f5f5 !important;
     border: none !important;
-    border-right: 1px solid #e0e0e0 !important;
-    transition: background 0.15s ease !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    transition: all 0.15s ease !important;
+    position: relative !important;
+    margin-bottom: -1px !important; // Pull down to overlap header border
+    z-index: 1 !important;
+
+    // Use pseudo-element for separator to control height
+    &::before {
+      content: '' !important;
+      position: absolute !important;
+      right: 0 !important;
+      top: 8px !important;
+      bottom: 9px !important; // Account for border
+      width: 1px !important;
+      background: #e0e0e0 !important;
+    }
 
     &:hover {
       background: #e8e8e8 !important;
+
+      .lm_close_tab {
+        opacity: 0.7 !important;
+      }
     }
 
     &.lm_active {
       background: white !important;
-      border-bottom: 2px solid #1976d2 !important;
-      font-weight: 600 !important;
+      border-bottom-color: white !important; // Hide bottom border so content flows in
+      z-index: 2 !important;
+      // Note: font-style is set dynamically via updateTabStyle()
+      // based on whether the tab is permanent or temporary (VSCode behavior)
     }
   }
 
   .lm_title {
     cursor: pointer !important;
     user-select: none !important;
+    margin-right: 4px !important; // Space between title and close button
   }
 
   .lm_close_tab {
-    width: 18px !important;
-    height: 18px !important;
+    width: 16px !important;
+    height: 16px !important;
     cursor: pointer !important;
-    opacity: 0.6 !important;
+    opacity: 0 !important; // Hidden by default
+    transition: all 0.15s ease !important;
+    margin-left: 4px !important;
+    flex-shrink: 0 !important; // Prevent close button from shrinking
 
     &:hover {
       opacity: 1 !important;
@@ -78,9 +113,8 @@
     }
   }
 
-  // Temporary tab styling (italic text)
-  .lm_tab {
-    font-style: italic;
-    font-weight: 400;
+  // Show close button on active tab and on hover
+  .lm_active .lm_close_tab {
+    opacity: 0.5 !important;
   }
 }
