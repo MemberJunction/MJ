@@ -79,7 +79,7 @@ export class HeaderComponent implements OnInit {
   @HostListener('document:click', ['$event'])
   OnClickOutside(event: MouseEvent): void {
     const target = event.target as HTMLElement;
-    const clickedInside = target.closest('.logo-container');
+    const clickedInside = target.closest('.app-switcher-container');
 
     if (!clickedInside && this.showAppSwitcher) {
       this.showAppSwitcher = false;

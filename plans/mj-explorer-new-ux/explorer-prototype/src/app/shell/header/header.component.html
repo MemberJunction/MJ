@@ -1,8 +1,10 @@
 <header class="header">
-  <!-- Logo / App Switcher -->
-  <div class="logo-container">
-    <div class="logo" (click)="ToggleAppSwitcher()" title="Switch Apps">
-      <span class="logo-text">MJ</span>
+  <!-- App Switcher (shows current app) -->
+  <div class="app-switcher-container">
+    <div class="app-switcher-button" (click)="ToggleAppSwitcher()" title="Switch Apps">
+      <i [class]="activeApp?.Icon || 'fa-solid fa-grid-2'" class="app-icon"></i>
+      <span class="app-name">{{ activeApp?.Name || 'Apps' }}</span>
+      <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
     </div>
 
     <!-- App Switcher Dropdown -->
@@ -15,12 +17,6 @@
         <span>{{ app.Name }}</span>
       </div>
     </div>
-  </div>
-
-  <!-- App Indicator -->
-  <div class="app-indicator" *ngIf="activeApp">
-    <i [class]="activeApp.Icon"></i>
-    <span>{{ activeApp.Name }}</span>
   </div>
 
   <!-- Navigation Items (List style) -->
