@@ -120,7 +120,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const savedConfig = this.shellService.LoadLayoutConfig();
     const tabs = this.shellService['tabs$'].value;
 
-    if (savedConfig && tabs.length > 0) {
+    // Check if saved config has actual content (not just empty root)
+    const savedConfigHasContent = savedConfig?.root?.content && savedConfig.root.content.length > 0;
+
+    if (savedConfigHasContent && tabs.length > 0) {
       // Restore saved layout with existing tabs
       try {
         this.layout.loadLayout(savedConfig);
@@ -335,7 +338,13 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private updateLayout(tabs: TabState[]): void {
-    if (!this.layout || !this.layout.rootItem) return;
+    if (!this.layout) return;
+
+    // If layout has no root item (all tabs were closed), add all tabs as new
+    if (!this.layout.rootItem) {
+      tabs.forEach(tab => this.addTabToLayout(tab));
+      return;
+    }
 
     // Get current component items
     const getAllComponents = (item: any): any[] => {
@@ -458,9 +467,36 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     };
 
     try {
+      // Check if layout has any content - if not, we need to reset it first
+      // This happens when all tabs were closed
+      if (!this.layout.rootItem ||
+          (this.layout.rootItem.contentItems && this.layout.rootItem.contentItems.length === 0)) {
+        // Reset to a fresh layout before adding the component
+        const config: LayoutConfig = {
+          root: {
+            type: 'row',
+            content: []
+          }
+        };
+        this.layout.loadLayout(config);
+      }
+
       this.layout.addComponent(componentConfig.componentType, componentConfig.componentState, componentConfig.title);
     } catch (error) {
       console.error('Failed to add tab to layout:', error);
+      // Try resetting layout and adding again
+      try {
+        const config: LayoutConfig = {
+          root: {
+            type: 'row',
+            content: []
+          }
+        };
+        this.layout.loadLayout(config);
+        this.layout.addComponent(componentConfig.componentType, componentConfig.componentState, componentConfig.title);
+      } catch (retryError) {
+        console.error('Failed to add tab even after layout reset:', retryError);
+      }
     }
   }
 
