@@ -9,7 +9,7 @@ import { EmbedTextLocalHelper } from "./util";
 
 interface ExtractedParameter {
     name: string;
-    type: 'string' | 'number' | 'date' | 'boolean' | 'array';
+    type: 'string' | 'number' | 'date' | 'boolean' | 'array' | 'object';
     isRequired: boolean;
     description: string;
     usage: string[];
@@ -162,21 +162,34 @@ export class QueryEntityExtended extends QueryEntity {
     
     private async extractAndSyncData(): Promise<void> {
         try {
+            // Pre-check: Skip AI call if SQL doesn't contain Nunjucks syntax
+            const hasNunjucksSyntax = this.SQL && (
+                this.SQL.includes('{{') ||
+                this.SQL.includes('{%') ||
+                this.SQL.includes('{#')
+            );
+
+            if (!hasNunjucksSyntax) {
+                // No Nunjucks syntax found - skip AI processing to save tokens/time
+                this.UsesTemplate = false;
+                return;
+            }
+
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, this.ContextCurrentUser, this.ProviderToUse as any as IMetadataProvider);
-            
+
             // Find the Template Parameter Extraction prompt (we'll reuse it for SQL)
-            const aiPrompt = AIEngine.Instance.Prompts.find(p => 
-                p.Name === 'SQL Query Parameter Extraction' && 
+            const aiPrompt = AIEngine.Instance.Prompts.find(p =>
+                p.Name === 'SQL Query Parameter Extraction' &&
                 p.Category === 'MJ: System'
             );
-            
+
             if (!aiPrompt) {
                 // Prompt not configured, non-fatal, just warn and return
                 console.warn('AI prompt for SQL Query Parameter Extraction not found. Skipping parameter extraction.');
                 return;
             }
-            
+
             // Prepare prompt data - we'll send the SQL as templateText since the prompt
             // is designed to extract Nunjucks parameters from any template content
             const promptData = {
@@ -193,15 +206,25 @@ export class QueryEntityExtended extends QueryEntity {
             const result = await promptRunner.ExecutePrompt<ParameterExtractionResult>(params);
 
             if (!result.success || !result.result) {
-                // AI extraction failed - this is common with complex queries or model limitations
-                // Not logging as error since it's expected behavior for some queries
+                // AI extraction failed - log details for debugging
+                console.warn(`Query "${this.Name}" - AI parameter extraction failed:`, {
+                    success: result.success,
+                    status: result.status,
+                    errorMessage: result.errorMessage,
+                    hasResult: !!result.result
+                });
                 this.UsesTemplate = false;
                 return;
             }
 
             // Validate that result.result has the expected structure
             if (!result.result.parameters || !Array.isArray(result.result.parameters)) {
-                // AI returned malformed result - silently handle by marking as non-templated
+                // AI returned malformed result - log for debugging
+                console.warn(`Query "${this.Name}" - AI returned malformed result:`, {
+                    hasParameters: !!result.result.parameters,
+                    isArray: Array.isArray(result.result.parameters),
+                    resultKeys: Object.keys(result.result)
+                });
                 this.UsesTemplate = false;
                 return;
             }
@@ -278,18 +301,29 @@ export class QueryEntityExtended extends QueryEntity {
                 const newParam = await md.GetEntityObject<QueryParameterEntity>('MJ: Query Parameters', this.ContextCurrentUser);
                 newParam.QueryID = this.ID;
                 newParam.Name = param.name;
-                switch (param.type) {
+
+                // Normalize type to lowercase for case-insensitive matching
+                const normalizedType = param.type?.toLowerCase();
+                switch (normalizedType) {
                     case "array":
                     case "boolean":
                     case "string":
                     case "date":
                     case "number":
-                        newParam.Type = param.type;
+                        newParam.Type = normalizedType;
                         break;
-                    default: 
-                        newParam.Type = 'string'; // Default to string if unknown
+                    case "object":
+                        // Object type is supported in Nunjucks/RunQuery but not yet in database schema
+                        // Store as string for now - the actual validation happens at runtime
+                        console.log(`Query "${this.Name}" - Parameter "${param.name}" is type "object", storing as "string" (runtime will handle object validation)`);
+                        newParam.Type = 'string';
+                        break;
+                    default:
+                        console.warn(`Query "${this.Name}" - Unknown parameter type "${param.type}" for parameter "${param.name}", defaulting to "string"`);
+                        newParam.Type = 'string';
                 }
-                newParam.IsRequired = false; // Like templates, make all optional to avoid breaking queries
+
+                newParam.IsRequired = param.isRequired;
                 newParam.DefaultValue = param.defaultValue;
                 newParam.Description = param.description;
                 newParam.DetectionMethod = 'AI'; // Indicate this was found via AI
@@ -301,14 +335,31 @@ export class QueryEntityExtended extends QueryEntity {
                 const extractedParam = extractedParams.find(p => p.name.toLowerCase() === existingParam.Name.toLowerCase());
                 if (extractedParam) {
                     let hasChanges = false;
-                    
+
+                    // Normalize type to lowercase for case-insensitive comparison
+                    const normalizedType = extractedParam.type?.toLowerCase();
+                    const validTypes: Array<'array' | 'boolean' | 'string' | 'date' | 'number'> = ['array', 'boolean', 'string', 'date', 'number'];
+                    const isValidType = validTypes.includes(normalizedType as any);
+
+                    let targetType: 'array' | 'boolean' | 'string' | 'date' | 'number';
+                    if (isValidType) {
+                        targetType = normalizedType as any;
+                    } else if (normalizedType === 'object') {
+                        // Object type is supported in Nunjucks/RunQuery but not yet in database schema
+                        console.log(`Query "${this.Name}" - Parameter "${extractedParam.name}" is type "object", storing as "string" (runtime will handle object validation)`);
+                        targetType = 'string';
+                    } else {
+                        console.warn(`Query "${this.Name}" - Unknown parameter type "${extractedParam.type}" for parameter "${extractedParam.name}", defaulting to "string"`);
+                        targetType = 'string';
+                    }
+
                     // Check each property for changes
-                    if (existingParam.Type !== extractedParam.type) {
-                        existingParam.Type = extractedParam.type;
+                    if (existingParam.Type !== targetType) {
+                        existingParam.Type = targetType;
                         hasChanges = true;
                     }
                     if (existingParam.IsRequired !== extractedParam.isRequired) {
-                        existingParam.IsRequired = false; // Keep all optional like templates
+                        existingParam.IsRequired = extractedParam.isRequired;
                         hasChanges = true;
                     }
                     if (existingParam.DefaultValue !== extractedParam.defaultValue) {
@@ -323,7 +374,7 @@ export class QueryEntityExtended extends QueryEntity {
                         existingParam.DetectionMethod = 'AI';
                         hasChanges = true;
                     }
-                    
+
                     if (hasChanges) {
                         promises.push(existingParam.Save());
                     }
