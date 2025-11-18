@@ -221,6 +221,15 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public totalExecutionHistoryCount: number = 0;
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
+
+    /** Search functionality for execution history */
+    public executionSearchText: string = '';
+    public filteredExecutions: AIAgentRunEntityExtended[] = [];
+
+    /** Pagination state for execution history */
+    public executionHistoryPageSize: number = 20;
+    public executionHistoryCurrentPage: number = 1;
+    public isLoadingMoreExecutions: boolean = false;
     
     // === Loading States ===
     /** Main loading state for initial data load */
@@ -565,7 +574,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     private async loadRelatedCounts(forceRefresh: boolean): Promise<void> {
         if (!this.record?.ID) return;
-        
+
+        // Reset pagination state on refresh
+        if (forceRefresh) {
+            this.executionHistoryCurrentPage = 1;
+            this.isLoadingMoreExecutions = false;
+            this.recentExecutions = [];
+        }
+
         // Set loading state
         this.isLoadingData = true;
         this.loadingStates = {
@@ -581,7 +597,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         if (forceRefresh) {
             await AIEngineBase.Instance.Config(true); // force refresh
         }
-        
+
         try {
             // Clear unified sub-agents array
             this.allSubAgents = [];
@@ -639,7 +655,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => aa.AgentID === this.record.ID);
                 return filteredAgentActions.some(aa => aa.ActionID === a.ID);
             });
-            
+
             // Execute all queries in a single batch for better performance
             const results = await rv.RunViews([
                 // Learning cycles
@@ -657,27 +673,31 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     Fields: ["ID","Name", "AgentID", "AgentNoteType","AgentNoteTypeID","UserID"],
                     ExtraFilter: `AgentID='${this.record.ID}'`
                 },
-                // Execution history
+                // Execution history (initial page)
                 {
                     EntityName: 'MJ: AI Agent Runs',
                     Fields: [ // limit what we take from runs as this is where we can have a LOT come down if we include JSON fields
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
-                        "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp"
+                        "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
+                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
-                    MaxRows: 100
+                    MaxRows: this.executionHistoryPageSize
                 }
             ]);
 
             // Process results in the same order as queries
             if (results && results.length > 0) {
                 this.learningCycles = results[0].Results as AIAgentLearningCycleEntity[] || [];
-                
+
                 this.agentNotes = results[1].Results as AIAgentNoteEntity[] || [];
-                
+
                 this.recentExecutions = results[2].Results as AIAgentRunEntityExtended[] || [];
                 this.totalExecutionHistoryCount = results[2].TotalRowCount;
+
+                // Initialize filtered executions
+                this.filteredExecutions = [...this.recentExecutions];
             }
 
             // Create snapshot for cancel/revert functionality
@@ -717,7 +737,61 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             executionHistoryCount: this.executionHistoryCount
         };
     }
-    
+
+    /**
+     * Loads the next page of execution history
+     */
+    public async loadMoreExecutionHistory(): Promise<void> {
+        if (this.isLoadingMoreExecutions || !this.record?.ID) {
+            return;
+        }
+
+        // Check if there are more results to load
+        if (this.recentExecutions.length >= this.totalExecutionHistoryCount) {
+            return;
+        }
+
+        this.isLoadingMoreExecutions = true;
+        this.cdr.detectChanges();
+
+        try {
+            this.executionHistoryCurrentPage++;
+            const startRow = (this.executionHistoryCurrentPage - 1) * this.executionHistoryPageSize;
+
+            const rv = new RunView();
+            const result = await rv.RunView<AIAgentRunEntityExtended>({
+                EntityName: 'MJ: AI Agent Runs',
+                Fields: [
+                    "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
+                    "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
+                    "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                ],
+                ExtraFilter: `AgentID='${this.record.ID}'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: this.executionHistoryPageSize,
+                StartRow: startRow,
+                ResultType: 'entity_object'
+            });
+
+            if (result.Success && result.Results) {
+                this.recentExecutions.push(...result.Results);
+                this.cdr.detectChanges();
+            }
+        } catch (error) {
+            console.error('Error loading more execution history:', error);
+        } finally {
+            this.isLoadingMoreExecutions = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Checks if there are more execution history records to load
+     */
+    public get hasMoreExecutionHistory(): boolean {
+        return this.recentExecutions.length < this.totalExecutionHistoryCount;
+    }
+
     /**
      * Loads the agent type entity for this agent
      * @private
@@ -1491,7 +1565,23 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public toggleExecutionExpanded(executionId: string) {
         this.expandedExecutions[executionId] = !this.expandedExecutions[executionId];
     }
-    
+
+    /**
+     * Filters execution history based on search text
+     */
+    public onExecutionSearchChange(): void {
+        if (!this.executionSearchText || this.executionSearchText.trim() === '') {
+            // No search text - show all executions
+            this.filteredExecutions = [...this.recentExecutions];
+        } else {
+            // Filter by Run ID (case-insensitive partial match)
+            const searchLower = this.executionSearchText.toLowerCase().trim();
+            this.filteredExecutions = this.recentExecutions.filter(execution =>
+                execution.ID.toLowerCase().includes(searchLower)
+            );
+        }
+    }
+
     /**
      * Opens the full execution record in a new view
      */
@@ -2613,7 +2703,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this.recentExecutions.length = 0;
         this.learningCycles.length = 0;
         this.agentNotes.length = 0;
-        
+
+        // Reset pagination state
+        this.executionHistoryCurrentPage = 1;
+        this.totalExecutionHistoryCount = 0;
+        this.isLoadingMoreExecutions = false;
+
         // Clear maps and objects
         this._permissionCache.clear();
         this._runningTimeCache.clear();

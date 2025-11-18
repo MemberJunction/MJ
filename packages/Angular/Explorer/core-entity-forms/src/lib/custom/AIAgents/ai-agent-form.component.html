@@ -109,7 +109,7 @@
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content execution-history-panel">
-                                
+
                                 @if (executionHistoryCount === 0) {
                                     <div class="empty-state">
                                         <i class="fa-solid fa-history"></i>
@@ -117,8 +117,29 @@
                                         <p>This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here.</p>
                                     </div>
                                 } @else {
+                                    <!-- Search Bar -->
+                                    <div class="execution-search-bar">
+                                        <kendo-textbox
+                                            [(ngModel)]="executionSearchText"
+                                            (ngModelChange)="onExecutionSearchChange()"
+                                            [ngModelOptions]="{standalone: true}"
+                                            placeholder="Search by Run ID..."
+                                            [clearButton]="true">
+                                            <ng-template kendoTextBoxPrefixTemplate>
+                                                <i class="fa-solid fa-search"></i>
+                                            </ng-template>
+                                        </kendo-textbox>
+                                    </div>
+
                                     <div class="execution-history-list">
-                                        @for (execution of recentExecutions; track execution.ID) {
+                                        @if (filteredExecutions.length === 0) {
+                                            <div class="empty-state">
+                                                <i class="fa-solid fa-search"></i>
+                                                <h4>No Matching Results</h4>
+                                                <p>No execution history found matching "{{ executionSearchText }}"</p>
+                                            </div>
+                                        }
+                                        @for (execution of filteredExecutions; track execution.ID) {
                                             <div class="execution-card" [class.expanded]="expandedExecutions[execution.ID]">
                                                 <div class="execution-header" (click)="toggleExecutionExpanded(execution.ID)">
                                                     <div class="execution-left-section">
@@ -280,9 +301,32 @@
                                                 }
                                             </div>
                                         }
-                                        @if (executionHistoryCount > recentExecutions.length) {
-                                            <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Runs', '')">
-                                                <span>View all {{ executionHistoryCount }} executions...</span>
+
+                                        <!-- Pagination Controls -->
+                                        @if (hasMoreExecutionHistory) {
+                                            <div class="pagination-controls">
+                                                <button kendoButton
+                                                        fillMode="outline"
+                                                        size="medium"
+                                                        (click)="loadMoreExecutionHistory()"
+                                                        [disabled]="isLoadingMoreExecutions"
+                                                        class="load-more-btn">
+                                                    @if (isLoadingMoreExecutions) {
+                                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                                        Loading...
+                                                    } @else {
+                                                        <i class="fa-solid fa-chevron-down"></i>
+                                                        Load More ({{ recentExecutions.length }} of {{ totalExecutionHistoryCount }})
+                                                    }
+                                                </button>
+                                                <button kendoButton
+                                                        fillMode="flat"
+                                                        size="small"
+                                                        (click)="navigateToEntity('MJ: AI Agent Runs', '')"
+                                                        class="view-all-btn">
+                                                    <i class="fa-solid fa-external-link"></i>
+                                                    View All in Grid
+                                                </button>
                                             </div>
                                         }
                                     </div>
