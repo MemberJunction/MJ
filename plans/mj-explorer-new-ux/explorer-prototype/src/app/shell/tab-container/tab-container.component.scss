@@ -32,10 +32,12 @@
 
   // Make tabs larger and easier to click
   .lm_header {
-    height: 36px !important;
+    height: 38px !important; // 2px taller for top padding
+    padding-top: 2px !important; // Space above tabs
     background: #f5f5f5 !important;
-    border-bottom: 1px solid #e0e0e0 !important;
+    border-bottom: 1px solid #ebebeb !important; // Lighter border color
     overflow: visible !important; // Allow active tab to overlap border
+    box-sizing: border-box !important;
   }
 
   .lm_tabs {
@@ -50,29 +52,18 @@
   .lm_tab {
     padding: 0 16px !important;
     font-size: 13px !important;
-    height: 37px !important; // 1px taller to overlap border
-    line-height: 36px !important;
+    height: 35px !important; // Slightly shorter than header
+    line-height: 35px !important;
     box-sizing: border-box !important;
     cursor: pointer !important;
     user-select: none !important;
-    background: #f5f5f5 !important;
+    background: transparent !important; // Transparent instead of gray
     border: none !important;
-    border-bottom: 1px solid #e0e0e0 !important;
+    border-bottom: 1px solid #ebebeb !important; // Lighter border
     transition: all 0.15s ease !important;
     position: relative !important;
-    margin-bottom: -1px !important; // Pull down to overlap header border
     z-index: 1 !important;
-
-    // Use pseudo-element for separator to control height
-    &::before {
-      content: '' !important;
-      position: absolute !important;
-      right: 0 !important;
-      top: 8px !important;
-      bottom: 9px !important; // Account for border
-      width: 1px !important;
-      background: #e0e0e0 !important;
-    }
+    margin-right: 1px !important; // Small gap between tabs
 
     &:hover {
       background: #e8e8e8 !important;
@@ -84,7 +75,13 @@
 
     &.lm_active {
       background: white !important;
+      height: 37px !important; // Taller to overlap header border
+      margin-bottom: -1px !important; // Pull down to cover border
+      margin-right: 0 !important; // No gap after active tab
+      border: 1px solid #ebebeb !important; // Lighter borders
       border-bottom-color: white !important; // Hide bottom border so content flows in
+      border-radius: 4px 4px 0 0 !important; // Rounded top corners
+      color: #1976d2 !important; // Blue text when selected
       z-index: 2 !important;
       // Note: font-style is set dynamically via updateTabStyle()
       // based on whether the tab is permanent or temporary (VSCode behavior)
@@ -94,17 +91,23 @@
   .lm_title {
     cursor: pointer !important;
     user-select: none !important;
-    margin-right: 4px !important; // Space between title and close button
   }
 
   .lm_close_tab {
+    position: absolute !important;
+    right: 4px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
     width: 16px !important;
     height: 16px !important;
     cursor: pointer !important;
     opacity: 0 !important; // Hidden by default
     transition: all 0.15s ease !important;
-    margin-left: 4px !important;
-    flex-shrink: 0 !important; // Prevent close button from shrinking
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 10px !important;
 
     &:hover {
       opacity: 1 !important;
@@ -116,5 +119,10 @@
   // Show close button on active tab and on hover
   .lm_active .lm_close_tab {
     opacity: 0.5 !important;
+  }
+
+  // Adjust padding when close button is visible
+  .lm_tab {
+    padding-right: 24px !important; // Make room for close button
   }
 }

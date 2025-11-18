@@ -4,8 +4,8 @@ import { RouterModule, Router } from '@angular/router';
 import { ShellService } from '../../core/services/shell.service';
 import { TabState } from '../../core/models/app.interface';
 import { Subscription } from 'rxjs';
-import { LayoutConfig, ComponentItemConfig, ResolvedComponentItemConfig, ComponentContainer } from 'golden-layout';
-import { VirtualLayout } from 'golden-layout';
+import { LayoutConfig, ComponentItemConfig, ResolvedComponentItemConfig, ComponentContainer, ResolvedLayoutConfig, LayoutConfig as GLLayoutConfig } from 'golden-layout';
+import { VirtualLayout, LayoutConfig as GoldenLayoutConfigClass } from 'golden-layout';
 
 // Import all the components we might need to render
 import { ChatComponent } from '../../apps/conversations/chat/chat.component';
@@ -110,31 +110,35 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private initializeGoldenLayout(): void {
     const container = this.layoutContainerRef.nativeElement;
 
-    const config: LayoutConfig = {
-      root: {
-        type: 'row',
-        content: []
-      }
-    };
-
     this.layout = new VirtualLayout(
       container,
       this.bindComponentEvent.bind(this),
       this.unbindComponentEvent.bind(this)
     );
 
-    this.layout.loadLayout(config);
-    this.isInitialized = true;
+    // Try to load saved layout configuration
+    const savedConfig = this.shellService.LoadLayoutConfig();
+    const tabs = this.shellService['tabs$'].value;
+
+    if (savedConfig && tabs.length > 0) {
+      // Restore saved layout with existing tabs
+      try {
+        this.layout.loadLayout(savedConfig);
+        this.isInitialized = true;
+      } catch (error) {
+        console.warn('Failed to restore saved layout, using default:', error);
+        this.loadDefaultLayout(tabs);
+      }
+    } else {
+      // Start with empty layout and add tabs
+      this.loadDefaultLayout(tabs);
+    }
 
     // Set initial size explicitly
     const rect = container.getBoundingClientRect();
     this.layout.setSize(rect.width, rect.height);
 
-    // Add existing tabs
-    const tabs = this.shellService['tabs$'].value;
-    tabs.forEach((tab: TabState) => this.addTabToLayout(tab));
-
-    // Force layout update after adding tabs
+    // Force layout update after loading
     setTimeout(() => {
       if (this.layout) {
         const rect = container.getBoundingClientRect();
@@ -149,6 +153,39 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         this.layout.setSize(rect.width, rect.height);
       }
     });
+
+    // Save layout configuration whenever it changes
+    this.layout.on('stateChanged', () => {
+      this.saveLayoutConfig();
+    });
+  }
+
+  private loadDefaultLayout(tabs: TabState[]): void {
+    const config: LayoutConfig = {
+      root: {
+        type: 'row',
+        content: []
+      }
+    };
+
+    this.layout!.loadLayout(config);
+    this.isInitialized = true;
+
+    // Add existing tabs
+    tabs.forEach((tab: TabState) => this.addTabToLayout(tab));
+  }
+
+  private saveLayoutConfig(): void {
+    if (this.layout) {
+      try {
+        const resolvedConfig = this.layout.saveLayout();
+        // Convert ResolvedLayoutConfig to LayoutConfig for storage
+        const config = GoldenLayoutConfigClass.fromResolved(resolvedConfig);
+        this.shellService.SaveLayoutConfig(config);
+      } catch (error) {
+        console.warn('Failed to save layout config:', error);
+      }
+    }
   }
 
   private bindComponentEvent(
