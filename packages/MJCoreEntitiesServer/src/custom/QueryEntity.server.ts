@@ -75,7 +75,7 @@ export class QueryEntityExtended extends QueryEntity {
             const descriptionField = this.GetFieldByName('Description');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
             const shouldGenerateEmbedding = !this.IsSaved || descriptionField.Dirty;
-            
+
             // Generate embedding for Description if needed, before saving
             if (shouldGenerateEmbedding) {
                 await this.GenerateEmbeddingByFieldName("Description", "EmbeddingVector", "EmbeddingModelID");
@@ -84,7 +84,7 @@ export class QueryEntityExtended extends QueryEntity {
                 this.EmbeddingVector = null;
                 this.EmbeddingModelID = null;
             }
-            
+
             // Save the query first without AI processing (no transaction needed for basic save)
             const saveResult = await super.Save(options);
             if (!saveResult) {
@@ -107,6 +107,27 @@ export class QueryEntityExtended extends QueryEntity {
             return true;
         } catch (e) {
             LogError('Failed to save query:', e);
+            this.LatestResult?.Errors.push(e);
+            return false;
+        }
+    }
+
+    override async Delete(options?: EntitySaveOptions): Promise<boolean> {
+        try {
+            // Perform the actual delete operation
+            const deleteResult = await super.Delete(options);
+            if (!deleteResult) {
+                return false;
+            }
+
+            // CRITICAL: Refresh metadata cache after deletion to prevent stale query references
+            // This ensures that MJAPI and any other services using cached metadata
+            // immediately see that this query no longer exists
+            await this.RefreshRelatedMetadata(true);
+
+            return true;
+        } catch (e) {
+            LogError('Failed to delete query:', e);
             this.LatestResult?.Errors.push(e);
             return false;
         }
