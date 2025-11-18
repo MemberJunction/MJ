@@ -116,8 +116,8 @@ Example Output for the above template:
       "isRequired": false,
       "description": "Field name for an optional additional sum aggregation",
       "usage": [
-        "Conditional SELECT: SUM({{ extraSumField | sqlIdentifier }}) {{ extraSumFieldAlias | sqlIdentifier }}",
-        "IF condition check: {% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}"
+        "Conditional SELECT: SUM({% raw %}{{ extraSumField | sqlIdentifier }}{% endraw %}) {% raw %}{{ extraSumFieldAlias | sqlIdentifier }}{% endraw %}",
+        "IF condition check: {% raw %}{% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}{% endraw %}"
       ],
       "defaultValue": null
     },
@@ -127,8 +127,8 @@ Example Output for the above template:
       "isRequired": false,
       "description": "Alias for the optional extraSumField aggregation column",
       "usage": [
-        "Column alias: {{ extraSumFieldAlias | sqlIdentifier }}",
-        "IF condition check: {% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}"
+        "Column alias: {% raw %}{{ extraSumFieldAlias | sqlIdentifier }}{% endraw %}",
+        "IF condition check: {% raw %}{% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}{% endraw %}"
       ],
       "defaultValue": null
     },
@@ -138,7 +138,7 @@ Example Output for the above template:
       "isRequired": true,
       "description": "Array of country names to filter accounts",
       "usage": [
-        "WHERE clause: a.Country IN {{ countryList | sqlIn }}"
+        "WHERE clause: a.Country IN {% raw %}{{ countryList | sqlIn }}{% endraw %}"
       ],
       "defaultValue": null
     },
@@ -148,7 +148,7 @@ Example Output for the above template:
       "isRequired": true,
       "description": "Minimum number of firms required for industry inclusion",
       "usage": [
-        "WHERE clause: i.NumFirms >= {{ minIndustryFirmCount | sqlNumber }}"
+        "WHERE clause: i.NumFirms >= {% raw %}{{ minIndustryFirmCount | sqlNumber }}{% endraw %}"
       ],
       "defaultValue": null
     },
@@ -158,7 +158,7 @@ Example Output for the above template:
       "isRequired": true,
       "description": "Earliest account creation date for filtering",
       "usage": [
-        "WHERE clause: a.__mj_CreatedAt >= {{ accountsCreatedOnOrAfter | sqlDate }}"
+        "WHERE clause: a.__mj_CreatedAt >= {% raw %}{{ accountsCreatedOnOrAfter | sqlDate }}{% endraw %}"
       ],
       "defaultValue": null
     },
@@ -168,8 +168,8 @@ Example Output for the above template:
       "isRequired": false,
       "description": "Custom ORDER BY expression for result sorting",
       "usage": [
-        "ORDER BY clause: {{ orderByClause | sqlNoKeywordsExpression }}",
-        "IF condition check: {% if orderByClause %}"
+        "ORDER BY clause: {% raw %}{{ orderByClause | sqlNoKeywordsExpression }}{% endraw %}",
+        "IF condition check: {% raw %}{% if orderByClause %}{% endraw %}"
       ],
       "defaultValue": null
     } 
