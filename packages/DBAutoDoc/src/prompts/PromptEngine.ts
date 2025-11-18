@@ -60,16 +60,31 @@ export class PromptEngine {
   private createLLM(): BaseLLM {
     const { provider, apiKey } = this.config;
 
+    // Map provider name to driver class name
+    const providerToDriverClass: Record<string, string> = {
+      'openai': 'OpenAILLM',
+      'anthropic': 'AnthropicLLM',
+      'groq': 'GroqLLM',
+      'mistral': 'MistralLLM',
+      'gemini': 'GeminiLLM',
+      'azure': 'AzureLLM',
+      'lmstudio': 'LMStudioLLM'
+    };
+
+    const driverClass = providerToDriverClass[provider.toLowerCase()];
+    if (!driverClass) {
+      throw new Error(`Unknown provider: ${provider}. Supported providers: ${Object.keys(providerToDriverClass).join(', ')}`);
+    }
+
     // Use MJ ClassFactory to create BaseLLM instance
-    // Provider maps to class key (e.g., 'OpenAILLM', 'AnthropicLLM', etc.)
     const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
       BaseLLM,
-      provider,
+      driverClass,
       apiKey
     );
 
     if (!llm) {
-      throw new Error(`Failed to create LLM instance for provider: ${provider}. Check that the provider name matches a registered BaseLLM subclass.`);
+      throw new Error(`Failed to create LLM instance for provider: ${provider} (driver class: ${driverClass}). Check that the provider is installed.`);
     }
 
     return llm;
@@ -183,9 +198,10 @@ export class PromptEngine {
       const params: ChatParams = {
         model: this.config.model,
         messages,
-        temperature: options?.temperature ?? this.config.temperature ?? 0.1,
         maxOutputTokens: options?.maxTokens ?? this.config.maxTokens,
         responseFormat: options?.responseFormat ?? 'JSON',
+        ...(options?.temperature != null && { temperature: options.temperature }),
+        ...(this.config.temperature != null && options?.temperature == null && { temperature: this.config.temperature }),
         ...(this.config.effortLevel != null && { effortLevel: this.config.effortLevel.toString() }) // Optional 1-100, BaseLLM drivers handle if supported
       };
 
@@ -263,13 +279,23 @@ export class PromptEngine {
       );
 
       // Build ChatParams array
-      const paramsArray: ChatParams[] = renderedPrompts.map((prompt, i) => ({
-        model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: requests[i].options?.temperature ?? this.config.temperature ?? 0.1,
-        maxOutputTokens: requests[i].options?.maxTokens ?? this.config.maxTokens,
-        responseFormat: requests[i].options?.responseFormat ?? 'JSON'
-      }));
+      const paramsArray: ChatParams[] = renderedPrompts.map((prompt, i) => {
+        const params: ChatParams = {
+          model: this.config.model,
+          messages: [{ role: 'user', content: prompt }],
+          maxOutputTokens: requests[i].options?.maxTokens ?? this.config.maxTokens,
+          responseFormat: requests[i].options?.responseFormat ?? 'JSON'
+        };
+
+        // Only add temperature if explicitly provided (don't default to 0.1)
+        if (requests[i].options?.temperature != null) {
+          params.temperature = requests[i].options!.temperature;
+        } else if (this.config.temperature != null) {
+          params.temperature = this.config.temperature;
+        }
+
+        return params;
+      });
 
       // Execute in parallel using AI/Core
       const results = await this.llm.ChatCompletions(paramsArray);

@@ -19,7 +19,7 @@ export default class DbDocStatus extends Command {
     const { flags } = await this.parse(DbDocStatus);
 
     // Load DBAutoDoc command dynamically
-    const { default: StatusCommand } = await import('@memberjunction/db-auto-doc/dist/commands/status.js');
+    const { default: StatusCommand } = await import('@memberjunction/db-auto-doc/dist/commands/status');
 
     // Build args array for DBAutoDoc command
     const args: string[] = [];

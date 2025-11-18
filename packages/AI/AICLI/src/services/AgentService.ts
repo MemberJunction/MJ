@@ -171,34 +171,43 @@ Next steps:
           };
           
           const icon = stepIcons[progress.step] || '→';
-          const percentage = progress.percentage.toFixed(0).padStart(3, ' ');
-          
+
+          // Use stepCount from metadata if available, otherwise fall back to percentage (deprecated)
+          let progressIndicator: string;
+          if (progress.metadata?.stepCount != null) {
+            progressIndicator = `Step ${progress.metadata.stepCount}`.padStart(7, ' ');
+          } else if (progress.percentage != null) {
+            progressIndicator = `${progress.percentage.toFixed(0).padStart(3, ' ')}%`;
+          } else {
+            progressIndicator = '   ';
+          }
+
           if (options.verbose) {
             // In verbose mode, show full progress updates
             console.log(
-              chalk.blue(`\n  ${icon} [${percentage}%]`),
+              chalk.blue(`\n  ${icon} [${progressIndicator}]`),
               chalk.bold(progress.step.replace(/_/g, ' ')),
               chalk.dim(`- ${progress.message}`)
             );
-            
+
             if (progress.metadata && Object.keys(progress.metadata).length > 0) {
               console.log(chalk.dim(`     ${JSON.stringify(progress.metadata)}`));
             }
           } else {
             // In non-verbose mode, show truncated progress on the same line
-            const display = `${icon} [${percentage}%] ${progress.step.replace(/_/g, ' ')}: ${progress.message}`;
+            const display = `${icon} [${progressIndicator}] ${progress.step.replace(/_/g, ' ')}: ${progress.message}`;
             const truncated = display.substring(0, 80);
             const finalDisplay = truncated + (display.length > 80 ? '...' : '');
-            
+
             // Clear previous line and write new content
             if (lastProgressOutput) {
               process.stdout.write('\r' + ' '.repeat(lastProgressOutput.length) + '\r');
             }
             process.stdout.write(finalDisplay);
             lastProgressOutput = finalDisplay;
-            
-            // Add newline when we reach 100%
-            if (progress.percentage >= 100 && lastProgressOutput) {
+
+            // Add newline when finalizing
+            if (progress.step === 'finalization' && lastProgressOutput) {
               process.stdout.write('\n');
               lastProgressOutput = '';
             }

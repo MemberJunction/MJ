@@ -58,7 +58,7 @@ export default class DbDocExport extends Command {
     const { flags } = await this.parse(DbDocExport);
 
     // Load DBAutoDoc command dynamically
-    const { default: ExportCommand } = await import('@memberjunction/db-auto-doc/dist/commands/export.js');
+    const { default: ExportCommand } = await import('@memberjunction/db-auto-doc/dist/commands/export');
 
     // Build args array for DBAutoDoc command
     const args: string[] = [];

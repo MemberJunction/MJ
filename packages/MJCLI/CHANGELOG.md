@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/cli
 
+## 2.119.0
+
+### Patch Changes
+
+- ed2394c: Add sample query generation feature with configurable maxTokens and maxTables options, fix config validation errors for commands that don't need database connection, and update DBAutoDoc documentation
+- Updated dependencies [7dd7cca]
+- Updated dependencies [ed2394c]
+- Updated dependencies [139fd77]
+- Updated dependencies [0a133df]
+  - @memberjunction/core@2.119.0
+  - @memberjunction/codegen-lib@2.119.0
+  - @memberjunction/db-auto-doc@2.119.0
+  - @memberjunction/ai-cli@2.119.0
+  - @memberjunction/metadata-sync@2.119.0
+  - @memberjunction/sqlserver-dataprovider@2.119.0
+  - @memberjunction/testing-cli@2.119.0
+
 ## 2.118.0
 
 ### Minor Changes

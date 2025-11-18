@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.119.0
+
+### Patch Changes
+
+- Updated dependencies [7dd7cca]
+  - @memberjunction/core@2.119.0
+  - @memberjunction/aiengine@2.119.0
+  - @memberjunction/ai-vector-dupe@2.119.0
+  - @memberjunction/actions@2.119.0
+  - @memberjunction/core-entities@2.119.0
+  - @memberjunction/queue@2.119.0
+  - @memberjunction/ai@2.119.0
+  - @memberjunction/ai-provider-bundle@2.119.0
+  - @memberjunction/global@2.119.0
+
 ## 2.118.0
 
 ### Patch Changes

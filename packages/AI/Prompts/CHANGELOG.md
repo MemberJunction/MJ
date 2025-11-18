@@ -1,5 +1,24 @@
 # @memberjunction/ai-prompts
 
+## 2.119.0
+
+### Minor Changes
+
+- efc6451: migration
+
+### Patch Changes
+
+- Updated dependencies [7dd7cca]
+- Updated dependencies [0a133df]
+  - @memberjunction/core@2.119.0
+  - @memberjunction/ai-core-plus@2.119.0
+  - @memberjunction/aiengine@2.119.0
+  - @memberjunction/core-entities@2.119.0
+  - @memberjunction/templates-base-types@2.119.0
+  - @memberjunction/templates@2.119.0
+  - @memberjunction/ai@2.119.0
+  - @memberjunction/global@2.119.0
+
 ## 2.118.0
 
 ### Patch Changes

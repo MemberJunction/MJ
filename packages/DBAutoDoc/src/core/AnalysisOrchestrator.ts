@@ -14,6 +14,7 @@ import { PromptEngine } from '../prompts/PromptEngine.js';
 import { AnalysisEngine } from './AnalysisEngine.js';
 import { SQLGenerator } from '../generators/SQLGenerator.js';
 import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
+import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
 import { DBAutoDocConfig } from '../types/config.js';
 import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
@@ -265,6 +266,14 @@ export class AnalysisOrchestrator {
         iterationTracker.completeRun(run, false, 'Max iterations reached');
       }
 
+      // Sample Query Generation (if enabled)
+      if (this.config.analysis.sampleQueryGeneration?.enabled) {
+        this.onProgress('Generating sample queries');
+        await this.generateSampleQueries(state, promptEngine, db.getDriver(), runFolder);
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
+      }
+
       // Final state update
       stateManager.updateSummary(state);
       await stateManager.save(state);
@@ -346,5 +355,101 @@ export class AnalysisOrchestrator {
     await fs.mkdir(runFolder, { recursive: true });
 
     return runFolder;
+  }
+
+  /**
+   * Generate sample queries for AI agents (like Skip)
+   */
+  private async generateSampleQueries(
+    state: DatabaseDocumentation,
+    promptEngine: PromptEngine,
+    driver: any,
+    runFolder: string
+  ): Promise<void> {
+    const config = this.config.analysis.sampleQueryGeneration;
+    if (!config) return;
+
+    // Use main AI config model, effortLevel, and maxTokens
+    const model = this.config.ai.model;
+    const effortLevel = this.config.ai.effortLevel || 75;
+    const maxTokens = this.config.ai.maxTokens || 16000;
+
+    // Determine output file paths for incremental writes
+    const queriesPath = path.join(runFolder, 'sample-queries.json');
+    const summaryPath = path.join(runFolder, 'sample-queries-summary.json');
+
+    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, effortLevel, maxTokens, queriesPath, summaryPath);
+
+    try {
+      const result = await generator.generateQueries(state.schemas);
+
+      if (result.success) {
+        state.phases.sampleQueryGeneration = {
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          status: 'completed',
+          queries: result.queries,
+          summary: result.summary
+        };
+
+        // Save queries and summary (final write to ensure we have the complete set)
+        // Note: Both were already written incrementally during generation
+        await fs.writeFile(
+          queriesPath,
+          JSON.stringify(result.queries, null, 2),
+          'utf-8'
+        );
+
+        await fs.writeFile(
+          summaryPath,
+          JSON.stringify(result.summary, null, 2),
+          'utf-8'
+        );
+
+        this.onProgress('Sample queries generated', {
+          total: result.summary.totalQueriesGenerated,
+          validated: result.summary.queriesValidated,
+          tokens: result.summary.tokensUsed,
+          cost: result.summary.estimatedCost
+        });
+      } else {
+        state.phases.sampleQueryGeneration = {
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          status: 'failed',
+          queries: [],
+          summary: result.summary,
+          errorMessage: result.errorMessage
+        };
+
+        this.onProgress('Sample query generation failed', {
+          error: result.errorMessage
+        });
+      }
+    } catch (error) {
+      state.phases.sampleQueryGeneration = {
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        status: 'failed',
+        queries: [],
+        summary: {
+          totalQueriesGenerated: 0,
+          queriesValidated: 0,
+          queriesFailed: 0,
+          totalExecutionTime: 0,
+          tokensUsed: 0,
+          estimatedCost: 0,
+          averageConfidence: 0,
+          queriesByType: {} as any,
+          queriesByPattern: {} as any,
+          queriesByComplexity: {} as any
+        },
+        errorMessage: (error as Error).message
+      };
+
+      this.onProgress('Sample query generation error', {
+        error: (error as Error).message
+      });
+    }
   }
 }

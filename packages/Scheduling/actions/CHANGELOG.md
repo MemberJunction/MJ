@@ -1,5 +1,17 @@
 # @memberjunction/scheduling-actions
 
+## 2.119.0
+
+### Patch Changes
+
+- Updated dependencies [7dd7cca]
+  - @memberjunction/core@2.119.0
+  - @memberjunction/actions-base@2.119.0
+  - @memberjunction/actions@2.119.0
+  - @memberjunction/core-entities@2.119.0
+  - @memberjunction/global@2.119.0
+  - @memberjunction/scheduling-base-types@2.119.0
+
 ## 2.118.0
 
 ### Patch Changes

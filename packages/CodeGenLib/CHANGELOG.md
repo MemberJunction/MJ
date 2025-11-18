@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.119.0
+
+### Minor Changes
+
+- 139fd77: migration
+
+### Patch Changes
+
+- ed2394c: Add sample query generation feature with configurable maxTokens and maxTables options, fix config validation errors for commands that don't need database connection, and update DBAutoDoc documentation
+- Updated dependencies [7dd7cca]
+  - @memberjunction/core@2.119.0
+  - @memberjunction/aiengine@2.119.0
+  - @memberjunction/actions@2.119.0
+  - @memberjunction/core-entities@2.119.0
+  - @memberjunction/core-entities-server@2.119.0
+  - @memberjunction/sqlserver-dataprovider@2.119.0
+  - @memberjunction/ai@2.119.0
+  - @memberjunction/ai-provider-bundle@2.119.0
+  - @memberjunction/global@2.119.0
+
 ## 2.118.0
 
 ### Patch Changes

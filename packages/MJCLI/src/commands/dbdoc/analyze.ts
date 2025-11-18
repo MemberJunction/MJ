@@ -26,7 +26,7 @@ export default class DbDocAnalyze extends Command {
     const { flags } = await this.parse(DbDocAnalyze);
 
     // Load DBAutoDoc command dynamically
-    const { default: AnalyzeCommand } = await import('@memberjunction/db-auto-doc/dist/commands/analyze.js');
+    const { default: AnalyzeCommand } = await import('@memberjunction/db-auto-doc/dist/commands/analyze');
 
     // Build args array for DBAutoDoc command
     const args: string[] = [];
