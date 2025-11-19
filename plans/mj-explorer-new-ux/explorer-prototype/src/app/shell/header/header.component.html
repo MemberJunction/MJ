@@ -1,6 +1,6 @@
 <header class="header">
   <!-- App Switcher (shows current app) -->
-  <div class="app-switcher-container">
+  <div class="app-switcher-container" [style.--app-color]="activeApp?.Color || '#1976d2'">
     <div class="app-switcher-button" (click)="ToggleAppSwitcher()" title="Switch Apps">
       <i [class]="activeApp?.Icon || 'fa-solid fa-grid-2'" class="app-icon"></i>
       <span class="app-name">{{ activeApp?.Name || 'Apps' }}</span>
@@ -12,6 +12,7 @@
       <div *ngFor="let app of GetAllApps()"
            class="app-switcher-item"
            [class.active]="activeApp?.Id === app.Id"
+           [style.--item-color]="app.Color"
            (click)="SwitchToApp(app)">
         <i [class]="app.Icon"></i>
         <span>{{ app.Name }}</span>
@@ -20,7 +21,7 @@
   </div>
 
   <!-- Navigation Items (List style) -->
-  <nav class="nav-list" *ngIf="navigationType === 'list' && navItems.length > 0">
+  <nav class="nav-list" [style.--app-color]="activeApp?.Color || '#1976d2'" *ngIf="navigationType === 'list' && navItems.length > 0">
     <a
       *ngFor="let item of navItems"
       (click)="OnNavigate(item.Route)"

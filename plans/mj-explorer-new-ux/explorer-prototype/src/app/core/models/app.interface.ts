@@ -8,6 +8,7 @@ export interface IApp {
   Name: string;
   Icon: string;
   Route: string;
+  Color: string; // App signature color for visual identification
 
   // Navigation style
   GetNavigationType(): 'list' | 'breadcrumb';
@@ -54,4 +55,5 @@ export interface TabState {
   Route: string;
   Data?: any;
   IsPermanent?: boolean; // VSCode-style: false = temporary (gets replaced), true = permanent (stays)
+  Color?: string; // App signature color for visual identification
 }

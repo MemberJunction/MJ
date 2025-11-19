@@ -72,6 +72,10 @@ export class HeaderComponent implements OnInit {
 
   SwitchToApp(app: IApp): void {
     this.showAppSwitcher = false;
+    // Don't do anything if already on this app
+    if (this.activeApp?.Id === app.Id) {
+      return;
+    }
     // SetActiveApp now handles opening default tab if needed
     this.shellService.SetActiveApp(app.Id);
   }

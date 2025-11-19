@@ -22,6 +22,8 @@ interface TabComponentState {
   tabId: string;
   title: string;
   route: string;
+  appId: string;
+  appColor: string;
 }
 
 // Map routes to components
@@ -270,10 +272,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         tabElement.addEventListener('dblclick', (e: Event) => {
           e.stopPropagation();
           this.shellService.ToggleTabPermanent(state.tabId);
-          this.updateTabStyle(tabElement, state.tabId);
+          this.updateTabStyle(tabElement, state.tabId, state.appColor);
         });
-        // Set initial style based on permanent status
-        this.updateTabStyle(tabElement, state.tabId);
+        // Set initial style based on permanent status and app color
+        this.updateTabStyle(tabElement, state.tabId, state.appColor);
       }
     }, 100);
 
@@ -298,7 +300,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     return null;
   }
 
-  private updateTabStyle(tabElement: HTMLElement, tabId: string): void {
+  private updateTabStyle(tabElement: HTMLElement, tabId: string, appColor?: string): void {
     const tabs = this.shellService['tabs$'].value;
     const tab = tabs.find(t => t.Id === tabId);
     // VSCode behavior: only italic changes, font-weight stays constant
@@ -306,6 +308,17 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       tabElement.style.fontStyle = 'normal';
     } else {
       tabElement.style.fontStyle = 'italic';
+    }
+
+    // Apply app color as CSS variable for the accent indicator
+    if (appColor) {
+      tabElement.style.setProperty('--app-color', appColor);
+    } else if (tab) {
+      // Get color from app if not provided
+      const app = this.shellService.GetApp(tab.AppId);
+      if (app?.Color) {
+        tabElement.style.setProperty('--app-color', app.Color);
+      }
     }
   }
 
@@ -402,13 +415,27 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const container = item.container;
     if (!container) return;
 
+    // Get the app for the updated tab
+    const app = this.shellService.GetApp(updatedTab.AppId);
+    const appColor = app?.Color || '#757575';
+
     // Update the state
     const state = container.state as TabComponentState;
     state.route = updatedTab.Route;
     state.title = updatedTab.Title;
+    state.appId = updatedTab.AppId;
+    state.appColor = appColor;
 
     // Update the tab title
     container.setTitle(updatedTab.Title);
+
+    // Update tab styling with new app color
+    setTimeout(() => {
+      const tabElement = this.findTabElement(container);
+      if (tabElement) {
+        this.updateTabStyle(tabElement, state.tabId, appColor);
+      }
+    }, 50);
 
     // Clean up old component
     const oldCompRef = this.componentRefs.get(state.tabId);
@@ -455,13 +482,19 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private addTabToLayout(tab: TabState): void {
     if (!this.layout) return;
 
+    // Get the app color for this tab
+    const app = this.shellService.GetApp(tab.AppId);
+    const appColor = app?.Color || '#757575';
+
     const componentConfig: ComponentItemConfig = {
       type: 'component',
       componentType: 'TabContent',
       componentState: {
         tabId: tab.Id,
         title: tab.Title,
-        route: tab.Route
+        route: tab.Route,
+        appId: tab.AppId,
+        appColor: appColor
       } as TabComponentState,
       title: tab.Title
     };

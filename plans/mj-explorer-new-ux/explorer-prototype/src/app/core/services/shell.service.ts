@@ -35,6 +35,7 @@ export class ShellService {
   SetActiveApp(appId: string): void {
     const app = this.apps.get(appId);
     if (app) {
+      const previousApp = this.activeApp$.value;
       this.activeApp$.next(app);
 
       // Check if there are any tabs for this app
@@ -45,6 +46,23 @@ export class ShellService {
         const navItems = app.GetNavItems();
         const defaultRoute = navItems[0]?.Route || `/${appId}`;
         const defaultTitle = navItems[0]?.Label || app.Name;
+
+        // Check if switching from another app with a single temporary tab - replace it
+        if (previousApp && previousApp.Id !== appId) {
+          const previousAppTabs = this.tabs$.value.filter(t => t.AppId === previousApp.Id);
+          if (previousAppTabs.length === 1 && !previousAppTabs[0].IsPermanent) {
+            // Replace the temporary tab from the previous app
+            const tempTab = previousAppTabs[0];
+            tempTab.AppId = appId;
+            tempTab.Title = defaultTitle;
+            tempTab.Route = defaultRoute;
+            tempTab.Color = app.Color;
+            this.tabs$.next([...this.tabs$.value]);
+            this.SetActiveTab(tempTab.Id);
+            this.saveTabsToStorage();
+            return;
+          }
+        }
 
         this.OpenTab({
           AppId: appId,
@@ -72,13 +90,15 @@ export class ShellService {
   // Tab Management
   OpenTab(request: TabRequest): string {
     const tabId = this.generateTabId();
+    const app = this.apps.get(request.AppId);
     const tab: TabState = {
       Id: tabId,
       AppId: request.AppId,
       Title: request.Title,
       Route: request.Route,
       Data: request.Data,
-      IsPermanent: false // New tabs start as temporary
+      IsPermanent: false, // New tabs start as temporary
+      Color: app?.Color // App signature color for visual identification
     };
 
     const currentTabs = this.tabs$.value;

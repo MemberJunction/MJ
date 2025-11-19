@@ -11,6 +11,7 @@ export class ConversationsApp implements IApp {
   Name = 'Conversations';
   Icon = 'fa-solid fa-comments';
   Route = '/conversations';
+  Color = '#1976d2'; // Blue - communication, trust
 
   private shellService!: ShellService;
 

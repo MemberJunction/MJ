@@ -11,6 +11,7 @@ export class CrmApp implements IApp {
   Name = 'CRM';
   Icon = 'fa-solid fa-briefcase';
   Route = '/crm';
+  Color = '#2e7d32'; // Green - growth, relationships
 
   private shellService!: ShellService;
 

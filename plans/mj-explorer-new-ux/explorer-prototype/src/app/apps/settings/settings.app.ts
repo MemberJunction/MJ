@@ -12,6 +12,7 @@ export class SettingsApp implements IApp {
   Name = 'Settings';
   Icon = 'fa-solid fa-gear';
   Route = '/settings';
+  Color = '#616161'; // Gray - neutral, utility
 
   private currentRoute = '';
   private shellService!: ShellService;
