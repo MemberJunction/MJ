@@ -209,6 +209,7 @@ Available AI commands:
 - `actions run` - Execute an AI action with parameters
 - `prompts list` - List available AI models for direct prompt execution
 - `prompts run` - Execute a direct prompt with an AI model
+- `audit agent-run` - Audit and analyze AI agent execution runs for debugging
 
 **📚 For detailed documentation:** See the [AI-CLI README](../AI/AICLI/README.md)
 
@@ -248,6 +249,21 @@ mj ai prompts run -p "Explain quantum computing in simple terms"
 # Use a specific model
 mj ai prompts run -p "Write a Python function to sort a list" --model "gpt-4"
 
+# Audit recent agent runs
+mj ai audit agent-run --list --status failed --days 7
+
+# Audit specific run with summary
+mj ai audit agent-run <run-id>
+
+# Examine specific step in detail
+mj ai audit agent-run <run-id> --step 3 --detail full
+
+# Analyze errors in a run
+mj ai audit agent-run <run-id> --errors
+
+# Export full audit data
+mj ai audit agent-run <run-id> --export full --file audit.json
+
 # Use system prompt and temperature
 mj ai prompts run -p "Generate a haiku" --system "You are a poet" --temperature 0.3
 ```
@@ -281,6 +297,22 @@ mj ai prompts run -p "Generate a haiku" --system "You are a poet" --temperature 
 - `-v, --verbose`: Show detailed execution information
 - `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
 
+**Audit Commands:**
+- `<run-id>`: Agent Run ID (UUID) to audit (optional for --list mode)
+- `-l, --list`: List recent agent runs (filter with other options)
+- `-a, --agent <name>`: Filter by agent name (requires --list)
+- `--status <status>`: Filter by status: success, failed, running, all (default: all)
+- `--days <number>`: Number of days to look back (default: 7)
+- `--limit <number>`: Maximum runs to return (default: 50)
+- `-s, --step <number>`: Show details for specific step (1-based index)
+- `-d, --detail <level>`: Detail level for step: minimal, standard, detailed, full (default: standard)
+- `-e, --errors`: Show only error details and context
+- `--export <type>`: Export data: full, summary, steps
+- `-f, --file <path>`: Output file path for export
+- `--max-tokens <number>`: Max tokens per field (default: 5000, 0 = no limit)
+- `-o, --output <format>`: Output format (compact, json, table, markdown)
+- `-v, --verbose`: Show detailed diagnostic information
+
 #### AI Features:
 
 **Progress Tracking**: Real-time visual progress indicators during agent execution
@@ -298,6 +330,15 @@ mj ai prompts run -p "Generate a haiku" --system "You are a poet" --temperature 
 - Agent remembers previous exchanges
 - Natural back-and-forth dialogue
 - Exit with "exit", "quit", or Ctrl+C
+
+**Agent Run Auditing**: Comprehensive debugging and analysis tools
+- List recent runs with filtering by agent, status, and date
+- View run summaries with performance metrics and step breakdowns
+- Deep dive into specific steps with smart truncation for large payloads
+- Automatic error pattern detection with suggested fixes
+- Multiple output formats including markdown for AI assistants
+- Export capabilities for offline analysis
+- Optimized for read-only performance with `simple` result type
 
 #### AI Configuration:
 

@@ -26,7 +26,7 @@ Return a JSON array of parameter objects with this structure:
   "parameters": [
     {
       "name": "variableName",
-      "type": "Scalar|Array|Object",
+      "type": "string|number|date|boolean|array|object",
       "isRequired": true|false,
       "description": "Brief description of what this parameter is used for based on context",
       "usage": ["List of locations where this variable is used in the template"],
@@ -57,10 +57,13 @@ Return a JSON array of parameter objects with this structure:
 2. Ignore Nunjucks built-in variables (loop, super, etc.)
 3. Ignore {% raw %}single curly braces like { and } --- only look for double curly braces {{ and }} for true nunjucks params {% endraw %}
 4. For type detection:
-   - If used in {% raw %}{% for x in variable %}{% endraw %} → type is "Array"
-   - If properties are accessed (variable.property) → type is "Object"
-   - Otherwise → type is 'string' | 'number' | 'date' | 'boolean' - you can infer the type based on its use. When in doubt, use `string` 
+   - If used in {% raw %}{% for x in variable %}{% endraw %} → type is "array"
+   - If properties are accessed (variable.property) → type is "object" and extract only the top-level variable name
+   - Check filters for type hints: sqlString → "string", sqlNumber → "number", sqlDate → "date", sqlIn → "array"
+   - Otherwise infer from context: comparison operators, SQL clause usage, default values
+   - When in doubt, use "string"
 5. Include meaningful descriptions based on usage context
+6. For usage array, provide specific examples showing exactly where/how the variable is used in the template
 
 ## Example:
 Template:
@@ -110,49 +113,64 @@ Example Output for the above template:
     {
       "name": "extraSumField",
       "type": "string",
-      "isRequired": false, // not required because if not provided query adapts
-      "description": "Field used for an extra sum in the aggregation",
-      "usage": ["example usage", "example usage 2", "example usage 3"],
+      "isRequired": false,
+      "description": "Field name for an optional additional sum aggregation",
+      "usage": [
+        "Conditional SELECT: SUM({% raw %}{{ extraSumField | sqlIdentifier }}{% endraw %}) {% raw %}{{ extraSumFieldAlias | sqlIdentifier }}{% endraw %}",
+        "IF condition check: {% raw %}{% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}{% endraw %}"
+      ],
       "defaultValue": null
     },
     {
       "name": "extraSumFieldAlias",
       "type": "string",
-      "isRequired": false, // not required because if not provided query adapts
-      "description": "If extraSumField is provided, this is the alias used for the summation operation",
-      "usage": ["example usage", "example usage 2", "example usage 3"],
+      "isRequired": false,
+      "description": "Alias for the optional extraSumField aggregation column",
+      "usage": [
+        "Column alias: {% raw %}{{ extraSumFieldAlias | sqlIdentifier }}{% endraw %}",
+        "IF condition check: {% raw %}{% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}{% endraw %}"
+      ],
       "defaultValue": null
     },
     {
       "name": "countryList",
       "type": "array",
-      "isRequired": true, // required because query will not run without this
-      "description": "Array of countries to filter the query on",
-      "usage": ["example usage", "example usage 2"],
+      "isRequired": true,
+      "description": "Array of country names to filter accounts",
+      "usage": [
+        "WHERE clause: a.Country IN {% raw %}{{ countryList | sqlIn }}{% endraw %}"
+      ],
       "defaultValue": null
     },
     {
       "name": "minIndustryFirmCount",
       "type": "number",
-      "isRequired": true, // required because query will not run without this
-      "description": "filter condition to include only industries where NumFirms >= this amount",
-      "usage": ["example usage"],
+      "isRequired": true,
+      "description": "Minimum number of firms required for industry inclusion",
+      "usage": [
+        "WHERE clause: i.NumFirms >= {% raw %}{{ minIndustryFirmCount | sqlNumber }}{% endraw %}"
+      ],
       "defaultValue": null
     },
     {
       "name": "accountsCreatedOnOrAfter",
       "type": "date",
-      "isRequired": true, // required because query will not run without this
-      "description": "filter condition to include only accounts created on/after this date",
-      "usage": ["example usage"],
+      "isRequired": true,
+      "description": "Earliest account creation date for filtering",
+      "usage": [
+        "WHERE clause: a.__mj_CreatedAt >= {% raw %}{{ accountsCreatedOnOrAfter | sqlDate }}{% endraw %}"
+      ],
       "defaultValue": null
     },
     {
       "name": "orderByClause",
       "type": "string",
-      "isRequired": false, // NOT required because query will adapt without this
-      "description": "Sorting clause to be used when provided to order the results",
-      "usage": ["example usage"],
+      "isRequired": false,
+      "description": "Custom ORDER BY expression for result sorting",
+      "usage": [
+        "ORDER BY clause: {% raw %}{{ orderByClause | sqlNoKeywordsExpression }}{% endraw %}",
+        "IF condition check: {% raw %}{% if orderByClause %}{% endraw %}"
+      ],
       "defaultValue": null
     } 
   ],

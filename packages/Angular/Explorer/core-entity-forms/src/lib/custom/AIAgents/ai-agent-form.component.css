@@ -759,6 +759,70 @@
     color: #2196f3;
 }
 
+/* Pagination Controls */
+.pagination-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    margin-top: 12px;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 10px;
+    border: 1px solid #dee2e6;
+}
+
+.page-nav-btn {
+    min-width: 120px;
+    font-weight: 500;
+}
+
+.page-nav-btn i {
+    font-size: 12px;
+}
+
+.page-nav-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.page-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 0 16px;
+    font-weight: 500;
+    color: #495057;
+    min-width: 200px;
+    text-align: center;
+}
+
+.page-info .record-count {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: normal;
+}
+
+.page-info .fa-spinner {
+    margin-right: 8px;
+    color: #2196f3;
+}
+
+.view-all-btn {
+    color: #6c757d;
+    white-space: nowrap;
+    margin-left: auto;
+}
+
+.view-all-btn:hover {
+    color: #2196f3;
+}
+
+.view-all-btn i {
+    margin-right: 4px;
+}
+
 /* Payload Section Styles */
 .payload-config-section,
 .payload-paths-section,
@@ -1624,12 +1688,28 @@
     background: #a0a0a0;
 }
 
+/* Execution History Search Bar */
+.execution-search-bar {
+    margin-bottom: 16px;
+    padding: 0 4px;
+}
+
+.execution-search-bar kendo-textbox {
+    width: 100%;
+}
+
+.execution-search-bar .fa-search {
+    color: #666;
+    margin-right: 8px;
+    font-size: 14px;
+}
+
 /* New Execution History Card Design */
 .execution-history-list {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-top: 16px;
+    margin-top: 8px;
 }
 
 .execution-card {
