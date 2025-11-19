@@ -135,11 +135,11 @@
     align-items: center !important;
     justify-content: center !important;
     font-size: 10px !important;
+    color: #757575 !important; // Gray X icon
 
     &:hover {
       opacity: 1 !important;
-      background: rgba(0, 0, 0, 0.1) !important;
-      border-radius: 3px !important;
+      color: #c62828 !important; // Red X on hover - no background change
     }
   }
 
