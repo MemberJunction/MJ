@@ -1,5 +1,4 @@
 import { Component, Input, Output, EventEmitter, HostListener } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 
 /**
@@ -8,8 +7,6 @@ import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-app
  */
 @Component({
   selector: 'mj-app-switcher',
-  standalone: true,
-  imports: [CommonModule],
   templateUrl: './app-switcher.component.html',
   styleUrls: ['./app-switcher.component.scss']
 })
@@ -25,7 +22,14 @@ export class AppSwitcherComponent {
    * Get all available applications
    */
   get apps(): BaseApplication[] {
-    return this.appManager.GetAllApps();
+    const apps = this.appManager.GetAllApps();
+    console.log('[AppSwitcher] Apps loaded:', apps.map(a => ({
+      Name: a.Name,
+      Color: a.Color,
+      GetColor: a.GetColor(),
+      Icon: a.Icon
+    })));
+    return apps;
   }
 
   /**

@@ -58,7 +58,7 @@
     color: #616161;
     position: relative;
 
-    // Colored left accent bar
+    // Colored left accent bar - ALWAYS visible with app color
     &::before {
       content: '';
       position: absolute;
@@ -68,16 +68,18 @@
       width: 3px;
       border-radius: 2px;
       background-color: var(--item-color, #757575);
-      opacity: 0.5;
-      transition: opacity 0.15s;
+      opacity: 1;
+      transition: all 0.15s;
     }
 
-    // Icon uses app color
+    // Icon ALWAYS uses app color
     i {
       font-size: 18px;
       color: var(--item-color, #757575);
       width: 20px;
       text-align: center;
+      opacity: 1;
+      transition: all 0.15s;
     }
 
     &:hover {
@@ -85,7 +87,11 @@
       color: #424242;
 
       &::before {
-        opacity: 0.8;
+        opacity: 0.9;
+      }
+
+      i {
+        opacity: 1;
       }
     }
 
@@ -94,7 +100,8 @@
       color: var(--item-color, #1976d2);
 
       &::before {
-        opacity: 1;
+        width: 4px;
+        left: 3px;
       }
     }
   }

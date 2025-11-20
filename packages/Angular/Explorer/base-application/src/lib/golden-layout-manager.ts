@@ -20,6 +20,8 @@ interface GLVirtualLayout {
   loadLayout(config: GLLayoutConfig): void;
   saveLayout(): GLResolvedLayoutConfig;
   addItemAtLocation(config: GLComponentItemConfig, location: Array<{ typeId: number }>): void;
+  addComponent(componentType: string, componentState: Record<string, unknown>, title: string): void;
+  setSize(width: number, height: number): void;
 }
 
 interface GLLayoutItem {
@@ -106,6 +108,7 @@ export interface LayoutChangedEvent {
 export class GoldenLayoutManager {
   private layout: GLVirtualLayout | null = null;
   private containerElement: HTMLElement | null = null;
+  private resizeObserver: ResizeObserver | null = null;
 
   // Event subjects
   private tabShown$ = new Subject<TabShownEvent>();
@@ -151,11 +154,13 @@ export class GoldenLayoutManager {
    * Initialize Golden Layout in the specified container element
    */
   Initialize(element: HTMLElement): void {
+    console.log('[GoldenLayoutManager] Initialize called, element:', element);
     this.containerElement = element;
 
     // Import Golden Layout dynamically at runtime
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { VirtualLayout } = require('golden-layout');
+    console.log('[GoldenLayoutManager] Golden Layout module loaded:', !!VirtualLayout);
 
     // Create layout with empty config
     const config: GLLayoutConfig = {
@@ -171,11 +176,15 @@ export class GoldenLayoutManager {
       }
     };
 
+    console.log('[GoldenLayoutManager] Creating VirtualLayout with config:', config);
+
     this.layout = new VirtualLayout(
       this.containerElement,
       this.bindComponentEventListener.bind(this),
       this.unbindComponentEventListener.bind(this)
     ) as GLVirtualLayout;
+
+    console.log('[GoldenLayoutManager] VirtualLayout created:', !!this.layout);
 
     // Subscribe to state changes
     this.layout.on('stateChanged', () => {
@@ -194,12 +203,49 @@ export class GoldenLayoutManager {
         this.activeTab$.next(state.tabId);
       }
     });
+
+    // Load the empty config to establish root structure
+    // This MUST be done before adding any components
+    console.log('[GoldenLayoutManager] Loading initial empty layout');
+    this.layout.loadLayout(config);
+
+    // CRITICAL: Set the size of Golden Layout to match the container
+    // Without this, all internal elements will have height: 0
+    const rect = this.containerElement.getBoundingClientRect();
+    console.log('[GoldenLayoutManager] Setting layout size:', rect.width, 'x', rect.height);
+    this.layout.setSize(rect.width, rect.height);
+
+    // Retry setSize after a delay to handle timing issues with flexbox layout
+    // This matches the prototype's approach
+    setTimeout(() => {
+      if (this.layout && this.containerElement) {
+        const newRect = this.containerElement.getBoundingClientRect();
+        console.log('[GoldenLayoutManager] Retrying setSize after delay:', newRect.width, 'x', newRect.height);
+        this.layout.setSize(newRect.width, newRect.height);
+      }
+    }, 100);
+
+    // Watch for container resize and update Golden Layout size
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.layout && this.containerElement) {
+        const newRect = this.containerElement.getBoundingClientRect();
+        console.log('[GoldenLayoutManager] Container resized, updating layout:', newRect.width, 'x', newRect.height);
+        this.layout.setSize(newRect.width, newRect.height);
+      }
+    });
+    this.resizeObserver.observe(this.containerElement);
+
+    console.log('[GoldenLayoutManager] Event listeners attached, initialization complete');
   }
 
   /**
    * Destroy the Golden Layout instance
    */
   Destroy(): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     if (this.layout) {
       this.layout.destroy();
       this.layout = null;
@@ -212,26 +258,24 @@ export class GoldenLayoutManager {
    * Add a new tab to the layout
    */
   AddTab(state: TabComponentState): void {
+    console.log('[GoldenLayoutManager] AddTab called:', state.tabId, state.title);
     if (!this.layout) {
-      console.error('Layout not initialized');
+      console.error('[GoldenLayoutManager] Layout not initialized');
       return;
     }
 
-    const componentConfig: GLComponentItemConfig = {
-      type: 'component',
-      componentType: 'tab-content',
-      componentState: state as unknown as Record<string, unknown>,
-      title: state.title
-    };
+    console.log('[GoldenLayoutManager] Adding component with state:', state);
 
-    // Find or create a stack to add to
-    const targetStack = this.findFirstStack();
-
-    if (targetStack) {
-      targetStack.addItem(componentConfig);
-    } else {
-      // No stack exists, add to root
-      this.layout.addItemAtLocation(componentConfig, [{ typeId: 1 }]);
+    try {
+      // Use the addComponent method like the prototype does!
+      this.layout.addComponent(
+        'tab-content',  // componentType
+        state as unknown as Record<string, unknown>,  // componentState
+        state.title  // title
+      );
+      console.log('[GoldenLayoutManager] Tab added successfully using addComponent()');
+    } catch (error) {
+      console.error('[GoldenLayoutManager] Failed to add tab:', error);
     }
   }
 
@@ -284,6 +328,12 @@ export class GoldenLayoutManager {
       return;
     }
 
+    // Don't load empty layouts - Golden Layout doesn't handle them well
+    if (!config.root.content || config.root.content.length === 0) {
+      console.log('Skipping load of empty layout');
+      return;
+    }
+
     try {
       const glConfig = this.convertToGoldenLayoutConfig(config);
       this.layout.loadLayout(glConfig);
@@ -326,13 +376,37 @@ export class GoldenLayoutManager {
   }
 
   /**
+   * Get all tab IDs currently in the layout
+   */
+  GetAllTabIds(): string[] {
+    return Array.from(this.containerMap.keys());
+  }
+
+  /**
    * Bind component event listener (called by Golden Layout)
    */
   private bindComponentEventListener(
     container: GLComponentContainer,
     itemConfig: { componentState: Record<string, unknown> }
-  ): void {
+  ): { component: HTMLElement; virtual: boolean } {
     const state = container.state as unknown as TabComponentState;
+
+    // Create a simple div element for tab content
+    const element = document.createElement('div');
+    element.className = 'tab-content-container';
+    element.style.width = '100%';
+    element.style.height = '100%';
+    element.style.overflow = 'auto';
+    element.style.padding = '20px';
+
+    // Temporary placeholder content
+    element.innerHTML = `
+      <h2>${state?.title || 'Tab Content'}</h2>
+      <p>Tab ID: ${state?.tabId || 'unknown'}</p>
+      <p>Route: ${state?.route || 'none'}</p>
+      <p>App ID: ${state?.appId || 'none'}</p>
+    `;
+
     if (state?.tabId) {
       this.containerMap.set(state.tabId, container);
 
@@ -356,6 +430,12 @@ export class GoldenLayoutManager {
         this.tabClosed$.next(state.tabId);
       });
     }
+
+    // CRITICAL: Return the bindable component object
+    return {
+      component: element,
+      virtual: false  // false means actual DOM content
+    };
   }
 
   /**
@@ -429,8 +509,11 @@ export class GoldenLayoutManager {
    * Convert workspace layout config to Golden Layout config
    */
   private convertToGoldenLayoutConfig(config: WorkspaceLayoutConfig): GLLayoutConfig {
+    // Sanitize the root node to ensure size values are valid
+    const sanitizedRoot = this.sanitizeLayoutNode(config.root);
+
     return {
-      root: config.root as GLLayoutNode,
+      root: sanitizedRoot as GLLayoutNode,
       header: {
         show: 'top',
         popout: false,
@@ -438,6 +521,36 @@ export class GoldenLayoutManager {
         close: 'tab'
       }
     };
+  }
+
+  /**
+   * Sanitize a layout node to ensure all values are Golden Layout compatible
+   */
+  private sanitizeLayoutNode(node: LayoutNode): LayoutNode {
+    const sanitized: LayoutNode = {
+      ...node
+    };
+
+    // Remove width/height if they exist and are not valid
+    // Golden Layout expects strings like "50%" or numbers (pixels)
+    // But JSON parsing might give us non-string objects
+    if (sanitized.width !== undefined) {
+      if (typeof sanitized.width !== 'number' && typeof sanitized.width !== 'string') {
+        delete sanitized.width;
+      }
+    }
+    if (sanitized.height !== undefined) {
+      if (typeof sanitized.height !== 'number' && typeof sanitized.height !== 'string') {
+        delete sanitized.height;
+      }
+    }
+
+    // Recursively sanitize child nodes
+    if (sanitized.content) {
+      sanitized.content = sanitized.content.map(child => this.sanitizeLayoutNode(child));
+    }
+
+    return sanitized;
   }
 
   /**

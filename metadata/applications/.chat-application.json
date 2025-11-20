@@ -8,26 +8,26 @@
     "ClassName": "BaseApplication",
     "DefaultNavItems": [
       {
-        "label": "Conversations",
-        "icon": "fa-comments",
-        "route": "/chat",
+        "Label": "Conversations",
+        "Icon": "fa-solid fa-comments",
+        "Route": "/chat",
         "queryParams": {
           "tab": "conversations"
         },
         "isDefault": true
       },
       {
-        "label": "Collections",
-        "icon": "fa-folder",
-        "route": "/chat",
+        "Label": "Collections",
+        "Icon": "fa-solid fa-folder",
+        "Route": "/chat",
         "queryParams": {
           "tab": "collections"
         }
       },
       {
-        "label": "Tasks",
-        "icon": "fa-tasks",
-        "route": "/chat",
+        "Label": "Tasks",
+        "Icon": "fa-solid fa-tasks",
+        "Route": "/chat",
         "queryParams": {
           "tab": "tasks"
         }
@@ -41,7 +41,7 @@
     "ID": "7A873E1A-692E-43FA-97F8-57D8161A985C"
   },
   "sync": {
-    "lastModified": "2025-11-20T10:23:27.514Z",
-    "checksum": "8461608b662eeaadfdb9fbc36148d548c9c56da036d2e89830014dee7ae0aa64"
+    "lastModified": "2025-11-20T11:21:19.870Z",
+    "checksum": "b1a0646f402b18285fd9278cc6f13a4b8e2fc1b3de4004712edb2333a7d8a35a"
   }
 }

@@ -1,5 +1,4 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 
 /**
@@ -7,8 +6,6 @@ import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction
  */
 @Component({
   selector: 'mj-app-nav',
-  standalone: true,
-  imports: [CommonModule],
   templateUrl: './app-nav.component.html',
   styleUrls: ['./app-nav.component.scss']
 })

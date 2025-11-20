@@ -82,11 +82,19 @@ export class BaseApplication {
   CreateDefaultTab(): TabRequest | null {
     const navItems = this.GetNavItems();
     if (navItems.length > 0) {
-      return {
+      const firstItem = navItems[0];
+      const tabRequest: TabRequest = {
         ApplicationId: this.ID,
-        Title: navItems[0].Label,
-        Route: navItems[0].Route
+        Title: firstItem.Label,
+        Route: firstItem.Route
       };
+
+      // Include query params in the configuration if present
+      if (firstItem.queryParams) {
+        tabRequest.Configuration = { queryParams: firstItem.queryParams };
+      }
+
+      return tabRequest;
     }
     return null;
   }

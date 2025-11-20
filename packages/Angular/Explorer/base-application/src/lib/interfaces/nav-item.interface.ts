@@ -13,4 +13,10 @@ export interface NavItem {
 
   /** Badge to display (notification count, etc.) */
   Badge?: number | string;
+
+  /** Query parameters to include in the route */
+  queryParams?: Record<string, string>;
+
+  /** Whether this is the default nav item for the application */
+  isDefault?: boolean;
 }

@@ -85,9 +85,18 @@ export class ApplicationManager {
     try {
       const md = new Metadata();
       const appInfoList: ApplicationInfo[] = md.Applications;
+      console.log('[ApplicationManager] Loading applications from metadata:', appInfoList.length);
 
       const apps: BaseApplication[] = [];
       for (const appInfo of appInfoList) {
+        console.log('[ApplicationManager] Creating app:', {
+          Name: appInfo.Name,
+          ClassName: appInfo.ClassName,
+          Color: appInfo.Color,
+          Icon: appInfo.Icon,
+          HasDefaultNavItems: !!appInfo.DefaultNavItems
+        });
+
         // Create instance using ClassFactory (gets subclass if registered)
         const app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
           BaseApplication,
@@ -104,10 +113,17 @@ export class ApplicationManager {
         );
 
         if (app) {
+          console.log('[ApplicationManager] Created app instance:', {
+            Name: app.Name,
+            Color: app.Color,
+            GetColor: app.GetColor(),
+            NavItemsCount: app.GetNavItems().length
+          });
           apps.push(app);
         }
       }
 
+      console.log('[ApplicationManager] Total apps created:', apps.length);
       this.applications$.next(apps);
       this.initialized = true;
 
@@ -123,15 +139,23 @@ export class ApplicationManager {
    * Set the active application by ID
    */
   async SetActiveApp(appId: string): Promise<void> {
+    console.log('[ApplicationManager] SetActiveApp called:', appId);
     const currentApp = this.activeApp$.value;
     const newApp = this.applications$.value.find(a => a.ID === appId);
 
     if (!newApp) {
-      console.error(`Application not found: ${appId}`);
+      console.error('[ApplicationManager] Application not found:', appId);
       return;
     }
 
+    console.log('[ApplicationManager] Switching to app:', {
+      Name: newApp.Name,
+      Color: newApp.GetColor(),
+      NavItems: newApp.GetNavItems()
+    });
+
     if (currentApp?.ID === appId) {
+      console.log('[ApplicationManager] App already active, skipping');
       return; // Already active
     }
 

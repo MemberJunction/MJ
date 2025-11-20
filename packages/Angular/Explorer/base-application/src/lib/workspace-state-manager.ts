@@ -148,10 +148,17 @@ export class WorkspaceStateManager {
    * Open a tab (new or focus existing)
    */
   OpenTab(request: TabRequest, appColor: string): string {
+    console.log('[WorkspaceStateManager] OpenTab called:', { request, appColor });
     const config = this.configuration$.value;
     if (!config) {
+      console.error('[WorkspaceStateManager] Configuration not initialized');
       throw new Error('Configuration not initialized');
     }
+
+    console.log('[WorkspaceStateManager] Current config:', {
+      tabCount: config.tabs.length,
+      activeTabId: config.activeTabId
+    });
 
     // Check for existing tab
     const existingTab = config.tabs.find(tab =>
@@ -162,6 +169,7 @@ export class WorkspaceStateManager {
     );
 
     if (existingTab) {
+      console.log('[WorkspaceStateManager] Found existing tab, focusing:', existingTab.id);
       // Focus existing tab
       const updatedConfig = {
         ...config,
@@ -177,6 +185,7 @@ export class WorkspaceStateManager {
     );
 
     if (tempTab) {
+      console.log('[WorkspaceStateManager] Replacing temporary tab:', tempTab.id);
       // Replace temporary tab
       const updatedTabs = config.tabs.map(tab =>
         tab.id === tempTab.id
@@ -195,10 +204,12 @@ export class WorkspaceStateManager {
         tabs: updatedTabs,
         activeTabId: tempTab.id
       });
+      console.log('[WorkspaceStateManager] Tab replaced successfully');
       return tempTab.id;
     }
 
     // Create new tab
+    console.log('[WorkspaceStateManager] Creating new tab');
     const newTab: WorkspaceTab = {
       id: this.generateUUID(),
       applicationId: request.ApplicationId,
@@ -211,12 +222,15 @@ export class WorkspaceStateManager {
       configuration: request.Configuration || {}
     };
 
+    console.log('[WorkspaceStateManager] New tab created:', newTab);
+
     this.UpdateConfiguration({
       ...config,
       tabs: [...config.tabs, newTab],
       activeTabId: newTab.id
     });
 
+    console.log('[WorkspaceStateManager] Configuration updated with new tab');
     return newTab.id;
   }
 

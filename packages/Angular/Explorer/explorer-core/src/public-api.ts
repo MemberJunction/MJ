@@ -28,11 +28,9 @@ export * from './lib/favorites/favorites.component'
 export * from './lib/header/header.component'
 export * from './lib/header/MSFT_UserImageService'
 
-// New Shell Components (New Explorer UX)
+// New Shell Module (New Explorer UX)
+export * from './lib/shell/shell.module'
 export * from './lib/shell/shell.component'
-export * from './lib/shell/components/header/app-switcher.component'
-export * from './lib/shell/components/header/app-nav.component'
-export * from './lib/shell/components/tabs/tab-container.component'
 export * from './lib/single-entity/single-entity.component'
 export * from './lib/single-record/single-record.component'
 export * from './lib/single-report/single-report.component'

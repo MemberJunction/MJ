@@ -1,5 +1,4 @@
 import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import {
   ApplicationManager,
@@ -9,9 +8,6 @@ import {
   TabService
 } from '@memberjunction/ng-base-application';
 import { Metadata } from '@memberjunction/core';
-import { AppSwitcherComponent } from './components/header/app-switcher.component';
-import { AppNavComponent } from './components/header/app-nav.component';
-import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
@@ -24,15 +20,8 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
  */
 @Component({
   selector: 'mj-shell',
-  standalone: true,
-  imports: [
-    CommonModule,
-    AppSwitcherComponent,
-    AppNavComponent,
-    TabContainerComponent
-  ],
   templateUrl: './shell.component.html',
-  styleUrls: ['./shell.component.scss']
+  styleUrls: ['./shell.component.css']
 })
 export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
@@ -83,7 +72,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to active app changes
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(app => {
+        console.log('[Shell] Active app changed:', app?.Name);
         this.activeApp = app;
+
+        // Create default tab when app is activated
+        if (app) {
+          const tabRequest = app.CreateDefaultTab();
+          console.log('[Shell] Creating default tab:', tabRequest);
+          if (tabRequest) {
+            this.tabService.OpenTab(tabRequest);
+          }
+        }
       })
     );
 

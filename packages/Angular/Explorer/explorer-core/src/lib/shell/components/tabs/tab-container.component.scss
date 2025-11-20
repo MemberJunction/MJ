@@ -1,3 +1,12 @@
+:host {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .tab-container {
   display: flex;
   flex-direction: column;
@@ -12,6 +21,12 @@
   height: 100%;
   position: relative;
   background: white;
+}
+
+.tab-content-container {
+  background: white;
+  color: #333;
+  padding: 20px;
 }
 
 // Context Menu
@@ -54,148 +69,147 @@
 }
 
 // Override Golden Layout styles
-:host ::ng-deep {
-  .lm_content {
-    background: white !important;
-  }
+/* Global overrides */
+mj-tab-container .lm_content {
+  background: white !important;
+}
 
-  .lm_item_container {
-    background: white !important;
-  }
+mj-tab-container .lm_item_container {
+  background: white !important;
+}
 
-  // Make tabs larger and easier to click
-  .lm_header {
-    height: 38px !important;
-    padding-top: 2px !important;
-    padding-left: 4px !important;
-    background: #f5f5f5 !important;
-    border-bottom: 1px solid #ebebeb !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-  }
+// Make tabs larger and easier to click
+mj-tab-container .lm_header {
+  height: 38px !important;
+  padding-top: 2px !important;
+  padding-left: 4px !important;
+  background: #f5f5f5 !important;
+  border-bottom: 1px solid #ebebeb !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
 
-  .lm_tabs {
-    height: 36px !important;
-  }
+mj-tab-container .lm_tabs {
+  height: 36px !important;
+}
 
-  // Hide Golden Layout window controls
-  .lm_controls {
-    display: none !important;
-  }
+// Hide Golden Layout window controls
+mj-tab-container .lm_controls {
+  display: none !important;
+}
 
-  .lm_tab {
-    padding: 0 16px !important;
-    font-size: 13px !important;
-    height: 35px !important;
-    line-height: 35px !important;
-    box-sizing: border-box !important;
-    cursor: pointer !important;
-    user-select: none !important;
-    background: transparent !important;
-    border: none !important;
-    border-bottom: 1px solid #ebebeb !important;
-    transition: all 0.15s ease !important;
-    position: relative !important;
-    z-index: 1 !important;
-    margin-right: 1px !important;
+mj-tab-container .lm_header .lm_tab {
+  padding: 0 16px !important;
+  font-size: 13px !important;
+  height: 35px !important;
+  line-height: 35px !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid #ebebeb !important;
+  transition: all 0.15s ease !important;
+  position: relative !important;
+  z-index: 1 !important;
+  margin-right: 1px !important;
 
-    // App color accent - left edge indicator
-    &::before {
-      content: '' !important;
-      position: absolute !important;
-      left: 0 !important;
-      top: 4px !important;
-      bottom: 4px !important;
-      width: 3px !important;
-      border-radius: 0 2px 2px 0 !important;
-      background-color: var(--app-color, transparent) !important;
-      opacity: 0.6 !important;
-      transition: all 0.15s ease !important;
-    }
-
-    &:hover {
-      background: #e8e8e8 !important;
-
-      .lm_close_tab {
-        opacity: 0.7 !important;
-      }
-
-      &::before {
-        opacity: 0.8 !important;
-      }
-    }
-
-    &.lm_active {
-      background: white !important;
-      height: 37px !important;
-      margin-bottom: -1px !important;
-      margin-right: 0 !important;
-      border: 1px solid #ebebeb !important;
-      border-bottom-color: white !important;
-      border-radius: 4px 4px 0 0 !important;
-      z-index: 2 !important;
-
-      // Enhanced app color accent for active tab
-      &::before {
-        opacity: 1 !important;
-        width: 3px !important;
-        top: 2px !important;
-        bottom: 2px !important;
-        box-shadow: 0 0 6px var(--app-color, transparent) !important;
-      }
-    }
-  }
-
-  .lm_title {
-    cursor: pointer !important;
-    user-select: none !important;
-  }
-
-  .lm_close_tab {
+  // App color accent - left edge indicator
+  &::before {
+    content: '' !important;
     position: absolute !important;
-    right: 4px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 16px !important;
-    height: 16px !important;
-    cursor: pointer !important;
-    opacity: 0 !important;
+    left: 0 !important;
+    top: 4px !important;
+    bottom: 4px !important;
+    width: 3px !important;
+    border-radius: 0 2px 2px 0 !important;
+    background-color: var(--app-color, transparent) !important;
+    opacity: 0.6 !important;
     transition: all 0.15s ease !important;
-    flex-shrink: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-size: 10px !important;
-    color: #757575 !important;
+  }
 
-    &:hover {
-      opacity: 1 !important;
-      color: #c62828 !important;
+  &:hover {
+    background: #e8e8e8 !important;
+
+    .lm_close_tab {
+      opacity: 0.7 !important;
+    }
+
+    &::before {
+      opacity: 0.8 !important;
     }
   }
 
-  // Show close button on hover (except pinned)
-  .lm_tab:hover:not(.pinned) .lm_close_tab {
-    opacity: 0.7 !important;
-  }
+  &.lm_active {
+    background: white !important;
+    height: 37px !important;
+    margin-bottom: -1px !important;
+    margin-right: 0 !important;
+    border: 1px solid #ebebeb !important;
+    border-bottom-color: white !important;
+    border-radius: 4px 4px 0 0 !important;
+    z-index: 2 !important;
 
-  // Pinned tabs never show close button
-  .lm_tab.pinned .lm_close_tab {
-    display: none !important;
+    // Enhanced app color accent for active tab
+    &::before {
+      opacity: 1 !important;
+      width: 3px !important;
+      top: 2px !important;
+      bottom: 2px !important;
+      box-shadow: 0 0 6px var(--app-color, transparent) !important;
+    }
   }
+}
 
-  // Hide close button on active tab by default
-  .lm_active .lm_close_tab {
-    opacity: 0 !important;
-  }
+mj-tab-container .lm_title {
+  cursor: pointer !important;
+  user-select: none !important;
+}
 
-  // Show close button when hovering active tab
-  .lm_active:hover .lm_close_tab {
-    opacity: 0.7 !important;
-  }
+mj-tab-container .lm_close_tab {
+  position: absolute !important;
+  right: 4px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 16px !important;
+  height: 16px !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10px !important;
+  color: #757575 !important;
 
-  // Adjust padding for close button
-  .lm_tab {
-    padding-right: 24px !important;
+  &:hover {
+    opacity: 1 !important;
+    color: #c62828 !important;
   }
+}
+
+// Show close button on hover (except pinned)
+mj-tab-container .lm_header .lm_tab:hover:not(.pinned) .lm_close_tab {
+  opacity: 0.7 !important;
+}
+
+// Pinned tabs never show close button
+mj-tab-container .lm_header .lm_tab.pinned .lm_close_tab {
+  display: none !important;
+}
+
+// Hide close button on active tab by default
+mj-tab-container .lm_active .lm_close_tab {
+  opacity: 0 !important;
+}
+
+// Show close button when hovering active tab
+mj-tab-container .lm_active:hover .lm_close_tab {
+  opacity: 0.7 !important;
+}
+
+// Adjust padding for close button
+mj-tab-container .lm_header .lm_tab {
+  padding-right: 24px !important;
 }

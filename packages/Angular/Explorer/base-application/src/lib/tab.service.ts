@@ -26,6 +26,7 @@ export class TabService {
    * Request that a new tab be opened
    */
   OpenTab(request: TabRequest): void {
+    console.log('[TabService] OpenTab called:', request);
     this.tabRequest$.next(request);
   }
 
