@@ -10,8 +10,8 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
     <mj-tabstrip (TabSelectedabSelect)="selectTabHandler()" (ResizeContainer)="sharedService.InvokeManualResize()">
         <mj-tab [TabSelected]="true"> Data </mj-tab>
         <mj-tab-body>
-            <mj-user-view-grid [Params]="Params" [InEditMode]="InEditMode" [EditMode]="EditMode" [AutoNavigate]="AutoNavigate" 
-                                    (rowClicked)="this.rowClicked.emit($event)" (rowEdited)="this.rowEdited.emit($event)" >
+            <mj-user-view-grid [Params]="Params" [InEditMode]="InEditMode" [EditMode]="EditMode" [AutoNavigate]="AutoNavigate"
+                                    [Height]="'auto'" (rowClicked)="this.rowClicked.emit($event)" (rowEdited)="this.rowEdited.emit($event)" >
             </mj-user-view-grid>
         </mj-tab-body>
 
