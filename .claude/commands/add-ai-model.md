@@ -5,18 +5,27 @@ You are a database migration specialist for MemberJunction. Your task is to crea
 1. **Gather Model Information**
    - Ask the user for the model name (e.g., "Claude Haiku 4.5", "GPT-4 Turbo")
    - Ask for the vendor name (e.g., "Anthropic", "OpenAI", "Google")
+   - **If user provides a documentation URL, use WebFetch to extract exact specifications**
    - Use WebSearch to find current specifications:
-     - API name/identifier
-     - Token limits (input and output)
-     - Pricing (per million tokens)
-     - Release date
+     - API name/identifier (including preview vs GA naming)
+     - Token limits (input and output - verify actual documented limits)
+     - Pricing (per million tokens, including tiered pricing if applicable)
+     - Release date (exact date, not approximations)
      - Key features and capabilities
      - Knowledge cutoff date
+     - Performance benchmarks (for SpeedRank determination)
 
-2. **Query Database for Required IDs**
+2. **Verify Specifications with Targeted Searches**
+   - Search specifically for output token limits (often documented separately from pricing)
+   - Search for official release date announcements (don't approximate)
+   - Search for context window details (distinguish between input limit and total window)
+   - Search for performance/speed benchmarks to inform SpeedRank
+   - **Always verify the current year** - use environment context, don't assume dates
+
+3. **Query Database for Required IDs**
    - Connect using these credentials:
      ```
-     Server: localhost
+     Server: sqlserver.local
      Database: mj_test
      Username: MJ_CodeGen
      Password: YourStrong@Passw0rd789
@@ -29,14 +38,14 @@ You are a database migration specialist for MemberJunction. Your task is to crea
    - Get price type ID (usually "Tokens"): `ECE2BCB7-C854-4BF7-A517-D72793A40652`
    - Get unit type ID (usually "Per 1M Tokens"): `54208F7D-331C-40AB-84E8-163338EE9EA1`
 
-3. **Generate UUIDs**
+4. **Generate UUIDs**
    - Run `uuidgen` 4 times to generate:
      - Model ID
      - Model Developer AIModelVendor ID
      - Inference Provider AIModelVendor ID
      - AIModelCost ID
 
-4. **Determine Rankings**
+5. **Determine Rankings**
    - **PowerRank** (1-12): Model capability level
      - 1-3: Basic models
      - 4-6: Capable models
@@ -52,13 +61,15 @@ You are a database migration specialist for MemberJunction. Your task is to crea
      - 7-9: Higher pricing
      - 10-12: Premium pricing
 
-5. **Create Migration File**
+6. **Create Migration File**
    - Filename format: `V{YYYYMMDDHHMM}__v2.{VERSION}.x__Add_{Model_Name}.sql`
    - Use current timestamp for version number
+   - **Find latest version number**: `ls -1 migrations/v2/V2025*.sql | tail -1 | sed -E 's/.*v2\.([0-9]+)\.x.*/\1/'`
+   - Increment by 1 for new version
    - Follow the template below
    - Use proper SQL Server syntax with `[${flyway:defaultSchema}].[TableName]`
 
-6. **Review Previous Migration**
+7. **Review Previous Migration**
    - Look at `/migrations/v2/V202510031321__v2.104.x__Add_Claude_4.5_Sonnet.sql` as reference
    - Ensure consistency with existing patterns
 
@@ -90,7 +101,7 @@ VALUES
     (
         @ModelID,
         '{Model Name}',
-        '{Description with key features, context window, capabilities}',
+        '{Vendor}''s {positioning description}. Features {X}M token input context window and {Y}k output capacity. {Key benchmark results if available}. {Notable capabilities} with knowledge cutoff of {Month Year}.',
         @LLMTypeID, -- LLM type
         1, -- IsActive
         {PowerRank}, -- PowerRank
@@ -136,6 +147,9 @@ VALUES
     );
 
 -- 4. Add cost tracking record for {Vendor} pricing
+-- Note: If model has tiered pricing based on prompt size or other factors,
+-- document all tiers in Comments field and use base tier pricing in the record.
+-- Additional tiers can be added as separate AIModelCost records if needed.
 INSERT INTO [${flyway:defaultSchema}].[AIModelCost]
     (ID, ModelID, VendorID, StartedAt, EndedAt, Status, Currency, PriceTypeID, InputPricePerUnit, OutputPricePerUnit, UnitTypeID, ProcessingType, Comments)
 VALUES
@@ -152,7 +166,7 @@ VALUES
         {OutputPrice}, -- Output price per M tokens
         '54208f7d-331c-40ab-84e8-163338ee9ea1', -- Per 1M tokens unit type
         'Realtime',
-        '{Model Name} pricing on {Vendor} as of {Month Year}. Include notes about caching, batch processing, special features, knowledge cutoff, etc.'
+        '{Model Name} pricing on {Vendor} as of {Month Year}. {Tiered pricing details if applicable - e.g., "Base tier pricing shown ($X/$Y per 1M tokens for prompts <= Zk). Higher tier available for prompts > Zk ($A/$B per 1M tokens)."} Released {exact date} {notable deployment info}. API name is {api-name} {note about preview/GA transitions if applicable}. Features {input count} token input context window, {output count} output capacity, and knowledge cutoff of {Month Year}. {Include benchmark scores if available: "Achieves state-of-the-art performance across X of Y major AI benchmarks including top scores in reasoning (A%), coding (B%), and multimodal understanding (C%)."}'
     );
 ```
 
@@ -164,8 +178,12 @@ VALUES
 4. **Never insert __mj timestamp columns** - they're auto-generated
 5. **Escape single quotes** in descriptions with double quotes: `'Vendor''s model'`
 6. **Query database** to get correct vendor IDs - don't guess
-7. **Use WebSearch** to get accurate, current model specifications
-8. **Review reference migration** for consistency
+7. **Use WebFetch for official docs** when URLs are provided by the user
+8. **Use WebSearch** to get accurate, current model specifications
+9. **Search specifically for output token limits** - they're often documented separately from pricing
+10. **Verify dates match current year** - check environment context, don't assume
+11. **Include benchmark data** when available to justify PowerRank/SpeedRank assignments
+12. **Review reference migration** for consistency
 
 ## Driver Class Names by Vendor
 

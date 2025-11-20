@@ -2438,6 +2438,30 @@ export class BaseAgent {
     }
 
     /**
+     * Serializes payload for logging to PayloadAtStart
+     * Override in subclasses to customize logging behavior (e.g., summarize large payloads)
+     *
+     * @param payload - The payload to serialize
+     * @returns Serialized string or null to skip logging
+     * @protected
+     */
+    protected serializePayloadAtStart(payload: any): string | null {
+        return payload ? JSON.stringify(payload) : null;
+    }
+
+    /**
+     * Serializes payload for logging to PayloadAtEnd
+     * Override in subclasses to customize logging behavior (e.g., summarize large payloads)
+     *
+     * @param payload - The payload to serialize
+     * @returns Serialized string or null to skip logging
+     * @protected
+     */
+    protected serializePayloadAtEnd(payload: any): string | null {
+        return payload ? JSON.stringify(payload) : null;
+    }
+
+    /**
      * Recovery Strategy 1: Remove oldest action-result messages.
      * Targets messages older than minAge turns for removal.
      *
@@ -3664,8 +3688,8 @@ The context is now within limits. Please retry your request with the recovered c
         stepEntity.ParentID = params.parentId || null;  // Link to parent step (e.g., loop step)
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
-        stepEntity.PayloadAtStart = params.payloadAtStart ? JSON.stringify(params.payloadAtStart) : null;
-        stepEntity.PayloadAtEnd = params.payloadAtEnd ? JSON.stringify(params.payloadAtEnd) : null;
+        stepEntity.PayloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
+        stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(params.payloadAtEnd);
         
         // Populate InputData if provided
         if (params.inputData) {
@@ -4115,7 +4139,7 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Set PayloadAtStart
             if (stepEntity && payload) {
-                stepEntity.PayloadAtStart = JSON.stringify(payload);
+                stepEntity.PayloadAtStart = this.serializePayloadAtStart(payload);
             }
             
             let downstreamPayload = payload; // Start with current payload
@@ -4309,7 +4333,7 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Set PayloadAtEnd with the final payload after changes
             if (stepEntity && finalPayload) {
-                stepEntity.PayloadAtEnd = JSON.stringify(finalPayload);
+                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(finalPayload);
             }
             
             // Update the agent run's current payload
@@ -4340,7 +4364,7 @@ The context is now within limits. Please retry your request with the recovered c
             // that affects downstream things in the agent run
             // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
             const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
-            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
+            stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
             // instead return a helpful message in our return value that the parent loop can review and adjust
@@ -4568,8 +4592,8 @@ The context is now within limits. Please retry your request with the recovered c
             else {
                 scopedPayload = subAgentPayloadOverride; // we received a payload override, use it
             }
-            
-            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
+
+            stepEntity.PayloadAtStart = this.serializePayloadAtStart(previousDecision.newPayload);
 
             // Execute sub-agent with scoped payload
             // Child sub-agents don't use context messages (they inherit payload directly)
@@ -4690,7 +4714,7 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.TargetLogID = subAgentResult.agentRun.ID;
                 // Set the SubAgentRun property for hierarchical tracking
                 stepEntity.SubAgentRun = subAgentResult.agentRun;
-                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
                 // saving happens later by calling finalizeStepEntity()
             }
             
@@ -4770,12 +4794,12 @@ The context is now within limits. Please retry your request with the recovered c
                     subAgentId: subAgentEntity.ID
                 }
             });
-            
+
             // Set PayloadAtEnd with the merged payload
             if (stepEntity) {
-                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
-            
+
             // Update the agent run's current payload with the merged result
             if (this._agentRun) {
                 this._agentRun.FinalPayloadObject = mergedPayload;
@@ -4795,7 +4819,7 @@ The context is now within limits. Please retry your request with the recovered c
             // that affects downstream things in the agent run
             // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
             const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
-            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
+            stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -4958,7 +4982,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Related agents can receive parent data in two ways:
             // 1. SubAgentInputMapping: Maps parent payload → sub-agent payload (structural data)
             // 2. SubAgentContextPaths: Parent payload → sub-agent conversation context (LLM awareness)
-            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
+            stepEntity.PayloadAtStart = this.serializePayloadAtStart(previousDecision.newPayload);
 
             // Prepare initial payload via input mapping (if configured)
             let initialSubAgentPayload: SR | undefined = subAgentPayloadOverride;
@@ -5065,7 +5089,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Set PayloadAtEnd with the merged payload
             if (stepEntity) {
-                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
 
             // Finalize step entity
@@ -5117,7 +5141,7 @@ The context is now within limits. Please retry your request with the recovered c
             };
         } catch (error) {
             const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
-            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
+            stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             return {
@@ -5671,7 +5695,7 @@ The context is now within limits. Please retry your request with the recovered c
                     
                     finalPayload = changeResult.result;
                     if (lastStep) {
-                        lastStep.PayloadAtEnd = JSON.stringify(finalPayload);
+                        lastStep.PayloadAtEnd = this.serializePayloadAtEnd(finalPayload);
                         await lastStep.Save();
                     }
                     
@@ -6153,9 +6177,9 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams
     ): Promise<BaseAgentNextStep> {
         // Finalize the loop step now that loop is complete
-        loopStepEntity.PayloadAtEnd = JSON.stringify(loopResults.finalPayload);
-        await this.finalizeStepEntity(loopStepEntity, 
-                                      loopResults.errors.length === 0, 
+        loopStepEntity.PayloadAtEnd = this.serializePayloadAtEnd(loopResults.finalPayload);
+        await this.finalizeStepEntity(loopStepEntity,
+                                      loopResults.errors.length === 0,
                                       loopResults.errors.join('\n\n'),
                                       loopResults);
 
@@ -6415,9 +6439,9 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
     ): Promise<BaseAgentNextStep> {
-        loopStepEntity.PayloadAtEnd = JSON.stringify(loopResults.finalPayload);
+        loopStepEntity.PayloadAtEnd = this.serializePayloadAtEnd(loopResults.finalPayload);
 
-        await this.finalizeStepEntity(loopStepEntity, 
+        await this.finalizeStepEntity(loopStepEntity,
                                       loopResults.errors.length === 0,
                                       loopResults.errors.join('\n\n'),
                                       loopResults);

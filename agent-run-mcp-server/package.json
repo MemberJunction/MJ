@@ -1,0 +1,31 @@
+{
+  "name": "agent-run-mcp-server",
+  "version": "1.0.0",
+  "description": "Lightweight MCP server exposing only agent run diagnostic tools",
+  "type": "module",
+  "bin": {
+    "agent-run-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "private": true,
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "2.118.0",
+    "@memberjunction/global": "2.118.0",
+    "@memberjunction/core-entities": "2.118.0",
+    "@memberjunction/sqlserver-dataprovider": "2.118.0",
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "cosmiconfig": "9.0.0",
+    "dotenv": "^16.4.1",
+    "mssql": "^11.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.2",
+    "typescript": "^5.4.5"
+  }
+}
