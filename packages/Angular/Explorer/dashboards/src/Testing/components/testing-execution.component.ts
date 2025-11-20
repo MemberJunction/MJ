@@ -610,6 +610,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   @Output() stateChange = new EventEmitter<any>();
 
   private destroy$ = new Subject<void>();
+  private activeDialogRef: DialogRef | null = null;
 
   isRefreshing = false;
   filters: ExecutionFilters = {
@@ -642,6 +643,16 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    // Close any open dialog when component is destroyed
+    if (this.activeDialogRef) {
+      try {
+        this.activeDialogRef.close();
+      } catch (error) {
+        // Dialog might already be closed, ignore error
+      }
+      this.activeDialogRef = null;
+    }
+
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -784,7 +795,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   }
 
   startNewTest(): void {
-    const dialogRef: DialogRef = this.dialogService.open({
+    this.activeDialogRef = this.dialogService.open({
       content: TestRunDialogComponent,
       width: 1000,
       height: 750,
@@ -792,9 +803,19 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       actions: []
     });
 
-    dialogRef.result.subscribe((result) => {
-      if (result && typeof result === 'object' && 'testExecuted' in result && result.testExecuted) {
-        this.refresh();
+    this.activeDialogRef.result.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (result) => {
+        if (result && typeof result === 'object' && 'testExecuted' in result && result.testExecuted) {
+          this.refresh();
+        }
+      },
+      error: () => {
+        this.activeDialogRef = null;
+      },
+      complete: () => {
+        this.activeDialogRef = null;
       }
     });
   }

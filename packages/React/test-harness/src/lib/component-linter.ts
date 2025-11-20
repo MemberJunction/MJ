@@ -4711,88 +4711,171 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
           'response': 'Results',
           'Response': 'Results'
         };
-        
+
+        // Helper function to validate property access and create violation
+        const validatePropertyAccess = (
+          objName: string,
+          propName: string,
+          isFromRunQuery: boolean,
+          isFromRunView: boolean,
+          line: number,
+          column: number,
+          code: string
+        ) => {
+          if (!isFromRunQuery && !isFromRunView) return;
+
+          const isValidQueryProp = validRunQueryResultProps.has(propName);
+          const isValidViewProp = validRunViewResultProps.has(propName);
+
+          if (isFromRunQuery && !isValidQueryProp) {
+            const suggestion = incorrectToCorrectMap[propName];
+            violations.push({
+              rule: 'runquery-result-invalid-property',
+              severity: 'critical',
+              line,
+              column,
+              message: suggestion
+                ? `RunQuery results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
+                : `Invalid property "${propName}" on RunQuery result. Valid properties are: ${Array.from(validRunQueryResultProps).join(', ')}`,
+              code
+            });
+          } else if (isFromRunView && !isValidViewProp) {
+            const suggestion = incorrectToCorrectMap[propName];
+            violations.push({
+              rule: 'runview-result-invalid-property',
+              severity: 'critical',
+              line,
+              column,
+              message: suggestion
+                ? `RunView results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
+                : `Invalid property "${propName}" on RunView result. Valid properties are: ${Array.from(validRunViewResultProps).join(', ')}`,
+              code
+            });
+          }
+        };
+
         traverse(ast, {
           MemberExpression(path: NodePath<t.MemberExpression>) {
             // Check if this is accessing a property on a variable that looks like a query/view result
             if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
               const objName = path.node.object.name;
               const propName = path.node.property.name;
-              
+
               // Only check if we can definitively trace this to RunQuery or RunView
-              const isFromRunQuery = path.scope.hasBinding(objName) && 
+              const isFromRunQuery = path.scope.hasBinding(objName) &&
                                     ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-              const isFromRunView = path.scope.hasBinding(objName) && 
+              const isFromRunView = path.scope.hasBinding(objName) &&
                                    ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
-              
-              // Only validate if we're CERTAIN it's from RunQuery or RunView
-              if (isFromRunQuery || isFromRunView) {
-                // WHITELIST APPROACH: Check if the property is valid for the result type
-                const isValidQueryProp = validRunQueryResultProps.has(propName);
-                const isValidViewProp = validRunViewResultProps.has(propName);
-                
-                // If it's specifically from RunQuery or RunView, be more specific
-                if (isFromRunQuery && !isValidQueryProp) {
-                  // Property is not valid for RunQueryResult
-                  const suggestion = incorrectToCorrectMap[propName];
-                  if (suggestion) {
-                    violations.push({
-                      rule: 'runquery-result-invalid-property',
-                      severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `RunQuery results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`,
-                      code: `${objName}.${propName}`
-                    });
-                  } else {
-                    violations.push({
-                      rule: 'runquery-result-invalid-property',
-                      severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `Invalid property "${propName}" on RunQuery result. Valid properties are: ${Array.from(validRunQueryResultProps).join(', ')}`,
-                      code: `${objName}.${propName}`
-                    });
-                  }
-                } else if (isFromRunView && !isValidViewProp) {
-                  // Property is not valid for RunViewResult
-                  const suggestion = incorrectToCorrectMap[propName];
-                  if (suggestion) {
-                    violations.push({
-                      rule: 'runview-result-invalid-property',
-                      severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `RunView results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`,
-                      code: `${objName}.${propName}`
-                    });
-                  } else {
-                    violations.push({
-                      rule: 'runview-result-invalid-property',
-                      severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `Invalid property "${propName}" on RunView result. Valid properties are: ${Array.from(validRunViewResultProps).join(', ')}`,
-                      code: `${objName}.${propName}`
-                    });
-                  }
-                }
-                
-                // Check for nested incorrect access like result.data.entities or result.Data.entities
-                if (t.isMemberExpression(path.parent) && 
-                    t.isIdentifier(path.parent.property) && 
-                    (propName === 'data' || propName === 'Data')) {
-                  const nestedProp = path.parent.property.name;
-                  violations.push({
-                    rule: 'runquery-runview-result-structure',
-                    severity: 'critical',
-                    line: path.parent.loc?.start.line || 0,
-                    column: path.parent.loc?.start.column || 0,
-                    message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
-                    code: `${objName}.${propName}.${nestedProp}`
-                  });
-                }
+
+              // Use shared validation logic
+              validatePropertyAccess(
+                objName,
+                propName,
+                isFromRunQuery,
+                isFromRunView,
+                path.node.loc?.start.line || 0,
+                path.node.loc?.start.column || 0,
+                `${objName}.${propName}`
+              );
+
+              // Check for nested incorrect access like result.data.entities or result.Data.entities
+              if ((isFromRunQuery || isFromRunView) &&
+                  t.isMemberExpression(path.parent) &&
+                  t.isIdentifier(path.parent.property) &&
+                  (propName === 'data' || propName === 'Data')) {
+                const nestedProp = path.parent.property.name;
+                violations.push({
+                  rule: 'runquery-runview-result-structure',
+                  severity: 'critical',
+                  line: path.parent.loc?.start.line || 0,
+                  column: path.parent.loc?.start.column || 0,
+                  message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
+                  code: `${objName}.${propName}.${nestedProp}`
+                });
               }
+            }
+          },
+
+          // NEW: Handle optional chaining (result?.records, result?.Rows, etc.)
+          OptionalMemberExpression(path: NodePath<t.OptionalMemberExpression>) {
+            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
+              const objName = path.node.object.name;
+              const propName = path.node.property.name;
+
+              // Only check if we can definitively trace this to RunQuery or RunView
+              const isFromRunQuery = path.scope.hasBinding(objName) &&
+                                    ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+              const isFromRunView = path.scope.hasBinding(objName) &&
+                                   ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+
+              // Use shared validation logic
+              validatePropertyAccess(
+                objName,
+                propName,
+                isFromRunQuery,
+                isFromRunView,
+                path.node.loc?.start.line || 0,
+                path.node.loc?.start.column || 0,
+                `${objName}?.${propName}`
+              );
+            }
+          },
+
+          // NEW: Detect weak fallback patterns like result?.records ?? result?.Rows ?? []
+          LogicalExpression(path: NodePath<t.LogicalExpression>) {
+            if (path.node.operator !== '??') return;
+
+            // Collect all invalid property accesses in the chain
+            const invalidAccesses: Array<{objName: string, propName: string, line: number}> = [];
+
+            const checkNode = (node: t.Node) => {
+              if (t.isOptionalMemberExpression(node) &&
+                  t.isIdentifier(node.object) &&
+                  t.isIdentifier(node.property)) {
+
+                const objName = node.object.name;
+                const propName = node.property.name;
+
+                // Check if this is from RunQuery/RunView
+                const isFromRunQuery = path.scope.hasBinding(objName) &&
+                                      ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+                const isFromRunView = path.scope.hasBinding(objName) &&
+                                     ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+
+                if (isFromRunQuery || isFromRunView) {
+                  const isValidQueryProp = validRunQueryResultProps.has(propName);
+                  const isValidViewProp = validRunViewResultProps.has(propName);
+
+                  if ((isFromRunQuery && !isValidQueryProp) || (isFromRunView && !isValidViewProp)) {
+                    invalidAccesses.push({
+                      objName,
+                      propName,
+                      line: node.loc?.start.line || 0
+                    });
+                  }
+                }
+              } else if (t.isLogicalExpression(node) && node.operator === '??') {
+                // Recursively check chained ?? operators
+                checkNode(node.left);
+                checkNode(node.right);
+              }
+            };
+
+            checkNode(path.node);
+
+            // If we found multiple invalid accesses in a chain, report as weak fallback
+            if (invalidAccesses.length >= 2) {
+              const objName = invalidAccesses[0].objName;
+              const props = invalidAccesses.map(a => a.propName).join(', ');
+
+              violations.push({
+                rule: 'runquery-runview-result-structure',
+                severity: 'critical',
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0,
+                message: `Weak fallback pattern detected: "${objName}?.${invalidAccesses[0].propName} ?? ${objName}?.${invalidAccesses[1].propName} ?? ..." uses multiple INVALID properties (${props}). This masks the real issue. Use "${objName}?.Results ?? []" instead. RunQuery/RunView results have a "Results" property (capital R), not "${props}".`,
+                code: path.toString().substring(0, 100)
+              });
             }
           },
           
