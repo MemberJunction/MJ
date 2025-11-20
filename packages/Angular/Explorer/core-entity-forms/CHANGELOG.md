@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.120.0
+
+### Patch Changes
+
+- 3074b66: Add agent run auditing and debugging tools, enhance AI agent execution history with search and pagination, improve query parameter extraction and validation, and add linter validation for missing query names
+- Updated dependencies [3074b66]
+- Updated dependencies [60a1831]
+- Updated dependencies [5dc805c]
+  - @memberjunction/core@2.120.0
+  - @memberjunction/ai-engine-base@2.120.0
+  - @memberjunction/ai-core-plus@2.120.0
+  - @memberjunction/actions-base@2.120.0
+  - @memberjunction/ng-base-forms@2.120.0
+  - @memberjunction/ng-form-toolbar@2.120.0
+  - @memberjunction/ng-testing@2.120.0
+  - @memberjunction/ng-action-gallery@2.120.0
+  - @memberjunction/ng-ai-test-harness@2.120.0
+  - @memberjunction/ng-code-editor@2.120.0
+  - @memberjunction/ng-container-directives@2.120.0
+  - @memberjunction/ng-deep-diff@2.120.0
+  - @memberjunction/ng-join-grid@2.120.0
+  - @memberjunction/ng-timeline@2.120.0
+  - @memberjunction/core-entities@2.120.0
+  - @memberjunction/ng-tabstrip@2.120.0
+  - @memberjunction/global@2.120.0
+
 ## 2.119.0
 
 ### Minor Changes

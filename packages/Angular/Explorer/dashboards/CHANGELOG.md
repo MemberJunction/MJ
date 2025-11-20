@@ -1,5 +1,26 @@
 # @memberjunction/ng-dashboards
 
+## 2.120.0
+
+### Patch Changes
+
+- 60a1831: Fix WebSocket subscription lifecycle management in GraphQL data provider, add Gemini 3 Pro model with 1M token context window, enhance component linter to detect invalid property access on RunQuery/RunView results, and fix testing dashboard dialog rendering issues
+- Updated dependencies [3074b66]
+- Updated dependencies [60a1831]
+- Updated dependencies [5dc805c]
+  - @memberjunction/core@2.120.0
+  - @memberjunction/ng-core-entity-forms@2.120.0
+  - @memberjunction/graphql-dataprovider@2.120.0
+  - @memberjunction/ng-shared@2.120.0
+  - @memberjunction/ng-testing@2.120.0
+  - @memberjunction/ng-action-gallery@2.120.0
+  - @memberjunction/ng-ai-test-harness@2.120.0
+  - @memberjunction/ng-container-directives@2.120.0
+  - @memberjunction/ng-notifications@2.120.0
+  - @memberjunction/core-entities@2.120.0
+  - @memberjunction/templates-base-types@2.120.0
+  - @memberjunction/testing-engine-base@2.120.0
+
 ## 2.119.0
 
 ### Minor Changes

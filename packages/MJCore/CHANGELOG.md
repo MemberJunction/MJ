@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core
 
+## 2.120.0
+
+### Minor Changes
+
+- 3074b66: Add agent run auditing and debugging tools, enhance AI agent execution history with search and pagination, improve query parameter extraction and validation, and add linter validation for missing query names
+- 60a1831: Fix WebSocket subscription lifecycle management in GraphQL data provider, add Gemini 3 Pro model with 1M token context window, enhance component linter to detect invalid property access on RunQuery/RunView results, and fix testing dashboard dialog rendering issues
+
+### Patch Changes
+
+- 5dc805c: just a prototype
+  - @memberjunction/global@2.120.0
+
 ## 2.119.0
 
 ### Minor Changes

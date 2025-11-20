@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/templates
 
+## 2.120.0
+
+### Patch Changes
+
+- Updated dependencies [3074b66]
+- Updated dependencies [60a1831]
+- Updated dependencies [5dc805c]
+  - @memberjunction/core@2.120.0
+  - @memberjunction/aiengine@2.120.0
+  - @memberjunction/core-entities@2.120.0
+  - @memberjunction/templates-base-types@2.120.0
+  - @memberjunction/ai@2.120.0
+  - @memberjunction/ai-provider-bundle@2.120.0
+  - @memberjunction/global@2.120.0
+
 ## 2.119.0
 
 ### Patch Changes

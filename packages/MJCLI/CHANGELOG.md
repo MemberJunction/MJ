@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/cli
 
+## 2.120.0
+
+### Patch Changes
+
+- Updated dependencies [3074b66]
+- Updated dependencies [60a1831]
+- Updated dependencies [5dc805c]
+  - @memberjunction/core@2.120.0
+  - @memberjunction/ai-cli@2.120.0
+  - @memberjunction/codegen-lib@2.120.0
+  - @memberjunction/metadata-sync@2.120.0
+  - @memberjunction/sqlserver-dataprovider@2.120.0
+  - @memberjunction/testing-cli@2.120.0
+  - @memberjunction/db-auto-doc@2.120.0
+
 ## 2.119.0
 
 ### Patch Changes

@@ -29,11 +29,13 @@
     "build:generated": "turbo --log-order=stream build --filter=\"mj_generatedentities\" --filter=\"mj_generatedactions\"",
     "build:api": "turbo --log-order=stream build --filter=\"mj_api\"",
     "build:explorer": "turbo --log-order=stream build --filter=\"mj_explorer\"",
+    "build:mcp-agent": "cd agent-run-mcp-server && npm run build",
     "build:table": "turbo build --filter=\"@memberjunction*\"",
     "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "start:api": "turbo start --filter=mj_api",
     "start:explorer": "turbo start --filter=mj_explorer",
+    "start:mcp-agent": "node agent-run-mcp-server/dist/index.js",
     "deps:check": "syncpack list-mismatches",
     "deps:fix": "syncpack fix-mismatches",
     "deps:update": "syncpack update",
@@ -49,7 +51,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/cli": "2.118.0",
+    "@memberjunction/cli": "2.119.0",
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
     "simple-git": "^3.27.0"
