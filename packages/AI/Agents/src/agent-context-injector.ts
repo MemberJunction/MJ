@@ -129,7 +129,7 @@ export class AgentContextInjector {
 
         const rv = new RunView();
         const result = await rv.RunView<AIAgentExampleEntity>({
-            EntityName: 'AI Agent Examples',
+            EntityName: 'MJ: AI Agent Examples',
             ExtraFilter: filter,
             OrderBy: orderBy,
             MaxRows: params.maxExamples,

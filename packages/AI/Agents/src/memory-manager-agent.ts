@@ -428,7 +428,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
         for (const extracted of extractedExamples) {
             try {
-                const example = await md.GetEntityObject<AIAgentExampleEntity>('AI Agent Examples', contextUser);
+                const example = await md.GetEntityObject<AIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
                 example.AgentID = extracted.agentId;
                 example.UserID = extracted.userId || null;
                 example.CompanyID = extracted.companyId || null;
