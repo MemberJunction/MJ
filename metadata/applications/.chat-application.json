@@ -1,0 +1,47 @@
+{
+  "fields": {
+    "Name": "Chat",
+    "Description": "Agent conversations, artifact collections, and tasks",
+    "Icon": "fa-solid fa-robot",
+    "DefaultForNewUser": true,
+    "Color": "#9c27b0",
+    "ClassName": "BaseApplication",
+    "DefaultNavItems": [
+      {
+        "label": "Conversations",
+        "icon": "fa-comments",
+        "route": "/chat",
+        "queryParams": {
+          "tab": "conversations"
+        },
+        "isDefault": true
+      },
+      {
+        "label": "Collections",
+        "icon": "fa-folder",
+        "route": "/chat",
+        "queryParams": {
+          "tab": "collections"
+        }
+      },
+      {
+        "label": "Tasks",
+        "icon": "fa-tasks",
+        "route": "/chat",
+        "queryParams": {
+          "tab": "tasks"
+        }
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "7A873E1A-692E-43FA-97F8-57D8161A985C"
+  },
+  "sync": {
+    "lastModified": "2025-11-20T10:23:27.514Z",
+    "checksum": "8461608b662eeaadfdb9fbc36148d548c9c56da036d2e89830014dee7ae0aa64"
+  }
+}
