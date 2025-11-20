@@ -1,0 +1,6 @@
+# Prevent accidental publishing
+*
+!package.json
+
+# This package should NEVER be published to NPM
+# It's for local testing only

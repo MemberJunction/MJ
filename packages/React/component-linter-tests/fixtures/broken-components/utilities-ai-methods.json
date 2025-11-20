@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component calling invalid methods on utilities.ai (violates utilities-ai-methods rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [response, setResponse] = useState('');\n  \n  useEffect(() => {\n    async function callAI() {\n      const result = await utilities.ai.invalidMethod({ prompt: 'Hello' });\n      setResponse(result);\n    }\n    callAI();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>Response: {response}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}
