@@ -40,38 +40,13 @@ export abstract class AutotagBase {
      * @param contentItem - ContentItem to process with LLM
      * @param contextUser - User context
      * @param protectedFields - Array of ContentItem field names that should not be updated (e.g., ['Name', 'Description'])
-     * @param forceVisionProcessing - Optional flag to force vision model processing for PDF items
      */
     public async TagSingleContentItem(
         contentItem: ContentItemEntity, 
         contextUser: UserInfo,
-        protectedFields?: string[],
-        forceVisionProcessing?: boolean
+        protectedFields?: string[]
     ): Promise<void> {
-        // Auto-detect vision processing from environment if not explicitly set
-        const shouldForceVision = forceVisionProcessing ?? this.shouldAutoForceVisionProcessing();
-        
         const contentItems = [contentItem];
-        await this.engine.ExtractTextAndProcessWithLLM(contentItems, contextUser, protectedFields, shouldForceVision);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItems, contextUser, protectedFields);
     }
-
-    /**
-     * Check if vision processing should be automatically forced based on environment
-     */
-    private shouldAutoForceVisionProcessing(): boolean {
-        const envForceVision = process.env.FORCE_VISION_PROCESSING;
-        return envForceVision && (envForceVision.toLowerCase() === 'true' || envForceVision === '1');
-    }
-
-    // LEGACY METHODS (for backward compatibility)
-    
-    /**
-     * Legacy method: Bulk processing approach (kept for backward compatibility)
-     */
-    public abstract SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]>;
-    
-    /**
-     * Legacy method: Full autotag process (kept for backward compatibility)
-     */
-    public abstract Autotag(contextUser: UserInfo): Promise<void>;
 }

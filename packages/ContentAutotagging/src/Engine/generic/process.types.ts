@@ -18,33 +18,9 @@ export class ContentItemProcessParams {
     correctedPdfBuffer?: Buffer; // Add buffer to pass corrected PDF through processing chain
 }
 
-export class ContentItemProcessResults {
-    title: string;
-    author: string[];
-    publicationDate: Date;
-    keywords: string[];
-    content_text: string;
-    processStartTime: Date;
-    processEndTime: Date;
-    contentItemID: string;
-}
 
 export interface JsonObject {
     [key: string]: any;
-}
-
-export interface StructuredPDFContent {
-    rawText: string;
-    tables: any[]; // Empty array - no longer using table detection
-    hasTabularData: boolean;
-    contentType: 'tabular' | 'text' | 'mixed';
-    pdfBuffer?: Buffer; // For vision model processing
-}
-
-export class ContentItemProcessParamsExtended extends ContentItemProcessParams {
-    structuredData?: StructuredPDFContent;
-    preserveTableStructure?: boolean;
-    pdfBuffer?: Buffer; // For vision model processing
 }
 
 export interface ContentDiscoveryResult {

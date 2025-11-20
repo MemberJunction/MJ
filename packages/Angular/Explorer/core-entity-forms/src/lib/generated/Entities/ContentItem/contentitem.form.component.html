@@ -22,7 +22,7 @@
         </div>
         <div class="form-panels-container">
 <!-- Details Section -->
-        <div class="form-card collapsible-card" data-section-name="details" data-field-names="contentsourceid content source id name description contenttypeid content type id contentsourcetypeid content source type id contentfiletypeid content file type id checksum url text __mj_createdat created at __mj_updatedat updated at">
+        <div class="form-card collapsible-card" data-section-name="details" data-field-names="contentsourceid content source id name description contenttypeid content type id contentsourcetypeid content source type id contentfiletypeid content file type id checksum url text processwithvision process with vision __mj_createdat created at __mj_updatedat updated at">
             <div class="collapsible-header" (click)="toggleSection('details')" role="button" tabindex="0">
                 <div class="collapsible-title">
                     <i class="fa fa-align-left"></i>
@@ -103,6 +103,13 @@
             [ShowLabel]="true"
             FieldName="Text"
             Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProcessWithVision"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

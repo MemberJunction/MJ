@@ -3666,6 +3666,10 @@ export const ContentItemSchema = z.object({
         * * Display Name: Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The extracted text content from the source document or file.`),
+    ProcessWithVision: z.boolean().nullable().describe(`
+        * * Field Name: ProcessWithVision
+        * * Display Name: Process With Vision
+        * * SQL Data Type: bit`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -26290,6 +26294,18 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     }
     set Text(value: string | null) {
         this.Set('Text', value);
+    }
+
+    /**
+    * * Field Name: ProcessWithVision
+    * * Display Name: Process With Vision
+    * * SQL Data Type: bit
+    */
+    get ProcessWithVision(): boolean | null {
+        return this.Get('ProcessWithVision');
+    }
+    set ProcessWithVision(value: boolean | null) {
+        this.Set('ProcessWithVision', value);
     }
 
     /**

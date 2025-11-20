@@ -17,16 +17,16 @@
     "debug:retag": "node --inspect-brk -r dotenv/config dist/simple-retag.js"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.115.0",
-    "@memberjunction/ai-openai": "2.115.0",
-    "@memberjunction/ai-vectordb": "2.115.0",
-    "@memberjunction/ai-vectors": "2.115.0",
-    "@memberjunction/ai-vectors-pinecone": "2.115.0",
-    "@memberjunction/ai-vector-sync": "2.115.0",
-    "@memberjunction/aiengine": "2.115.0",
-    "@memberjunction/core": "2.115.0",
-    "@memberjunction/global": "2.115.0",
-    "@memberjunction/core-entities": "2.115.0",
+    "@memberjunction/ai": "2.116.0",
+    "@memberjunction/ai-openai": "2.116.0",
+    "@memberjunction/ai-vectordb": "2.116.0",
+    "@memberjunction/ai-vectors": "2.116.0",
+    "@memberjunction/ai-vectors-pinecone": "2.116.0",
+    "@memberjunction/ai-vector-sync": "2.116.0",
+    "@memberjunction/aiengine": "2.116.0",
+    "@memberjunction/core": "2.116.0",
+    "@memberjunction/global": "2.116.0",
+    "@memberjunction/core-entities": "2.116.0",
     "dotenv": "^16.4.1"
   },
   "devDependencies": {

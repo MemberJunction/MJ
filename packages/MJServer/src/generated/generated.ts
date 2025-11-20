@@ -46968,6 +46968,9 @@ export class MJContentItem_ {
     @Field({nullable: true, description: `The extracted text content from the source document or file.`}) 
     Text?: string;
         
+    @Field(() => Boolean, {nullable: true}) 
+    ProcessWithVision?: boolean;
+        
     @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
@@ -47034,6 +47037,9 @@ export class CreateMJContentItemInput {
 
     @Field({ nullable: true })
     Text: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ProcessWithVision: boolean | null;
 }
     
 
@@ -47071,6 +47077,9 @@ export class UpdateMJContentItemInput {
 
     @Field({ nullable: true })
     Text?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ProcessWithVision?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

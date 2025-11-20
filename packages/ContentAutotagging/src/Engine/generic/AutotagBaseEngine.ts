@@ -5,48 +5,35 @@ import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import pdf2pic from 'pdf2pic'
 import { PDFDocument, degrees } from 'pdf-lib'
-import * as im from 'imagemagick'
 import * as officeparser from 'officeparser'
 import * as XLSX from 'xlsx'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { spawn } from 'child_process'
-import { ProcessRunParams, JsonObject, ContentItemProcessParams, StructuredPDFContent, ContentItemProcessParamsExtended } from './process.types'
+import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseLLM, GetAIAPIKey, ChatMessage } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { LoadGeminiLLM } from '@memberjunction/ai-gemini'
 import { ContentItemAttributeEntity } from '@memberjunction/core-entities'
 import { AIEngineBase } from '@memberjunction/ai-engine-base'
 
 /**
  * AutotagBaseEngine - Main engine for content processing with vision model support
  * 
- * FORCE VISION PROCESSING OPTIONS:
- * 
- * 1. Environment Variable (Global):
- *    Set FORCE_VISION_PROCESSING=true to force all PDFs to use vision models
- *    Example: FORCE_VISION_PROCESSING=true npm start
- * 
- * 2. Content Source Parameter (Per-Source):
- *    Add 'forceVisionProcessing': true to content source parameters
- * 
- * 3. Method Parameter (Per-Call):
- *    Pass forceVisionProcessing: true to processing methods
- *    Example: await engine.ExtractTextAndProcessWithLLM(items, user, [], true);
- *            await autotag.TagSingleContentItem(item, user, [], true);
- * 
- * Priority: Method Parameter > Environment Variable > Content Source Parameter
+ * INTELLIGENT PROCESSING FLOW:
+ * - Every document first tries regular text extraction (PDF, DOCX, XLSX parsers)
+ * - Engine analyzes text quality automatically using meaningful character density
+ * - Documents with poor text quality are automatically flagged for vision processing
+ * - ProcessWithVision flag is set automatically based on analysis results
  * 
  * ORIENTATION DETECTION:
  * - Uses IMAGE-BASED analysis with vision models (more reliable than text analysis)
  * - Tests all 4 orientations and picks the one that looks most correct
- * - Optimized: skips orientation detection when vision processing is globally forced
- * - Prioritizes accuracy over speed for critical document processing
+ * - Optimized processing flow prioritizes accuracy over speed for critical documents
  */
 @RegisterClass(AIEngine, 'AutotagBaseEngine')
 export class AutotagBaseEngine extends AIEngine {
@@ -54,8 +41,6 @@ export class AutotagBaseEngine extends AIEngine {
     
     constructor() {
         super();
-        // Load Gemini provider to ensure it's registered
-        LoadGeminiLLM();
     }
 
     public static get Instance(): AutotagBaseEngine {
@@ -64,13 +49,13 @@ export class AutotagBaseEngine extends AIEngine {
 
     /**
      * Given a list of content items, extract the text from each content item with the LLM and send off the required parameters to the LLM for tagging.
+     * Vision processing is determined automatically per content item based on the ProcessWithVision flag.
      * @param contentItems 
      * @param contextUser 
      * @param protectedFields 
-     * @param forceVisionProcessing - Optional flag to force vision processing for all PDF items
      * @returns 
      */
-    public async ExtractTextAndProcessWithLLM(contentItems: ContentItemEntity[], contextUser: UserInfo, protectedFields?: string[], forceVisionProcessing?: boolean): Promise<void> {
+    public async ExtractTextAndProcessWithLLM(contentItems: ContentItemEntity[], contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
             console.log('No content items to process');
             return;
@@ -85,25 +70,31 @@ export class AutotagBaseEngine extends AIEngine {
             try {
                 const processingParams = new ContentItemProcessParams();
                 
-                // Parameters that depend on the content item
-                processingParams.text = contentItem.Text;
-                
-                processingParams.name = contentItem.Name;
-                processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
-                processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
-                processingParams.contentTypeID = contentItem.ContentTypeID;
+                // Check if this item needs vision processing
+                if (contentItem.ProcessWithVision) {
+                    console.log(`🔄 Content item ${contentItem.ID} flagged for vision processing`);
+                    // For vision processing, we need to re-process the document with images
+                    await this.processContentItemWithVision(contentItem, processingParams, contextUser, protectedFields);
+                } else {
+                    console.log(`📝 Content item ${contentItem.ID} using regular text processing`);
+                    // Use the pre-extracted text for regular processing
+                    processingParams.text = contentItem.Text;
+                    
+                    processingParams.name = contentItem.Name;
+                    processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
+                    processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
+                    processingParams.contentTypeID = contentItem.ContentTypeID;
 
-                // Parameters that depend on the content type
-                const { modelID, minTags, maxTags } = await this.getContentItemParams(processingParams.contentTypeID, contextUser) 
-                processingParams.modelID = modelID;
-                processingParams.minTags = minTags;
-                processingParams.maxTags = maxTags;
-                processingParams.contentItemID = contentItem.ID;
+                    // Parameters that depend on the content type
+                    const { modelID, minTags, maxTags } = await this.getContentItemParams(processingParams.contentTypeID, contextUser) 
+                    processingParams.modelID = modelID;
+                    processingParams.minTags = minTags;
+                    processingParams.maxTags = maxTags;
+                    processingParams.contentItemID = contentItem.ID;
 
-                await this.ProcessContentItemText(processingParams, contextUser, protectedFields);
-
+                    await this.ProcessContentItemText(processingParams, contextUser, protectedFields);
+                }
             }
-
             catch (e) {
                 console.error(`Failed to process content source item: ${contentItem.Get('contentItemID')}`);
                 throw e;
@@ -115,67 +106,69 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
-     * Enhanced version that can handle structured content for tabular data like salary schedules
-     * @param contentItems 
-     * @param contextUser 
-     * @param structuredDataMap Optional map of contentItemID -> StructuredPDFContent for items that have structured data
+     * Process a single content item that has been flagged for vision processing
+     * This method handles loading the file, converting to images, and processing with vision models
+     * @param contentItem - Content item flagged with ProcessWithVision=true
+     * @param processingParams - Processing parameters being built up
+     * @param contextUser - User context
+     * @param protectedFields - Fields that should not be updated
      */
-    public async ExtractTextAndProcessWithLLMEnhanced(
-        contentItems: ContentItemEntity[], 
-        contextUser: UserInfo,
-        structuredDataMap?: Map<string, StructuredPDFContent>,
+    private async processContentItemWithVision(
+        contentItem: ContentItemEntity, 
+        processingParams: ContentItemProcessParams, 
+        contextUser: UserInfo, 
         protectedFields?: string[]
     ): Promise<void> {
-        if (!contentItems || contentItems.length === 0) {
-            console.log('No content items to process');
-            return;
-        }
+        try {
+            // Set up basic processing parameters
+            processingParams.name = contentItem.Name;
+            processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
+            processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
+            processingParams.contentTypeID = contentItem.ContentTypeID;
+            processingParams.contentItemID = contentItem.ID;
 
-        const processRunParams = new ProcessRunParams();
-        processRunParams.sourceID = contentItems[0].ContentSourceID
-        processRunParams.startTime = new Date();
-        processRunParams.numItemsProcessed = contentItems.length;
+            // Get content type-specific parameters
+            const { modelID, minTags, maxTags } = await this.getContentItemParams(processingParams.contentTypeID, contextUser);
+            processingParams.modelID = modelID;
+            processingParams.minTags = minTags;
+            processingParams.maxTags = maxTags;
 
-        for (const contentItem of contentItems) {
-            try {
-                const processingParams = new ContentItemProcessParamsExtended();
-                
-                // Parameters that depend on the content item
-                processingParams.text = contentItem.Text;
-                processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
-                processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
-                processingParams.contentTypeID = contentItem.ContentTypeID;
-
-                // Check if we have structured data for this content item
-                const structuredData = structuredDataMap?.get(contentItem.ID);
-                if (structuredData && structuredData.hasTabularData) {
-                    processingParams.structuredData = structuredData;
-                    processingParams.preserveTableStructure = true;
-                    processingParams.pdfBuffer = structuredData.pdfBuffer; // Pass PDF buffer for vision processing
-                    console.log(`Using structured processing for content item: ${contentItem.Name}`);
-                }
-
-                // Parameters that depend on the content type
-                const { modelID, minTags, maxTags } = await this.getContentItemParams(processingParams.contentTypeID, contextUser) 
-                processingParams.modelID = modelID;
-                processingParams.minTags = minTags;
-                processingParams.maxTags = maxTags;
-                processingParams.contentItemID = contentItem.ID;
-
-                // Use enhanced processing method
-                await this.ProcessContentItemTextEnhanced(processingParams, contextUser, protectedFields);
-
+            // Load the file and prepare for vision processing
+            const filePath = contentItem.URL;
+            console.log(`📄 Loading file for vision processing: ${filePath}`);
+            
+            const dataBuffer = await fs.promises.readFile(filePath);
+            const fileExtension = path.extname(filePath).toLowerCase();
+            
+            let visionResults: JsonObject;
+            
+            if (fileExtension === '.pdf') {
+                // For PDFs, use orientation-corrected buffer and convert to images
+                console.log('🔄 Processing PDF with vision model...');
+                const correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
+                visionResults = await this.processWithVisionModel(correctedPdfBuffer, processingParams, contextUser);
+            } else {
+                // For other file types (DOCX, XLSX), we might need different processing
+                // For now, fall back to text processing since vision is primarily for PDFs
+                console.log(`⚠️ Vision processing requested for ${fileExtension} file, falling back to text processing`);
+                processingParams.text = contentItem.Text; // Use pre-extracted text
+                visionResults = await this.promptAndRetrieveResultsFromLLM(processingParams, contextUser);
             }
-
-            catch (e) {
-                console.error(`Failed to process content source item: ${contentItem.Get('contentItemID')}`);
-                throw e;
-            }
+            
+            // Save the results
+            await this.saveLLMResults(visionResults, contextUser, protectedFields);
+            
+        } catch (error) {
+            console.error(`🔥 Failed to process content item ${contentItem.ID} with vision:`, error.message);
+            
+            // Fall back to regular text processing on error
+            console.log('🔄 Falling back to regular text processing...');
+            processingParams.text = contentItem.Text;
+            const fallbackResults = await this.promptAndRetrieveResultsFromLLM(processingParams, contextUser);
+            await this.saveLLMResults(fallbackResults, contextUser, protectedFields);
         }
-
-        processRunParams.endTime = new Date();
-        await this.saveProcessRun(processRunParams, contextUser);
     }
+
 
     /**
      * Given processing parameters that include the text from our content item, process the text with the LLM and extract the 
@@ -184,94 +177,11 @@ export class AutotagBaseEngine extends AIEngine {
      * @returns 
      */
     public async ProcessContentItemText(params: ContentItemProcessParams, contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
-        // Check if vision processing with base64 images was requested
-        if (params.text && params.text.startsWith('VISION_IMAGES:')) {
-            console.log('🔄 Processing vision images from base64 strings');
-            const base64Images = params.text.substring('VISION_IMAGES:'.length).split('|');
-            console.log(`📸 Found ${base64Images.length} base64 images to process`);
-            
-            // Process with vision model using base64 images directly
-            const LLMResults: JsonObject = await this.processWithVisionModelFromBase64(base64Images, params, contextUser);
-            await this.saveLLMResults(LLMResults, contextUser, protectedFields);
-            return;
-        }
-        
-        // Check if vision processing was requested via the special token (legacy support)
-        if (params.text === 'VISION_PROCESSING_REQUESTED' || params.text === 'VISION_PROCESSING_REQUESTED_NO_FILE') {
-            console.log('🔄 Switching to vision processing due to force flag');
-            console.log(`🔍 DEBUG: correctedPdfBuffer available: ${!!params.correctedPdfBuffer}`);
-            console.log(`🔍 DEBUG: correctedPdfBuffer size: ${params.correctedPdfBuffer?.length || 0} bytes`);
-            
-            let correctedPdfBuffer: Buffer;
-            
-            // Use cached corrected buffer if available, otherwise re-read and correct
-            if (params.correctedPdfBuffer && params.correctedPdfBuffer.length > 0) {
-                console.log('✅ Using cached corrected PDF buffer');
-                correctedPdfBuffer = params.correctedPdfBuffer;
-            } else {
-                console.log('⚠️ No cached buffer available, re-reading and correcting PDF...');
-                console.log(`🔍 DEBUG: ContentItemID: ${params.contentItemID}`);
-                // Fallback: re-read and correct (shouldn't happen with new flow)
-                const contentItem = await this.getContentItemEntity(params.contentItemID, contextUser);
-                console.log(`🔍 DEBUG: ContentItem URL: ${contentItem.URL}`);
-                const filePath = contentItem.URL;
-                const dataBuffer = await fs.promises.readFile(filePath);
-                correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
-            }
-            
-            // Process with vision model using corrected buffer
-            const LLMResults: JsonObject = await this.processWithVisionModel(correctedPdfBuffer, params, contextUser);
-            await this.saveLLMResults(LLMResults, contextUser, protectedFields);
-            return;
-        }
-        
-        // Regular text processing
+        // Regular text processing - vision processing is now handled separately via ProcessWithVision flag
         const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
         await this.saveLLMResults(LLMResults, contextUser, protectedFields);
     }
 
-    /**
-     * Enhanced content processing that handles vision model processing for tabular PDFs
-     * @param params Enhanced processing parameters that may include structured data
-     * @param contextUser User context
-     */
-    public async ProcessContentItemTextEnhanced(params: ContentItemProcessParamsExtended, contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
-        let LLMResults: JsonObject;
-
-        // Check if we should use vision processing for tabular content
-        if (params.structuredData && params.preserveTableStructure && params.structuredData.hasTabularData && params.pdfBuffer) {
-            console.log('Using VISION MODEL processing for tabular PDF content');
-            
-            // Create processing params for vision model
-            const processParams: ContentItemProcessParams = {
-                text: params.text, // Still include text for fallback
-                modelID: params.modelID,
-                name: params.name,
-                minTags: params.minTags,
-                maxTags: params.maxTags,
-                contentItemID: params.contentItemID,
-                contentTypeID: params.contentTypeID,
-                contentFileTypeID: params.contentFileTypeID,
-                contentSourceTypeID: params.contentSourceTypeID
-            };
-            
-            // Process with vision model instead of text
-            LLMResults = await this.processWithVisionModel(params.pdfBuffer, processParams, contextUser);
-            
-        } else {
-            console.log('Using regular text processing');
-            
-            // Use regular text processing
-            const processParams: ContentItemProcessParams = {
-                ...params,
-                text: params.text
-            };
-            
-            LLMResults = await this.promptAndRetrieveResultsFromLLM(processParams, contextUser);
-        }
-
-        await this.saveLLMResults(LLMResults, contextUser, protectedFields);
-    }
 
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
         const model = AIEngineBase.Instance.Models.find(m => m.ID === params.modelID)
@@ -861,17 +771,6 @@ export class AutotagBaseEngine extends AIEngine {
             throw e
         }
     }
-    
-    /**
-    * Given the content source parameters, this function creates a description of the content source item.
-    * @param contentSourceParams: The parameters of the content source item
-    * @returns The description of the content source item
-    */
-    public async getContentItemDescription(contentSourceParams: ContentSourceParams, contextUser): Promise<string> {
-        const description = `${await this.getContentTypeName(contentSourceParams.ContentTypeID, contextUser)} in ${await this.getContentFileTypeName(contentSourceParams.ContentFileTypeID, contextUser)} format obtained from a ${await this.getContentSourceTypeName(contentSourceParams.ContentSourceTypeID, contextUser)} source`
-        
-        return description
-    }
 
     public async getChecksumFromURL(url: string): Promise<string> {
         const response = await axios.get(url)
@@ -930,10 +829,9 @@ export class AutotagBaseEngine extends AIEngine {
      * Parse content from a ContentItem entity with full context and parameter support
      * @param contentItem - The ContentItem entity containing metadata and file path
      * @param contextUser - User context for database operations
-     * @param forceVisionProcessing - Optional flag to force vision model processing for PDFs
      * @returns Parsed text from the content item
      */
-    public async parseContentItem(contentItem: ContentItemEntity, contextUser: UserInfo, forceVisionProcessing?: boolean): Promise<string> {
+    public async parseContentItem(contentItem: ContentItemEntity, contextUser: UserInfo): Promise<string> {
         try {
             // 1. Load content source and parameters
             const contentSource = await this.getContentSourceEntity(contentItem.ContentSourceID, contextUser);
@@ -947,44 +845,38 @@ export class AutotagBaseEngine extends AIEngine {
             const filePath = contentItem.URL; // Assuming URL contains file path for local files
             const dataBuffer = await fs.promises.readFile(filePath);
             
-            // 4. Check for vision processing flags
-            const shouldUseVision = this.shouldForceVisionProcessing(forceVisionProcessing, sourceParams);
+            // 4. Always try regular text extraction first
+            let extractedText: string;
             
-            // 5. Parse based on file type with full context
             switch (fileExtension) {
                 case '.pdf':
                     // Preprocess PDF for orientation correction
                     const correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
-                    
-                    if (shouldUseVision) {
-                        console.log('🔄 FORCING VISION PROCESSING for PDF - converting to images');
-                        console.log('📋 Using corrected PDF buffer (post-orientation detection)');
-                        
-                        // Set flag to identify final processing images in debug output
-                        this.currentOrientationTest = 'final';
-                        
-                        try {
-                            // Convert corrected PDF to high-quality B&W images using ImageMagick
-                            const images = await this.convertPDFToImages(correctedPdfBuffer);
-                            console.log(`✅ Generated ${images.length} FINAL high-contrast B&W images for vision processing`);
-                            console.log('🎨 Images should be pure black/white with ImageMagick optimizations');
-                            
-                            // Return images as concatenated base64 string with special prefix
-                            return 'VISION_IMAGES:' + images.join('|');
-                        } finally {
-                            // Clear the debug flag
-                            this.currentOrientationTest = undefined;
-                        }
-                    }
-                    
-                    return await this.parsePDF(correctedPdfBuffer);
+                    extractedText = await this.parsePDF(correctedPdfBuffer);
+                    break;
                 case '.docx':
-                    return await this.parseDOCX(dataBuffer);
+                    extractedText = await this.parseDOCX(dataBuffer);
+                    break;
                 case '.xlsx':
-                    return await this.parseXLSXWithContext(dataBuffer, sourceParams);
+                    extractedText = await this.parseXLSXWithContext(dataBuffer, sourceParams);
+                    break;
                 default:
                     throw new Error(`Unsupported file type: ${fileExtension}`);
             }
+            
+            // 5. Analyze text extraction quality and set ProcessWithVision flag
+            const qualityAnalysis = await this.analyzeTextQuality(extractedText, dataBuffer, contentFileType.Name);
+            contentItem.ProcessWithVision = qualityAnalysis.needsVisionProcessing;
+            
+            if (qualityAnalysis.needsVisionProcessing) {
+                console.log(`📸 Poor text extraction detected (${qualityAnalysis.charsPerPage} chars/page vs ${qualityAnalysis.expectedCharsPerPage} expected). Flagged for vision processing: ${contentFileType.Name}`);
+            } else {
+                console.log(`📝 Good text extraction detected (${qualityAnalysis.charsPerPage} chars/page). Using regular parsing: ${contentFileType.Name}`);
+            }
+            
+            // 6. Return the extracted text (TagSingleContentItem will handle vision routing)
+            return extractedText;
+            
         } catch (error) {
             console.error(`Failed to parse content item ${contentItem.ID}:`, error.message);
             throw new Error(`Content parsing failed: ${error.message}`);
@@ -992,131 +884,90 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
-     * Enhanced parseContentItem that returns both text and corrected PDF buffer
-     * @param contentItem - The ContentItem entity
-     * @param contextUser - User context
-     * @param forceVisionProcessing - Vision processing flag
-     * @returns Object containing text and corrected PDF buffer
+     * Analyze text extraction quality to determine if vision processing is needed
+     * Works for any file type by analyzing text density vs file size
      */
-    public async parseContentItemWithBuffer(
-        contentItem: ContentItemEntity, 
-        contextUser: UserInfo, 
-        forceVisionProcessing?: boolean
-    ): Promise<{ text: string; correctedPdfBuffer?: Buffer }> {
+    private async analyzeTextQuality(extractedText: string, fileBuffer: Buffer, fileName: string): Promise<{
+        needsVisionProcessing: boolean;
+        charsPerPage: number;
+        expectedCharsPerPage: number;
+        meaningfulChars: number;
+        totalPages: number;
+    }> {
         try {
-            // 1. Load content source and parameters
-            const contentSource = await this.getContentSourceEntity(contentItem.ContentSourceID, contextUser);
-            const sourceParams = await this.getContentSourceParams(contentSource, contextUser);
+            // Count meaningful characters (letters and numbers only)
+            const meaningfulChars = (extractedText.match(/[a-zA-Z0-9]/g) || []).length;
             
-            // 2. Get content file type information
-            const contentFileType = await this.getContentFileTypeEntity(contentItem.ContentFileTypeID, contextUser);
-            const fileExtension = contentFileType.FileExtension.toLowerCase();
+            // Estimate page count based on file type and size
+            const totalPages = await this.estimatePageCount(fileBuffer, fileName);
+            const charsPerPage = meaningfulChars / totalPages;
+
+            // Calculate dynamic threshold based on file characteristics
+            const fileSizeKB = fileBuffer.length / 1024;
+            const fileSizePerPageKB = fileSizeKB / totalPages;
             
-            // 3. Check for vision processing flags BEFORE trying to read file
-            const shouldUseVision = this.shouldForceVisionProcessing(forceVisionProcessing, sourceParams);
+            // Dynamic expectation: larger file size per page suggests more content
+            // Base minimum of 50 chars/page, with additional expectations for larger files
+            const expectedCharsPerPage = Math.max(50, Math.min(300, fileSizePerPageKB * 2));
             
-            // 4. If forcing vision processing and file doesn't exist locally, return token without file processing
-            if (shouldUseVision && fileExtension === '.pdf') {
-                const filePath = contentItem.URL;
-                console.log(`🔍 Checking file existence: ${filePath}`);
-                
-                try {
-                    // Try to check if file exists before reading
-                    await fs.promises.access(filePath);
-                    console.log('✅ File exists locally, proceeding with orientation correction...');
-                } catch (accessError) {
-                    console.log('⚠️ File not accessible locally, will use existing ContentItem text for vision processing');
-                    console.log(`🔍 File path: ${filePath}`);
-                    console.log(`🔍 Access error: ${accessError.message}`);
-                    
-                    // Return vision token without file processing - the vision model will handle the existing text
-                    return { 
-                        text: 'VISION_PROCESSING_REQUESTED_NO_FILE'  // Special token indicating no file access
-                    };
-                }
-            }
+            const needsVisionProcessing = charsPerPage < expectedCharsPerPage;
+
+            return {
+                needsVisionProcessing,
+                charsPerPage: Math.round(charsPerPage),
+                expectedCharsPerPage: Math.round(expectedCharsPerPage),
+                meaningfulChars,
+                totalPages
+            };
+
+        } catch (error) {
+            console.warn(`Could not analyze text quality for ${fileName}: ${error.message}. Defaulting to regular processing.`);
+            return {
+                needsVisionProcessing: false,
+                charsPerPage: 0,
+                expectedCharsPerPage: 0,
+                meaningfulChars: 0,
+                totalPages: 1
+            };
+        }
+    }
+
+    /**
+     * Estimate page count for different file types
+     */
+    private async estimatePageCount(fileBuffer: Buffer, fileName: string): Promise<number> {
+        try {
+            const extension = fileName.toLowerCase().split('.').pop();
             
-            // 5. Read file data (only if we reach here)
-            const filePath = contentItem.URL;
-            const dataBuffer = await fs.promises.readFile(filePath);
-            
-            // 6. Parse based on file type with full context
-            switch (fileExtension) {
-                case '.pdf':
-                    // Preprocess PDF for orientation correction
-                    const correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
-                    
-                    if (shouldUseVision) {
-                        console.log('🔄 FORCING VISION PROCESSING for PDF (flag enabled)');
-                        return { 
-                            text: 'VISION_PROCESSING_REQUESTED', 
-                            correctedPdfBuffer // Return the corrected buffer
-                        };
+            switch (extension) {
+                case 'pdf':
+                    // For PDFs, get exact page count from metadata
+                    try {
+                        const pdfParse = require('pdf-parse');
+                        const pdfInfo = await pdfParse(fileBuffer, {max: 1}); // Only parse metadata, not content
+                        return pdfInfo.numpages || 1;
+                    } catch (error) {
+                        // If PDF parsing fails, estimate based on file size
+                        const fileSizeKB = fileBuffer.length / 1024;
+                        return Math.max(1, Math.round(fileSizeKB / 100)); // ~100KB per page estimate
                     }
                     
-                    const text = await this.parsePDF(correctedPdfBuffer);
-                    return { text, correctedPdfBuffer };
-                    
-                case '.docx':
-                    const docxText = await this.parseDOCX(dataBuffer);
-                    return { text: docxText };
-                    
-                case '.xlsx':
-                    const xlsxText = await this.parseXLSXWithContext(dataBuffer, sourceParams);
-                    return { text: xlsxText };
+                case 'docx':
+                case 'xlsx':
+                    // For Office docs, estimate based on file size
+                    // Rough estimation: 100KB per page for DOCX, 50KB per sheet for XLSX
+                    const fileSizeKB = fileBuffer.length / 1024;
+                    const avgSizePerPage = extension === 'xlsx' ? 50 : 100;
+                    return Math.max(1, Math.round(fileSizeKB / avgSizePerPage));
                     
                 default:
-                    throw new Error(`Unsupported file type: ${fileExtension}`);
+                    // Default to 1 page for unknown types
+                    return 1;
             }
         } catch (error) {
-            console.error(`Failed to parse content item ${contentItem.ID}:`, error.message);
-            throw new Error(`Content parsing failed: ${error.message}`);
+            console.warn(`Could not estimate page count for ${fileName}: ${error.message}`);
+            return 1;
         }
-    }
-
-    /**
-     * Determines whether to force vision processing based on multiple flag sources
-     * @param forceVisionProcessing - Method-level override flag
-     * @param sourceParams - Content source parameters that may contain vision flag
-     * @returns true if vision processing should be forced
-     */
-    private shouldForceVisionProcessing(forceVisionProcessing?: boolean, sourceParams?: Map<string, any>): boolean {
-        // 1. Check method-level override (highest priority)
-        if (forceVisionProcessing === true) {
-            console.log('🎯 Vision processing forced via method parameter');
-            return true;
-        }
-        
-        // 2. Check environment variable (global setting)
-        const envForceVision = process.env.FORCE_VISION_PROCESSING;
-        if (envForceVision && (envForceVision.toLowerCase() === 'true' || envForceVision === '1')) {
-            console.log('🌍 Vision processing forced via environment variable FORCE_VISION_PROCESSING');
-            return true;
-        }
-        
-        // 3. Check content source parameter (per-source setting)
-        if (sourceParams?.has('forceVisionProcessing')) {
-            const sourceVisionFlag = sourceParams.get('forceVisionProcessing');
-            if (sourceVisionFlag === true || sourceVisionFlag === 'true' || sourceVisionFlag === '1') {
-                console.log('📋 Vision processing forced via content source parameter');
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Helper method to get ContentItem entity by ID
-     * @param contentItemID - ID of the content item
-     * @param contextUser - User context
-     * @returns ContentItem entity
-     */
-    private async getContentItemEntity(contentItemID: string, contextUser: UserInfo): Promise<ContentItemEntity> {
-        const md = new Metadata();
-        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
-        await contentItem.Load(contentItemID);
-        return contentItem;
     }
 
     /**
@@ -1256,20 +1107,13 @@ export class AutotagBaseEngine extends AIEngine {
      * - More reliable than text-based detection (handles scanned docs, garbled OCR)
      * - Tests all 4 orientations (0°, 90°, 180°, 270°) 
      * - Vision model determines which looks most correctly oriented
-     * - Prioritizes accuracy over speed for critical document processing
+     * - Always runs orientation correction for optimal text extraction quality
      * 
      * @param dataBuffer - Original PDF buffer
      * @returns Orientation-corrected PDF buffer
      */
-    public async preprocessPDFOrientation(dataBuffer: Buffer, skipIfVisionForced: boolean = false): Promise<Buffer> {
+    public async preprocessPDFOrientation(dataBuffer: Buffer): Promise<Buffer> {
         try {
-            // Check if we should skip orientation correction when vision processing is forced
-            // (since vision models can handle rotated content well)
-            const envForceVision = process.env.FORCE_VISION_PROCESSING;
-            if (skipIfVisionForced && envForceVision && (envForceVision.toLowerCase() === 'true' || envForceVision === '1')) {
-                console.log('⚡ Skipping orientation detection - vision processing forced globally');
-                return dataBuffer;
-            }
             
             const requiredRotation = await this.detectPDFOrientation(dataBuffer);
             
@@ -1501,186 +1345,6 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
-     * Calculates a comprehensive readability score combining multiple heuristics
-     * NOTE: This is now legacy - kept for potential fallback use
-     */
-    private calculateComprehensiveReadabilityScore(text: string): number {
-        const readabilityScore = this.calculateTextReadability(text);
-        const lineStructure = this.analyzeLineStructure(text);
-        const documentPatterns = this.analyzeDocumentPatterns(text);
-        
-        // Weight the different components
-        let totalScore = readabilityScore * 0.4;
-        
-        // Line structure scoring
-        const structureScore = this.scoreLineStructure(lineStructure);
-        totalScore += structureScore * 0.3;
-        
-        // Document pattern scoring
-        const patternScore = this.scoreDocumentPatterns(documentPatterns);
-        totalScore += patternScore * 0.3;
-        
-        return Math.min(totalScore, 1.0);
-    }
-
-    /**
-     * Scores line structure quality
-     */
-    private scoreLineStructure(structure: { avgLineLength: number; lineCount: number; emptyLineRatio: number }): number {
-        let score = 0;
-        
-        // Prefer reasonable line lengths (20-120 characters)
-        if (structure.avgLineLength >= 20 && structure.avgLineLength <= 120) {
-            score += 0.4;
-        } else if (structure.avgLineLength >= 10 && structure.avgLineLength <= 200) {
-            score += 0.2;
-        }
-        
-        // Prefer documents with reasonable number of lines
-        if (structure.lineCount >= 10) {
-            score += 0.3;
-        } else if (structure.lineCount >= 5) {
-            score += 0.1;
-        }
-        
-        // Prefer reasonable empty line ratio (some whitespace, but not too much)
-        if (structure.emptyLineRatio >= 0.1 && structure.emptyLineRatio <= 0.5) {
-            score += 0.3;
-        } else if (structure.emptyLineRatio <= 0.7) {
-            score += 0.1;
-        }
-        
-        return score;
-    }
-
-    /**
-     * Scores document pattern quality
-     */
-    private scoreDocumentPatterns(patterns: { hasHeaders: boolean; hasNumbers: boolean; hasTablePatterns: boolean }): number {
-        let score = 0;
-        
-        if (patterns.hasHeaders) score += 0.4;
-        if (patterns.hasNumbers) score += 0.3;
-        if (patterns.hasTablePatterns) score += 0.3;
-        
-        return score;
-    }
-
-    /**
-     * Calculates text readability score based on various heuristics
-     */
-    private calculateTextReadability(text: string): number {
-        const lines = text.split('\n').filter(line => line.trim().length > 0);
-        
-        // Heuristic 1: Reasonable line lengths (not too short, not extremely long)
-        const avgLineLength = lines.reduce((sum, line) => sum + line.length, 0) / lines.length;
-        const lineLengthScore = this.normalizeScore(avgLineLength, 20, 150); // Optimal range 20-150 chars
-        
-        // Heuristic 2: Proper word spacing (not too many single characters)
-        const words = text.split(/\\s+/).filter(word => word.length > 0);
-        const longWords = words.filter(word => word.length > 2).length;
-        const wordLengthScore = longWords / Math.max(words.length, 1);
-        
-        // Heuristic 3: Reasonable character distribution
-        const alphanumericRatio = (text.match(/[a-zA-Z0-9]/g) || []).length / text.length;
-        
-        // Heuristic 4: Common English word patterns
-        const commonWords = ['the', 'and', 'to', 'of', 'a', 'in', 'is', 'it', 'for', 'with'];
-        const foundCommonWords = commonWords.filter(word => 
-            text.toLowerCase().includes(' ' + word + ' ')
-        ).length;
-        const commonWordScore = foundCommonWords / commonWords.length;
-        
-        return (lineLengthScore * 0.3 + wordLengthScore * 0.3 + alphanumericRatio * 0.2 + commonWordScore * 0.2);
-    }
-
-    /**
-     * Analyzes line structure patterns
-     */
-    private analyzeLineStructure(text: string): { avgLineLength: number; lineCount: number; emptyLineRatio: number } {
-        const allLines = text.split('\n');
-        const nonEmptyLines = allLines.filter(line => line.trim().length > 0);
-        
-        return {
-            avgLineLength: nonEmptyLines.reduce((sum, line) => sum + line.length, 0) / Math.max(nonEmptyLines.length, 1),
-            lineCount: nonEmptyLines.length,
-            emptyLineRatio: (allLines.length - nonEmptyLines.length) / allLines.length
-        };
-    }
-
-    /**
-     * Looks for common document patterns that indicate proper orientation
-     */
-    private analyzeDocumentPatterns(text: string): { hasHeaders: boolean; hasNumbers: boolean; hasTablePatterns: boolean } {
-        const lowerText = text.toLowerCase();
-        
-        // Look for header-like patterns
-        const hasHeaders = /^[A-Z][^\\n]*$/m.test(text) || 
-                          lowerText.includes('salary') || 
-                          lowerText.includes('schedule') ||
-                          lowerText.includes('district') ||
-                          lowerText.includes('employee');
-        
-        // Look for numeric patterns (common in salary schedules)
-        const hasNumbers = /\\d{1,3}(,\\d{3})*(\\.\\d{2})?/.test(text); // Currency-like patterns
-        
-        // Look for table-like patterns
-        const hasTablePatterns = text.includes('\\t') || // Tab characters
-                                 /\\s{2,}\\d+\\s{2,}/.test(text) || // Spaced numbers
-                                 /\\|.*\\|/.test(text); // Pipe characters
-        
-        return { hasHeaders, hasNumbers, hasTablePatterns };
-    }
-
-    /**
-     * Calculates overall orientation confidence and recommended rotation
-     */
-    private calculateOrientationScore(
-        readabilityScore: number, 
-        lineStructure: { avgLineLength: number; lineCount: number; emptyLineRatio: number },
-        patterns: { hasHeaders: boolean; hasNumbers: boolean; hasTablePatterns: boolean }
-    ): { rotation: number; confidence: number } {
-        
-        // For now, we'll implement a simple heuristic
-        // In a more sophisticated implementation, you could:
-        // 1. Try parsing the PDF at different rotations
-        // 2. Compare readability scores across rotations
-        // 3. Use machine learning models trained on document orientation
-        
-        let confidence = readabilityScore;
-        
-        // Boost confidence if we find expected patterns
-        if (patterns.hasHeaders) confidence += 0.1;
-        if (patterns.hasNumbers) confidence += 0.1;
-        if (patterns.hasTablePatterns) confidence += 0.1;
-        
-        // Adjust based on line structure
-        if (lineStructure.avgLineLength > 10 && lineStructure.avgLineLength < 200) {
-            confidence += 0.1;
-        }
-        
-        // For this initial implementation, if confidence is high, assume no rotation needed
-        // Later, we could enhance this to actually test different rotations
-        return {
-            rotation: 0, // For now, always assume correct orientation if confident
-            confidence: Math.min(confidence, 1.0)
-        };
-    }
-
-    /**
-     * Normalizes a score to 0-1 range based on optimal range
-     */
-    private normalizeScore(value: number, minOptimal: number, maxOptimal: number): number {
-        if (value >= minOptimal && value <= maxOptimal) {
-            return 1.0;
-        } else if (value < minOptimal) {
-            return Math.max(0, value / minOptimal);
-        } else {
-            return Math.max(0, 1 - ((value - maxOptimal) / maxOptimal));
-        }
-    }
-
-    /**
      * Corrects PDF orientation by rotating pages
      * @param dataBuffer - Original PDF buffer
      * @param rotationDegrees - Degrees to rotate (90, 180, or 270)
@@ -1710,46 +1374,6 @@ export class AutotagBaseEngine extends AIEngine {
         const dataPDF = await pdfParse(dataBuffer);
         return dataPDF.text
     }
-
-    /**
-     * Enhanced PDF parsing that can include PDF buffer for vision model processing
-     * @param dataBuffer: The buffer of data to extract structured content from
-     * @param assumeTabularContent: If true, assumes content has tables (for vision model processing)
-     * @returns StructuredPDFContent with raw text and PDF buffer for vision processing
-     */
-    public async parsePDFWithStructure(dataBuffer: Buffer, assumeTabularContent: boolean = false): Promise<StructuredPDFContent> {
-        try {
-            // Preprocess PDF for orientation correction
-            const correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
-            
-            // Get raw text using standard pdf-parse
-            const dataPDF = await pdfParse(correctedPdfBuffer);
-            const rawText = dataPDF.text;
-
-            return {
-                rawText,
-                tables: [], // No longer using table detection - vision model handles structure
-                hasTabularData: assumeTabularContent,
-                contentType: assumeTabularContent ? 'tabular' : 'text',
-                pdfBuffer: correctedPdfBuffer // Include corrected PDF buffer for vision model processing
-            };
-
-        } catch (error) {
-            console.warn('Structured PDF parsing failed, falling back to text-only:', error.message);
-            // Fallback to regular text extraction
-            const dataPDF = await pdfParse(dataBuffer);
-            return {
-                rawText: dataPDF.text,
-                tables: [],
-                hasTabularData: false,
-                contentType: 'text'
-            };
-        }
-    }
-
-
-
-
 
     /**
      * Convert PDF to high-resolution, high-contrast PNG images optimized for OCR and vision model processing
@@ -2092,145 +1716,16 @@ export class AutotagBaseEngine extends AIEngine {
             throw error;
         }
     }
-
+    
     /**
-     * Process content using vision model with pre-generated base64 images
-     * This method is optimized for the new workflow where images are generated during PDF parsing
-     * and stored as base64 strings in ContentItem.Text field
-     */
-    public async processWithVisionModelFromBase64(
-        base64Images: string[],
-        params: ContentItemProcessParams,
-        contextUser: UserInfo
-    ): Promise<JsonObject> {
-        try {
-            console.log(`Starting vision model processing with ${base64Images.length} base64 images...`);
-            
-            // Get AI model and create LLM instance (same as regular processing)
-            const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID);
-            if (!model) {
-                throw new Error(`AI Model with ID ${params.modelID} not found`);
-            }
-            
-            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-                BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)
-            );
-
-            // Use existing prompt system (same as text processing)
-            const { systemPrompt, userPrompt } = await this.getLLMPrompts(params, '', {}, contextUser);
-            
-            console.log('\n=== VISION MODEL (BASE64) DEBUGGING ===');
-            console.log('📝 System Prompt:');
-            console.log(systemPrompt.substring(0, 500) + '...');
-            console.log('\n📝 User Prompt:');
-            console.log(userPrompt.substring(0, 500) + '...');
-            console.log('\n🖼️ Base64 images being processed:', base64Images.length);
-            console.log('📏 Base64 image sizes:', base64Images.map((img, i) => `Page ${i+1}: ${img.length} chars`));
-            
-            // Create multimodal messages with base64 images
-            const messages: ChatMessage[] = [
-                {
-                    role: 'system' as const,
-                    content: systemPrompt
-                },
-                {
-                    role: 'user' as const,
-                    content: [
-                        {
-                            type: 'text',
-                            content: userPrompt
-                        },
-                        ...base64Images.map(imageData => ({
-                            type: 'image_url' as const,
-                            content: imageData
-                        }))
-                    ]
-                }
-            ];
-
-            console.log(`\n🤖 Sending ${base64Images.length} base64 images to vision model: ${model.APIName}`);
-            console.log('⏳ Processing with vision model...');
-            
-            // Process with vision model
-            const response = await llm.ChatCompletion({
-                messages,
-                model: model.APIName,
-                temperature: 0.0
-            });
-
-            const visionResponse = response.data.choices[0]?.message?.content?.trim() || '';
-            console.log('\n📤 Vision Model Raw Response:');
-            console.log('='.repeat(80));
-            console.log(visionResponse);
-            console.log('='.repeat(80));
-            console.log('📊 Response length:', visionResponse.length, 'characters');
-            console.log('🔧 Parsing JSON response...');
-            
-            // Parse the vision model response (same logic as processWithVisionModel)
-            let visionResults: JsonObject;
-            try {
-                // Clean the response to extract JSON from markdown code blocks
-                let cleanedResponse = visionResponse.trim();
-                
-                // Remove markdown code blocks if present
-                if (cleanedResponse.startsWith('```json')) {
-                    cleanedResponse = cleanedResponse.replace(/^```json\s*/i, '');
-                }
-                if (cleanedResponse.startsWith('```')) {
-                    cleanedResponse = cleanedResponse.replace(/^```\s*/, '');
-                }
-                if (cleanedResponse.endsWith('```')) {
-                    cleanedResponse = cleanedResponse.replace(/\s*```$/, '');
-                }
-                
-                // Remove numeric separators (same as text processing)
-                cleanedResponse = cleanedResponse.replace(/(\d+)_(\d+)/g, '$1$2');
-                
-                // Additional cleaning for common vision model formatting issues
-                cleanedResponse = cleanedResponse.trim();
-                
-                console.log('🧹 Cleaned response (first 300 chars):', cleanedResponse.substring(0, 300) + '...');
-                
-                visionResults = JSON.parse(cleanedResponse);
-                visionResults.processedWithVision = true;
-                visionResults.processedFromBase64 = true; // Flag to indicate this was processed from stored base64
-                visionResults.totalPages = base64Images.length;
-                visionResults.contentItemID = params.contentItemID;
-                
-                console.log(`✅ Vision processing successful - processed data from ${base64Images.length} base64 images`);
-                console.log('📊 Extracted fields:', Object.keys(visionResults).join(', '));
-                return visionResults;
-                
-            } catch (parseError) {
-                console.error('❌ Vision model JSON parse error:', parseError.message);
-                console.error('🔍 Raw vision response:', visionResponse.substring(0, 500));
-                
-                // Try to find where JSON might actually start
-                const jsonStartPattern = /\{[\s\S]*\}/;
-                const jsonMatch = visionResponse.match(jsonStartPattern);
-                if (jsonMatch) {
-                    try {
-                        console.log('🔧 Attempting to parse extracted JSON...');
-                        const extractedJson = jsonMatch[0].replace(/(\d+)_(\d+)/g, '$1$2');
-                        visionResults = JSON.parse(extractedJson);
-                        visionResults.processedWithVision = true;
-                        visionResults.processedFromBase64 = true;
-                        visionResults.totalPages = base64Images.length;
-                        visionResults.contentItemID = params.contentItemID;
-                        console.log('🎯 Successfully parsed extracted JSON!');
-                        return visionResults;
-                    } catch (secondParseError) {
-                        console.error('❌ Second parse attempt failed:', secondParseError.message);
-                    }
-                }
-                
-                throw new Error(`Vision model response is not valid JSON: ${parseError.message}`);
-            }
-            
-        } catch (error) {
-            console.error('Vision model processing (base64) failed:', error.message);
-            throw error;
-        }
+    * Given the content source parameters, this function creates a description of the content source item.
+    * @param contentSourceParams: The parameters of the content source item
+    * @returns The description of the content source item
+    */
+    public async getContentItemDescription(contentSourceParams: ContentSourceParams, contextUser): Promise<string> {
+        const description = `${await this.getContentTypeName(contentSourceParams.ContentTypeID, contextUser)} in ${await this.getContentFileTypeName(contentSourceParams.ContentFileTypeID, contextUser)} format obtained from a ${await this.getContentSourceTypeName(contentSourceParams.ContentSourceTypeID, contextUser)} source`
+        
+        return description
     }
 
     /**
@@ -2243,19 +1738,6 @@ export class AutotagBaseEngine extends AIEngine {
         return dataDOCX
     }
 
-    /**
-     * Parse Excel file (basic method - use parseContentItem for full functionality)
-     * @param dataBuffer - Excel file buffer
-     * @returns Parsed text from first sheet
-     */
-    public async parseXLSX(dataBuffer: Buffer): Promise<string> {
-        const XLSX = require('xlsx');
-        const workbook = XLSX.read(dataBuffer, { type: 'buffer' });
-        
-        // Always use first sheet for basic parsing
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        return XLSX.utils.sheet_to_csv(firstSheet);
-    }
 
     public async parseHTML(data: string): Promise<string> {
         try {

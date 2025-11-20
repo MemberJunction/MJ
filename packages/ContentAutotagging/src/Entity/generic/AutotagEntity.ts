@@ -17,8 +17,6 @@ export class AutotagEntity extends AutotagBase {
         this.engine = AutotagBaseEngine.Instance;
     }
     
-    // NEW CLOUD-FRIENDLY METHODS
-    
     /**
      * Discovery phase: Find entity records that need processing
      * @param contentSources - Entity content sources to discover items from

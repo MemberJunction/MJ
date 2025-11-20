@@ -193,13 +193,13 @@ export class AutotagAzureBlob extends CloudStorageBase {
             contentItem.URL = tempFilePath; // Temporarily point to temp file for parsing
             
             try {
-                // Parse using centralized method
-                const parsedText = await this.engine.parseContentItem(contentItem, contextUser, true);
+                // Parse content (engine will handle quality analysis and set ProcessWithVision flag)
+                const parsedText = await this.engine.parseContentItem(contentItem, contextUser);
                 contentItem.Text = parsedText;
                 contentItem.Checksum = await this.engine.getChecksumFromText(parsedText);
                 contentItem.URL = originalURL; // Restore original blob path
 
-                // Save the ContentItem
+                // Save the ContentItem (ProcessWithVision flag is set by the engine)
                 const saveResult = await contentItem.Save();
                 if (saveResult) {
                     console.log(`Successfully ${discoveryItem.action}d content item for blob: ${blobName}`);

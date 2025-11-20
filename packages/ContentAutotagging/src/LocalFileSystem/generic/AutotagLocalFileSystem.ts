@@ -23,8 +23,6 @@ export class AutotagLocalFileSystem extends AutotagBase {
         return this.contextUser;
     }
 
-    // NEW CLOUD-FRIENDLY METHODS
-
     /**
      * Discovery phase: Scan directories and identify files that need processing
      * @param contentSources - Array of local file system content sources
@@ -168,8 +166,6 @@ export class AutotagLocalFileSystem extends AutotagBase {
         }
     }
 
-    // HELPER METHODS
-
     /**
      * Recursively scan directory for files
      */
@@ -252,76 +248,6 @@ export class AutotagLocalFileSystem extends AutotagBase {
         } else {
             throw new Error(`Unknown file extension ${extension} for file ${filePath}`);
         }
-    }
-
-    /**
-     * Implemented abstract method from the AutotagBase class. that runs the entire autotagging process. This method is the entry point for the autotagging process.
-     * It initializes the connection, retrieves the content sources corresponding to the content source type, sets the content items that we want to process, 
-     * extracts and processes the text, and sets the results in the database.
-     */
-    public async Autotag(contextUser: UserInfo): Promise<void> {
-        try {
-            this.contextUser = contextUser;
-            
-            this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local File System', this.contextUser);
-            const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
-            const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
-            
-            console.log(`Processing ${contentItemsToProcess.length} content items...`);
-            
-            // Use standard text processing (parsing was already done in SetContentItemsToProcess)
-            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
-            
-            console.log('✅ Autotagging process completed successfully!');
-            console.log(`✅ Processed ${contentItemsToProcess.length} content items`);
-            
-        } catch (error) {
-            console.error('❌ Autotagging process failed:', error.message);
-            throw error;
-        } finally {
-            // Give a moment for any pending operations to complete, then exit
-            setTimeout(() => {
-                console.log('🔄 Shutting down autotagging process...');
-                process.exit(0);
-            }, 2000);
-        }
-    }
-
-    /**
-    * Implemented abstract method from the AutotagBase class. Given a list of content sources, this method should return a list 
-    * of content source items that have been modified or added after the most recent process run for that content source.
-    * @param contentSources - An array of content sources to check for modified or added content source items
-    * @returns - An array of content source items that have been modified or added after the most recent process run for that content source
-    */
-    public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = []
-
-        for (const contentSource of contentSources) {
-            // First check that the directory exists
-            if (fs.existsSync(contentSource.URL)) {
-                const contentSourceParams = await this.setContentSourceParams(contentSource);
-                const lastRunDate: Date = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser)
-
-                // Traverse through all the files in the directory
-                if (lastRunDate) {
-                const contentItems = await this.SetNewAndModifiedContentItems(contentSourceParams, lastRunDate, this.contextUser);
-                    if (contentItems && contentItems.length > 0) {
-                        contentItemsToProcess.push(...contentItems);
-                    }
-                    else {
-                        // No content items found to process
-                        console.log(`No content items found to process for content source: ${contentSource.Get('Name')}`);
-                    }
-                } 
-                else {
-                throw new Error('Invalid last run date');
-                }
-            } else {
-                console.log(`Invalid Content Source ${contentSource.Name}`);
-            }
-        }
-
-        return contentItemsToProcess;
     }
 
     public async setContentSourceParams(contentSource: ContentSourceEntity) { 
