@@ -316,7 +316,54 @@ describe('ComponentLinter - RunQuery/RunView Validation', () => {
       );
       
       expect(queryNameViolation).toBeDefined();
-      expect(queryNameViolation?.severity).toBe('critical');
+      expect(queryNameViolation?.severity).toBe('high');
+    });
+
+    it('should validate query name even WITHOUT Parameters property (regression test for bug)', async () => {
+      // This test ensures we catch the bug where query name validation was skipped
+      // if the RunQuery call didn't have a Parameters property
+      const code = `
+        function TestComponent({ utilities }) {
+          const loadData = async () => {
+            // Query name is wrong, but NO Parameters property
+            const result = await utilities.rq.RunQuery({
+              QueryName: 'ActiveMemberCountsByMembershipType',
+              CategoryPath: 'Skip/Analytics/Membership'
+            });
+
+            setData(result.Results || []);
+          };
+
+          return <div>Test</div>;
+        }
+      `;
+
+      const spec: ComponentSpec = {
+        name: 'TestComponent',
+        type: 'chart',
+        title: 'Test Component',
+        dataRequirements: {
+          mode: 'queries',
+          entities: [],
+          queries: [{
+            name: 'ActiveMembersByMembershipType',  // Different from code!
+            categoryPath: 'Skip/Analytics/Membership',
+            fields: [],
+            entityNames: []
+          }]
+        }
+      } as any;
+
+      const violations = await linter.lint(code, spec);
+
+      const queryNameViolation = violations.find(v =>
+        v.message.includes('ActiveMemberCountsByMembershipType') &&
+        v.message.includes('not found in component spec')
+      );
+
+      expect(queryNameViolation).toBeDefined();
+      expect(queryNameViolation?.severity).toBe('high');
+      expect(queryNameViolation?.message).toContain('ActiveMembersByMembershipType');
     });
   });
 

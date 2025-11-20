@@ -18,7 +18,7 @@ import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
 import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
-import { Observable } from 'rxjs';
+import { Observable, Subject, Subscription } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
@@ -1788,8 +1788,170 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     private _wsClient: Client = null;
-    private _pushStatusRequests: {sessionId: string, observable: Observable<string>}[] = [];
-    
+    private _wsClientCreatedAt: number = null;
+    private _pushStatusSubjects: Map<string, {
+        subject: Subject<string>,
+        subscription: Subscription,
+        createdAt: number,
+        lastRequestedAt: number,
+        lastEmissionAt: number,
+        activeSubscribers: number
+    }> = new Map();
+    // Tracks total WebSocket subscriptions (not component subscribers)
+    // Used to prevent disposing client when subscriptions are active
+    private _activeSubscriptionCount = 0;
+    private readonly WS_CLIENT_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+    private readonly SUBSCRIPTION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    private readonly SUBSCRIPTION_IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+    private _subscriptionCleanupTimer: NodeJS.Timeout = null;
+    private _isCleaningUp = false; // Prevent concurrent cleanup
+
+    /**
+     * Gets or creates a WebSocket client with health checking and automatic cleanup
+     * @returns Active WebSocket client
+     */
+    private getOrCreateWSClient(): Client {
+        const now = Date.now();
+
+        // Check if existing client is too old and should be recreated
+        if (this._wsClient && this._wsClientCreatedAt) {
+            const age = now - this._wsClientCreatedAt;
+            if (age > this.WS_CLIENT_MAX_AGE_MS && this._activeSubscriptionCount === 0) {
+                // Client is old and no active subscriptions, recreate it
+                this.disposeWSClient();
+            }
+        }
+
+        // Create new client if needed
+        if (!this._wsClient) {
+            this._wsClient = createClient({
+                url: this.ConfigData.WSURL,
+                connectionParams: {
+                    Authorization: 'Bearer ' + this.ConfigData.Token,
+                },
+                keepAlive: 30000, // Send keepalive ping every 30 seconds
+                retryAttempts: 3,
+                shouldRetry: () => true,
+            });
+            this._wsClientCreatedAt = now;
+
+            // Start cleanup timer if not already running
+            if (!this._subscriptionCleanupTimer) {
+                this._subscriptionCleanupTimer = setInterval(() => {
+                    this.cleanupStaleSubscriptions();
+                }, this.SUBSCRIPTION_CLEANUP_INTERVAL_MS);
+            }
+        }
+
+        return this._wsClient;
+    }
+
+    /**
+     * Disposes of the WebSocket client
+     * Does NOT complete subjects - caller should handle that separately to avoid double-cleanup
+     */
+    private disposeWSClient(): void {
+        if (this._wsClient) {
+            try {
+                this._wsClient.dispose();
+            } catch (e) {
+                console.error('[GraphQLDataProvider] Error disposing WebSocket client:', e);
+            }
+            this._wsClient = null;
+            this._wsClientCreatedAt = null;
+        }
+    }
+
+    /**
+     * Completes all subjects and clears the cache
+     * Separate from disposeWSClient to avoid double-cleanup
+     */
+    private completeAllSubjects(): void {
+        this._pushStatusSubjects.forEach((entry, sessionId) => {
+            try {
+                entry.subject.complete();
+                entry.subscription.unsubscribe();
+            } catch (e) {
+                console.error(`[GraphQLDataProvider] Error cleaning up subject for ${sessionId}:`, e);
+            }
+        });
+        this._pushStatusSubjects.clear();
+    }
+
+    /**
+     * Cleans up stale subscription subjects that haven't been used recently
+     * Uses cleanup flag to prevent concurrent execution
+     * Uses Map snapshot to avoid concurrent modification issues
+     */
+    private cleanupStaleSubscriptions(): void {
+        // Prevent concurrent cleanup
+        if (this._isCleaningUp) {
+            return;
+        }
+        this._isCleaningUp = true;
+
+        try {
+            const now = Date.now();
+            const initialCount = this._pushStatusSubjects.size;
+
+            // Create snapshot to avoid concurrent modification during iteration
+            const entries = Array.from(this._pushStatusSubjects.entries());
+            const toRemove: string[] = [];
+
+            // Identify stale subscriptions (must have no active subscribers AND be idle)
+            entries.forEach(([sessionId, value]) => {
+                const timeSinceRequested = now - value.lastRequestedAt;
+                const timeSinceEmission = now - value.lastEmissionAt;
+
+                // Clean up if ALL conditions are true:
+                // 1. No active subscribers (no component is listening)
+                // 2. Not requested recently (no component has requested it)
+                // 3. Not receiving data (no active server communication)
+                const shouldCleanup = value.activeSubscribers === 0 &&
+                    timeSinceRequested >= this.SUBSCRIPTION_IDLE_TIMEOUT_MS &&
+                    timeSinceEmission >= this.SUBSCRIPTION_IDLE_TIMEOUT_MS;
+
+                if (shouldCleanup) {
+                    console.log(`[GraphQLDataProvider] Marking session ${sessionId} for cleanup: ` +
+                        `activeSubscribers=${value.activeSubscribers}, ` +
+                        `timeSinceRequested=${Math.round(timeSinceRequested/1000)}s, ` +
+                        `timeSinceEmission=${Math.round(timeSinceEmission/1000)}s`);
+                    toRemove.push(sessionId);
+                }
+            });
+
+            // Complete subjects and unsubscribe from WebSocket
+            toRemove.forEach(sessionId => {
+                const entry = this._pushStatusSubjects.get(sessionId);
+                if (entry) {
+                    try {
+                        entry.subject.complete(); // Completes for ALL subscribers
+                        entry.subscription.unsubscribe(); // Closes WebSocket subscription
+                        this._pushStatusSubjects.delete(sessionId);
+                        console.log(`[GraphQLDataProvider] Cleaned up stale subscription for session: ${sessionId}`);
+                    } catch (e) {
+                        console.error(`[GraphQLDataProvider] Error cleaning up subscription for ${sessionId}:`, e);
+                    }
+                }
+            });
+
+            if (toRemove.length > 0) {
+                console.log(`[GraphQLDataProvider] Cleaned up ${toRemove.length} stale subscription(s)`);
+            }
+
+            // If no subscriptions remain and client is old, dispose of it
+            if (this._pushStatusSubjects.size === 0 && this._wsClient && this._wsClientCreatedAt) {
+                const clientAge = now - this._wsClientCreatedAt;
+                if (clientAge > this.WS_CLIENT_MAX_AGE_MS) {
+                    console.log('[GraphQLDataProvider] Disposing of idle WebSocket client');
+                    this.disposeWSClient();
+                }
+            }
+        } finally {
+            this._isCleaningUp = false;
+        }
+    }
+
     /**
      * Generic subscription method for GraphQL subscriptions
      * @param subscription The GraphQL subscription query
@@ -1797,18 +1959,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns Observable that emits subscription data
      */
     public subscribe(subscription: string, variables?: any): Observable<any> {
-        // Ensure websocket client is initialized
-        if (!this._wsClient) {
-            this._wsClient = createClient({
-                url: this.ConfigData.WSURL,
-                connectionParams: {
-                    Authorization: 'Bearer ' + this.ConfigData.Token,
-                },
-            });
-        }
-
         return new Observable((observer) => {
-            const unsubscribe = this._wsClient.subscribe(
+            const client = this.getOrCreateWSClient();
+            this._activeSubscriptionCount++;
+
+            const unsubscribe = client.subscribe(
                 { query: subscription, variables },
                 {
                     next: (data) => {
@@ -1823,28 +1978,44 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             );
 
-            // Return cleanup function
+            // Return cleanup function - this is ALWAYS called when subscription ends
+            // whether by error, completion, or manual unsubscribe
             return () => {
+                this._activeSubscriptionCount--;
                 unsubscribe();
             };
         });
     }
-    
+
     public PushStatusUpdates(sessionId: string = null): Observable<string> {
         if (!sessionId)
             sessionId = this.sessionId;
 
-        if (!this._wsClient)
-            this._wsClient = createClient({
-                url: this.ConfigData.WSURL,
-                connectionParams: {
-                    Authorization: 'Bearer ' + this.ConfigData.Token,
-                },
-            });
+        const now = Date.now();
 
-        const existingRequest = this._pushStatusRequests.find(r => r.sessionId === sessionId);
-        if (existingRequest)
-            return existingRequest.observable;
+        // Check for existing subject
+        const existing = this._pushStatusSubjects.get(sessionId);
+        if (existing) {
+            // Update last requested time
+            existing.lastRequestedAt = now;
+            // Wrap with defer to increment on subscribe and finalize to decrement on unsubscribe
+            return new Observable<string>((observer) => {
+                // Increment subscriber count when Observable is subscribed to
+                existing.activeSubscribers++;
+
+                // Subscribe to the underlying Subject
+                const subscription = existing.subject.subscribe(observer);
+
+                // Return teardown function that decrements count
+                return () => {
+                    const entry = this._pushStatusSubjects.get(sessionId);
+                    if (entry && entry.activeSubscribers > 0) {
+                        entry.activeSubscribers--;
+                    }
+                    subscription.unsubscribe();
+                };
+            });
+        }
 
         const SUBSCRIBE_TO_STATUS = gql`subscription StatusUpdates($sessionId: String!) {
             statusUpdates(sessionId: $sessionId) {
@@ -1855,31 +2026,108 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         `;
 
-        const newObservable = new Observable<string>((observer) => {
-            const unsubscribe = this._wsClient.subscribe(
-              { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
-              {
-                next: (data: any) => {
-                    // Extract the message field from the statusUpdates object
-                    // data.data.statusUpdates = { message: string, date: Date, sessionId: string }
-                    return observer.next(data.data.statusUpdates.message)
-                },
+        // Create new Subject for status updates (no buffering - status updates are ephemeral)
+        const subject = new Subject<string>();
+        const client = this.getOrCreateWSClient();
+
+        // Subscribe to WebSocket and pipe data to Subject
+        const subscription = new Subscription();
+        subscription.add(
+            new Observable((observer) => {
+                const unsubscribe = client.subscribe(
+                    { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
+                    {
+                        next: (data: any) => {
+                            // Update last emission time
+                            const entry = this._pushStatusSubjects.get(sessionId);
+                            if (entry) {
+                                entry.lastEmissionAt = Date.now();
+                            }
+                            // Extract the message and emit to subject
+                            observer.next(data.data.statusUpdates.message);
+                        },
+                        error: (error) => {
+                            observer.error(error);
+                        },
+                        complete: () => {
+                            observer.complete();
+                        },
+                    }
+                );
+
+                // Increment AFTER successful subscription setup
+                this._activeSubscriptionCount++;
+
+                return () => {
+                    this._activeSubscriptionCount--;
+                    unsubscribe();
+                };
+            }).subscribe({
+                next: (message: string) => subject.next(message),
                 error: (error) => {
-                    return observer.error(error)
+                    // On error, complete subject and remove from cache
+                    subject.error(error);
+                    this._pushStatusSubjects.delete(sessionId);
                 },
                 complete: () => {
-                    return observer.complete()
-                },
-              }
-            );
+                    // On completion, complete subject and remove from cache
+                    subject.complete();
+                    this._pushStatusSubjects.delete(sessionId);
+                }
+            })
+        );
 
+        // Store subject with tracking data
+        this._pushStatusSubjects.set(sessionId, {
+            subject,
+            subscription,
+            createdAt: now,
+            lastRequestedAt: now,
+            lastEmissionAt: now,
+            activeSubscribers: 0  // Will be incremented when first component subscribes
+        });
+
+        // Wrap return Observable to track subscribers
+        return new Observable<string>((observer) => {
+            // Increment subscriber count when Observable is subscribed to
+            const entry = this._pushStatusSubjects.get(sessionId);
+            if (entry) {
+                entry.activeSubscribers++;
+            }
+
+            // Subscribe to the underlying Subject
+            const sub = subject.subscribe(observer);
+
+            // Return teardown function that decrements count
             return () => {
-              // Cleanup logic
-              unsubscribe();
+                const entry = this._pushStatusSubjects.get(sessionId);
+                if (entry && entry.activeSubscribers > 0) {
+                    entry.activeSubscribers--;
+                }
+                sub.unsubscribe();
             };
         });
-        this._pushStatusRequests.push({sessionId, observable: newObservable});
-        return newObservable;
+    }
+
+    /**
+     * Public method to dispose of WebSocket resources
+     * Call this when shutting down the provider or on logout
+     */
+    public disposeWebSocketResources(): void {
+        // Stop cleanup timer
+        if (this._subscriptionCleanupTimer) {
+            clearInterval(this._subscriptionCleanupTimer);
+            this._subscriptionCleanupTimer = null;
+        }
+
+        // Complete all subjects and clear cache
+        this.completeAllSubjects();
+
+        // Reset counters
+        this._activeSubscriptionCount = 0;
+
+        // Dispose WebSocket client
+        this.disposeWSClient();
     }
 }
 

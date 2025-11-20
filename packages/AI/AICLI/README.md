@@ -18,10 +18,11 @@ A fully functional command-line interface for executing MemberJunction AI agents
 - ✅ Direct prompt execution with any AI model
 - ✅ Interactive chat mode with agents
 - ✅ Comprehensive error handling and logging
-- ✅ Multiple output formats (compact, table, JSON)
+- ✅ Multiple output formats (compact, table, JSON, markdown)
 - ✅ Real-time progress tracking with visual indicators
 - ✅ Advanced text formatting for improved readability
 - ✅ Full conversation context in chat mode
+- ✅ Agent run auditing and debugging tools
 
 ## Installation
 
@@ -163,17 +164,37 @@ The chat mode maintains full conversation context:
 - Supports natural back-and-forth dialogue
 - Exit with "exit", "quit", or Ctrl+C
 
+### Agent Run Auditing
+
+The AgentAuditService provides comprehensive debugging and performance analysis tools for AI agent executions. This service is exposed through the MJCLI `mj ai audit agent-run` command.
+
+**Key Features:**
+- **List Recent Runs**: Filter by agent name, status, and date range
+- **Run Summaries**: High-level overview with step list and identifiable IDs
+- **Step Detail Analysis**: Deep dive into specific step inputs/outputs with smart truncation
+- **Error Analysis**: Automatic error pattern detection with suggested fixes
+- **Multiple Output Formats**: Compact, JSON, table, markdown
+- **Token Management**: Smart truncation prevents overwhelming large payloads (configurable with `--max-tokens`)
+- **Export Capabilities**: Full data export to JSON files for offline analysis
+
+**Smart Truncation:**
+The audit system automatically truncates large input/output payloads to prevent token overflow, showing the first 70% and last 30% of content with a truncation indicator. This is especially useful for Skip-Brain agents that generate large component payloads.
+
+**Performance Optimization:**
+All audit queries use `ResultType: 'simple'` for optimal read-only performance, avoiding unnecessary entity object instantiation overhead.
+
 ## Architecture
 
 The CLI follows the MetadataSync pattern with:
 
-- **Service Layer**: AgentService, ActionService, ValidationService
+- **Service Layer**: AgentService, ActionService, ValidationService, AgentAuditService
 - **Infrastructure**: MJ Provider with database integration
 - **Logging**: Comprehensive execution tracking with file output
 - **Error Handling**: User-friendly error messages with next steps
 - **Configuration**: Automatic mj.config.cjs detection and loading
 - **Text Formatting**: Advanced console output formatting with TextFormatter
 - **Progress Tracking**: Real-time execution status with visual indicators
+- **Audit & Analysis**: AgentAuditService for debugging and performance analysis
 
 ### Design Decisions
 
