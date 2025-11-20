@@ -122,21 +122,17 @@ export class AgentContextInjector {
      * Query examples using multi-dimensional scoping priority
      */
     private async queryExamplesWithScoping(params: GetExamplesParams): Promise<AIAgentExampleEntity[]> {
-        const filter = this.buildExamplesScopingFilter(params);
-        const orderBy = params.strategy === 'Rated'
-            ? 'SuccessScore DESC, __mj_CreatedAt DESC'
-            : '__mj_CreatedAt DESC';
+        // Use cached data from AIEngine instead of database query
+        const allExamples = AIEngine.Instance.AgentExamples;
 
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentExampleEntity>({
-            EntityName: 'MJ: AI Agent Examples',
-            ExtraFilter: filter,
-            OrderBy: orderBy,
-            MaxRows: params.maxExamples,
-            ResultType: 'entity_object'
-        }, params.contextUser);
+        // Filter examples matching our scoping criteria
+        const filtered = this.filterExamplesByScoping(allExamples, params);
 
-        return result.Success ? (result.Results || []) : [];
+        // Sort based on strategy
+        const sorted = this.sortExamples(filtered, params.strategy);
+
+        // Return top N results
+        return sorted.slice(0, params.maxExamples);
     }
 
     /**
@@ -194,40 +190,69 @@ export class AgentContextInjector {
     }
 
     /**
-     * Build filter with scoping priority for examples
+     * Filter examples using multi-dimensional scoping priority.
+     * Implements 4-level scoping hierarchy for examples (examples are always agent-specific).
      */
-    private buildExamplesScopingFilter(params: GetExamplesParams): string {
-        const filters: string[] = ['Status = \'Active\''];
+    private filterExamplesByScoping(examples: AIAgentExampleEntity[], params: GetExamplesParams): AIAgentExampleEntity[] {
+        return examples.filter(example => {
+            // Must be active
+            if (example.Status !== 'Active') {
+                return false;
+            }
 
-        // Examples are always agent-specific (AgentID is NOT NULL in schema)
-        filters.push(`AgentID='${params.agentId}'`);
+            // Must match the agent
+            if (example.AgentID !== params.agentId) {
+                return false;
+            }
 
-        // Build additional scoping
-        const scopeConditions: string[] = [];
+            // Check scoping priority (any of these conditions can match)
+            const matchesPriority1 = params.userId && params.companyId &&
+                example.UserID === params.userId && example.CompanyID === params.companyId;
 
-        // Priority 1: Agent + User + Company
-        if (params.userId && params.companyId) {
-            scopeConditions.push(`(UserID='${params.userId}' AND CompanyID='${params.companyId}')`);
+            const matchesPriority2 = params.userId &&
+                example.UserID === params.userId && example.CompanyID == null;
+
+            const matchesPriority3 = params.companyId &&
+                example.UserID == null && example.CompanyID === params.companyId;
+
+            const matchesPriority4 = example.UserID == null && example.CompanyID == null;
+
+            return matchesPriority1 || matchesPriority2 || matchesPriority3 || matchesPriority4;
+        });
+    }
+
+    /**
+     * Sort examples based on the specified strategy
+     */
+    private sortExamples(examples: AIAgentExampleEntity[], strategy: 'Semantic' | 'Recent' | 'Rated'): AIAgentExampleEntity[] {
+        // Create a copy to avoid mutating the original array
+        const sorted = [...examples];
+
+        if (strategy === 'Rated') {
+            // Sort by SuccessScore DESC, then by creation date DESC
+            sorted.sort((a, b) => {
+                const scoreA = a.SuccessScore ?? 0;
+                const scoreB = b.SuccessScore ?? 0;
+
+                if (scoreB !== scoreA) {
+                    return scoreB - scoreA;
+                }
+
+                // Tie-breaker: most recent first
+                const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
+                const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+                return dateB - dateA;
+            });
+        } else {
+            // 'Recent' strategy (or default): sort by creation date DESC
+            sorted.sort((a, b) => {
+                const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
+                const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+                return dateB - dateA;
+            });
         }
 
-        // Priority 2: Agent + User
-        if (params.userId) {
-            scopeConditions.push(`(UserID='${params.userId}' AND CompanyID IS NULL)`);
-        }
-
-        // Priority 3: Agent + Company
-        if (params.companyId) {
-            scopeConditions.push(`(UserID IS NULL AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 4: Agent only
-        scopeConditions.push(`(UserID IS NULL AND CompanyID IS NULL)`);
-
-        if (scopeConditions.length > 0) {
-            filters.push(`(${scopeConditions.join(' OR ')})`);
-        }
-
-        return filters.join(' AND ');
+        return sorted;
     }
 
     /**
