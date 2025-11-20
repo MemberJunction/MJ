@@ -1,5 +1,23 @@
 # @memberjunction/ai-agents
 
+## 2.120.0
+
+### Patch Changes
+
+- 3074b66: Add agent run auditing and debugging tools, enhance AI agent execution history with search and pagination, improve query parameter extraction and validation, and add linter validation for missing query names
+- Updated dependencies [3074b66]
+- Updated dependencies [60a1831]
+- Updated dependencies [5dc805c]
+  - @memberjunction/core@2.120.0
+  - @memberjunction/ai-core-plus@2.120.0
+  - @memberjunction/aiengine@2.120.0
+  - @memberjunction/ai-prompts@2.120.0
+  - @memberjunction/actions-base@2.120.0
+  - @memberjunction/actions@2.120.0
+  - @memberjunction/core-entities@2.120.0
+  - @memberjunction/ai@2.120.0
+  - @memberjunction/global@2.120.0
+
 ## 2.119.0
 
 ### Minor Changes

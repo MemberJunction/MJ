@@ -1,5 +1,29 @@
 # @memberjunction/ai-cli
 
+## 2.120.0
+
+### Patch Changes
+
+- 3074b66: Add agent run auditing and debugging tools, enhance AI agent execution history with search and pagination, improve query parameter extraction and validation, and add linter validation for missing query names
+- Updated dependencies [3074b66]
+- Updated dependencies [60a1831]
+- Updated dependencies [5dc805c]
+  - @memberjunction/core@2.120.0
+  - @memberjunction/ai-agents@2.120.0
+  - @memberjunction/ai-prompts@2.120.0
+  - @memberjunction/core-actions@2.120.0
+  - @memberjunction/actions@2.120.0
+  - @memberjunction/core-entities@2.120.0
+  - @memberjunction/core-entities-server@2.120.0
+  - @memberjunction/sqlserver-dataprovider@2.120.0
+  - @memberjunction/ai@2.120.0
+  - @memberjunction/ai-anthropic@2.120.0
+  - @memberjunction/ai-betty-bot@2.120.0
+  - @memberjunction/ai-cerebras@2.120.0
+  - @memberjunction/ai-groq@2.120.0
+  - @memberjunction/ai-mistral@2.120.0
+  - @memberjunction/ai-openai@2.120.0
+
 ## 2.119.0
 
 ### Patch Changes

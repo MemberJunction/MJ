@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.120.0
+
+### Patch Changes
+
+- Updated dependencies [3074b66]
+- Updated dependencies [60a1831]
+- Updated dependencies [5dc805c]
+  - @memberjunction/core@2.120.0
+  - @memberjunction/ai-agents@2.120.0
+  - @memberjunction/ai-engine-base@2.120.0
+  - @memberjunction/ai-core-plus@2.120.0
+  - @memberjunction/aiengine@2.120.0
+  - @memberjunction/ai-vector-sync@2.120.0
+  - @memberjunction/code-execution@2.120.0
+  - @memberjunction/actions@2.120.0
+  - @memberjunction/communication-engine@2.120.0
+  - @memberjunction/content-autotagging@2.120.0
+  - @memberjunction/external-change-detection@2.120.0
+  - @memberjunction/core-entities@2.120.0
+  - @memberjunction/core-entities-server@2.120.0
+  - @memberjunction/storage@2.120.0
+  - @memberjunction/sqlserver-dataprovider@2.120.0
+  - @memberjunction/global@2.120.0
+
 ## 2.119.0
 
 ### Patch Changes
