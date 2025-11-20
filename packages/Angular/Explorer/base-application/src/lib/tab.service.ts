@@ -1,0 +1,107 @@
+import { Injectable } from '@angular/core';
+import { Subject, Observable } from 'rxjs';
+import { TabRequest } from './interfaces/tab-request.interface';
+
+/**
+ * Service for requesting tabs to be opened.
+ *
+ * This service provides a way for any component in the app to request
+ * that a new tab be opened without needing direct access to the
+ * WorkspaceStateManager.
+ */
+@Injectable({
+  providedIn: 'root'
+})
+export class TabService {
+  private tabRequest$ = new Subject<TabRequest>();
+
+  /**
+   * Observable of tab open requests
+   */
+  get TabRequests(): Observable<TabRequest> {
+    return this.tabRequest$.asObservable();
+  }
+
+  /**
+   * Request that a new tab be opened
+   */
+  OpenTab(request: TabRequest): void {
+    this.tabRequest$.next(request);
+  }
+
+  /**
+   * Helper method to open a record in a tab
+   */
+  OpenRecord(entityName: string, recordId: string, applicationId: string): void {
+    this.OpenTab({
+      ApplicationId: applicationId,
+      Title: `${entityName}`,
+      Route: `/record/${entityName}/${recordId}`,
+      Configuration: {
+        resourceType: 'record',
+        entityName,
+        recordId
+      }
+    });
+  }
+
+  /**
+   * Helper method to open a view in a tab
+   */
+  OpenView(viewId: string, viewName: string, applicationId: string): void {
+    this.OpenTab({
+      ApplicationId: applicationId,
+      Title: viewName,
+      Route: `/view/${viewId}`,
+      Configuration: {
+        resourceType: 'view',
+        viewId
+      }
+    });
+  }
+
+  /**
+   * Helper method to open a dashboard in a tab
+   */
+  OpenDashboard(dashboardId: string, dashboardName: string, applicationId: string): void {
+    this.OpenTab({
+      ApplicationId: applicationId,
+      Title: dashboardName,
+      Route: `/dashboard/${dashboardId}`,
+      Configuration: {
+        resourceType: 'dashboard',
+        dashboardId
+      }
+    });
+  }
+
+  /**
+   * Helper method to open a report in a tab
+   */
+  OpenReport(reportId: string, reportName: string, applicationId: string): void {
+    this.OpenTab({
+      ApplicationId: applicationId,
+      Title: reportName,
+      Route: `/report/${reportId}`,
+      Configuration: {
+        resourceType: 'report',
+        reportId
+      }
+    });
+  }
+
+  /**
+   * Helper method to open a query in a tab
+   */
+  OpenQuery(queryId: string, queryName: string, applicationId: string): void {
+    this.OpenTab({
+      ApplicationId: applicationId,
+      Title: queryName,
+      Route: `/query/${queryId}`,
+      Configuration: {
+        resourceType: 'query',
+        queryId
+      }
+    });
+  }
+}

@@ -10,6 +10,8 @@ import { TabRequest } from './interfaces/tab-request.interface';
  *
  * @example
  * ```typescript
+ * import { RegisterClass } from '@memberjunction/global';
+ *
  * @RegisterClass(BaseApplication, 'CRMApplication')
  * export class CRMApplication extends BaseApplication {
  *   override GetNavItems(): NavItem[] {
@@ -20,7 +22,7 @@ import { TabRequest } from './interfaces/tab-request.interface';
  * }
  * ```
  */
-@RegisterClass(BaseApplication, 'BaseApplication')
+@RegisterClass(BaseApplication)
 export class BaseApplication {
   /** Application ID from database */
   public ID: string = '';

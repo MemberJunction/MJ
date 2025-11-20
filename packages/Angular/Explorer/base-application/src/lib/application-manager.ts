@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { MJGlobal } from '@memberjunction/global';
-import { RunView } from '@memberjunction/core';
+import { MJGlobal, MJEventType } from '@memberjunction/global';
+import { Metadata, RunView, ApplicationInfo } from '@memberjunction/core';
 import { ApplicationEntity } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
@@ -56,9 +56,26 @@ export class ApplicationManager {
   }
 
   /**
-   * Initialize the application manager by loading all applications
+   * Initialize the application manager by subscribing to the LoggedIn event.
+   * Applications are loaded when the event fires, ensuring metadata is ready.
    */
-  async Initialize(): Promise<void> {
+  Initialize(): void {
+    if (this.initialized) {
+      return;
+    }
+
+    // Subscribe with replay (true) to catch the event even if it already fired
+    MJGlobal.Instance.GetEventListener(true).subscribe(event => {
+      if (event.event === MJEventType.LoggedIn) {
+        this.loadApplications();
+      }
+    });
+  }
+
+  /**
+   * Load applications from metadata and extended data
+   */
+  private async loadApplications(): Promise<void> {
     if (this.initialized) {
       return;
     }
@@ -66,6 +83,11 @@ export class ApplicationManager {
     this.loading$.next(true);
 
     try {
+      const md = new Metadata();
+      const appInfoList: ApplicationInfo[] = md.Applications;
+
+      // Get extended application data (Color, DefaultNavItems, ClassName) via RunView
+      // since these new columns aren't in the core ApplicationInfo class yet
       const rv = new RunView();
       const result = await rv.RunView<ApplicationEntity>({
         EntityName: 'Applications',
@@ -73,26 +95,31 @@ export class ApplicationManager {
         ResultType: 'entity_object'
       });
 
-      if (!result.Success) {
-        throw new Error(`Failed to load applications: ${result.ErrorMessage}`);
+      // Create a map for quick lookup of extended data
+      const extendedDataMap = new Map<string, ApplicationInfo>();
+      if (result.Success) {
+        for (const appEntity of appInfoList) {
+          extendedDataMap.set(appEntity.ID, appEntity);
+        }
       }
 
       const apps: BaseApplication[] = [];
-      for (const appEntity of result.Results) {
-        // Get new columns using Get() method since they may not be in typed properties yet
-        const className = appEntity.Get('ClassName') as string || 'BaseApplication';
-        const color = appEntity.Get('Color') as string || '#1976d2';
-        const defaultNavItems = appEntity.Get('DefaultNavItems') as string || '';
+      for (const appInfo of appInfoList) {
+        // Get extended data from RunView results
+        const appEntity = extendedDataMap.get(appInfo.ID);
+        const className = appEntity?.Get('ClassName') as string || 'BaseApplication';
+        const color = appEntity?.Get('Color') as string || '#1976d2';
+        const defaultNavItems = appEntity?.Get('DefaultNavItems') as string || '';
 
         // Create instance using ClassFactory (gets subclass if registered)
         const app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
           BaseApplication,
           className,
           {
-            ID: appEntity.ID,
-            Name: appEntity.Name,
-            Description: appEntity.Description || '',
-            Icon: appEntity.Icon || '',
+            ID: appInfo.ID,
+            Name: appInfo.Name,
+            Description: appInfo.Description || '',
+            Icon: appInfo.Icon || '',
             Color: color,
             DefaultNavItems: defaultNavItems,
             ClassName: className

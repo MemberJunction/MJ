@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import {
@@ -6,10 +6,9 @@ import {
   WorkspaceStateManager,
   GoldenLayoutManager,
   BaseApplication,
-  TabComponentState,
-  TabShownEvent
+  TabService
 } from '@memberjunction/ng-base-application';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 import { AppSwitcherComponent } from './components/header/app-switcher.component';
 import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -44,13 +43,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private appManager: ApplicationManager,
     private workspaceManager: WorkspaceStateManager,
-    private layoutManager: GoldenLayoutManager
+    private layoutManager: GoldenLayoutManager,
+    private tabService: TabService
   ) {}
 
   async ngOnInit(): Promise<void> {
     try {
-      // Initialize application manager
-      await this.appManager.Initialize();
+      // Initialize application manager (subscribes to LoggedIn event)
+      this.appManager.Initialize();
 
       // Get current user and initialize workspace
       const md = new Metadata();
@@ -66,11 +66,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         })
       );
 
-      // Set first app as active if none selected
-      const apps = this.appManager.GetAllApps();
-      if (apps.length > 0 && !this.appManager.GetActiveApp()) {
-        await this.appManager.SetActiveApp(apps[0].ID);
-      }
+      // Subscribe to applications loading - set first app as active when loaded
+      this.subscriptions.push(
+        this.appManager.Applications.subscribe(async apps => {
+          if (apps.length > 0 && !this.appManager.GetActiveApp()) {
+            await this.appManager.SetActiveApp(apps[0].ID);
+          }
+        })
+      );
+
+      // Subscribe to tab open requests from TabService
+      this.subscriptions.push(
+        this.tabService.TabRequests.subscribe(request => {
+          const app = this.appManager.GetAppById(request.ApplicationId);
+          const appColor = app?.GetColor() || '#757575';
+          this.workspaceManager.OpenTab(request, appColor);
+        })
+      );
 
       this.initialized = true;
     } catch (error) {

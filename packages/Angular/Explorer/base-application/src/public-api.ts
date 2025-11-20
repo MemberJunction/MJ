@@ -10,6 +10,7 @@ export * from './lib/base-application';
 export * from './lib/application-manager';
 export * from './lib/workspace-state-manager';
 export * from './lib/golden-layout-manager';
+export * from './lib/tab.service';
 
 // Interfaces
 export * from './lib/interfaces/nav-item.interface';

@@ -5,7 +5,9 @@ import {
   AfterViewInit,
   ViewChild,
   ElementRef,
-  ViewContainerRef,
+  ApplicationRef,
+  EnvironmentInjector,
+  createComponent,
   ComponentRef
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -18,6 +20,10 @@ import {
   TabShownEvent,
   WorkspaceTab
 } from '@memberjunction/ng-base-application';
+import { MJGlobal } from '@memberjunction/global';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
+import { LogError } from '@memberjunction/core';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -41,6 +47,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private subscriptions: Subscription[] = [];
 
+  // Track component references for cleanup
+  private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
+
   // Context menu state
   contextMenuVisible = false;
   contextMenuX = 0;
@@ -50,7 +59,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private layoutManager: GoldenLayoutManager,
     private workspaceManager: WorkspaceStateManager,
-    private appManager: ApplicationManager
+    private appManager: ApplicationManager,
+    private appRef: ApplicationRef,
+    private environmentInjector: EnvironmentInjector
   ) {}
 
   ngOnInit(): void {
@@ -60,6 +71,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         this.onTabShown(event);
       }),
       this.layoutManager.TabClosed.subscribe(tabId => {
+        this.cleanupTabComponent(tabId);
         this.workspaceManager.CloseTab(tabId);
       }),
       this.layoutManager.LayoutChanged.subscribe(event => {
@@ -109,6 +121,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
+
+    // Cleanup all dynamic components
+    this.componentRefs.forEach((ref, tabId) => {
+      this.cleanupTabComponent(tabId);
+    });
+    this.componentRefs.clear();
   }
 
   /**
@@ -146,11 +164,155 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Load content into a tab container
    */
   private loadTabContent(tabId: string, container: unknown): void {
-    // TODO: Implement dynamic component loading based on route
-    // This will use Angular's ViewContainerRef to create components
-    const tab = this.workspaceManager.GetTab(tabId);
-    if (tab) {
-      console.log('Loading content for tab:', tab.title, tab.configuration);
+    try {
+      const tab = this.workspaceManager.GetTab(tabId);
+      if (!tab) {
+        LogError(`Tab not found: ${tabId}`);
+        return;
+      }
+
+      // Get the container element from Golden Layout
+      const glContainer = container as { element: HTMLElement };
+      if (!glContainer?.element) {
+        LogError('Golden Layout container element not found');
+        return;
+      }
+
+      // Extract resource data from tab configuration
+      const resourceData = this.getResourceDataFromTab(tab);
+      if (!resourceData) {
+        LogError(`Unable to create ResourceData for tab: ${tab.title}`);
+        return;
+      }
+
+      // Get the component registration for this resource type
+      const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+        BaseResourceComponent,
+        resourceData.ResourceType
+      );
+
+      if (!resourceReg) {
+        LogError(`Unable to find resource registration for ${resourceData.ResourceType}`);
+        return;
+      }
+
+      // Create the component dynamically
+      const componentRef = createComponent(resourceReg.SubClass, {
+        environmentInjector: this.environmentInjector
+      });
+
+      // Attach to Angular's change detection
+      this.appRef.attachView(componentRef.hostView);
+
+      // Set the resource data on the component
+      const instance = componentRef.instance as BaseResourceComponent;
+      instance.Data = resourceData;
+
+      // Wire up events
+      instance.LoadCompleteEvent = () => {
+        console.log('Tab content loaded:', tab.title);
+      };
+
+      instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
+        // Update tab title if needed
+        if (entity && entity.Get && entity.Get('Name')) {
+          // TODO: Implement UpdateTabTitle in WorkspaceStateManager
+          console.log('Tab record saved:', entity.Get('Name'));
+        }
+      };
+
+      // Create a container div for the component
+      const componentElement = document.createElement('div');
+      componentElement.className = 'tab-content-wrapper';
+      componentElement.style.cssText = 'width: 100%; height: 100%; overflow: auto;';
+
+      // Append the component's native element
+      const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
+      componentElement.appendChild(nativeElement);
+
+      // Add to Golden Layout container
+      glContainer.element.appendChild(componentElement);
+
+      // Store reference for cleanup
+      this.componentRefs.set(tabId, componentRef as ComponentRef<BaseResourceComponent>);
+
+    } catch (e) {
+      LogError(e);
+    }
+  }
+
+  /**
+   * Convert tab configuration to ResourceData
+   */
+  private getResourceDataFromTab(tab: WorkspaceTab): ResourceData | null {
+    const config = tab.configuration;
+
+    // Extract resource type from configuration or route
+    let resourceType = config['resourceType'] as string;
+
+    if (!resourceType && config['route']) {
+      // Parse route to determine resource type
+      resourceType = this.getResourceTypeFromRoute(config['route'] as string);
+    }
+
+    if (!resourceType) {
+      return null;
+    }
+
+    // Create ResourceData object
+    const resourceData = new ResourceData({
+      ResourceType: resourceType,
+      ResourceRecordID: config['recordId'] as string || '',
+      Configuration: config
+    });
+
+    return resourceData;
+  }
+
+  /**
+   * Determine resource type from route
+   */
+  private getResourceTypeFromRoute(route: string): string {
+    // Parse route segments to determine resource type
+    const segments = route.split('/').filter(s => s);
+
+    if (segments.length === 0) {
+      return 'home';
+    }
+
+    // Common route patterns
+    if (route.includes('/record/')) {
+      return 'record';
+    }
+    if (route.includes('/view/')) {
+      return 'view';
+    }
+    if (route.includes('/dashboard/')) {
+      return 'dashboard';
+    }
+    if (route.includes('/report/')) {
+      return 'report';
+    }
+    if (route.includes('/search')) {
+      return 'search';
+    }
+    if (route.includes('/query/')) {
+      return 'query';
+    }
+
+    // Default based on first segment
+    return segments[0] || 'home';
+  }
+
+  /**
+   * Cleanup a tab's component
+   */
+  private cleanupTabComponent(tabId: string): void {
+    const componentRef = this.componentRefs.get(tabId);
+    if (componentRef) {
+      this.appRef.detachView(componentRef.hostView);
+      componentRef.destroy();
+      this.componentRefs.delete(tabId);
     }
   }
 
