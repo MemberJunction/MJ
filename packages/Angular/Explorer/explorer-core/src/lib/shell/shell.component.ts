@@ -12,6 +12,7 @@ import { Metadata } from '@memberjunction/core';
 import { AppSwitcherComponent } from './components/header/app-switcher.component';
 import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -49,47 +50,63 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      // Initialize application manager (subscribes to LoggedIn event)
-      this.appManager.Initialize();
-
-      // Get current user and initialize workspace
-      const md = new Metadata();
-      const user = md.CurrentUser;
-      if (user) {
-        await this.workspaceManager.Initialize(user.ID);
-      }
-
-      // Subscribe to active app changes
-      this.subscriptions.push(
-        this.appManager.ActiveApp.subscribe(app => {
-          this.activeApp = app;
-        })
-      );
-
-      // Subscribe to applications loading - set first app as active when loaded
-      this.subscriptions.push(
-        this.appManager.Applications.subscribe(async apps => {
-          if (apps.length > 0 && !this.appManager.GetActiveApp()) {
-            await this.appManager.SetActiveApp(apps[0].ID);
-          }
-        })
-      );
-
-      // Subscribe to tab open requests from TabService
-      this.subscriptions.push(
-        this.tabService.TabRequests.subscribe(request => {
-          const app = this.appManager.GetAppById(request.ApplicationId);
-          const appColor = app?.GetColor() || '#757575';
-          this.workspaceManager.OpenTab(request, appColor);
-        })
-      );
-
-      this.initialized = true;
+      MJGlobal.Instance.GetEventListener(true).subscribe(event => {
+        if (event.event === MJEventType.LoggedIn) {
+          // Initialize shell on login
+          this.initializeShell().catch(err => {
+            console.error('Error during shell initialization:', err);
+            this.loading = false;
+          });
+        }
+      });
     } catch (error) {
       console.error('Failed to initialize shell:', error);
-    } finally {
       this.loading = false;
     }
+  }
+
+  async initializeShell(): Promise<void> {
+    // Initialize application manager (subscribes to LoggedIn event)
+    this.appManager.Initialize();
+
+    // Get current user and initialize workspace
+    const md = new Metadata();
+    const user = md.CurrentUser;
+    if (user) {
+      // CRITICAL: Wait for workspace initialization to complete
+      // before allowing any tab operations
+      await this.workspaceManager.Initialize(user.ID);
+    } else {
+      throw new Error('No current user found');
+    }
+
+    // Subscribe to active app changes
+    this.subscriptions.push(
+      this.appManager.ActiveApp.subscribe(app => {
+        this.activeApp = app;
+      })
+    );
+
+    // Subscribe to applications loading - set first app as active when loaded
+    this.subscriptions.push(
+      this.appManager.Applications.subscribe(async apps => {
+        if (apps.length > 0 && !this.appManager.GetActiveApp()) {
+          await this.appManager.SetActiveApp(apps[0].ID);
+        }
+      })
+    );
+
+    // Subscribe to tab open requests from TabService
+    this.subscriptions.push(
+      this.tabService.TabRequests.subscribe(request => {
+        const app = this.appManager.GetAppById(request.ApplicationId);
+        const appColor = app?.GetColor() || '#757575';
+        this.workspaceManager.OpenTab(request, appColor);
+      })
+    );
+
+    this.initialized = true;
+    this.loading = false;
   }
 
   ngAfterViewInit(): void {
