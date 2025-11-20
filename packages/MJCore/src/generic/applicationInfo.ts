@@ -160,6 +160,32 @@ export class ApplicationInfo extends BaseInfo {
      */
     SchemaAutoAddNewEntities: string = null
 
+    /**
+     * Timestamp when the record was created
+     */
+    __mj_CreatedAt: Date = null; 
+
+    /**
+     * Timestamp when the record was last updated
+     */
+    __mj_UpdatedAt: Date = null; 
+    
+    /**
+    * Hex color code for visual theming (e.g., #4caf50)
+    */
+    Color: string = null;
+
+    /**
+    * JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
+    */
+    DefaultNavItems: string = null;
+
+    /**
+    * TypeScript class name for ClassFactory registration (e.g., CRMApplication)
+    */
+    ClassName: string = null;
+
+        
     private _ApplicationEntities: ApplicationEntityInfo[] = []
     /**
      * Gets the list of entities that belong to this application with their display sequence.
@@ -202,6 +228,5 @@ export class ApplicationInfo extends BaseInfo {
                 this._ApplicationSettings = as.map(s => new ApplicationSettingInfo(s));
         }
     }
-
 }
  
