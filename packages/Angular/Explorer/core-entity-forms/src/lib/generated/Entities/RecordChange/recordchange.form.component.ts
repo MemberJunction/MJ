@@ -17,6 +17,7 @@ export class RecordChangeFormComponent extends BaseFormComponent {
             { sectionKey: 'recordContext', sectionName: 'Record Context', isExpanded: true },
             { sectionKey: 'changeSummary', sectionName: 'Change Summary', isExpanded: true },
             { sectionKey: 'changeContent', sectionName: 'Change Content', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

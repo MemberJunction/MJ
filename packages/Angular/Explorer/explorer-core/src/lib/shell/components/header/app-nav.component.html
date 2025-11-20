@@ -1,0 +1,11 @@
+<nav class="nav-list" [style.--app-color]="appColor">
+  <div
+    *ngFor="let item of navItems"
+    class="nav-item"
+    [class.active]="isActive(item)"
+    (click)="onNavClick(item)">
+    <i *ngIf="item.Icon" [class]="item.Icon"></i>
+    <span>{{ item.Label }}</span>
+    <span *ngIf="item.Badge" class="badge">{{ item.Badge }}</span>
+  </div>
+</nav>

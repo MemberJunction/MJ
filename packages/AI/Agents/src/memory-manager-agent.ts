@@ -83,14 +83,9 @@ export class MemoryManagerAgent extends BaseAgent {
      * Only extract notes/examples for agents that actually use these features.
      */
     private async LoadAgentsUsingMemory(contextUser: UserInfo): Promise<AIAgentEntityExtended[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentEntityExtended>({
-            EntityName: 'AI Agents',
-            ExtraFilter: `Status='Active' AND (InjectNotes=1 OR InjectExamples=1)`,
-            ResultType: 'entity_object'
-        }, contextUser);
+        const filteredAgents = AIEngine.Instance.Agents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
 
-        return result.Success ? (result.Results || []) : [];
+        return filteredAgents;
     }
 
     /**
@@ -199,16 +194,8 @@ export class MemoryManagerAgent extends BaseAgent {
             return [];
         }
 
-        // Load existing notes for comparison
-        const rv = new RunView();
-        const existingNotesResult = await rv.RunView<AIAgentNoteEntity>({
-            EntityName: 'AI Agent Notes',
-            ExtraFilter: `Status='Active'`,
-            MaxRows: 1000,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        const existingNotes = existingNotesResult.Success ? (existingNotesResult.Results || []) : [];
+        const allNotes = AIEngine.Instance.AgentNotes;
+        const existingNotes = allNotes.filter(n => n.Status === 'Active');
 
         // Group conversation details by conversation ID for context
         const detailsByConversation = new Map<string, ConversationDetailEntity[]>();
@@ -322,7 +309,6 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Load existing examples for each agent to compare
-        const rv = new RunView();
         const approvedExamples: ExtractedExample[] = [];
 
         // Process each candidate example with LLM-based deduplication
@@ -428,7 +414,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
         for (const extracted of extractedExamples) {
             try {
-                const example = await md.GetEntityObject<AIAgentExampleEntity>('AI Agent Examples', contextUser);
+                const example = await md.GetEntityObject<AIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
                 example.AgentID = extracted.agentId;
                 example.UserID = extracted.userId || null;
                 example.CompanyID = extracted.companyId || null;

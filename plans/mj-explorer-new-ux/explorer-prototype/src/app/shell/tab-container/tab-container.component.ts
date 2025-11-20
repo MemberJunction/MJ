@@ -162,7 +162,42 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Save layout configuration whenever it changes
     this.layout.on('stateChanged', () => {
       this.saveLayoutConfig();
+      // Reapply styles to all tabs after layout changes (handles drag/drop)
+      this.refreshAllTabStyles();
     });
+  }
+
+  private refreshAllTabStyles(): void {
+    // Wait for DOM to settle after Golden Layout operations
+    setTimeout(() => {
+      if (!this.layout || !this.layout.rootItem) return;
+
+      // Find all component items
+      const getAllComponents = (item: any): any[] => {
+        let components: any[] = [];
+        if (item.type === 'component') {
+          components.push(item);
+        } else if (item.contentItems) {
+          for (const child of item.contentItems) {
+            components = components.concat(getAllComponents(child));
+          }
+        }
+        return components;
+      };
+
+      const currentItems = getAllComponents(this.layout.rootItem);
+
+      // Reapply styles to each tab
+      currentItems.forEach((item: any) => {
+        const state = item.container?.state as TabComponentState | undefined;
+        if (state?.tabId) {
+          const tabElement = this.findTabElementByContainer(item.container);
+          if (tabElement) {
+            this.updateTabStyle(tabElement, state.tabId, state.appColor);
+          }
+        }
+      });
+    }, 50);
   }
 
   private loadDefaultLayout(tabs: TabState[]): void {
@@ -267,13 +302,22 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Handle double-click on tab header to toggle permanent status
     // We need to wait for the tab element to be created, then attach the listener
     setTimeout(() => {
-      const tabElement = this.findTabElement(container);
+      const tabElement = this.findTabElementByContainer(container);
       if (tabElement) {
+        // Double-click to pin/unpin
         tabElement.addEventListener('dblclick', (e: Event) => {
           e.stopPropagation();
           this.shellService.ToggleTabPermanent(state.tabId);
           this.updateTabStyle(tabElement, state.tabId, state.appColor);
         });
+
+        // Right-click context menu
+        tabElement.addEventListener('contextmenu', (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.showTabContextMenu(e, state.tabId);
+        });
+
         // Set initial style based on permanent status and app color
         this.updateTabStyle(tabElement, state.tabId, state.appColor);
       }
@@ -300,14 +344,166 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     return null;
   }
 
+  // More reliable method to find tab element using Golden Layout's internal structure
+  private findTabElementByContainer(container: ComponentContainer): HTMLElement | null {
+    // Access Golden Layout's tab element through the component item
+    const componentItem = (container as any)._componentItem;
+    if (componentItem && componentItem.tab && componentItem.tab.element) {
+      return componentItem.tab.element as HTMLElement;
+    }
+    // Fallback to title matching
+    return this.findTabElement(container);
+  }
+
+  private showTabContextMenu(event: MouseEvent, tabId: string): void {
+    // Remove any existing context menu
+    this.removeContextMenu();
+
+    const tabs = this.shellService['tabs$'].value;
+    const tab = tabs.find(t => t.Id === tabId);
+    if (!tab) return;
+
+    // Create context menu
+    const menu = document.createElement('div');
+    menu.className = 'tab-context-menu';
+    menu.style.cssText = `
+      position: fixed;
+      top: ${event.clientY}px;
+      left: ${event.clientX}px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      padding: 4px 0;
+      z-index: 10000;
+      min-width: 150px;
+      font-size: 13px;
+    `;
+
+    // Pin/Unpin option
+    const pinOption = document.createElement('div');
+    pinOption.className = 'context-menu-item';
+    pinOption.innerHTML = tab.IsPermanent
+      ? '<i class="fa-solid fa-thumbtack" style="margin-right: 8px; width: 14px;"></i>Unpin Tab'
+      : '<i class="fa-solid fa-thumbtack" style="margin-right: 8px; width: 14px;"></i>Pin Tab';
+    pinOption.style.cssText = `
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      color: #424242;
+    `;
+    pinOption.addEventListener('mouseenter', () => pinOption.style.background = '#f5f5f5');
+    pinOption.addEventListener('mouseleave', () => pinOption.style.background = 'transparent');
+    pinOption.addEventListener('click', () => {
+      this.shellService.ToggleTabPermanent(tabId);
+      // Update the tab style
+      const tabElement = this.findTabElementById(tabId);
+      if (tabElement) {
+        const app = this.shellService.GetApp(tab.AppId);
+        this.updateTabStyle(tabElement, tabId, app?.Color);
+      }
+      this.removeContextMenu();
+    });
+
+    // Close option
+    const closeOption = document.createElement('div');
+    closeOption.className = 'context-menu-item';
+    closeOption.innerHTML = '<i class="fa-solid fa-xmark" style="margin-right: 8px; width: 14px;"></i>Close Tab';
+    closeOption.style.cssText = `
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      color: #424242;
+    `;
+    closeOption.addEventListener('mouseenter', () => closeOption.style.background = '#f5f5f5');
+    closeOption.addEventListener('mouseleave', () => closeOption.style.background = 'transparent');
+    closeOption.addEventListener('click', () => {
+      this.shellService.CloseTab(tabId);
+      this.removeContextMenu();
+    });
+
+    menu.appendChild(pinOption);
+    menu.appendChild(closeOption);
+    document.body.appendChild(menu);
+
+    // Close menu when clicking outside
+    const closeMenu = (e: MouseEvent) => {
+      if (!menu.contains(e.target as Node)) {
+        this.removeContextMenu();
+        document.removeEventListener('click', closeMenu);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+  }
+
+  private removeContextMenu(): void {
+    const existingMenu = document.querySelector('.tab-context-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+  }
+
+  private findTabElementById(tabId: string): HTMLElement | null {
+    // Find tab element by searching through all tabs and matching the tabId in their state
+    const allTabs = document.querySelectorAll('.lm_tab');
+    const tabs = this.shellService['tabs$'].value;
+    const tab = tabs.find(t => t.Id === tabId);
+    if (!tab) return null;
+
+    for (let i = 0; i < allTabs.length; i++) {
+      const tabElement = allTabs[i] as HTMLElement;
+      const titleElement = tabElement.querySelector('.lm_title');
+      if (titleElement && titleElement.textContent === tab.Title) {
+        return tabElement;
+      }
+    }
+    return null;
+  }
+
   private updateTabStyle(tabElement: HTMLElement, tabId: string, appColor?: string): void {
     const tabs = this.shellService['tabs$'].value;
     const tab = tabs.find(t => t.Id === tabId);
+
     // VSCode behavior: only italic changes, font-weight stays constant
     if (tab?.IsPermanent) {
       tabElement.style.fontStyle = 'normal';
+      tabElement.classList.add('pinned');
+
+      // Add pin icon in the close button area if not already present
+      if (!tabElement.querySelector('.pin-icon')) {
+        const pinIcon = document.createElement('i');
+        pinIcon.className = 'fa-solid fa-thumbtack pin-icon';
+        pinIcon.style.cssText = `
+          position: absolute;
+          right: 4px;
+          top: 50%;
+          transform: translateY(-50%) rotate(45deg);
+          font-size: 9px;
+          color: #9e9e9e;
+          width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        `;
+        // Click on pin to unpin
+        pinIcon.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.shellService.ToggleTabPermanent(tabId);
+          this.updateTabStyle(tabElement, tabId, appColor);
+        });
+        tabElement.appendChild(pinIcon);
+      }
     } else {
       tabElement.style.fontStyle = 'italic';
+      tabElement.classList.remove('pinned');
+      // Remove pin icon if present
+      const pinIcon = tabElement.querySelector('.pin-icon');
+      if (pinIcon) {
+        pinIcon.remove();
+      }
     }
 
     // Apply app color as CSS variable for the accent indicator

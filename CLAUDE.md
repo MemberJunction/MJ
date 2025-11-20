@@ -27,6 +27,18 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
+### 4. NO STANDALONE COMPONENTS - EVER
+- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
+- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
+- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
+- When creating new components:
+  - Create or add to an NgModule
+  - Declare component in the module's `declarations` array
+  - Import `CommonModule` and other required modules in the module's `imports` array
+  - Export the component in the module's `exports` array if it needs to be used outside the module
+- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
+- This is **non-negotiable** - standalone components are strictly forbidden
+
 ---
 
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization

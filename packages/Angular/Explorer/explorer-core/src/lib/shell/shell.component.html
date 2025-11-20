@@ -1,0 +1,46 @@
+<div class="shell-container" *ngIf="!loading">
+  <!-- Header -->
+  <header class="shell-header">
+    <!-- App Switcher -->
+    <mj-app-switcher
+      [activeApp]="activeApp"
+      (appSelected)="onAppSwitch($event)">
+    </mj-app-switcher>
+
+    <!-- App Navigation -->
+    <mj-app-nav
+      *ngIf="activeApp"
+      [app]="activeApp"
+      (navItemClick)="onNavItemClick($event)">
+    </mj-app-nav>
+
+    <!-- Spacer -->
+    <div class="spacer"></div>
+
+    <!-- Actions (search, notifications, user menu) -->
+    <div class="header-actions">
+      <button class="icon-btn" title="Search">
+        <i class="fa-solid fa-search"></i>
+      </button>
+      <button class="icon-btn" title="Notifications">
+        <i class="fa-solid fa-bell"></i>
+      </button>
+      <div class="user-menu">
+        <button class="avatar-btn">
+          <i class="fa-solid fa-user"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tab Container -->
+  <mj-tab-container></mj-tab-container>
+</div>
+
+<!-- Loading State -->
+<div class="shell-loading" *ngIf="loading">
+  <div class="loading-spinner">
+    <i class="fa-solid fa-spinner fa-spin"></i>
+  </div>
+  <p>Loading workspace...</p>
+</div>
