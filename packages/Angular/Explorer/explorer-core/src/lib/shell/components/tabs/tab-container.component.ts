@@ -38,7 +38,7 @@ import { LogError } from '@memberjunction/core';
 @Component({
   selector: 'mj-tab-container',
   templateUrl: './tab-container.component.html',
-  styleUrls: ['./tab-container.component.scss'],
+  styleUrls: ['./tab-container.component.css'],
   encapsulation: ViewEncapsulation.None
 })
 export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {

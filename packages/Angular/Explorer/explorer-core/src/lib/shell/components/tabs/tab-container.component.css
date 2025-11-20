@@ -1,6 +1,9 @@
 :host {
   display: flex;
   flex: 1;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -66,16 +69,17 @@
 }
 
 /* Override Golden Layout styles */
-:host ::ng-deep .lm_content {
+/* Global overrides */
+mj-tab-container .lm_content {
   background: white !important;
 }
 
-:host ::ng-deep .lm_item_container {
+mj-tab-container .lm_item_container {
   background: white !important;
 }
 
 /* Make tabs larger and easier to click */
-:host ::ng-deep .lm_header {
+mj-tab-container .lm_header {
   height: 38px !important;
   padding-top: 2px !important;
   padding-left: 4px !important;
@@ -85,16 +89,16 @@
   box-sizing: border-box !important;
 }
 
-:host ::ng-deep .lm_tabs {
+mj-tab-container .lm_tabs {
   height: 36px !important;
 }
 
 /* Hide Golden Layout window controls */
-:host ::ng-deep .lm_controls {
+mj-tab-container .lm_controls {
   display: none !important;
 }
 
-:host ::ng-deep .lm_tab {
+mj-tab-container .lm_header .lm_tab {
   padding: 0 16px !important;
   font-size: 13px !important;
   height: 35px !important;
@@ -112,7 +116,7 @@
 }
 
 /* App color accent - left edge indicator */
-:host ::ng-deep .lm_tab::before {
+mj-tab-container .lm_header .lm_tab::before {
   content: '' !important;
   position: absolute !important;
   left: 0 !important;
@@ -125,19 +129,19 @@
   transition: all 0.15s ease !important;
 }
 
-:host ::ng-deep .lm_tab:hover {
+mj-tab-container .lm_header .lm_tab:hover {
   background: #e8e8e8 !important;
 }
 
-:host ::ng-deep .lm_tab:hover .lm_close_tab {
+mj-tab-container .lm_header .lm_tab:hover .lm_close_tab {
   opacity: 0.7 !important;
 }
 
-:host ::ng-deep .lm_tab:hover::before {
+mj-tab-container .lm_header .lm_tab:hover::before {
   opacity: 0.8 !important;
 }
 
-:host ::ng-deep .lm_tab.lm_active {
+mj-tab-container .lm_header .lm_tab.lm_active {
   background: white !important;
   height: 37px !important;
   margin-bottom: -1px !important;
@@ -149,7 +153,7 @@
 }
 
 /* Enhanced app color accent for active tab */
-:host ::ng-deep .lm_tab.lm_active::before {
+mj-tab-container .lm_header .lm_tab.lm_active::before {
   opacity: 1 !important;
   width: 3px !important;
   top: 2px !important;
@@ -157,12 +161,12 @@
   box-shadow: 0 0 6px var(--app-color, transparent) !important;
 }
 
-:host ::ng-deep .lm_title {
+mj-tab-container .lm_title {
   cursor: pointer !important;
   user-select: none !important;
 }
 
-:host ::ng-deep .lm_close_tab {
+mj-tab-container .lm_close_tab {
   position: absolute !important;
   right: 4px !important;
   top: 50% !important;
@@ -180,32 +184,32 @@
   color: #757575 !important;
 }
 
-:host ::ng-deep .lm_close_tab:hover {
+mj-tab-container .lm_close_tab:hover {
   opacity: 1 !important;
   color: #c62828 !important;
 }
 
 /* Show close button on hover (except pinned) */
-:host ::ng-deep .lm_tab:hover:not(.pinned) .lm_close_tab {
+mj-tab-container .lm_header .lm_tab:hover:not(.pinned) .lm_close_tab {
   opacity: 0.7 !important;
 }
 
 /* Pinned tabs never show close button */
-:host ::ng-deep .lm_tab.pinned .lm_close_tab {
+mj-tab-container .lm_header .lm_tab.pinned .lm_close_tab {
   display: none !important;
 }
 
 /* Hide close button on active tab by default */
-:host ::ng-deep .lm_active .lm_close_tab {
+mj-tab-container .lm_active .lm_close_tab {
   opacity: 0 !important;
 }
 
 /* Show close button when hovering active tab */
-:host ::ng-deep .lm_active:hover .lm_close_tab {
+mj-tab-container .lm_active:hover .lm_close_tab {
   opacity: 0.7 !important;
 }
 
 /* Adjust padding for close button */
-:host ::ng-deep .lm_tab {
+mj-tab-container .lm_header .lm_tab {
   padding-right: 24px !important;
 }
