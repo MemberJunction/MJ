@@ -1,0 +1,58 @@
+import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction/ng-base-application';
+
+/**
+ * Horizontal navigation items for the current app.
+ */
+@Component({
+  selector: 'mj-app-nav',
+  standalone: true,
+  imports: [CommonModule],
+  templateUrl: './app-nav.component.html',
+  styleUrls: ['./app-nav.component.scss']
+})
+export class AppNavComponent {
+  @Input() app: BaseApplication | null = null;
+  @Output() navItemClick = new EventEmitter<string>();
+
+  constructor(private workspaceManager: WorkspaceStateManager) {}
+
+  /**
+   * Get navigation items for current app
+   */
+  get navItems(): NavItem[] {
+    return this.app?.GetNavItems() || [];
+  }
+
+  /**
+   * Get app color for theming
+   */
+  get appColor(): string {
+    return this.app?.GetColor() || '#1976d2';
+  }
+
+  /**
+   * Handle nav item click
+   */
+  onNavClick(item: NavItem): void {
+    this.navItemClick.emit(item.Route);
+  }
+
+  /**
+   * Check if nav item is active (has matching tab)
+   */
+  isActive(item: NavItem): boolean {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config || !this.app) return false;
+
+    // Check if active tab matches this nav item
+    const activeTab = config.tabs.find(t => t.id === config.activeTabId);
+    if (activeTab && activeTab.applicationId === this.app.ID) {
+      // Simple route matching
+      return activeTab.configuration['route'] === item.Route ||
+             activeTab.title === item.Label;
+    }
+    return false;
+  }
+}

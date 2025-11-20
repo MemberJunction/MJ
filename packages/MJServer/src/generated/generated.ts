@@ -16650,6 +16650,17 @@ export class MJApplication_ {
     @Field({nullable: true, description: `Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas`}) 
     SchemaAutoAddNewEntities?: string;
         
+    @Field({nullable: true, description: `Hex color code for visual theming (e.g., #4caf50)`}) 
+    @MaxLength(40)
+    Color?: string;
+        
+    @Field({nullable: true, description: `JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`}) 
+    DefaultNavItems?: string;
+        
+    @Field({nullable: true, description: `TypeScript class name for ClassFactory registration (e.g., CRMApplication)`}) 
+    @MaxLength(510)
+    ClassName?: string;
+        
     @Field(() => [MJApplicationEntity_])
     ApplicationEntities_ApplicationIDArray: MJApplicationEntity_[]; // Link to ApplicationEntities
     
@@ -16689,6 +16700,15 @@ export class CreateMJApplicationInput {
 
     @Field({ nullable: true })
     SchemaAutoAddNewEntities: string | null;
+
+    @Field({ nullable: true })
+    Color: string | null;
+
+    @Field({ nullable: true })
+    DefaultNavItems: string | null;
+
+    @Field({ nullable: true })
+    ClassName: string | null;
 }
     
 
@@ -16714,6 +16734,15 @@ export class UpdateMJApplicationInput {
 
     @Field({ nullable: true })
     SchemaAutoAddNewEntities?: string | null;
+
+    @Field({ nullable: true })
+    Color?: string | null;
+
+    @Field({ nullable: true })
+    DefaultNavItems?: string | null;
+
+    @Field({ nullable: true })
+    ClassName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24956,6 +24985,9 @@ export class MJWorkspace_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(200)
     User: string;
@@ -24981,6 +25013,9 @@ export class CreateMJWorkspaceInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 }
     
 
@@ -25000,6 +25035,9 @@ export class UpdateMJWorkspaceInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

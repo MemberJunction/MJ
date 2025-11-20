@@ -1,0 +1,20 @@
+<div class="app-switcher-container">
+  <div class="app-switcher-button" (click)="toggleDropdown()">
+    <i class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
+       [style.color]="activeApp?.GetColor()"></i>
+    <span class="app-name">{{ activeApp?.Name || 'Select App' }}</span>
+    <i class="dropdown-arrow fa-solid fa-chevron-down"></i>
+  </div>
+
+  <div class="app-switcher-dropdown" *ngIf="showDropdown">
+    <div
+      *ngFor="let app of apps"
+      class="app-switcher-item"
+      [class.active]="app.ID === activeApp?.ID"
+      [style.--item-color]="app.GetColor()"
+      (click)="selectApp(app)">
+      <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
+      <span>{{ app.Name }}</span>
+    </div>
+  </div>
+</div>

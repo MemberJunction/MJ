@@ -2498,6 +2498,21 @@ export const ApplicationSchema = z.object({
         * * Display Name: Schema Auto Add New Entities
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Hex color code for visual theming (e.g., #4caf50)`),
+    DefaultNavItems: z.string().nullable().describe(`
+        * * Field Name: DefaultNavItems
+        * * Display Name: Default Nav Items
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
+    ClassName: z.string().nullable().describe(`
+        * * Field Name: ClassName
+        * * Display Name: Class Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript class name for ClassFactory registration (e.g., CRMApplication)`),
 });
 
 export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
@@ -17576,6 +17591,11 @@ export const WorkspaceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -24044,6 +24064,45 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     }
     set SchemaAutoAddNewEntities(value: string | null) {
         this.Set('SchemaAutoAddNewEntities', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Hex color code for visual theming (e.g., #4caf50)
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: DefaultNavItems
+    * * Display Name: Default Nav Items
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
+    */
+    get DefaultNavItems(): string | null {
+        return this.Get('DefaultNavItems');
+    }
+    set DefaultNavItems(value: string | null) {
+        this.Set('DefaultNavItems', value);
+    }
+
+    /**
+    * * Field Name: ClassName
+    * * Display Name: Class Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript class name for ClassFactory registration (e.g., CRMApplication)
+    */
+    get ClassName(): string | null {
+        return this.Get('ClassName');
+    }
+    set ClassName(value: string | null) {
+        this.Set('ClassName', value);
     }
 }
 
@@ -36108,6 +36167,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'Explorer Navigation Items')
 export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationItemEntityType> {
@@ -63158,6 +63218,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'Workspace Items')
 export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
@@ -63418,6 +63479,19 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
     }
 
     /**

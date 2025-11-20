@@ -29,6 +29,7 @@
     "@memberjunction/global": "2.119.0",
     "@memberjunction/core": "2.119.0",
     "@memberjunction/core-entities": "2.119.0",
+    "@memberjunction/ng-base-application": "2.119.0",
     "@memberjunction/entity-communications-client": "2.119.0",
     "@memberjunction/communication-types": "2.119.0",
     "@memberjunction/templates-base-types": "2.119.0",

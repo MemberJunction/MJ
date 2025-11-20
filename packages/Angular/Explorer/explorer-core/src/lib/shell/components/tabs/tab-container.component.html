@@ -1,0 +1,21 @@
+<div class="tab-container">
+  <!-- Golden Layout Container -->
+  <div #glContainer class="gl-container"></div>
+
+  <!-- Context Menu -->
+  <div
+    class="context-menu"
+    *ngIf="contextMenuVisible"
+    [style.left.px]="contextMenuX"
+    [style.top.px]="contextMenuY">
+    <div class="context-menu-item" (click)="onContextPin()">
+      <i [class]="isContextTabPinned ? 'fa-solid fa-thumbtack' : 'fa-regular fa-thumbtack'"></i>
+      <span>{{ isContextTabPinned ? 'Unpin Tab' : 'Pin Tab' }}</span>
+    </div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item" (click)="onContextClose()">
+      <i class="fa-solid fa-xmark"></i>
+      <span>Close Tab</span>
+    </div>
+  </div>
+</div>
