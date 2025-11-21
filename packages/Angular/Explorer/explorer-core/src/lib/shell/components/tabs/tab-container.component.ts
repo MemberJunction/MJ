@@ -231,6 +231,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       };
 
+      // Clear any existing content from the container (important for tab reuse)
+      // This prevents accumulation of wrapper divs when temporary tabs are replaced
+      glContainer.element.innerHTML = '';
+
       // Create a container div for the component
       const componentElement = document.createElement('div');
       componentElement.className = 'tab-content-wrapper';

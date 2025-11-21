@@ -22,7 +22,8 @@ export function LoadChatTasksResource() {
       <mj-tasks-full-view
         *ngIf="currentUser"
         [environmentId]="environmentId"
-        [currentUser]="currentUser">
+        [currentUser]="currentUser"
+        [baseFilter]="'1=1'">
       </mj-tasks-full-view>
     </div>
   `,

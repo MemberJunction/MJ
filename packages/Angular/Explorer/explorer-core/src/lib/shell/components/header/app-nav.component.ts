@@ -16,13 +16,10 @@ export class AppNavComponent implements OnInit, OnChanges {
   constructor(private workspaceManager: WorkspaceStateManager) {}
 
   ngOnInit(): void {
-    console.log('[AppNav] Component initialized, app:', this.app?.Name);
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['app']) {
-      console.log('[AppNav] App input changed to:', this.app?.Name);
-      console.log('[AppNav] Nav items:', this.app?.GetNavItems());
     }
   }
 
@@ -31,7 +28,6 @@ export class AppNavComponent implements OnInit, OnChanges {
    */
   get navItems(): NavItem[] {
     const items = this.app?.GetNavItems() || [];
-    console.log('[AppNav] navItems getter called, returning', items.length, 'items:', items);
     return items;
   }
 
@@ -46,9 +42,7 @@ export class AppNavComponent implements OnInit, OnChanges {
    * Handle nav item click
    */
   onNavClick(item: NavItem): void {
-    console.log('[AppNav] Nav item clicked:', item.Label, item);
     this.navItemClick.emit(item);
-    console.log('[AppNav] Event emitted');
   }
 
   /**

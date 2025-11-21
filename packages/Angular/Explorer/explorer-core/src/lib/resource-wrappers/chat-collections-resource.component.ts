@@ -19,11 +19,11 @@ export function LoadChatCollectionsResource() {
   selector: 'mj-chat-collections-resource',
   template: `
     <div class="chat-collections-container">
-      <mj-collection-view
+      <mj-collections-full-view
         *ngIf="currentUser"
         [environmentId]="environmentId"
         [currentUser]="currentUser">
-      </mj-collection-view>
+      </mj-collections-full-view>
     </div>
   `,
   styles: [`
