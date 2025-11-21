@@ -1,24 +1,222 @@
-import { Component } from '@angular/core';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Component, ViewContainerRef, ComponentRef } from '@angular/core';
+import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
+import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity } from '@memberjunction/core-entities';
+import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
+import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
+import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-dashboards';
+import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
 
 export function LoadDashboardResource() {
-    const test = new DashboardResource(); // Force inclusion in production builds (tree shaking workaround)
 }
 
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
  * Extends BaseResourceComponent to work with the resource type system
- * Handles loading dashboard metadata and delegating rendering to mj-single-dashboard
+ * Dynamically routes between code-based and config-based dashboards based on dashboard type
  */
 @RegisterClass(BaseResourceComponent, 'Dashboards')
 @Component({
     selector: 'mj-dashboard-resource',
-    template: `<mj-single-dashboard [ResourceData]="Data" (dashboardSaved)="ResourceRecordSaved($event)" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-dashboard>`
+    template: `<div class="dashboard-resource-container" style="width: 100%; height: 100%; overflow: auto;"></div>`,
+    styles: [`
+        .dashboard-resource-container {
+            width: 100%;
+            height: 100%;
+        }
+    `]
 })
 export class DashboardResource extends BaseResourceComponent {
+    private componentRef: ComponentRef<any> | null = null;
+    private dataLoaded = false;
+    private lastDataId: string | null = null;
+
+    constructor(private viewContainer: ViewContainerRef) {
+        super();
+    }
+
+    override set Data(value: ResourceData) {
+        super.Data = value;
+        if (!this.dataLoaded) {
+            this.dataLoaded = true;
+            this.loadDashboard();
+        }
+    }
+
+    // Need to override the getter too in TS otherwise the override to the setter alone above would break things
+    override get Data(): ResourceData {
+        return super.Data;
+    }
+
+    ngOnDestroy(): void {
+        if (this.componentRef) {
+            this.componentRef.destroy();
+        }
+    }
+
+    /**
+     * Load the appropriate dashboard component based on dashboard type
+     * Routes between code-based dashboards (registered classes) and config-based dashboards
+     */
+    private async loadDashboard(): Promise<void> {
+        const data = this.Data;
+        if (!data?.ResourceRecordID) {
+            this.NotifyLoadStarted();
+            this.NotifyLoadComplete();
+            return;
+        }
+
+        this.NotifyLoadStarted();
+
+        try {
+            await DashboardEngine.Instance.Config(false); // make sure it is configured, if already configured does nothing
+            const dashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === data.ResourceRecordID);
+            if (!dashboard) {
+                throw new Error(`Dashboard with ID ${data.ResourceRecordID} not found.`);
+            }
+
+            // Determine which dashboard component to load based on dashboard type
+            if (dashboard.Type === 'Code') {
+                // CODE-BASED DASHBOARD: Use registered class via DriverClass
+                await this.loadCodeBasedDashboard(dashboard);
+            } else {
+                // CONFIG-BASED DASHBOARD: Use the generic metadata-driven renderer
+                await this.loadConfigBasedDashboard(dashboard);
+            }
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
+    /**
+     * Load a code-based dashboard by looking up the registered class
+     */
+    private async loadCodeBasedDashboard(dashboard: DashboardEntity): Promise<void> {
+        try {
+            if (!dashboard.DriverClass) {
+                throw new Error(`Dashboard '${dashboard.Name}' is marked as Code type but has no DriverClass specified`);
+            }
+
+            // Look up the registered class using the DriverClass name
+            const classReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+                BaseDashboard,
+                dashboard.DriverClass
+            );
+
+            if (!classReg?.SubClass) {
+                throw new Error(`Dashboard class '${dashboard.DriverClass}' is not registered. Please check the class registration.`);
+            }
+
+            // Create the component instance
+            this.viewContainer.clear();
+            this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
+            const instance = this.componentRef.instance as BaseDashboard;
+
+            // Initialize with dashboard data
+            const baseData = this.Data;
+            const userStateEntity = await this.loadDashboardUserState(dashboard.ID);
+            const config: DashboardConfig = {
+                dashboard,
+                userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
+            };
+
+            // handle open entity record events in MJ Explorer with routing                  
+            instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
+            // check to see if the data has entityname/pkey
+            if (data && data.EntityName && data.RecordPKey) {
+                // open the record in the explorer
+                SharedService.Instance.OpenEntityRecord(data.EntityName, data.RecordPKey);
+                // this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
+                //                      { queryParams: { Entity: data.EntityName } })                      
+            }
+            });
+
+            instance.UserStateChanged.subscribe(async (userState: any) => {
+                if (!userState) {
+                    // if the user state is null, we need to remove it from the user state
+                    userState = {};
+                }
+                // save the user state to the dashboard user state entity
+                userStateEntity.UserState = JSON.stringify(userState);
+                if (!await userStateEntity.Save()) {
+                    LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
+                }
+            });
+            
+
+            instance.Config = config;
+            instance.Refresh();
+
+            this.NotifyLoadComplete();
+        } catch (error) {
+            console.error('Error loading code-based dashboard:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
+
+
+    protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
+        // handle user state changes for the dashboard
+        const rv = new RunView();
+        const md = new Metadata();
+        const stateResult = await rv.RunView({
+            EntityName: 'MJ: Dashboard User States',
+            ExtraFilter: `DashboardID='${dashboardId}' AND UserID='${md.CurrentUser.ID}'`,
+            ResultType: 'entity_object',
+        });
+        let stateObject: DashboardUserStateEntity;
+        if (stateResult && stateResult.Success && stateResult.Results.length > 0) {
+            stateObject = stateResult.Results[0];
+        }
+        else {
+            stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');
+            stateObject.DashboardID = dashboardId;
+            stateObject.UserID = md.CurrentUser.ID;
+            // don't save becuase we don't care about the state until something changes
+        }
+        return stateObject;
+    }
+
+    /**
+     * Load a config-based dashboard using the generic SingleDashboardComponent
+     */
+    private async loadConfigBasedDashboard(dashboard: DashboardEntity): Promise<void> {
+        try {
+            this.viewContainer.clear();
+            this.componentRef = this.viewContainer.createComponent(SingleDashboardComponent);
+            const instance = this.componentRef.instance as any;
+
+            // Initialize with dashboard data
+            const baseData = this.Data;
+            const resourceData = new ResourceData({
+                ResourceRecordID: baseData.ResourceRecordID,
+                Configuration: baseData.Configuration || {}
+            });
+
+            instance.ResourceData = resourceData;
+
+            // Wire up events if they exist
+            if (instance.loadComplete) {
+                instance.loadComplete.subscribe(() => {
+                    this.NotifyLoadComplete();
+                });
+            } else {
+                // Fallback if event emitter not available
+                setTimeout(() => this.NotifyLoadComplete(), 100);
+            }
+
+            if (instance.dashboardSaved) {
+                instance.dashboardSaved.subscribe((entity: any) => {
+                    this.ResourceRecordSaved(entity);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading config-based dashboard:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
     /**
      * Get the display name for a dashboard resource
      * Loads the actual dashboard name from the database if available
