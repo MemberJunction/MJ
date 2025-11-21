@@ -1,4 +1,4 @@
-import { Component, ViewContainerRef, ComponentRef } from '@angular/core';
+import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef } from '@angular/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
@@ -17,7 +17,7 @@ export function LoadDashboardResource() {
 @RegisterClass(BaseResourceComponent, 'Dashboards')
 @Component({
     selector: 'mj-dashboard-resource',
-    template: `<div class="dashboard-resource-container" style="width: 100%; height: 100%; overflow: auto;"></div>`,
+    template: `<div #container class="dashboard-resource-container" style="width: 100%; height: 100%; overflow: auto;"></div>`,
     styles: [`
         .dashboard-resource-container {
             width: 100%;
@@ -28,7 +28,7 @@ export function LoadDashboardResource() {
 export class DashboardResource extends BaseResourceComponent {
     private componentRef: ComponentRef<any> | null = null;
     private dataLoaded = false;
-    private lastDataId: string | null = null;
+    @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
 
     constructor(private viewContainer: ViewContainerRef) {
         super();
@@ -108,9 +108,13 @@ export class DashboardResource extends BaseResourceComponent {
             }
 
             // Create the component instance
-            this.viewContainer.clear();
+            this.containerElement.nativeElement.innerHTML = '';
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            this.containerElement.nativeElement.appendChild(nativeElement);
 
             // Initialize with dashboard data
             const baseData = this.Data;
@@ -183,9 +187,13 @@ export class DashboardResource extends BaseResourceComponent {
      */
     private async loadConfigBasedDashboard(dashboard: DashboardEntity): Promise<void> {
         try {
-            this.viewContainer.clear();
+            this.containerElement.nativeElement.innerHTML = '';
             this.componentRef = this.viewContainer.createComponent(SingleDashboardComponent);
             const instance = this.componentRef.instance as any;
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            this.containerElement.nativeElement.appendChild(nativeElement);
 
             // Initialize with dashboard data
             const baseData = this.Data;
