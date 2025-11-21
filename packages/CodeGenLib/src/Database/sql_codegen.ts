@@ -1243,6 +1243,15 @@ ${whereClause}GO${permissions}
 
                 // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
                 const candidateName = this.stripID(ef.Name);
+
+                // Skip if candidateName is empty (e.g., field named exactly "ID")
+                // This happens in table-per-type inheritance where child.ID is FK to parent.ID
+                // stripID("ID") returns "" which would generate invalid SQL: AS []
+                if (candidateName.trim().length === 0) {
+                    logStatus(`  Skipping related entity name field for ${ef.Name} in entity - stripID returned empty string (likely inheritance pattern)`);
+                    continue; // Skip this field entirely - no valid alias can be generated
+                }
+
                 // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating)
                 // because if it is, we need to change it to something else
                 const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
