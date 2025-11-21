@@ -1,0 +1,7 @@
+{
+  "name": "ChildComponent",
+  "description": "Child component modifying callback data (violates callbacks-passthrough-only rule)",
+  "code": "function ChildComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, callbacks }) {\n  const handleClick = () => {\n    const modifiedData = { ...savedUserSettings, extra: 'field' };\n    callbacks?.onDataChange?.(modifiedData);\n  };\n  \n  return (\n    <div>\n      <h1>Child Component</h1>\n      <button onClick={handleClick}>Send Modified Data</button>\n    </div>\n  );\n}",
+  "componentType": "child",
+  "libraries": []
+}

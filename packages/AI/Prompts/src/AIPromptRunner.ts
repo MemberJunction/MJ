@@ -554,10 +554,22 @@ export class AIPromptRunner {
     const chatResult = modelResult as ChatResult;
     const usage = chatResult.data?.usage;
     
+    // CRITICAL: Populate errorMessage field when execution fails
+    // This ensures errors are properly propagated to BaseAgent and visible in AgentRunStep logs
+    let errorMessage: string | undefined;
+    if (!chatResult.success) {
+      // Model execution failed
+      errorMessage = chatResult.errorMessage;
+    } else if (parsedResult.validationResult?.Success === false) {
+      // Validation failed (Warn or Strict mode)
+      errorMessage = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join('; ')}`;
+    }
+
     return {
       success: chatResult.success,
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
       result: parsedResult?.result ? parsedResult.result as T : parsedResult as T,
+      errorMessage, // Include error message for proper error propagation
       chatResult,
       promptRun,
       executionTimeMS,
@@ -2347,9 +2359,11 @@ export class AIPromptRunner {
         };
         failoverAttempts.push(failoverAttempt);
 
-        // Authentication errors: filter out all candidates from this vendor to avoid wasting attempts
-        if (errorAnalysis.errorType === 'Authentication') {
-          allCandidates = this.filterAuthenticationFailedVendor(
+        // Vendor-level errors: filter out all candidates from this vendor to avoid wasting attempts
+        // Authentication: Invalid API key affects all models from vendor
+        // VendorValidationError: API schema/validation is vendor-level, not model-level
+        if (errorAnalysis.errorType === 'Authentication' || errorAnalysis.errorType === 'VendorValidationError') {
+          allCandidates = this.filterVendorCandidates(
             errorAnalysis.errorType,
             candidate.vendorId,
             allCandidates
@@ -2360,13 +2374,10 @@ export class AIPromptRunner {
         const isLastCandidate = i === allCandidates.length - 1;
 
         // Fatal errors: stop immediately, don't try more candidates
+        // ErrorAnalyzer has already distinguished InvalidRequest (structural) from VendorValidationError
         if (errorAnalysis.severity === 'Fatal') {
-          this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-          break;
-        }
-
-        // Client-side errors: stop immediately (our fault, not vendor's)
-        if (errorAnalysis.errorType === 'InvalidRequest') {
+          const errorMessage = error?.message || error?.errorMessage || 'Unknown error';
+          LogErrorEx(`Stopping failover: Fatal error (${errorAnalysis.errorType}): ${errorMessage}`);
           this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
           break;
         }
@@ -3036,16 +3047,18 @@ export class AIPromptRunner {
   }
 
   /**
-   * Filters out all candidates from a vendor when authentication fails.
-   * Authentication errors indicate invalid API keys which affect all models from that vendor.
+   * Filters out all candidates from a vendor when a vendor-level error occurs.
+   * Vendor-level errors affect all models from that vendor:
+   * - Authentication: Invalid API key
+   * - VendorValidationError: API schema/validation requirements
    */
-  private filterAuthenticationFailedVendor(
+  private filterVendorCandidates(
     errorType: string,
     currentVendorId: string | undefined,
     allCandidates: ModelVendorCandidate[]
   ): ModelVendorCandidate[] {
-    if (errorType !== 'Authentication') {
-      return allCandidates; // No filtering needed for non-auth errors
+    if (errorType !== 'Authentication' && errorType !== 'VendorValidationError') {
+      return allCandidates; // No filtering needed for non-vendor-level errors
     }
 
     const failedVendorId = currentVendorId || 'default';
@@ -3060,8 +3073,23 @@ export class AIPromptRunner {
     if (removedCount > 0) {
       const vendorName = AIEngine.Instance.Vendors.find(v => v.ID === failedVendorId)?.Name || failedVendorId;
       const remainingCount = filteredCandidates.length;
+
+      // Log appropriate message based on error type
+      let reason: string;
+      let icon: string;
+      if (errorType === 'Authentication') {
+        reason = 'Invalid API key';
+        icon = '🔒';
+      } else if (errorType === 'VendorValidationError') {
+        reason = 'API schema incompatibility';
+        icon = '⚠️';
+      } else {
+        reason = 'Vendor-level error';
+        icon = '❌';
+      }
+
       this.logStatus(
-        `   🔒 Invalid API key for ${vendorName} - excluding ${removedCount} model${removedCount === 1 ? '' : 's'} from this vendor (${remainingCount} remaining)`,
+        `   ${icon} ${reason} for ${vendorName} - excluding ${removedCount} model${removedCount === 1 ? '' : 's'} from this vendor (${remainingCount} remaining)`,
         true
       );
     }

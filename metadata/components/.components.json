@@ -2063,8 +2063,8 @@
       "ID": "21A95BC1-2CCD-4949-A90F-4262F1DBDB62"
     },
     "sync": {
-      "lastModified": "2025-11-10T00:29:07.705Z",
-      "checksum": "2b5a10a24bf53663e946eef9377cd9a82ce0e0062f7d6e8d0a4a65e978585c27"
+      "lastModified": "2025-11-21T03:15:25.860Z",
+      "checksum": "5ffe2af27ccb90d43e23eddd2d24201b46423a1eadec056c1595f646896fb72a"
     }
   },
   {
@@ -2085,8 +2085,8 @@
       "ID": "90293530-7C0B-42B8-B8B1-38FD7D5C97DA"
     },
     "sync": {
-      "lastModified": "2025-11-13T23:20:19.127Z",
-      "checksum": "87c289fc0b5bb79dde167c40658ca410c3768353fe02ac5b1e7e3caf5f2426b6"
+      "lastModified": "2025-11-21T03:15:25.892Z",
+      "checksum": "b5af0fc6fe5253bc8d39b0453a80908b45cac7a8ea2504f088641f5844432051"
     }
   },
   {
@@ -2131,6 +2131,94 @@
     "sync": {
       "lastModified": "2025-10-29T20:15:54.087Z",
       "checksum": "2b5d406b7293f6d833f415d447ac21aa49de276d13d60665313f1feb9f0421ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MonthlyInvoiceRevenueChart",
+      "Namespace": "CRM/Reports",
+      "Description": "Displays monthly invoice revenue with drill-down to individual invoices. Demonstrates proper pattern for loading detail records, adding computed time period fields, and enabling drill-down to see individual invoices for each month.",
+      "Title": "Monthly Invoice Revenue Chart",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/monthly-invoice-revenue-chart.spec.json",
+      "FunctionalRequirements": "Shows total invoice revenue aggregated by month. Users can click any month's bar to see all invoices for that period in a data grid below. Demonstrates proper use of detail records with computed grouping fields for time-based aggregation.",
+      "TechnicalDesign": "Loads all invoices for current year via RunView. Adds computed Month and MonthName fields to each invoice record. Passes detail records to SimpleDrilldownChart which performs client-side aggregation by month and sums TotalAmount. Uses bar chart for time series. Grid shows invoice details with standard invoice fields."
+    },
+    "primaryKey": {
+      "ID": "48297465-8299-40FF-899D-E23639D05CEE"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T03:15:25.921Z",
+      "checksum": "1992dac06f58fc903f83d30141ddbab62dc8a5dbbcfdbc5801c5d8e52c44423e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ProductRevenueByCategory",
+      "Namespace": "CRM/Reports",
+      "Description": "Shows total revenue by product with drill-down to invoice line items. Demonstrates intermediate usage with custom grid fields, pie chart type, and event handlers for segment selection.",
+      "Title": "Product Revenue by Category",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/product-revenue-by-category.spec.json",
+      "FunctionalRequirements": "Aggregates invoice line item revenue by product category. Displays as pie chart for easy comparison of category contributions. Clicking a category segment reveals all line items in that category with product details. Features custom event handler to track user interactions and optional external callbacks for parent component integration.",
+      "TechnicalDesign": "Loads InvoiceLineItems with Product relationships via RunView. Filters to current year and paid/partial invoices only. Each line item includes ProductCategory from related Product. Uses pie chart for categorical comparison. Implements onDataPointClick handler to track segment selections. Grid displays detailed line item information including product names, quantities, prices. Demonstrates proper use of aggregateMethod='sum' with valueField for revenue calculations."
+    },
+    "primaryKey": {
+      "ID": "CBA1FDCD-255D-4ACE-A9CB-EF9A86B1DE0B"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T03:15:25.940Z",
+      "checksum": "623fe31f1743ee976e0edf1dfaf4bf516f261ff04a0521e9f2a3203deae61ebe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "EventSubmissionsByStatus",
+      "Namespace": "Events/Reports",
+      "Description": "Conference abstract submissions grouped by status with drill-down to submission details. Demonstrates advanced features including detail panel, custom field configuration, and count-based aggregation for tracking submission volumes across workflow stages.",
+      "Title": "Event Submissions by Status",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/event-submissions-by-status.spec.json",
+      "FunctionalRequirements": "Displays count of abstract submissions by status (New, Analyzing, Passed Initial, Under Review, Accepted, Rejected, etc.) for a specific event. Users click a status segment to see all submissions in that status. Clicking a submission row in the grid opens a detailed SingleRecordView panel showing full submission information including title, abstract, evaluation scores, and speaker details. Useful for conference organizers tracking submission pipeline and review workflows.",
+      "TechnicalDesign": "Loads all Submission records for specified EventID via RunView. Uses count aggregation (no valueField) to show submission volumes by Status. Implements doughnut chart for workflow stage visualization. Enables both grid drill-down and SingleRecordView side panel. Grid shows key submission fields (title, submitted date, score). SingleRecordView displays comprehensive submission details for in-depth review. Demonstrates showSingleRecordView=true configuration with custom field selection."
+    },
+    "primaryKey": {
+      "ID": "FD1EA084-3F65-4565-A6B9-4D413BEF6B57"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T03:15:25.956Z",
+      "checksum": "857c455b7c076efacfb82d3e8f04510d7a6f885fd38e63e5d6334191aa4a85c4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DealPipelineDashboard",
+      "Namespace": "CRM/Dashboards",
+      "Description": "Comprehensive sales pipeline dashboard with three coordinated drill-down charts: deals by stage, deals by source, and expected revenue by close month. Demonstrates expert-level composition, multiple chart types, shared state management, and cross-component coordination for executive sales analytics.",
+      "Title": "Deal Pipeline Dashboard",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/deal-pipeline-dashboard.spec.json",
+      "FunctionalRequirements": "Provides 360-degree view of sales pipeline with three interactive visualizations. Top chart shows deal count and total value by stage (Prospecting through Closed Won/Lost). Middle chart displays deal source analysis. Bottom chart shows expected revenue by projected close month. All charts support independent drill-down to deal details. Includes summary metrics panel showing total pipeline value, weighted expected revenue, average deal size, and win rate. Users can interact with any chart to inspect underlying deals. Demonstrates how multiple SimpleDrilldownChart components can coexist in a dashboard layout.",
+      "TechnicalDesign": "Loads all active Deal records once via RunView, filters to open deals (excluding Closed Won/Lost). Passes same dataset to three SimpleDrilldownChart instances with different groupBy configurations. First chart: bar chart by Stage using count aggregation. Second chart: pie chart by DealSource using count aggregation. Third chart: line chart by computed CloseMonth field using sum of ExpectedRevenue. Calculates summary metrics from raw deal data. Implements responsive grid layout with CSS flexbox. Each chart operates independently with its own drill-down state. Demonstrates proper data sharing pattern: load once, visualize many ways."
+    },
+    "primaryKey": {
+      "ID": "0912DC50-A416-4DF2-A609-2D1DFF952A94"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T03:15:26.057Z",
+      "checksum": "43465b1258de01d20b395a7125574afe295a4caee23942c3508056632fa0feee"
     }
   }
 ]

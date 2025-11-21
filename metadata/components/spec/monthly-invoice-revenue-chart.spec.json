@@ -1,0 +1,34 @@
+{
+  "name": "MonthlyInvoiceRevenueChart",
+  "title": "Monthly Invoice Revenue Chart",
+  "description": "Displays monthly invoice revenue with drill-down to individual invoices. Demonstrates the CORRECT pattern for chart with drill-down: loading detail records, adding computed time period field, and enabling drill-down to see individual invoices for each month.",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "Shows total invoice revenue aggregated by month. Users can click any month's bar to see all invoices for that period in a data grid below. Demonstrates proper use of detail records with computed grouping fields for time-based aggregation.",
+  "technicalDesign": "Loads all invoices for current year via RunView. Adds computed Month and MonthName fields to each invoice record. Passes detail records to SimpleDrilldownChart which performs client-side aggregation by month and sums TotalAmount. Uses bar chart for time series. Grid shows invoice details with standard invoice fields.",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Loads Invoice entity records via RunView, filters to current year"
+  },
+  "properties": [
+    {
+      "name": "year",
+      "type": "number",
+      "description": "Year to display revenue for (defaults to current year)",
+      "required": false,
+      "defaultValue": "new Date().getFullYear()"
+    }
+  ],
+  "events": [],
+  "dependencies": [
+    {
+      "name": "SimpleDrilldownChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry",
+      "version": "1.0.0",
+      "description": "Chart with drill-down capability"
+    }
+  ],
+  "code": "@file:../code/monthly-invoice-revenue-chart.js",
+  "exampleUsage": "<MonthlyInvoiceRevenueChart year={2025} />"
+}

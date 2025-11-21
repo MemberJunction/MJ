@@ -1,0 +1,14 @@
+{
+  "name": "TestComponent",
+  "description": "Component using RunView/RunQuery result directly in render (violates runview-runquery-result-direct-usage rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [result, setResult] = useState(null);\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Users' });\n      setResult(result);\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      {result.Results.map(item => <div key={item.ID}>{item.Name}</div>)}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": [
+    {
+      "type": "view",
+      "entityName": "Users",
+      "maxRows": 100
+    }
+  ]
+}
