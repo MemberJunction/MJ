@@ -565,6 +565,7 @@ export class AgentEvalDriver extends BaseTestDriver {
             conversationId: params.conversationId,  // Continue same conversation for multi-turn
             conversationMessages,
             contextUser: params.contextUser,
+            payload: params.inputPayload,  // Pass payload from previous turn
             override: params.turn.executionParams?.modelOverride ? {
                 modelId: params.turn.executionParams.modelOverride
             } : undefined
@@ -632,20 +633,14 @@ export class AgentEvalDriver extends BaseTestDriver {
 
     /**
      * Extract output payload from agent run.
+     * Uses FinalPayloadObject property which contains the agent's output that should be chained to next turn.
      * @private
      */
     private extractOutputPayload(agentRun: AIAgentRunEntity): Record<string, unknown> {
-        // TODO: This implementation depends on where AgentRun stores output payload
-        // For now, return a basic structure with agent run metadata
-        return {
-            agentRunId: agentRun.ID,
-            status: agentRun.Status,
-            success: agentRun.Success,
-            conversationId: agentRun.ConversationID,
-            errorMessage: agentRun.ErrorMessage
-            // Add actual payload extraction logic based on AgentRun structure
-            // e.g., agentRun.OutputPayload if that field exists
-        };
+        // FinalPayloadObject is the parsed JSON object from FinalPayload string
+        // At runtime, AIAgentRunEntity is actually AIAgentRunEntityExtended which has this property
+        const finalPayloadObject = (agentRun as any).FinalPayloadObject;
+        return finalPayloadObject || {};
     }
 
     /**
