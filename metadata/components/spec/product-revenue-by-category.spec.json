@@ -1,0 +1,59 @@
+{
+  "name": "ProductRevenueByCategory",
+  "title": "Product Revenue by Category",
+  "description": "Shows total revenue by product category with drill-down to invoice line items. Demonstrates intermediate chart with drill-down usage with custom grid fields, pie chart type, and event handlers for segment selection.",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "Aggregates invoice line item revenue by product category. Displays as pie chart for easy comparison of category contributions. Clicking a category segment reveals all line items in that category with product details. Features custom event handler to track user interactions and optional external callbacks for parent component integration.",
+  "technicalDesign": "Loads InvoiceLineItems with Product relationships via RunView. Filters to current year and paid/partial invoices only. Each line item includes ProductCategory from related Product. Uses pie chart for categorical comparison. Implements onDataPointClick handler to track segment selections. Grid displays detailed line item information including product names, quantities, prices. Demonstrates proper use of aggregateMethod='sum' with valueField for revenue calculations.",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Loads InvoiceLineItem entity with Product join, filters to current year paid invoices"
+  },
+  "properties": [
+    {
+      "name": "year",
+      "type": "number",
+      "description": "Year to display revenue for",
+      "required": false,
+      "defaultValue": "new Date().getFullYear()"
+    },
+    {
+      "name": "onCategorySelected",
+      "type": "function",
+      "description": "Callback fired when user clicks a category segment",
+      "required": false,
+      "parameters": [
+        {
+          "name": "categoryData",
+          "type": "{ category: string, revenue: number, itemCount: number }",
+          "description": "Selected category information"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "categorySelected",
+      "description": "Fired when a category segment is clicked",
+      "parameters": [
+        {
+          "name": "categoryData",
+          "type": "{ category: string, revenue: number, itemCount: number }",
+          "description": "Selected category details"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleDrilldownChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry",
+      "version": "1.0.0",
+      "description": "Chart with drill-down capability"
+    }
+  ],
+  "code": "@file:../code/product-revenue-by-category.js",
+  "exampleUsage": "<ProductRevenueByCategory \n  year={2025} \n  onCategorySelected={(data) => console.log('Selected:', data.category, data.revenue)}\n/>"
+}
