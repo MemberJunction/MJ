@@ -22,7 +22,6 @@ import { TabRequest } from './interfaces/tab-request.interface';
  * }
  * ```
  */
-@RegisterClass(BaseApplication)
 export class BaseApplication {
   /** Application ID from database */
   public ID: string = '';
@@ -85,13 +84,28 @@ export class BaseApplication {
       const firstItem = navItems[0];
       const tabRequest: TabRequest = {
         ApplicationId: this.ID,
-        Title: firstItem.Label,
-        Route: firstItem.Route
+        Title: firstItem.Label
       };
 
-      // Include query params in the configuration if present
-      if (firstItem.queryParams) {
-        tabRequest.Configuration = { queryParams: firstItem.queryParams };
+      // Handle resource-based nav items
+      if (firstItem.ResourceType) {
+        tabRequest.ResourceType = firstItem.ResourceType;
+        tabRequest.ResourceRecordId = firstItem.RecordId;
+        // Put resourceType in Configuration so it gets stored properly
+        tabRequest.Configuration = {
+          resourceType: firstItem.ResourceType,
+          recordId: firstItem.RecordId,
+          ...(firstItem.Configuration || {})
+        };
+      }
+      // Handle route-based nav items (legacy)
+      else if (firstItem.Route) {
+        tabRequest.Route = firstItem.Route;
+
+        // Include query params in the configuration if present
+        if (firstItem.queryParams) {
+          tabRequest.Configuration = { queryParams: firstItem.queryParams };
+        }
       }
 
       return tabRequest;

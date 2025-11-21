@@ -11,7 +11,7 @@ import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction
 })
 export class AppNavComponent {
   @Input() app: BaseApplication | null = null;
-  @Output() navItemClick = new EventEmitter<string>();
+  @Output() navItemClick = new EventEmitter<NavItem>();
 
   constructor(private workspaceManager: WorkspaceStateManager) {}
 
@@ -33,7 +33,7 @@ export class AppNavComponent {
    * Handle nav item click
    */
   onNavClick(item: NavItem): void {
-    this.navItemClick.emit(item.Route);
+    this.navItemClick.emit(item);
   }
 
   /**

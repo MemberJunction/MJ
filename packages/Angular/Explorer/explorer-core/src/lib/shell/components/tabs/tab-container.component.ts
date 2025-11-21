@@ -22,8 +22,8 @@ import {
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
-import { LogError } from '@memberjunction/core';
+import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
+import { LogError, Metadata, RunView } from '@memberjunction/core';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -172,10 +172,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Handle tab shown event for lazy loading
    */
-  private onTabShown(event: TabShownEvent): void {
+  private async onTabShown(event: TabShownEvent): Promise<void> {
     if (event.isFirstShow) {
       // Load content for this tab
-      this.loadTabContent(event.tabId, event.container);
+      await this.loadTabContent(event.tabId, event.container);
       this.layoutManager.MarkTabLoaded(event.tabId);
     }
   }
@@ -183,7 +183,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Load content into a tab container
    */
-  private loadTabContent(tabId: string, container: unknown): void {
+  private async loadTabContent(tabId: string, container: unknown): Promise<void> {
     try {
       const tab = this.workspaceManager.GetTab(tabId);
       if (!tab) {
@@ -199,7 +199,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       // Extract resource data from tab configuration
-      const resourceData = this.getResourceDataFromTab(tab);
+      const resourceData = await this.getResourceDataFromTab(tab);
       if (!resourceData) {
         LogError(`Unable to create ResourceData for tab: ${tab.title}`);
         return;
@@ -264,29 +264,48 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Convert tab configuration to ResourceData
    */
-  private getResourceDataFromTab(tab: WorkspaceTab): ResourceData | null {
+  private async getResourceDataFromTab(tab: WorkspaceTab): Promise<ResourceData | null> {
     const config = tab.configuration;
+    console.log('[TabContainer] getResourceDataFromTab - config:', config);
 
     // Extract resource type from configuration or route
     let resourceType = config['resourceType'] as string;
+    console.log('[TabContainer] getResourceDataFromTab - resourceType from config:', resourceType);
 
     if (!resourceType && config['route']) {
       // Parse route to determine resource type
       resourceType = this.getResourceTypeFromRoute(config['route'] as string);
+      console.log('[TabContainer] getResourceDataFromTab - resourceType from route:', resourceType);
     }
 
     if (!resourceType) {
+      console.log('[TabContainer] getResourceDataFromTab - NO resourceType found, returning null');
       return null;
     }
 
-    // Create ResourceData object
     const resourceData = new ResourceData({
+      ResourceTypeID: await this.getResourceTypeId(resourceType),
       ResourceType: resourceType,
       ResourceRecordID: config['recordId'] as string || '',
       Configuration: config
     });
 
+    console.log('[TabContainer] getResourceDataFromTab - created ResourceData:', resourceData);
     return resourceData;
+  }
+
+  private async getResourceTypeId(resourceType: string): Promise<string> {
+    const rv = new RunView();
+    const result = await rv.RunView<ResourceTypeEntity>({
+      EntityName: "Resource Types",
+      ExtraFilter: "Name ='" + resourceType + "'",
+    })
+    if (result && result.Success && result.Results.length > 0) {
+      return result.Results[0].ID;
+    }
+    else {
+      return '';
+    }
   }
 
   /**

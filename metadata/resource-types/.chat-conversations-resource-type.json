@@ -1,0 +1,16 @@
+{
+  "fields": {
+    "Name": "chat-conversations",
+    "DisplayName": "Chat Conversations",
+    "Description": "Chat conversation interface with sidebar and message area",
+    "Icon": "fa-solid fa-comments",
+    "EntityID": null
+  },
+  "primaryKey": {
+    "ID": "6BA617C4-0CBA-4C79-B037-456DF4B03D3D"
+  },
+  "sync": {
+    "lastModified": "2025-11-21T01:38:42.559Z",
+    "checksum": "a3bb2aa95ae291127fa34f87c849c70d6089c25620ba5b215dada6e56957285e"
+  }
+}

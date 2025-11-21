@@ -5,6 +5,7 @@ import { LoadRecordResource } from "./record-resource.component";
 import { LoadReportResource } from "./report-resource.component";
 import { LoadSearchResultsResource } from "./search-results-resource.component";
 import { LoadViewResource } from "./view-resource.component";
+import { LoadChatConversationsResource } from "./chat-conversations-resource.component";
 
 export function LoadResourceWrappers()
 {
@@ -15,4 +16,5 @@ export function LoadResourceWrappers()
     LoadSearchResultsResource();
     LoadQueryResource();
     LoadListDetailResource();
+    LoadChatConversationsResource();
 }

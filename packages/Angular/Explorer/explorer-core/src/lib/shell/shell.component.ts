@@ -139,26 +139,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Handle navigation item click
    */
-  onNavItemClick(route: string): void {
+  onNavItemClick(navItem: any): void {
     if (!this.activeApp) return;
 
     // Create tab request for nav item
-    const tabRequest = {
+    const tabRequest: any = {
       ApplicationId: this.activeApp.ID,
-      Title: this.getNavItemLabel(route),
-      Route: route
+      Title: navItem.Label
     };
 
-    this.workspaceManager.OpenTab(tabRequest, this.activeApp.GetColor());
-  }
+    // Handle resource-based nav items
+    if (navItem.ResourceType) {
+      tabRequest.ResourceType = navItem.ResourceType;
+      tabRequest.ResourceRecordId = navItem.RecordId || null;
+      // Put resourceType in Configuration so it gets stored properly
+      tabRequest.Configuration = {
+        resourceType: navItem.ResourceType,
+        recordId: navItem.RecordId,
+        ...(navItem.Configuration || {})
+      };
+    }
+    // Handle route-based nav items (legacy)
+    else if (navItem.Route) {
+      tabRequest.Route = navItem.Route;
+    }
 
-  /**
-   * Get label for a route from nav items
-   */
-  private getNavItemLabel(route: string): string {
-    if (!this.activeApp) return 'Tab';
-    const navItems = this.activeApp.GetNavItems();
-    const item = navItems.find(n => n.Route === route);
-    return item?.Label || 'Tab';
+    this.workspaceManager.OpenTab(tabRequest, this.activeApp.GetColor());
   }
 }

@@ -91,11 +91,12 @@ import { UserProfileComponent } from './lib/user-profile/user-profile.component'
 import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
 import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
-import { ListViewComponent } from './lib/list-view/list-view.component';  
+import { ListViewComponent } from './lib/list-view/list-view.component';
 import { ResourceBrowserComponent } from './lib/resource-browser/resource-browser.component';
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
+import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversations-resource.component';
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
@@ -142,6 +143,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ResourceBrowserComponent,
     SingleListDetailComponent,
     ListDetailResource,
+    ChatConversationsResource,
     TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
     StyleGuideTestComponent

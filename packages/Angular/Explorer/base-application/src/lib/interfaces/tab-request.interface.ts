@@ -8,10 +8,13 @@ export interface TabRequest {
   /** Display title for the tab */
   Title: string;
 
-  /** Route to load in the tab */
-  Route: string;
+  /** Route to load in the tab (optional if ResourceType is provided) */
+  Route?: string;
 
-  /** Resource type ID for matching existing tabs */
+  /** Resource type for resource-based tabs */
+  ResourceType?: string;
+
+  /** Resource type ID for matching existing tabs (legacy) */
   ResourceTypeId?: string;
 
   /** Resource record ID for matching existing tabs */
