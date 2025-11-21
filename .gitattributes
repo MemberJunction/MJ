@@ -1,1 +1,33 @@
+# Auto detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Windows batch files need CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Explicitly declare text files
+*.ts text
+*.js text
+*.json text
+*.md text
+*.html text
+*.css text
+*.scss text
+*.sql text
+*.yml text
+*.yaml text
+
+# Denote binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Linguist settings
 docs/** linguist-generated=true
