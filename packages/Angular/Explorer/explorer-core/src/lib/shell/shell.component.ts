@@ -55,6 +55,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   async initializeShell(): Promise<void> {
+    console.log('[Shell] ============ INITIALIZATION START ============');
+
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
@@ -65,6 +67,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       // CRITICAL: Wait for workspace initialization to complete
       // before allowing any tab operations
       await this.workspaceManager.Initialize(user.ID);
+      const config = this.workspaceManager.GetConfiguration();
+      console.log('[Shell] Workspace initialized with', config?.tabs.length || 0, 'saved tabs');
+      if (config?.tabs) {
+        config.tabs.forEach(tab => {
+          console.log(`[Shell]   - Tab: "${tab.title}" (app: ${tab.applicationId})`);
+        });
+      }
     } else {
       throw new Error('No current user found');
     }
@@ -72,17 +81,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to active app changes
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
-        console.log('[ShellComponent] ActiveApp changed:', app?.Name);
+        console.log('[Shell] ========== ACTIVE APP CHANGED ==========');
+        console.log('[Shell] New active app:', app?.Name, app?.ID);
         this.activeApp = app;
 
-        // Create default tab when app is activated
+        // Create default tab when app is activated ONLY if app has no tabs yet
         if (app) {
-          console.log('[ShellComponent] Creating default tab for app:', app.Name);
-          const tabRequest = await app.CreateDefaultTab();
-          console.log('[ShellComponent] Default tab request:', tabRequest);
-          if (tabRequest) {
-            console.log('[ShellComponent] Opening tab:', tabRequest.Title);
-            this.tabService.OpenTab(tabRequest);
+          const existingTabs = this.workspaceManager.GetAppTabs(app.ID);
+          console.log('[Shell] App tabs count:', existingTabs.length);
+          existingTabs.forEach((tab, idx) => {
+            console.log(`[Shell]   Tab ${idx + 1}: "${tab.title}" (id: ${tab.id.substring(0, 8)}...)`);
+          });
+
+          if (existingTabs.length === 0) {
+            console.log('[Shell] No tabs for app, creating default tab');
+            const tabRequest = await app.CreateDefaultTab();
+            if (tabRequest) {
+              console.log('[Shell] Opening default tab:', tabRequest.Title);
+              this.tabService.OpenTab(tabRequest);
+            }
+          } else {
+            console.log('[Shell] App has existing tabs, skipping default tab creation');
           }
         }
       })
@@ -91,7 +110,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to applications loading - set first app as active when loaded
     this.subscriptions.push(
       this.appManager.Applications.subscribe(async apps => {
+        console.log('[Shell] Applications loaded:', apps.length);
         if (apps.length > 0 && !this.appManager.GetActiveApp()) {
+          console.log('[Shell] Setting first app as active:', apps[0].Name);
           await this.appManager.SetActiveApp(apps[0].ID);
         }
       })
@@ -100,6 +121,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to tab open requests from TabService
     this.subscriptions.push(
       this.tabService.TabRequests.subscribe(request => {
+        console.log('[Shell] Tab open request from TabService:', request.Title);
         const app = this.appManager.GetAppById(request.ApplicationId);
         const appColor = app?.GetColor() || '#757575';
         this.workspaceManager.OpenTab(request, appColor);
@@ -108,6 +130,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.initialized = true;
     this.loading = false;
+    console.log('[Shell] ============ INITIALIZATION COMPLETE ============');
   }
 
   ngAfterViewInit(): void {

@@ -105,12 +105,22 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Load saved layout
     const config = this.workspaceManager.GetConfiguration();
     if (config) {
-      this.layoutManager.LoadLayout(config.layout);
+      // Check if we have a saved layout structure
+      const hasLayout = config.layout && config.layout.root &&
+                       config.layout.root.content &&
+                       config.layout.root.content.length > 0;
 
-      // Create tabs from configuration
-      config.tabs.forEach(tab => {
-        this.createTab(tab);
-      });
+      if (hasLayout) {
+        console.log('[TabContainer] Loading saved Golden Layout structure');
+        // LoadLayout will recreate tabs from the saved structure
+        this.layoutManager.LoadLayout(config.layout);
+      } else {
+        console.log('[TabContainer] No saved layout, creating tabs manually');
+        // No saved layout, create tabs manually
+        config.tabs.forEach(tab => {
+          this.createTab(tab);
+        });
+      }
 
       // Focus active tab
       if (config.activeTabId) {
@@ -136,6 +146,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Create a tab in Golden Layout from workspace tab data
    */
   private createTab(tab: WorkspaceTab): void {
+    console.log('[TabContainer] createTab() called for:', tab.title, 'id:', tab.id.substring(0, 8));
     const app = this.appManager.GetAppById(tab.applicationId);
     const appColor = app?.GetColor() || '#757575';
 
@@ -261,11 +272,17 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       return null;
     }
 
+    // Include applicationId in configuration for proper tab reload detection
+    const resourceConfig = {
+      ...config,
+      applicationId: tab.applicationId
+    };
+
     const resourceData = new ResourceData({
       ResourceTypeID: await this.getResourceTypeId(resourceType),
       ResourceType: resourceType,
       ResourceRecordID: config['recordId'] as string || '',
-      Configuration: config
+      Configuration: resourceConfig
     });
 
     return resourceData;
@@ -346,33 +363,32 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Sync tabs with configuration changes
    */
   private syncTabsWithConfiguration(tabs: WorkspaceTab[]): void {
-    console.log('[TabContainer] Syncing tabs with configuration');
     // Get existing tab IDs from Golden Layout
     const existingTabIds = this.layoutManager.GetAllTabIds();
 
     // Create tabs that don't exist yet
     tabs.forEach(tab => {
       if (!existingTabIds.includes(tab.id)) {
-        console.log('[TabContainer] Creating new tab:', tab.id, tab.title);
+        console.log('[TabContainer] Creating tab:', tab.title);
         this.createTab(tab);
       } else {
-        console.log('[TabContainer] Updating existing tab:', tab.id, tab.title);
         // Check if tab content needs to be reloaded (app or resource type changed)
         const existingComponentRef = this.componentRefs.get(tab.id);
         if (existingComponentRef) {
           const existingResourceData = existingComponentRef.instance.Data;
 
-          // Debug logging
-          console.log('[TabContainer] Existing ResourceType:', existingResourceData?.ResourceType);
-          console.log('[TabContainer] New resourceType from config:', tab.configuration['resourceType']);
-          console.log('[TabContainer] Existing app ID:', existingResourceData?.Configuration?.applicationId);
-          console.log('[TabContainer] New app ID:', tab.applicationId);
+          // Debug: what are we comparing?
+          console.log('[TabContainer] Checking if reload needed for:', tab.title);
+          console.log('[TabContainer]   Existing ResourceType:', existingResourceData?.ResourceType);
+          console.log('[TabContainer]   Tab config resourceType:', tab.configuration['resourceType']);
+          console.log('[TabContainer]   Existing appId:', existingResourceData?.Configuration?.applicationId);
+          console.log('[TabContainer]   Tab appId:', tab.applicationId);
 
           const needsReload = existingResourceData?.ResourceType !== tab.configuration['resourceType'] ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId;
 
           if (needsReload) {
-            console.log('[TabContainer] Tab content changed, reloading:', tab.id);
+            console.log('[TabContainer] Reloading tab content:', tab.title);
             // Clean up old component
             this.cleanupTabComponent(tab.id);
 
@@ -382,7 +398,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
             // If this tab is currently active, reload it immediately
             const config = this.workspaceManager.GetConfiguration();
             if (config?.activeTabId === tab.id) {
-              console.log('[TabContainer] Tab is active, reloading content immediately');
               const glContainer = this.layoutManager.GetContainer(tab.id);
               if (glContainer) {
                 this.loadTabContent(tab.id, glContainer);
