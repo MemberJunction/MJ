@@ -14,6 +14,7 @@ import {
     DriverExecutionResult,
     OracleInput,
     OracleResult,
+    TurnResult,
     ValidationResult,
     ValidationError,
     ValidationWarning
@@ -46,6 +47,46 @@ export interface AgentEvalConfig {
      * Maximum execution time in milliseconds
      */
     maxExecutionTime?: number;
+
+    /**
+     * When to evaluate with oracles in multi-turn tests
+     * - "final-turn-only": Run oracles only on final turn (default)
+     * - "each-turn": Run oracles after each turn
+     * - "all-turns-aggregate": Evaluate all turns together at the end
+     */
+    evaluationStrategy?: 'final-turn-only' | 'each-turn' | 'all-turns-aggregate';
+}
+
+/**
+ * Single turn in a multi-turn test
+ */
+export interface AgentEvalTurn {
+    /**
+     * User message for this turn
+     */
+    userMessage: string;
+
+    /**
+     * Input payload for this turn.
+     * - Turn 1: Use this payload (if provided)
+     * - Turn N (N>1): Automatically populated from previous turn's output
+     */
+    inputPayload?: Record<string, unknown>;
+
+    /**
+     * Optional: Override execution params for this specific turn
+     */
+    executionParams?: {
+        modelOverride?: string;
+        temperatureOverride?: number;
+        maxTokensOverride?: number;
+    };
+
+    /**
+     * Optional: Expected outcomes specific to this turn
+     * (for per-turn oracle evaluation)
+     */
+    expectedOutcomes?: AgentEvalExpectedOutcomes;
 }
 
 /**
@@ -53,9 +94,19 @@ export interface AgentEvalConfig {
  */
 export interface AgentEvalInput {
     /**
-     * User message to send to agent
+     * Single-turn: User message to send to agent (backward compatible)
      */
-    userMessage: string;
+    userMessage?: string;
+
+    /**
+     * Single-turn: Input payload (backward compatible)
+     */
+    inputPayload?: Record<string, unknown>;
+
+    /**
+     * Multi-turn: Array of turns to execute
+     */
+    turns?: AgentEvalTurn[];
 
     /**
      * Optional conversation context
@@ -69,7 +120,7 @@ export interface AgentEvalInput {
     };
 
     /**
-     * Optional agent execution parameters
+     * Optional agent execution parameters (applies to all turns unless overridden)
      */
     executionParams?: {
         modelOverride?: string;
@@ -162,8 +213,8 @@ export class AgentEvalDriver extends BaseTestDriver {
      *
      * Steps:
      * 1. Parse configuration and input
-     * 2. Load and execute agent via AgentRunner
-     * 3. Create bidirectional link (TestRun ↔ AgentRun)
+     * 2. Load and execute agent via AgentRunner (single or multi-turn)
+     * 3. Create bidirectional link (TestRun ↔ AgentRun(s))
      * 4. Run oracles to evaluate results
      * 5. Calculate score and determine status
      * 6. Return structured results
@@ -183,9 +234,14 @@ export class AgentEvalDriver extends BaseTestDriver {
             // Load agent
             const agent = await this.loadAgent(config.agentId, context.contextUser);
 
-            // Execute agent
-            this.log(`Executing agent: ${agent.Name}`, context.options.verbose);
-            const agentResult = await this.executeAgent(
+            // Normalize input to multi-turn format
+            const turns = this.normalizeTurns(input);
+            const isMultiTurn = turns.length > 1;
+
+            this.log(`Executing agent: ${agent.Name} (${turns.length} turn${turns.length > 1 ? 's' : ''})`, context.options.verbose);
+
+            // Execute agent (single or multi-turn)
+            const { agentRuns, turnResults } = await this.executeAgent(
                 agent,
                 input,
                 context.contextUser,
@@ -194,29 +250,27 @@ export class AgentEvalDriver extends BaseTestDriver {
                 context.testRun
             );
 
-            const agentRun = agentResult.agentRun;
+            // Create bidirectional links for all agent runs
+            await this.linkTestRunToAgentRuns(context.testRun, agentRuns);
 
-            // Create bidirectional link
-            await this.linkTestRunToAgentRun(context.testRun, agentRun);
-
-            // Extract actual output
-            const actualOutput = this.extractAgentOutput(agentRun);
+            // Get final agent run and output
+            const finalAgentRun = agentRuns[agentRuns.length - 1];
+            const actualOutput = this.extractAgentOutput(finalAgentRun);
 
             // Run oracles
             this.log('Running oracles for evaluation', context.options.verbose);
-            const oracleResults = await this.runOracles(
+            const oracleResults = await this.runOraclesForMultiTurn(
                 config,
-                input,
+                turns,
+                turnResults,
                 expected,
-                actualOutput,
-                agentRun,
                 context
             );
 
             // Calculate score and status
-            // When oracles are disabled, consider test passed if agent succeeded
+            // When oracles are disabled, consider test passed if final agent run succeeded
             const score = this.calculateScore(oracleResults, config.scoringWeights);
-            const status = oracleResults.length === 0 && agentRun.Status === 'Completed'
+            const status = oracleResults.length === 0 && finalAgentRun.Status === 'Completed'
                 ? 'Passed'
                 : this.determineStatus(oracleResults);
 
@@ -224,16 +278,14 @@ export class AgentEvalDriver extends BaseTestDriver {
             const passedChecks = oracleResults.filter(r => r.passed).length;
             const totalChecks = oracleResults.length;
 
-            // Calculate cost
-            const totalCost = this.calculateTotalCost(agentRun);
-
-            // Calculate duration in MS
-            const durationMs = this.calculateDurationMs(agentRun);
+            // Calculate total cost and duration across all turns
+            const totalCost = turnResults.reduce((sum, tr) => sum + (tr.cost || 0), 0);
+            const durationMs = turnResults.reduce((sum, tr) => sum + (tr.durationMs || 0), 0);
 
             // Build result
             const result: DriverExecutionResult = {
                 targetType: 'AI Agent',
-                targetLogId: agentRun.ID,
+                targetLogId: finalAgentRun.ID,
                 status,
                 score,
                 oracleResults,
@@ -244,7 +296,11 @@ export class AgentEvalDriver extends BaseTestDriver {
                 expectedOutput: expected,
                 actualOutput,
                 totalCost,
-                durationMs
+                durationMs,
+                // Multi-turn specific fields
+                totalTurns: isMultiTurn ? turns.length : undefined,
+                turnResults: isMultiTurn ? turnResults : undefined,
+                allAgentRunIds: isMultiTurn ? agentRuns.map(ar => ar.ID) : undefined
             };
 
             this.log(
@@ -327,12 +383,49 @@ export class AgentEvalDriver extends BaseTestDriver {
 
             // Validate input definition
             const input = this.parseInputDefinition<AgentEvalInput>(test);
-            if (!input.userMessage || input.userMessage.trim() === '') {
+
+            // Validate either userMessage OR turns is provided
+            if (!input.userMessage && (!input.turns || input.turns.length === 0)) {
                 errors.push({
                     category: 'input',
-                    message: 'userMessage is required in InputDefinition',
-                    field: 'InputDefinition.userMessage',
-                    suggestion: 'Provide the user message to send to the agent'
+                    message: 'Either userMessage or turns array is required in InputDefinition',
+                    field: 'InputDefinition',
+                    suggestion: 'Provide userMessage for single-turn or turns array for multi-turn tests'
+                });
+            }
+
+            // Validate turns array if provided
+            if (input.turns) {
+                if (input.turns.length === 0) {
+                    errors.push({
+                        category: 'input',
+                        message: 'turns array cannot be empty',
+                        field: 'InputDefinition.turns',
+                        suggestion: 'Provide at least one turn in the turns array'
+                    });
+                }
+
+                // Validate each turn
+                input.turns.forEach((turn, index) => {
+                    if (!turn.userMessage || turn.userMessage.trim() === '') {
+                        errors.push({
+                            category: 'input',
+                            message: `Turn ${index + 1}: userMessage is required`,
+                            field: `InputDefinition.turns[${index}].userMessage`,
+                            suggestion: 'Each turn must have a non-empty userMessage'
+                        });
+                    }
+                });
+
+                // Warning if inputPayload provided on non-first turns
+                input.turns.forEach((turn, index) => {
+                    if (index > 0 && turn.inputPayload) {
+                        warnings.push({
+                            category: 'best-practice',
+                            message: `Turn ${index + 1}: inputPayload will be overridden by previous turn output`,
+                            recommendation: 'Only the first turn should have inputPayload defined; subsequent turns automatically receive output from previous turn'
+                        });
+                    }
                 });
             }
 
@@ -363,7 +456,7 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /**
-     * Execute agent and return result.
+     * Execute agent (single or multi-turn) and return results.
      * @private
      */
     private async executeAgent(
@@ -373,15 +466,77 @@ export class AgentEvalDriver extends BaseTestDriver {
         test: TestEntity,
         maxExecutionTime: number | undefined,
         testRun: TestRunEntity
-    ): Promise<{ agentRun: AIAgentRunEntity }> {
+    ): Promise<{ agentRuns: AIAgentRunEntity[], turnResults: TurnResult[] }> {
+        // Normalize to multi-turn format
+        const turns = this.normalizeTurns(input);
+
+        const agentRuns: AIAgentRunEntity[] = [];
+        const turnResults: TurnResult[] = [];
+
+        let conversationId: string | undefined = input.conversationContext?.conversationId;
+        let previousOutputPayload: Record<string, unknown> | undefined;
+
+        // Execute each turn sequentially
+        for (let i = 0; i < turns.length; i++) {
+            const turn = turns[i];
+            const turnNumber = i + 1;
+
+            // Determine input payload for this turn
+            const inputPayload = i === 0
+                ? turn.inputPayload  // First turn: use provided payload
+                : previousOutputPayload;  // Subsequent turns: use previous output
+
+            // Execute single turn
+            const turnResult = await this.executeSingleTurn({
+                agent,
+                turn,
+                turnNumber,
+                totalTurns: turns.length,
+                conversationId,
+                inputPayload,
+                priorMessages: input.conversationContext?.priorMessages,
+                contextUser,
+                test,
+                testRun,
+                maxExecutionTime
+            });
+
+            agentRuns.push(turnResult.agentRun);
+            turnResults.push(turnResult);
+
+            // Update context for next turn
+            conversationId = turnResult.agentRun.ConversationID;
+            previousOutputPayload = this.extractOutputPayload(turnResult.agentRun);
+        }
+
+        return { agentRuns, turnResults };
+    }
+
+    /**
+     * Execute a single turn in a multi-turn test.
+     * @private
+     */
+    private async executeSingleTurn(params: {
+        agent: AIAgentEntity;
+        turn: AgentEvalTurn;
+        turnNumber: number;
+        totalTurns: number;
+        conversationId?: string;
+        inputPayload?: Record<string, unknown>;
+        priorMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;
+        contextUser: UserInfo;
+        test: TestEntity;
+        testRun: TestRunEntity;
+        maxExecutionTime?: number;
+    }): Promise<TurnResult> {
         const runner = new AgentRunner();
 
-        // Build conversation messages
+        // Build conversation messages (only for first turn with priorMessages)
         const conversationMessages: ChatMessage[] = [];
 
-        // Add prior messages if provided
-        if (input.conversationContext?.priorMessages) {
-            for (const msg of input.conversationContext.priorMessages) {
+        // Add prior messages only if this is the first turn and they're provided
+        if (params.turnNumber === 1 && params.priorMessages) {
+            for (const msg of params.priorMessages) {
                 conversationMessages.push({
                     role: msg.role,
                     content: msg.content
@@ -392,68 +547,136 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Add current user message
         conversationMessages.push({
             role: 'user',
-            content: input.userMessage
+            content: params.turn.userMessage
         } as ChatMessage);
 
+        // Build conversation name
+        const conversationName = params.totalTurns > 1
+            ? (params.testRun.Sequence != null
+                ? `[${params.testRun.Sequence}] ${params.test.Name} - Turn ${params.turnNumber}`
+                : `[Test] ${params.test.Name} - Turn ${params.turnNumber}`)
+            : (params.testRun.Sequence != null
+                ? `[${params.testRun.Sequence}] ${params.test.Name}`
+                : `[Test] ${params.test.Name}`);
+
         // Build execution parameters
-        const params = {
-            agent: agent as any, // Will be AIAgentEntityExtended at runtime
+        const runParams = {
+            agent: params.agent as any,
+            conversationId: params.conversationId,  // Continue same conversation for multi-turn
             conversationMessages,
-            contextUser,
-            override: input.executionParams?.modelOverride ? {
-                modelId: input.executionParams.modelOverride
+            contextUser: params.contextUser,
+            override: params.turn.executionParams?.modelOverride ? {
+                modelId: params.turn.executionParams.modelOverride
             } : undefined
         };
 
-        // Generate conversation name with sequence number (if in suite) or [Test] prefix (standalone)
-        // Sequence will be non-null when test is part of a suite run, showing test execution order
-        const conversationName = testRun.Sequence != null
-            ? `[${testRun.Sequence}] ${test.Name}`
-            : `[Test] ${test.Name}`;
+        // Execute with timeout if specified
+        const executePromise = runner.RunAgentInConversation(runParams, {
+            userMessage: params.turn.userMessage,
+            createArtifacts: true,
+            conversationName: conversationName,
+            testRunId: params.testRun.ID
+        });
 
-        // Execute agent with timeout if specified
-        if (maxExecutionTime) {
-            const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Agent execution timeout')), maxExecutionTime)
-            );
+        const startTime = Date.now();
+        const runResult = params.maxExecutionTime
+            ? await Promise.race([
+                executePromise,
+                this.createTimeoutPromise(params.maxExecutionTime)
+            ])
+            : await executePromise;
+        const endTime = Date.now();
 
-            const runResult = await Promise.race([
-                runner.RunAgentInConversation(params, {
-                    userMessage: input.userMessage,
-                    createArtifacts: true,
-                    conversationName: conversationName,
-                    testRunId: testRun.ID
-                }),
-                timeoutPromise
-            ]);
+        const agentRun = runResult.agentResult.agentRun;
 
-            return { agentRun: runResult.agentResult.agentRun };
-        } else {
-            const runResult = await runner.RunAgentInConversation(params, {
-                userMessage: input.userMessage,
-                createArtifacts: true,
-                conversationName: conversationName,
-                testRunId: testRun.ID
-            });
-
-            return { agentRun: runResult.agentResult.agentRun };
-        }
+        return {
+            turnNumber: params.turnNumber,
+            agentRun,
+            inputPayload: params.inputPayload,
+            outputPayload: this.extractOutputPayload(agentRun),
+            durationMs: endTime - startTime,
+            cost: agentRun.TotalCost || 0
+        };
     }
 
     /**
-     * Create bidirectional link between TestRun and AgentRun.
+     * Create a timeout promise that rejects after specified milliseconds.
      * @private
      */
-    private async linkTestRunToAgentRun(
-        testRun: TestRunEntity,
-        agentRun: AIAgentRunEntity
-    ): Promise<void> {
-        // Update AgentRun with hard FK to TestRun
-        agentRun.TestRunID = testRun.ID;
-        const saved = await agentRun.Save();
+    private createTimeoutPromise(timeoutMs: number): Promise<never> {
+        return new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Agent execution timeout after ${timeoutMs}ms`)), timeoutMs)
+        );
+    }
 
-        if (!saved) {
-            this.logError('Failed to link AgentRun to TestRun', new Error(agentRun.LatestResult?.Message));
+    /**
+     * Normalize input to multi-turn format for consistent processing.
+     * @private
+     */
+    private normalizeTurns(input: AgentEvalInput): AgentEvalTurn[] {
+        // If turns array provided, use it
+        if (input.turns && input.turns.length > 0) {
+            return input.turns;
+        }
+
+        // Backward compatibility: convert single message to single turn
+        if (input.userMessage) {
+            return [{
+                userMessage: input.userMessage,
+                inputPayload: input.inputPayload
+            }];
+        }
+
+        throw new Error('Either userMessage or turns must be provided in InputDefinition');
+    }
+
+    /**
+     * Extract output payload from agent run.
+     * @private
+     */
+    private extractOutputPayload(agentRun: AIAgentRunEntity): Record<string, unknown> {
+        // TODO: This implementation depends on where AgentRun stores output payload
+        // For now, return a basic structure with agent run metadata
+        return {
+            agentRunId: agentRun.ID,
+            status: agentRun.Status,
+            success: agentRun.Success,
+            conversationId: agentRun.ConversationID,
+            errorMessage: agentRun.ErrorMessage
+            // Add actual payload extraction logic based on AgentRun structure
+            // e.g., agentRun.OutputPayload if that field exists
+        };
+    }
+
+    /**
+     * Create bidirectional links between TestRun and multiple AgentRuns.
+     * @private
+     */
+    private async linkTestRunToAgentRuns(
+        testRun: TestRunEntity,
+        agentRuns: AIAgentRunEntity[]
+    ): Promise<void> {
+        // Link each AgentRun to TestRun with TurnNumber
+        for (let i = 0; i < agentRuns.length; i++) {
+            const agentRun = agentRuns[i];
+            const turnNumber = i + 1;
+
+            // Update AgentRun with hard FK to TestRun
+            agentRun.TestRunID = testRun.ID;
+
+            // Set turn number if field exists (check dynamically)
+            if ('TurnNumber' in agentRun) {
+                (agentRun as any).TurnNumber = turnNumber;
+            }
+
+            const saved = await agentRun.Save();
+
+            if (!saved) {
+                this.logError(
+                    `Failed to link AgentRun (Turn ${turnNumber}) to TestRun`,
+                    new Error(agentRun.LatestResult?.Message)
+                );
+            }
         }
     }
 
@@ -471,27 +694,109 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /**
-     * Run configured oracles.
+     * Run oracles for multi-turn evaluation.
      * @private
      */
-    private async runOracles(
+    private async runOraclesForMultiTurn(
         config: AgentEvalConfig,
-        input: AgentEvalInput,
+        turns: AgentEvalTurn[],
+        turnResults: TurnResult[],
         expected: AgentEvalExpectedOutcomes,
-        actualOutput: Record<string, unknown>,
-        agentRun: AIAgentRunEntity,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        const oracleResults: OracleResult[] = [];
-
         // TODO: Temporarily skip oracle execution while oracles are being finalized
         // Remove this flag once oracles are ready (SQL schema fixes, LLM Judge prompt creation, etc.)
         const skipOracles = true;
 
         if (skipOracles) {
             this.log('⚠️  Oracle execution temporarily disabled', context.options.verbose);
-            return oracleResults;
+            return [];
         }
+
+        const strategy = config.evaluationStrategy || 'final-turn-only';
+
+        switch (strategy) {
+            case 'final-turn-only':
+                return this.runOraclesForFinalTurn(config, turns, turnResults, expected, context);
+
+            case 'each-turn':
+                return this.runOraclesForEachTurn(config, turns, turnResults, expected, context);
+
+            case 'all-turns-aggregate':
+                return this.runOraclesForAllTurns(config, turns, turnResults, expected, context);
+
+            default:
+                throw new Error(`Unknown evaluation strategy: ${strategy}`);
+        }
+    }
+
+    /**
+     * Run oracles only on the final turn.
+     * @private
+     */
+    private async runOraclesForFinalTurn(
+        config: AgentEvalConfig,
+        turns: AgentEvalTurn[],
+        turnResults: TurnResult[],
+        expected: AgentEvalExpectedOutcomes,
+        context: DriverExecutionContext
+    ): Promise<OracleResult[]> {
+        const finalTurnResult = turnResults[turnResults.length - 1];
+        const finalTurn = turns[turns.length - 1];
+
+        return this.runOraclesForSingleTurn(
+            config,
+            finalTurn,
+            finalTurnResult,
+            finalTurn.expectedOutcomes || expected,
+            context
+        );
+    }
+
+    /**
+     * Run oracles after each turn and aggregate results.
+     * @private
+     */
+    private async runOraclesForEachTurn(
+        config: AgentEvalConfig,
+        turns: AgentEvalTurn[],
+        turnResults: TurnResult[],
+        expected: AgentEvalExpectedOutcomes,
+        context: DriverExecutionContext
+    ): Promise<OracleResult[]> {
+        const allResults: OracleResult[] = [];
+
+        for (let i = 0; i < turnResults.length; i++) {
+            const turn = turns[i];
+            const turnResult = turnResults[i];
+
+            const turnOracles = await this.runOraclesForSingleTurn(
+                config,
+                turn,
+                turnResult,
+                turn.expectedOutcomes || expected,
+                context,
+                `Turn ${i + 1}: `
+            );
+
+            allResults.push(...turnOracles);
+        }
+
+        return allResults;
+    }
+
+    /**
+     * Run oracles with all turns data for holistic evaluation.
+     * @private
+     */
+    private async runOraclesForAllTurns(
+        config: AgentEvalConfig,
+        turns: AgentEvalTurn[],
+        turnResults: TurnResult[],
+        expected: AgentEvalExpectedOutcomes,
+        context: DriverExecutionContext
+    ): Promise<OracleResult[]> {
+        const oracleResults: OracleResult[] = [];
 
         for (const oracleConfig of config.oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
@@ -501,11 +806,20 @@ export class AgentEvalDriver extends BaseTestDriver {
             }
 
             try {
+                // Pass all turns data to oracle
                 const oracleInput: OracleInput = {
                     test: context.test,
                     expectedOutput: expected,
-                    actualOutput,
-                    targetEntity: agentRun,
+                    actualOutput: {
+                        turns: turnResults.map(tr => ({
+                            turnNumber: tr.turnNumber,
+                            inputPayload: tr.inputPayload,
+                            outputPayload: tr.outputPayload,
+                            agentRunId: tr.agentRun.ID
+                        })),
+                        finalOutput: turnResults[turnResults.length - 1].outputPayload
+                    },
+                    targetEntity: turnResults[turnResults.length - 1].agentRun,
                     contextUser: context.contextUser
                 };
 
@@ -524,6 +838,64 @@ export class AgentEvalDriver extends BaseTestDriver {
                     passed: false,
                     score: 0,
                     message: `Oracle execution failed: ${(error as Error).message}`
+                });
+            }
+        }
+
+        return oracleResults;
+    }
+
+    /**
+     * Run oracles for a single turn.
+     * @private
+     */
+    private async runOraclesForSingleTurn(
+        config: AgentEvalConfig,
+        turn: AgentEvalTurn,
+        turnResult: TurnResult,
+        expected: AgentEvalExpectedOutcomes,
+        context: DriverExecutionContext,
+        messagePrefix: string = ''
+    ): Promise<OracleResult[]> {
+        const oracleResults: OracleResult[] = [];
+
+        for (const oracleConfig of config.oracles) {
+            const oracle = context.oracleRegistry.get(oracleConfig.type);
+            if (!oracle) {
+                this.logError(`Oracle not found: ${oracleConfig.type}`);
+                continue;
+            }
+
+            try {
+                const oracleInput: OracleInput = {
+                    test: context.test,
+                    expectedOutput: expected,
+                    actualOutput: turnResult.outputPayload,
+                    targetEntity: turnResult.agentRun,
+                    contextUser: context.contextUser
+                };
+
+                const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
+
+                // Add message prefix if provided (for per-turn evaluation)
+                if (messagePrefix) {
+                    result.message = messagePrefix + result.message;
+                }
+
+                oracleResults.push(result);
+
+                this.log(
+                    `${messagePrefix}Oracle ${oracleConfig.type}: ${result.passed ? 'PASSED' : 'FAILED'} (Score: ${result.score})`,
+                    context.options.verbose
+                );
+
+            } catch (error) {
+                this.logError(`${messagePrefix}Oracle ${oracleConfig.type} failed`, error as Error);
+                oracleResults.push({
+                    oracleType: oracleConfig.type,
+                    passed: false,
+                    score: 0,
+                    message: `${messagePrefix}Oracle execution failed: ${(error as Error).message}`
                 });
             }
         }
