@@ -247,7 +247,6 @@ export class GoldenLayoutManager {
    * Add a new tab to the layout
    */
   AddTab(state: TabComponentState): void {
-    console.log('[GoldenLayout] AddTab() called:', state.title, 'id:', state.tabId?.substring(0, 8));
     if (!this.layout) {
       LogError('GoldenLayoutManager: Layout not initialized');
       return;
@@ -316,7 +315,6 @@ export class GoldenLayoutManager {
 
     // Don't load empty or invalid layouts - Golden Layout doesn't handle them well
     if (!config || !config.root || !config.root.content || config.root.content.length === 0) {
-      console.log('[GoldenLayout] Skipping empty layout load');
       return;
     }
 

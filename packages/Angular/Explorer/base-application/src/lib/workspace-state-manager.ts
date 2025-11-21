@@ -121,10 +121,6 @@ export class WorkspaceStateManager {
     const config = this.configuration$.value;
 
     if (workspace && config) {
-      console.log('[Workspace] Saving configuration with', config.tabs.length, 'tabs:');
-      config.tabs.forEach((tab, idx) => {
-        console.log(`[Workspace]   ${idx + 1}. "${tab.title}" (id: ${tab.id.substring(0, 8)}...)`);
-      });
       workspace.Set('Configuration', JSON.stringify(config));
       await workspace.Save();
     }
@@ -149,7 +145,6 @@ export class WorkspaceStateManager {
    * Open a tab (new or focus existing)
    */
   OpenTab(request: TabRequest, appColor: string): string {
-    console.log('[Workspace] OpenTab request:', request.Title, 'for app:', request.ApplicationId?.substring(0, 8));
     const config = this.configuration$.value;
     if (!config) {
       throw new Error('Configuration not initialized');
@@ -172,7 +167,6 @@ export class WorkspaceStateManager {
     });
 
     if (existingTab) {
-      console.log('[Workspace] Focusing existing tab:', existingTab.title);
       // Focus existing tab
       const updatedConfig = {
         ...config,
@@ -186,7 +180,6 @@ export class WorkspaceStateManager {
     const tempTab = config.tabs.find(tab => !tab.isPinned);
 
     if (tempTab) {
-      console.log('[Workspace] Replacing temp tab "' + tempTab.title + '" with "' + request.Title + '"');
       // Replace temporary tab
       const updatedTabs = config.tabs.map(tab =>
         tab.id === tempTab.id
@@ -210,7 +203,6 @@ export class WorkspaceStateManager {
     }
 
     // Create new tab
-    console.log('[Workspace] Creating new tab:', request.Title);
     const newTab: WorkspaceTab = {
       id: this.generateUUID(),
       applicationId: request.ApplicationId,

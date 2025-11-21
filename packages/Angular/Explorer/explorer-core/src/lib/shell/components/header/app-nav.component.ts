@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 
 /**
@@ -9,17 +9,30 @@ import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction
   templateUrl: './app-nav.component.html',
   styleUrls: ['./app-nav.component.scss']
 })
-export class AppNavComponent {
+export class AppNavComponent implements OnInit, OnChanges {
   @Input() app: BaseApplication | null = null;
   @Output() navItemClick = new EventEmitter<NavItem>();
 
   constructor(private workspaceManager: WorkspaceStateManager) {}
 
+  ngOnInit(): void {
+    console.log('[AppNav] Component initialized, app:', this.app?.Name);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['app']) {
+      console.log('[AppNav] App input changed to:', this.app?.Name);
+      console.log('[AppNav] Nav items:', this.app?.GetNavItems());
+    }
+  }
+
   /**
    * Get navigation items for current app
    */
   get navItems(): NavItem[] {
-    return this.app?.GetNavItems() || [];
+    const items = this.app?.GetNavItems() || [];
+    console.log('[AppNav] navItems getter called, returning', items.length, 'items:', items);
+    return items;
   }
 
   /**
@@ -33,7 +46,9 @@ export class AppNavComponent {
    * Handle nav item click
    */
   onNavClick(item: NavItem): void {
+    console.log('[AppNav] Nav item clicked:', item.Label, item);
     this.navItemClick.emit(item);
+    console.log('[AppNav] Event emitted');
   }
 
   /**
@@ -47,7 +62,7 @@ export class AppNavComponent {
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     if (activeTab && activeTab.applicationId === this.app.ID) {
       // Simple route matching
-      return activeTab.configuration['route'] === item.Route ||
+      return (item.Route && activeTab.configuration['route'] === item.Route) ||
              activeTab.title === item.Label;
     }
     return false;

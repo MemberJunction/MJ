@@ -52,14 +52,20 @@ export class BaseApplication {
     }
   }
 
+  private _defaultNavItems: NavItem[] | null = null;
   /**
    * Returns navigation items for this application.
    * Override in subclass for dynamic behavior based on permissions, context, etc.
    */
   GetNavItems(): NavItem[] {
+    if (this._defaultNavItems) {
+      return this._defaultNavItems;
+    }
+
     if (this.DefaultNavItems) {
       try {
-        return JSON.parse(this.DefaultNavItems) as NavItem[];
+        this._defaultNavItems = JSON.parse(this.DefaultNavItems) as NavItem[];
+        return this._defaultNavItems;
       } catch (e) {
         console.error(`Failed to parse DefaultNavItems for ${this.Name}:`, e);
         return [];
