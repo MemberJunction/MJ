@@ -87,6 +87,10 @@ export interface SampleQuery {
   validated: boolean;
   validationError?: string;
 
+  /** Fix attempt tracking */
+  fixAttempts?: number;
+  fixHistory?: Array<{ sql: string; error: string }>;
+
   /** Generation metadata */
   generatedAt: string;
   confidence: number;
@@ -176,6 +180,8 @@ export interface SampleQueryGenerationConfig {
   queryTypes?: QueryType[];
   maxRowsInSample: number;
   maxTables?: number;  // Max tables to generate queries for (default: 10, set to 0 for all tables)
+  enableQueryFix?: boolean;  // Enable automatic query fix attempts (default: true)
+  maxFixAttempts?: number;  // Maximum number of fix attempts per query (default: 3)
 }
 
 export interface QueryGenerationContext {

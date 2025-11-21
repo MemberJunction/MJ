@@ -62,6 +62,8 @@ export interface SampleQueryGenerationConfig {
   tokenBudget: number;                  // Token budget for query generation phase (default: 100000, set to 0 for unlimited)
   maxRowsInSample: number;              // Max rows to return in sample results (default: 10)
   maxTables?: number;                   // Max tables to generate queries for (default: 10, set to 0 for all tables)
+  enableQueryFix?: boolean;             // Enable automatic query fix attempts (default: true)
+  maxFixAttempts?: number;              // Maximum number of fix attempts per query (default: 3)
 }
 
 export interface RelationshipDiscoveryConfig {

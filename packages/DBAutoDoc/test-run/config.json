@@ -100,6 +100,18 @@
         "enabled": true,
         "maxIterations": 5
       }
+    },
+    "sampleQueryGeneration": {
+      "enabled": true,
+      "queriesPerTable": 5,
+      "maxExecutionTime": 30000,
+      "includeMultiQueryPatterns": true,
+      "validateAlignment": true,
+      "tokenBudget": 100000,
+      "maxRowsInSample": 10,
+      "maxTables": 10,
+      "enableQueryFix": true,
+      "maxFixAttempts": 3
     }
   },
   "output": {
