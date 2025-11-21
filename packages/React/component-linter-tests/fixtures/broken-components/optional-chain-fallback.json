@@ -1,0 +1,23 @@
+{
+  "name": "OptionalChainFallbackTest",
+  "type": "chart",
+  "title": "Test Component with weak fallback pattern",
+  "description": "Component using the exact bug pattern: result?.records ?? result?.Rows ?? []",
+  "code": "function OptionalChainFallbackTest({ utilities }) {\n  const [data, setData] = React.useState([]);\n\n  React.useEffect(() => {\n    const loadData = async () => {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'TestQuery'\n      });\n      // BUG: Weak fallback pattern with multiple invalid properties\n      const rows = result?.records ?? result?.Rows ?? [];\n      setData(rows);\n    };\n    loadData();\n  }, []);\n\n  return React.createElement('div', null, 'Data: ' + data.length);\n}",
+  "location": "embedded",
+  "functionalRequirements": "Test component for linter validation",
+  "technicalDesign": "Simple test component",
+  "exampleUsage": "<OptionalChainFallbackTest />",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "TestQuery",
+        "categoryPath": "Test",
+        "fields": [],
+        "entityNames": []
+      }
+    ],
+    "entities": []
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "EventSubmissionsByStatus",
+  "title": "Event Submissions by Status",
+  "description": "Conference abstract submissions grouped by status with drill-down to submission details. Demonstrates advanced chart with drill-down features including SingleRecordView panel, custom field configuration, and count-based aggregation for tracking submission volumes across workflow stages.",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "Displays count of abstract submissions by status (New, Analyzing, Passed Initial, Under Review, Accepted, Rejected, etc.) for a specific event. Users click a status segment to see all submissions in that status. Clicking a submission row in the grid opens a detailed SingleRecordView panel showing full submission information including title, abstract, evaluation scores, and speaker details. Useful for conference organizers tracking submission pipeline and review workflows.",
+  "technicalDesign": "Loads all Submission records for specified EventID via RunView. Uses count aggregation (no valueField) to show submission volumes by Status. Implements doughnut chart for workflow stage visualization. Enables both grid drill-down and SingleRecordView side panel. Grid shows key submission fields (title, submitted date, score). SingleRecordView displays comprehensive submission details for in-depth review. Demonstrates showSingleRecordView=true configuration with custom field selection.",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Loads Submission entity filtered by EventID"
+  },
+  "properties": [
+    {
+      "name": "eventId",
+      "type": "string",
+      "description": "GUID of the event to show submissions for",
+      "required": true
+    },
+    {
+      "name": "eventName",
+      "type": "string",
+      "description": "Name of the event for display in title",
+      "required": false
+    },
+    {
+      "name": "onSubmissionSelected",
+      "type": "function",
+      "description": "Callback when a submission is selected in the grid",
+      "required": false,
+      "parameters": [
+        {
+          "name": "submission",
+          "type": "object",
+          "description": "Selected submission record"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "submissionSelected",
+      "description": "Fired when user selects a submission row",
+      "parameters": [
+        {
+          "name": "submission",
+          "type": "object",
+          "description": "Selected submission details"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleDrilldownChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry",
+      "version": "1.0.0",
+      "description": "Chart with drill-down and SingleRecordView capability"
+    }
+  ],
+  "code": "@file:../code/event-submissions-by-status.js",
+  "exampleUsage": "<EventSubmissionsByStatus \n  eventId=\"A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D\"\n  eventName=\"Annual Technology Conference 2025\"\n  onSubmissionSelected={(submission) => console.log('Viewing:', submission.SubmissionTitle)}\n/>"
+}

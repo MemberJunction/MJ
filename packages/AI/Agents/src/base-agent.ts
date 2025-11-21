@@ -4209,6 +4209,12 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if prompt execution failed
             if (!promptResult.success) {
+                // CRITICAL FIX: Preserve payload before finalizing step
+                // This matches the success path behavior where PayloadAtEnd is set before finalizeStepEntity
+                if (stepEntity && payload) {
+                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                }
+
                 await this.finalizeStepEntity(stepEntity, false, promptResult.errorMessage);
 
                 // Check if this is a fatal error that shouldn't be retried
@@ -4248,6 +4254,11 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
+                // CRITICAL FIX: Preserve payload before finalizing step
+                if (stepEntity && payload) {
+                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                }
+
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
                 const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
                 return {
@@ -4362,8 +4373,11 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (error) {
             // in this case, we have a failed prompt execution. In this situation, let's make sure our payload at end isn't adjusted as
             // that affects downstream things in the agent run
-            // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
-            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
+            // Preserve payload on error
+            const payload = stepEntity.PayloadAtEnd
+                ? JSON.parse(stepEntity.PayloadAtEnd)
+                : (previousDecision?.newPayload || params.payload);
+
             stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -4815,10 +4829,11 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: mergedPayload
             };            
         } catch (error) {
-            // in this case, we have a failed sub-agent execution. In this situation, let's make sure our payload at end isn't adjusted as
-            // that affects downstream things in the agent run
-            // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
-            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
+            // Preserve payload on error
+            const payload = stepEntity.PayloadAtEnd
+                ? JSON.parse(stepEntity.PayloadAtEnd)
+                : (previousDecision?.newPayload || params.payload);
+
             stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
@@ -5140,7 +5155,11 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: mergedPayload
             };
         } catch (error) {
-            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
+            // Preserve payload on error
+            const payload = stepEntity.PayloadAtEnd
+                ? JSON.parse(stepEntity.PayloadAtEnd)
+                : (previousDecision?.newPayload || params.payload);
+
             stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
             await this.finalizeStepEntity(stepEntity, false, error.message);
 

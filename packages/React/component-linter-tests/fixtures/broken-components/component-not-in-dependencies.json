@@ -1,0 +1,8 @@
+{
+  "name": "TestComponent",
+  "description": "Component using component not declared in dependencies (violates component-not-in-dependencies rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, components }) {\n  const { UserCard } = components;\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <UserCard name=\"John\" />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": []
+}

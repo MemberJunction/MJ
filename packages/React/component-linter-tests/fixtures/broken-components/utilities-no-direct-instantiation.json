@@ -1,0 +1,14 @@
+{
+  "name": "TestComponent",
+  "description": "Component directly instantiating RunView/RunQuery instead of using utilities (violates utilities-no-direct-instantiation rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      const rv = new RunView();\n      const result = await rv.RunView({ EntityName: 'Users' });\n      setData(result.Results || []);\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>Data count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": [
+    {
+      "type": "view",
+      "entityName": "Users",
+      "maxRows": 100
+    }
+  ]
+}

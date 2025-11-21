@@ -185,12 +185,33 @@ export class ErrorAnalyzer {
             return 'ModelError';
         }
 
-        // Check for invalid request patterns (be specific to avoid false positives)
-        if (errorString.includes('invalid request') ||
-            errorString.includes('bad request') ||
-            errorString.includes('malformed request') ||
-            errorString.includes('validation error')) {
+        // Check for vendor-specific validation errors
+        // These are field/schema validation errors that may be vendor-specific
+        // Examples: "PartListUnion is required", "field X is missing", "property Y must be..."
+        if (errorString.includes('required') ||
+            errorString.includes('validation') ||
+            errorString.includes('schema') ||
+            /\w+\s+is\s+required/.test(errorString) ||        // Matches "X is required"
+            /missing.*(?:field|property)/.test(errorString) || // Matches "missing field/property X"
+            /(?:field|property).*missing/.test(errorString) || // Matches "field/property X missing"
+            /must\s+(?:be|have|contain)/.test(errorString)) {  // Matches "X must be/have/contain Y"
+            return 'VendorValidationError';
+        }
+
+        // Check for structural invalid request patterns (truly malformed requests)
+        if (errorString.includes('malformed json') ||
+            errorString.includes('invalid json') ||
+            errorString.includes('json parse') ||
+            errorString.includes('syntax error') ||
+            errorString.includes('malformed request')) {
             return 'InvalidRequest';
+        }
+
+        // Generic "bad request" or "invalid request" - if no specific patterns matched above,
+        // default to VendorValidationError to allow failover (permissive approach)
+        if (errorString.includes('invalid request') ||
+            errorString.includes('bad request')) {
+            return 'VendorValidationError';
         }
 
         // Check for specific error types from provider SDKs
@@ -244,6 +265,7 @@ export class ErrorAnalyzer {
             case 'NoCredit':              // Billing/credit errors are retriable with another provider
             case 'ServiceUnavailable':
             case 'NetworkError':
+            case 'VendorValidationError': // Vendor-specific validation is retriable with another vendor
                 return 'Retriable';
 
             case 'InternalServerError':
@@ -251,7 +273,7 @@ export class ErrorAnalyzer {
                 return 'Transient';
 
             case 'Authentication':
-            case 'InvalidRequest':
+            case 'InvalidRequest':        // Structural errors (malformed JSON, etc.)
                 return 'Fatal';
 
             case 'ContextLengthExceeded':
@@ -267,7 +289,7 @@ export class ErrorAnalyzer {
      *
      * Strategy: We're permissive with failover - most errors should allow trying another
      * provider/model since vendors may use different status codes and error messages.
-     * Only block failover for clear client-side errors that won't be fixed by switching.
+     * Only block failover for clear client-side structural errors that won't be fixed by switching.
      *
      * @private
      * @static
@@ -285,10 +307,11 @@ export class ErrorAnalyzer {
             case 'ModelError':             // Different provider may have working model
             case 'ContextLengthExceeded':  // Different model may have larger context
             case 'Authentication':         // Different vendor may have valid API key
+            case 'VendorValidationError':  // Vendor-specific validation, different vendor may accept
                 return true;
 
-            // Clear client-side errors - DO NOT failover (won't help)
-            case 'InvalidRequest':         // Malformed request won't work elsewhere
+            // Clear client-side structural errors - DO NOT failover (won't help)
+            case 'InvalidRequest':         // Malformed JSON/syntax won't work anywhere
                 return false;
 
             // Unknown errors - DEFAULT to allowing failover (permissive approach)
