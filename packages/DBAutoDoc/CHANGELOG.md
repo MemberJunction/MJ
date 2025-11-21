@@ -1,5 +1,15 @@
 # @memberjunction/db-auto-doc
 
+## 2.121.0
+
+### Patch Changes
+
+- a2bef0a: Refactor component-linter with fixture-based testing infrastructure, fix agent execution error handling and payload propagation, add Gemini API parameter fixes, and improve vendor failover with VendorValidationError type
+- Updated dependencies [a2bef0a]
+  - @memberjunction/ai@2.121.0
+  - @memberjunction/ai-provider-bundle@2.121.0
+  - @memberjunction/global@2.121.0
+
 ## 2.120.0
 
 ### Patch Changes

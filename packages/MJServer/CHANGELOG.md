@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/server
 
+## 2.121.0
+
+### Patch Changes
+
+- Updated dependencies [a2bef0a]
+- Updated dependencies [7d5a046]
+  - @memberjunction/core@2.121.0
+  - @memberjunction/ai-agents@2.121.0
+  - @memberjunction/ai@2.121.0
+  - @memberjunction/ai-prompts@2.121.0
+  - @memberjunction/testing-engine@2.121.0
+  - @memberjunction/ai-agent-manager-actions@2.121.0
+  - @memberjunction/ai-agent-manager@2.121.0
+  - @memberjunction/ai-core-plus@2.121.0
+  - @memberjunction/aiengine@2.121.0
+  - @memberjunction/ai-vectors-pinecone@2.121.0
+  - @memberjunction/actions-apollo@2.121.0
+  - @memberjunction/actions-bizapps-accounting@2.121.0
+  - @memberjunction/actions-bizapps-crm@2.121.0
+  - @memberjunction/actions-bizapps-formbuilders@2.121.0
+  - @memberjunction/actions-bizapps-lms@2.121.0
+  - @memberjunction/actions-bizapps-social@2.121.0
+  - @memberjunction/core-actions@2.121.0
+  - @memberjunction/actions@2.121.0
+  - @memberjunction/entity-communications-server@2.121.0
+  - @memberjunction/communication-ms-graph@2.121.0
+  - @memberjunction/communication-sendgrid@2.121.0
+  - @memberjunction/component-registry-client-sdk@2.121.0
+  - @memberjunction/doc-utils@2.121.0
+  - @memberjunction/external-change-detection@2.121.0
+  - @memberjunction/graphql-dataprovider@2.121.0
+  - @memberjunction/core-entities@2.121.0
+  - @memberjunction/core-entities-server@2.121.0
+  - @memberjunction/data-context@2.121.0
+  - @memberjunction/data-context-server@2.121.0
+  - @memberjunction/queue@2.121.0
+  - @memberjunction/storage@2.121.0
+  - @memberjunction/sqlserver-dataprovider@2.121.0
+  - @memberjunction/scheduling-actions@2.121.0
+  - @memberjunction/scheduling-engine-base@2.121.0
+  - @memberjunction/scheduling-engine@2.121.0
+  - @memberjunction/skip-types@2.121.0
+  - @memberjunction/templates@2.121.0
+  - @memberjunction/ai-provider-bundle@2.121.0
+  - @memberjunction/global@2.121.0
+  - @memberjunction/scheduling-base-types@2.121.0
+
 ## 2.120.0
 
 ### Patch Changes

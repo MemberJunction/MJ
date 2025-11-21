@@ -1,5 +1,16 @@
 # @memberjunction/react-test-harness
 
+## 2.121.0
+
+### Patch Changes
+
+- a2bef0a: Refactor component-linter with fixture-based testing infrastructure, fix agent execution error handling and payload propagation, add Gemini API parameter fixes, and improve vendor failover with VendorValidationError type
+- Updated dependencies [a2bef0a]
+- Updated dependencies [7d5a046]
+  - @memberjunction/core@2.121.0
+  - @memberjunction/interactive-component-types@2.121.0
+  - @memberjunction/react-runtime@2.121.0
+
 ## 2.120.0
 
 ### Patch Changes
