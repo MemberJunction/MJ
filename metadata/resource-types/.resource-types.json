@@ -1,0 +1,119 @@
+[
+  {
+    "fields": {
+      "Name": "Dashboards",
+      "DisplayName": "Dashboards",
+      "Description": "Dashboards contain collections of resources a user can browse",
+      "Icon": "fa-solid fa-table-columns",
+      "EntityID": "@lookup:Entities.Name=Dashboards",
+      "CategoryEntityID": "@lookup:Entities.Name=Dashboard Categories"
+    },
+    "primaryKey": {
+      "ID": "D8AFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Queries",
+      "DisplayName": "Queries",
+      "Description": "Queries contain stored queries that can be used as building blocks for analysis",
+      "Icon": "fa-regular fa-file-code",
+      "EntityID": "@lookup:Entities.Name=Queries",
+      "CategoryEntityID": "@lookup:Entities.Name=Query Categories"
+    },
+    "primaryKey": {
+      "ID": "D9AFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Records",
+      "DisplayName": "Records",
+      "Description": "Records are links to a specific row of data from a designated entity",
+      "Icon": "fa-solid fa-rectangle-list",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "DAAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reports",
+      "DisplayName": "Reports",
+      "Description": "Reports are generated outputs from conversations a user has with the interface",
+      "Icon": "fa-solid fa-chart-simple",
+      "EntityID": "@lookup:Entities.Name=Reports",
+      "CategoryEntityID": "@lookup:Entities.Name=Report Categories"
+    },
+    "primaryKey": {
+      "ID": "DBAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Search Results",
+      "DisplayName": "Search Results",
+      "Description": "Displasy the results of a user search",
+      "Icon": "fa-solid fa-magnifying-glass",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "DCAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "User Views",
+      "DisplayName": "Views",
+      "Description": "User Views contain the metadata for the user viewing system of entity data",
+      "Icon": "fa-solid fa-table",
+      "EntityID": "@lookup:Entities.Name=User Views",
+      "CategoryEntityID": "@lookup:Entities.Name=User View Categories"
+    },
+    "primaryKey": {
+      "ID": "DDAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lists",
+      "DisplayName": "Lists",
+      "Description": "Lists contains sets of records from an Entity",
+      "Icon": "fa-solid fa-rectangle-list",
+      "EntityID": "@lookup:Entities.Name=Lists",
+      "CategoryEntityID": "@lookup:Entities.Name=List Categories"
+    },
+    "primaryKey": {
+      "ID": "E64D433E-F36B-1410-8560-0041FA62858A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Conversations",
+      "DisplayName": "Conversations",
+      "Description": "Conversations include those with AI systems as well as other users",
+      "Icon": "fa-regular fa-comments",
+      "EntityID": "@lookup:Entities.Name=Conversations",
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "81D4BC3D-9FEB-EF11-B01A-286B35C04427"
+    }
+  },
+  {
+    "fields": {
+      "Name": "chat-conversations",
+      "DisplayName": "Chat Conversations",
+      "Description": "Chat conversation interface with sidebar and message area",
+      "Icon": "fa-solid fa-comments",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "6BA617C4-0CBA-4C79-B037-456DF4B03D3D"
+    }
+  }
+]
