@@ -1,9 +1,22 @@
-.erd-composite {
-  overflow: hidden;
+:host {
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
-// Kendo Splitter Styles - let  handle sizing
+.erd-composite {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+// Kendo Splitter Styles
 .main-splitter {
+  height: 100%;
+  width: 100%;
+
   .k-pane {
     overflow: hidden;
   }

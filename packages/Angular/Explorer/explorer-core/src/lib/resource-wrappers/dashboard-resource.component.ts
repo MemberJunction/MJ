@@ -114,6 +114,8 @@ export class DashboardResource extends BaseResourceComponent {
 
             // Manually append the component's native element inside the div
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
             this.containerElement.nativeElement.appendChild(nativeElement);
 
             // Initialize with dashboard data
@@ -193,6 +195,8 @@ export class DashboardResource extends BaseResourceComponent {
 
             // Manually append the component's native element inside the div
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
             this.containerElement.nativeElement.appendChild(nativeElement);
 
             // Initialize with dashboard data
