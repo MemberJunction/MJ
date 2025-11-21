@@ -9,6 +9,16 @@ import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
 
+// Tool filtering types
+export interface ToolFilterOptions {
+    includePatterns?: string[];
+    excludePatterns?: string[];
+}
+
+// Track registered tool names for listing and filtering
+const registeredToolNames: string[] = [];
+let activeFilterOptions: ToolFilterOptions = {};
+
 
 const mcpServerPort = mcpServerSettings?.port || 3100;
 
@@ -38,9 +48,90 @@ const server = new FastMCP({
     version: "1.0.0"
 });
 
+/**
+ * Check if a tool name matches a glob-style pattern
+ * Supports: * (match all), prefix*, *suffix, *contains*
+ */
+function matchesPattern(toolName: string, pattern: string): boolean {
+    const lowerName = toolName.toLowerCase();
+    const lowerPattern = pattern.trim().toLowerCase();
+
+    if (lowerPattern === '*') {
+        return true;
+    }
+
+    const startsWithWildcard = lowerPattern.startsWith('*');
+    const endsWithWildcard = lowerPattern.endsWith('*');
+
+    if (startsWithWildcard && endsWithWildcard) {
+        // *contains*
+        const searchTerm = lowerPattern.slice(1, -1);
+        return lowerName.includes(searchTerm);
+    } else if (startsWithWildcard) {
+        // *suffix
+        const suffix = lowerPattern.slice(1);
+        return lowerName.endsWith(suffix);
+    } else if (endsWithWildcard) {
+        // prefix*
+        const prefix = lowerPattern.slice(0, -1);
+        return lowerName.startsWith(prefix);
+    } else {
+        // exact match
+        return lowerName === lowerPattern;
+    }
+}
+
+/**
+ * Check if a tool should be included based on filter options
+ */
+function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): boolean {
+    const { includePatterns, excludePatterns } = filterOptions;
+
+    // If include patterns are specified, tool must match at least one
+    if (includePatterns && includePatterns.length > 0) {
+        const matchesInclude = includePatterns.some(pattern => matchesPattern(toolName, pattern));
+        if (!matchesInclude) {
+            return false;
+        }
+    }
+
+    // If exclude patterns are specified, tool must not match any
+    if (excludePatterns && excludePatterns.length > 0) {
+        const matchesExclude = excludePatterns.some(pattern => matchesPattern(toolName, pattern));
+        if (matchesExclude) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Wrapper to add a tool with filtering support
+ */
+function addToolWithFilter(toolConfig: Parameters<typeof server.addTool>[0]): void {
+    const toolName = toolConfig.name;
+
+    // Always track the tool name for --list-tools
+    registeredToolNames.push(toolName);
+
+    // Check if tool should be included based on active filters
+    if (!shouldIncludeTool(toolName, activeFilterOptions)) {
+        return; // Skip this tool
+    }
+
+    addToolWithFilter(toolConfig);
+}
+
 // Initialize database and setup tools
-async function initializeServer() {
+export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
     try {
+        // Store filter options for use by addToolWithFilter
+        activeFilterOptions = filterOptions;
+
+        // Clear any previously registered tool names
+        registeredToolNames.length = 0;
+
         if (!mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
             throw new Error("MCP Server is disabled in the configuration.");
@@ -54,7 +145,7 @@ async function initializeServer() {
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
 
-        server.addTool({
+        addToolWithFilter({
             name: "Get_All_Entities",
             description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
             parameters: z.object({}),
@@ -62,7 +153,7 @@ async function initializeServer() {
                 const md = new Metadata();
                 const output = JSON.stringify(md.Entities, null, 2);
                 return output;
-            }        
+            }
         });
 
         const contextUser = UserCache.Instance.Users[0];
@@ -115,7 +206,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add discovery tool if any agent tool has discover enabled
         const hasDiscovery = agentTools.some(tool => tool.discover);
         if (hasDiscovery) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Discover_Agents",
                 description: "List available AI agents based on a name pattern (* for all agents)",
                 parameters: z.object({
@@ -137,7 +228,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add general agent execution tool if any tool has execute enabled
         const hasExecute = agentTools.some(tool => tool.execute);
         if (hasExecute) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Run_Agent",
                 description: "Execute any AI agent by name or ID",
                 parameters: z.object({
@@ -239,7 +330,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add status tool if any agent tool has status enabled
         const hasStatus = agentTools.some(tool => tool.status);
         if (hasStatus) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Get_Agent_Run_Status",
                 description: "Get the status of a running or completed agent execution",
                 parameters: z.object({
@@ -270,7 +361,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add cancel tool if any agent tool has cancel enabled
         const hasCancel = agentTools.some(tool => tool.cancel);
         if (hasCancel) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Cancel_Agent_Run",
                 description: "Cancel a running agent execution (Note: cancellation support depends on agent implementation)",
                 parameters: z.object({
@@ -327,7 +418,7 @@ async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<
 function addAgentExecuteTool(agent: AIAgentEntityExtended, contextUser: UserInfo) {
     const agentRunner = new AgentRunner();
     
-    server.addTool({
+    addToolWithFilter({
         name: `Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`,
         description: `Execute the ${agent.Name || 'Unknown'} agent. ${agent.Description || ''}`,
         parameters: z.object({
@@ -433,7 +524,7 @@ function addEntityRunViewTool(entity: EntityInfo, contextUser: UserInfo) {
             return JSON.stringify(result);
         }
     };
-    server.addTool(toolConfig);
+    addToolWithFilter(toolConfig);
 }
 
 function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
@@ -457,7 +548,7 @@ function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    server.addTool(toolConfig);    
+    addToolWithFilter(toolConfig);    
 }
 
 function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
@@ -494,7 +585,7 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    server.addTool(toolConfig);    
+    addToolWithFilter(toolConfig);    
 }
 
 function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
@@ -525,7 +616,7 @@ function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    server.addTool(toolConfig);
+    addToolWithFilter(toolConfig);
 }
 
 
@@ -633,7 +724,7 @@ function addEntityGetTool(entity: EntityInfo, contextUser: UserInfo) {
             return await convertEntityObjectToJSON(record);
         }
     };
-    server.addTool(toolConfig);
+    addToolWithFilter(toolConfig);
 }
 function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
     get: boolean;
@@ -694,5 +785,162 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
     return matchingEntities;
 }
 
-// Run the server
-initializeServer();
+/**
+ * List all available tools without starting the server
+ * This connects to the database to discover dynamic tools
+ */
+export async function listAvailableTools(filterOptions: ToolFilterOptions = {}) {
+    try {
+        if (!mcpServerSettings?.enableMCPServer) {
+            console.log("MCP Server is disabled in the configuration.");
+            return;
+        }
+
+        // Store filter options
+        activeFilterOptions = filterOptions;
+        registeredToolNames.length = 0;
+
+        // Initialize database connection to discover dynamic tools
+        const pool = new sql.ConnectionPool(poolConfig);
+        await pool.connect();
+
+        const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
+        await setupSQLServerClient(config);
+
+        // Register all tools (they won't actually be added to server, just tracked)
+        // We need to use a dummy filter that includes everything for listing
+        const listingFilterOptions = { ...filterOptions };
+        activeFilterOptions = {}; // Temporarily clear filters to get all tool names
+
+        // Add built-in tool
+        registeredToolNames.push("Get_All_Entities");
+
+        const contextUser = UserCache.Instance.Users[0];
+
+        // Load tools to populate registeredToolNames
+        await loadEntityToolsForListing(contextUser);
+        await loadAgentToolsForListing(contextUser);
+
+        // Close database connection
+        await pool.close();
+
+        // Apply filters to the list if specified
+        let toolsToShow = registeredToolNames;
+        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+            activeFilterOptions = listingFilterOptions;
+            toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
+        }
+
+        // Sort tools alphabetically
+        toolsToShow.sort();
+
+        console.log("\n=== Available MCP Tools ===\n");
+
+        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+            console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
+        } else {
+            console.log(`Total tools: ${toolsToShow.length}\n`);
+        }
+
+        // Group tools by prefix for better readability
+        const toolGroups: Record<string, string[]> = {};
+        for (const tool of toolsToShow) {
+            const prefix = tool.split('_')[0];
+            if (!toolGroups[prefix]) {
+                toolGroups[prefix] = [];
+            }
+            toolGroups[prefix].push(tool);
+        }
+
+        // Print grouped tools
+        for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
+            console.log(`--- ${prefix} ---`);
+            for (const tool of tools) {
+                console.log(`  ${tool}`);
+            }
+            console.log();
+        }
+
+        console.log("Use --include and --exclude to filter tools when starting the server.");
+        console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+
+    } catch (error) {
+        console.error("Failed to list tools:", error);
+    }
+}
+
+/**
+ * Helper to load entity tools for listing (just collects names)
+ */
+async function loadEntityToolsForListing(contextUser: UserInfo) {
+    const entityTools = mcpServerSettings?.entityTools;
+
+    if (entityTools && entityTools.length > 0) {
+        const md = new Metadata();
+
+        entityTools.forEach((tool) => {
+            const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
+            matchingEntities.forEach((entity) => {
+                if (tool.get) {
+                    registeredToolNames.push(`Get_${entity.ClassName}_Record`);
+                }
+                if (tool.create) {
+                    registeredToolNames.push(`Create_${entity.ClassName}_Record`);
+                }
+                if (tool.update) {
+                    registeredToolNames.push(`Update_${entity.ClassName}_Record`);
+                }
+                if (tool.delete) {
+                    registeredToolNames.push(`Delete_${entity.ClassName}_Record`);
+                }
+                if (tool.runView) {
+                    registeredToolNames.push(`Run_${entity.ClassName}_View`);
+                }
+            });
+        });
+    }
+}
+
+/**
+ * Helper to load agent tools for listing (just collects names)
+ */
+async function loadAgentToolsForListing(contextUser: UserInfo) {
+    const agentTools = mcpServerSettings?.agentTools;
+
+    if (agentTools && agentTools.length > 0) {
+        const aiEngine = AIEngine.Instance;
+        await aiEngine.Config(false, contextUser);
+
+        const hasDiscovery = agentTools.some(tool => tool.discover);
+        if (hasDiscovery) {
+            registeredToolNames.push("Discover_Agents");
+        }
+
+        const hasExecute = agentTools.some(tool => tool.execute);
+        if (hasExecute) {
+            registeredToolNames.push("Run_Agent");
+        }
+
+        // Add specific agent execution tools
+        for (const tool of agentTools) {
+            const agentPattern = tool.agentName || "*";
+            const agents = await discoverAgents(agentPattern, contextUser);
+
+            for (const agent of agents) {
+                if (tool.execute) {
+                    registeredToolNames.push(`Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`);
+                }
+            }
+        }
+
+        const hasStatus = agentTools.some(tool => tool.status);
+        if (hasStatus) {
+            registeredToolNames.push("Get_Agent_Run_Status");
+        }
+
+        const hasCancel = agentTools.some(tool => tool.cancel);
+        if (hasCancel) {
+            registeredToolNames.push("Cancel_Agent_Run");
+        }
+    }
+}
