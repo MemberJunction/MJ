@@ -172,7 +172,13 @@ import { TestingModule } from '@memberjunction/ng-testing';
     ActionsManagementDashboardComponent,
     ComponentStudioDashboardComponent,
     SchedulingDashboardComponent,
-    TestingDashboardComponent
+    TestingDashboardComponent,
+    // Export AI components for use in resource wrappers
+    ExecutionMonitoringComponent,
+    PromptManagementV2Component,
+    AgentConfigurationComponent,
+    ModelManagementV2Component,
+    SystemConfigurationComponent
   ]
 })
 export class DashboardsModule { }

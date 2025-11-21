@@ -16,8 +16,21 @@ export function LoadAIMonitorResource() {
 @RegisterClass(BaseResourceComponent, 'ai-monitor')
 @Component({
   selector: 'mj-ai-monitor-resource',
-  templateUrl: './ai-monitor-resource.component.html',
-  styleUrls: ['./ai-monitor-resource.component.scss'],
+  template: `
+    <div class="ai-monitor-container">
+      <app-execution-monitoring
+        *ngIf="currentUser">
+      </app-execution-monitoring>
+    </div>
+  `,
+  styles: [`
+    .ai-monitor-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  `],
   encapsulation: ViewEncapsulation.None
 })
 export class AIMonitorResource extends BaseResourceComponent {

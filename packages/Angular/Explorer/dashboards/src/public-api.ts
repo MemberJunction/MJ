@@ -15,12 +15,25 @@ export * from './generic/base-dashboard';
 // Dashboards
 export * from './EntityAdmin/entity-admin-dashboard.component';
 export * from './AI/ai-dashboard.component';
-export * from './Actions';
 export * from './ComponentStudio';
 export * from './Scheduling/scheduling-dashboard.component';
 export * from './Testing/testing-dashboard.component';
 
-export * from './Actions/index';
+// Export Actions (without wildcard to avoid conflicts)
+export { ActionsManagementDashboardComponent } from './Actions';
+
+// Export AI components for resource wrappers (these take precedence)
+export {
+  ExecutionMonitoringComponent,
+  PromptManagementV2Component,
+  AgentConfigurationComponent,
+  ModelManagementV2Component,
+  SystemConfigurationComponent,
+  KPICardComponent,
+  LiveExecutionWidgetComponent,
+  TimeSeriesChartComponent,
+  PerformanceHeatmapComponent
+} from './AI/index';
 
 // Module
 export * from './module';

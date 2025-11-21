@@ -10,15 +10,30 @@ export function LoadChatTasksResource() {
 }
 
 /**
- * Chat Tasks Resource - displays the tasks dropdown for tab-based display
+ * Chat Tasks Resource - displays the tasks full view for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
  * Shows all tasks associated with conversations and artifacts
  */
 @RegisterClass(BaseResourceComponent, 'chat-tasks')
 @Component({
   selector: 'mj-chat-tasks-resource',
-  templateUrl: './chat-tasks-resource.component.html',
-  styleUrls: ['./chat-tasks-resource.component.scss'],
+  template: `
+    <div class="chat-tasks-container">
+      <mj-tasks-full-view
+        *ngIf="currentUser"
+        [environmentId]="environmentId"
+        [currentUser]="currentUser">
+      </mj-tasks-full-view>
+    </div>
+  `,
+  styles: [`
+    .chat-tasks-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  `],
   encapsulation: ViewEncapsulation.None
 })
 export class ChatTasksResource extends BaseResourceComponent {

@@ -11,8 +11,21 @@ export function LoadAIModelsResource() {
 @RegisterClass(BaseResourceComponent, 'ai-models')
 @Component({
   selector: 'mj-ai-models-resource',
-  templateUrl: './ai-models-resource.component.html',
-  styleUrls: ['./ai-models-resource.component.scss'],
+  template: `
+    <div class="ai-models-container">
+      <app-model-management-v2
+        *ngIf="currentUser">
+      </app-model-management-v2>
+    </div>
+  `,
+  styles: [`
+    .ai-models-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  `],
   encapsulation: ViewEncapsulation.None
 })
 export class AIModelsResource extends BaseResourceComponent {

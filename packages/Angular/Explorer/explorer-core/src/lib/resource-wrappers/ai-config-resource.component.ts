@@ -11,8 +11,21 @@ export function LoadAIConfigResource() {
 @RegisterClass(BaseResourceComponent, 'ai-config')
 @Component({
   selector: 'mj-ai-config-resource',
-  templateUrl: './ai-config-resource.component.html',
-  styleUrls: ['./ai-config-resource.component.scss'],
+  template: `
+    <div class="ai-config-container">
+      <app-system-configuration
+        *ngIf="currentUser">
+      </app-system-configuration>
+    </div>
+  `,
+  styles: [`
+    .ai-config-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  `],
   encapsulation: ViewEncapsulation.None
 })
 export class AIConfigResource extends BaseResourceComponent {

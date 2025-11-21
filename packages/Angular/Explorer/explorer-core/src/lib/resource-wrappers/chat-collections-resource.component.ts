@@ -17,8 +17,23 @@ export function LoadChatCollectionsResource() {
 @RegisterClass(BaseResourceComponent, 'chat-collections')
 @Component({
   selector: 'mj-chat-collections-resource',
-  templateUrl: './chat-collections-resource.component.html',
-  styleUrls: ['./chat-collections-resource.component.scss'],
+  template: `
+    <div class="chat-collections-container">
+      <mj-collection-view
+        *ngIf="currentUser"
+        [environmentId]="environmentId"
+        [currentUser]="currentUser">
+      </mj-collection-view>
+    </div>
+  `,
+  styles: [`
+    .chat-collections-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  `],
   encapsulation: ViewEncapsulation.None
 })
 export class ChatCollectionsResource extends BaseResourceComponent {

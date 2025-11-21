@@ -11,8 +11,21 @@ export function LoadAIPromptsResource() {
 @RegisterClass(BaseResourceComponent, 'ai-prompts')
 @Component({
   selector: 'mj-ai-prompts-resource',
-  templateUrl: './ai-prompts-resource.component.html',
-  styleUrls: ['./ai-prompts-resource.component.scss'],
+  template: `
+    <div class="ai-prompts-container">
+      <app-prompt-management-v2
+        *ngIf="currentUser">
+      </app-prompt-management-v2>
+    </div>
+  `,
+  styles: [`
+    .ai-prompts-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  `],
   encapsulation: ViewEncapsulation.None
 })
 export class AIPromptsResource extends BaseResourceComponent {

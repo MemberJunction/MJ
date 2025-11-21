@@ -11,8 +11,21 @@ export function LoadAIAgentsResource() {
 @RegisterClass(BaseResourceComponent, 'ai-agents')
 @Component({
   selector: 'mj-ai-agents-resource',
-  templateUrl: './ai-agents-resource.component.html',
-  styleUrls: ['./ai-agents-resource.component.scss'],
+  template: `
+    <div class="ai-agents-container">
+      <app-agent-configuration
+        *ngIf="currentUser">
+      </app-agent-configuration>
+    </div>
+  `,
+  styles: [`
+    .ai-agents-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  `],
   encapsulation: ViewEncapsulation.None
 })
 export class AIAgentsResource extends BaseResourceComponent {
