@@ -589,10 +589,12 @@ export interface ExecutionMonitoringState {
   `,
   styles: [`
     .execution-monitoring {
-      padding: 20px;
+      padding: 0;
       background: #f8f9fa;
-      min-height: 100vh;
+      width: 100%;
+      height: 100%;
       position: relative;
+      overflow: auto;
     }
     
     .execution-monitoring.loading {

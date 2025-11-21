@@ -387,8 +387,8 @@ export class GoldenLayoutManager {
     element.className = 'tab-content-container';
     element.style.width = '100%';
     element.style.height = '100%';
-    element.style.overflow = 'auto';
-    element.style.padding = '20px';
+    element.style.overflow = 'hidden';
+    element.style.padding = '0';
 
     // Temporary placeholder content
     element.innerHTML = `

@@ -238,7 +238,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Create a container div for the component
       const componentElement = document.createElement('div');
       componentElement.className = 'tab-content-wrapper';
-      componentElement.style.cssText = 'width: 100%; height: 100%; overflow: auto;';
+      componentElement.style.cssText = 'width: 100%; height: 100%; overflow: hidden;';
 
       // Append the component's native element
       const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];

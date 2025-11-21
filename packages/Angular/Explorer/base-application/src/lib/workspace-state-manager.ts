@@ -156,14 +156,19 @@ export class WorkspaceStateManager {
 
       // For resource-based tabs, match by resourceType in configuration
       if (request.Configuration?.resourceType) {
+        // Normalize empty/null/undefined to empty string for comparison
+        const requestRecordId = request.ResourceRecordId || '';
+        const tabRecordId = tab.resourceRecordId || '';
         return tab.configuration.resourceType === request.Configuration.resourceType &&
-               tab.resourceRecordId === request.ResourceRecordId;
+               tabRecordId === requestRecordId;
       }
 
       // Legacy: match by entity and viewId
+      const requestRecordId = request.ResourceRecordId || '';
+      const tabRecordId = tab.resourceRecordId || '';
       return tab.configuration.entity === request.Configuration?.entity &&
              tab.configuration.viewId === request.Configuration?.viewId &&
-             tab.resourceRecordId === request.ResourceRecordId;
+             tabRecordId === requestRecordId;
     });
 
     if (existingTab) {
