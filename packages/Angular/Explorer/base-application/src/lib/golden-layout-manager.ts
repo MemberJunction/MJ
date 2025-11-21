@@ -360,6 +360,13 @@ export class GoldenLayoutManager {
   }
 
   /**
+   * Mark tab as not loaded (forces reload on next show)
+   */
+  MarkTabNotLoaded(tabId: string): void {
+    this.loadedTabs.delete(tabId);
+  }
+
+  /**
    * Get all tab IDs currently in the layout
    */
   GetAllTabIds(): string[] {
@@ -515,6 +522,20 @@ export class GoldenLayoutManager {
       ...node
     };
 
+    // Cast to any to work with dynamic properties
+    const sanitizedAny = sanitized as any;
+
+    // Convert size from number + sizeUnit to Golden Layout format
+    // Golden Layout expects strings like "100%" or "1fr", not separate fields
+    if (sanitizedAny.size !== undefined && sanitizedAny.sizeUnit !== undefined) {
+      if (typeof sanitizedAny.size === 'number') {
+        // Combine size and sizeUnit into a single string
+        sanitizedAny.size = `${sanitizedAny.size}${sanitizedAny.sizeUnit}`;
+        // Remove sizeUnit as it's now part of size
+        delete sanitizedAny.sizeUnit;
+      }
+    }
+
     // Remove width/height if they exist and are not valid
     // Golden Layout expects strings like "50%" or numbers (pixels)
     // But JSON parsing might give us non-string objects
@@ -528,6 +549,9 @@ export class GoldenLayoutManager {
         delete sanitized.height;
       }
     }
+
+    // Remove other Golden Layout internal fields that shouldn't be in saved config
+    delete sanitizedAny.minSizeUnit;
 
     // Recursively sanitize child nodes
     if (sanitized.content) {

@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Actions",
+    "Description": "Manage and monitor all system actions and workflows",
+    "Icon": "fa-solid fa-bolt",
+    "DefaultForNewUser": true,
+    "Color": "#ff9800",
+    "ClassName": "BaseApplication",
+    "DefaultNavItems": null
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "02D5423E-F36B-1410-8DAC-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2025-11-21T21:09:21.311Z",
+    "checksum": "ab49f282e46415dc67175df16170838dd5f905222d7361bd00fd5f961e03998c"
+  }
+}

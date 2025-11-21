@@ -145,20 +145,30 @@ export class WorkspaceStateManager {
    * Open a tab (new or focus existing)
    */
   OpenTab(request: TabRequest, appColor: string): string {
+    console.log('[WorkspaceStateManager] OpenTab called:', request);
     const config = this.configuration$.value;
     if (!config) {
       throw new Error('Configuration not initialized');
     }
 
-    // Check for existing tab
-    const existingTab = config.tabs.find(tab =>
-      tab.applicationId === request.ApplicationId &&
-      tab.configuration.entity === request.Configuration?.entity &&
-      tab.configuration.viewId === request.Configuration?.viewId &&
-      tab.resourceRecordId === request.ResourceRecordId
-    );
+    // Check for existing tab - match by resource type and record ID for resource-based tabs
+    const existingTab = config.tabs.find(tab => {
+      if (tab.applicationId !== request.ApplicationId) return false;
+
+      // For resource-based tabs, match by resourceType in configuration
+      if (request.Configuration?.resourceType) {
+        return tab.configuration.resourceType === request.Configuration.resourceType &&
+               tab.resourceRecordId === request.ResourceRecordId;
+      }
+
+      // Legacy: match by entity and viewId
+      return tab.configuration.entity === request.Configuration?.entity &&
+             tab.configuration.viewId === request.Configuration?.viewId &&
+             tab.resourceRecordId === request.ResourceRecordId;
+    });
 
     if (existingTab) {
+      console.log('[WorkspaceStateManager] Found existing tab, focusing:', existingTab.id);
       // Focus existing tab
       const updatedConfig = {
         ...config,
@@ -168,17 +178,17 @@ export class WorkspaceStateManager {
       return existingTab.id;
     }
 
-    // Find temporary tab from same app to replace
-    const tempTab = config.tabs.find(tab =>
-      tab.applicationId === request.ApplicationId && !tab.isPinned
-    );
+    // Find temporary tab (unpinned tab from ANY app) to replace
+    const tempTab = config.tabs.find(tab => !tab.isPinned);
 
     if (tempTab) {
+      console.log('[WorkspaceStateManager] Replacing temporary tab:', tempTab.id);
       // Replace temporary tab
       const updatedTabs = config.tabs.map(tab =>
         tab.id === tempTab.id
           ? {
               ...tab,
+              applicationId: request.ApplicationId,  // Update app ID for cross-app navigation
               title: request.Title,
               resourceTypeId: request.ResourceTypeId || '',
               resourceRecordId: request.ResourceRecordId || '',
@@ -196,6 +206,7 @@ export class WorkspaceStateManager {
     }
 
     // Create new tab
+    console.log('[WorkspaceStateManager] Creating new tab');
     const newTab: WorkspaceTab = {
       id: this.generateUUID(),
       applicationId: request.ApplicationId,

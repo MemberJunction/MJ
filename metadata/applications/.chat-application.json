@@ -12,6 +12,18 @@
         "Icon": "fa-solid fa-comments",
         "ResourceType": "chat-conversations",
         "isDefault": true
+      },
+      {
+        "Label": "Collections",
+        "Icon": "fa-solid fa-folder-open",
+        "ResourceType": "chat-collections",
+        "isDefault": false
+      },
+      {
+        "Label": "Tasks",
+        "Icon": "fa-solid fa-tasks",
+        "ResourceType": "chat-tasks",
+        "isDefault": false
       }
     ]
   },
@@ -22,7 +34,7 @@
     "ID": "7A873E1A-692E-43FA-97F8-57D8161A985C"
   },
   "sync": {
-    "lastModified": "2025-11-21T01:21:24.407Z",
-    "checksum": "442f5c492e886e48ad7e36bd39fda39da16c74b1cedcfb3f5a5023b9857db213"
+    "lastModified": "2025-11-21T21:09:21.373Z",
+    "checksum": "e35eaa4def2f509af779329f5e5f4aaa4df073a1b5afb7468d40c0f8fdd1064b"
   }
 }

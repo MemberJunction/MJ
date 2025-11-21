@@ -97,6 +97,13 @@ import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
 import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversations-resource.component';
+import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collections-resource.component';
+import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
+import { AIMonitorResource } from './lib/resource-wrappers/ai-monitor-resource.component';
+import { AIPromptsResource } from './lib/resource-wrappers/ai-prompts-resource.component';
+import { AIAgentsResource } from './lib/resource-wrappers/ai-agents-resource.component';
+import { AIModelsResource } from './lib/resource-wrappers/ai-models-resource.component';
+import { AIConfigResource } from './lib/resource-wrappers/ai-config-resource.component';
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
@@ -144,6 +151,13 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     SingleListDetailComponent,
     ListDetailResource,
     ChatConversationsResource,
+    ChatCollectionsResource,
+    ChatTasksResource,
+    AIMonitorResource,
+    AIPromptsResource,
+    AIAgentsResource,
+    AIModelsResource,
+    AIConfigResource,
     TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
     StyleGuideTestComponent

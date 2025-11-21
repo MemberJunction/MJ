@@ -115,5 +115,124 @@
     "primaryKey": {
       "ID": "6BA617C4-0CBA-4C79-B037-456DF4B03D3D"
     }
+  },
+  {
+    "fields": {
+      "Name": "chat-collections",
+      "DisplayName": "Chat Collections",
+      "Description": "Browse and manage collections of conversation artifacts",
+      "Icon": "fa-solid fa-folder-open",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "6D129612-8D4B-4B63-A9EA-956719DCFA1B"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T20:56:27.320Z",
+      "checksum": "179ab0ff84754cf17d43eb1baa51c3e8e0544dc64ced72affe1a524745fe7c6b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "chat-tasks",
+      "DisplayName": "Chat Tasks",
+      "Description": "View and manage tasks from conversations",
+      "Icon": "fa-solid fa-tasks",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "60BC22A6-3C22-45F1-9237-76AACE812285"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T20:56:27.349Z",
+      "checksum": "557f04f6350f4aa0390f5ff905b10cda6c70ae56a54a2735af5ea4a5509d59cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ai-monitor",
+      "DisplayName": "AI Monitor",
+      "Description": "Real-time monitoring of AI executions with KPIs and performance metrics",
+      "Icon": "fa-solid fa-chart-line",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "3E69CEB8-6EA7-4668-AC28-B98D707A5832"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T20:56:27.364Z",
+      "checksum": "f188dbce760c08d2a2c0655258690844d5c07840ddbb89df5980bff25cc50b5d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ai-prompts",
+      "DisplayName": "AI Prompts",
+      "Description": "Manage AI prompts and prompt templates",
+      "Icon": "fa-solid fa-comment-dots",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "46DB8291-4297-409D-99BA-D171FAEC5C7B"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T20:56:27.377Z",
+      "checksum": "ba1f4cb66820feda3ba9edff5f21ea5a5f36c16f93c81e13295a6339f4994807"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ai-agents",
+      "DisplayName": "AI Agents",
+      "Description": "Configure and manage AI agents",
+      "Icon": "fa-solid fa-robot",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "776BD136-4849-4877-A13B-5A553E7CCED2"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T20:56:27.390Z",
+      "checksum": "d58d1757695e97dae35cf794b00ceacc433c975532728651bd6821b9951a64b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ai-models",
+      "DisplayName": "AI Models",
+      "Description": "Manage AI model configurations and priorities",
+      "Icon": "fa-solid fa-microchip",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "9CD4185D-2498-440C-91AA-533E5414474B"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T20:56:27.403Z",
+      "checksum": "7ae7df63ec5653dd59422aa03e5d2d20bbe4f7827b9d14c44a318a4df6c4ab0e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ai-config",
+      "DisplayName": "AI Configuration",
+      "Description": "System-wide AI configuration settings",
+      "Icon": "fa-solid fa-cogs",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "C82D4A22-67AD-4A9C-B947-EFC8C892610E"
+    },
+    "sync": {
+      "lastModified": "2025-11-21T20:56:27.415Z",
+      "checksum": "6b1494900247f6a1af5e253b3990b680d92fce196658ee895d3412f75b365402"
+    }
   }
 ]

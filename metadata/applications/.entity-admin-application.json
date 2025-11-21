@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Entity Admin",
+    "Description": "Manage and monitor all entities, fields, and relationships",
+    "Icon": "fa-solid fa-database",
+    "DefaultForNewUser": true,
+    "Color": "#4caf50",
+    "ClassName": "BaseApplication",
+    "DefaultNavItems": null
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2025-11-21T21:09:21.411Z",
+    "checksum": "f684983075330a839d47b84070c5957fe9b8a20b8b7969efce53efeacc370558"
+  }
+}

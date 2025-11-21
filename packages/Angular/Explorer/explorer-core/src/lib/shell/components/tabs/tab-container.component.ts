@@ -346,14 +346,51 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Sync tabs with configuration changes
    */
   private syncTabsWithConfiguration(tabs: WorkspaceTab[]): void {
+    console.log('[TabContainer] Syncing tabs with configuration');
     // Get existing tab IDs from Golden Layout
     const existingTabIds = this.layoutManager.GetAllTabIds();
 
     // Create tabs that don't exist yet
     tabs.forEach(tab => {
       if (!existingTabIds.includes(tab.id)) {
+        console.log('[TabContainer] Creating new tab:', tab.id, tab.title);
         this.createTab(tab);
       } else {
+        console.log('[TabContainer] Updating existing tab:', tab.id, tab.title);
+        // Check if tab content needs to be reloaded (app or resource type changed)
+        const existingComponentRef = this.componentRefs.get(tab.id);
+        if (existingComponentRef) {
+          const existingResourceData = existingComponentRef.instance.Data;
+
+          // Debug logging
+          console.log('[TabContainer] Existing ResourceType:', existingResourceData?.ResourceType);
+          console.log('[TabContainer] New resourceType from config:', tab.configuration['resourceType']);
+          console.log('[TabContainer] Existing app ID:', existingResourceData?.Configuration?.applicationId);
+          console.log('[TabContainer] New app ID:', tab.applicationId);
+
+          const needsReload = existingResourceData?.ResourceType !== tab.configuration['resourceType'] ||
+                             existingResourceData?.Configuration?.applicationId !== tab.applicationId;
+
+          if (needsReload) {
+            console.log('[TabContainer] Tab content changed, reloading:', tab.id);
+            // Clean up old component
+            this.cleanupTabComponent(tab.id);
+
+            // Mark tab as not loaded so it will reload when shown
+            this.layoutManager.MarkTabNotLoaded(tab.id);
+
+            // If this tab is currently active, reload it immediately
+            const config = this.workspaceManager.GetConfiguration();
+            if (config?.activeTabId === tab.id) {
+              console.log('[TabContainer] Tab is active, reloading content immediately');
+              const glContainer = this.layoutManager.GetContainer(tab.id);
+              if (glContainer) {
+                this.loadTabContent(tab.id, glContainer);
+              }
+            }
+          }
+        }
+
         // Update styling for existing tabs
         const app = this.appManager.GetAppById(tab.applicationId);
         this.layoutManager.UpdateTabStyle(tab.id, {

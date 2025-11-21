@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Scheduling Management",
+    "Description": "Manage and monitor scheduled jobs and tasks",
+    "Icon": "fa-solid fa-calendar-alt",
+    "DefaultForNewUser": false,
+    "Color": "#00bcd4",
+    "ClassName": "BaseApplication",
+    "DefaultNavItems": null
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "09CBDAE2-4F2A-4F01-BA8C-C7EB4AFAC36A"
+  },
+  "sync": {
+    "lastModified": "2025-11-21T21:09:21.431Z",
+    "checksum": "c4786c7c444d0818cc180f5ac533e10c5076d4e7cd73e8f303dbea1af3612522"
+  }
+}

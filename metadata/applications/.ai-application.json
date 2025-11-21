@@ -1,0 +1,52 @@
+{
+  "fields": {
+    "Name": "AI",
+    "Description": "AI Administration",
+    "Icon": "fa-solid fa-robot",
+    "DefaultForNewUser": true,
+    "Color": "#d32f2f",
+    "ClassName": "BaseApplication",
+    "DefaultNavItems": [
+      {
+        "Label": "Monitor",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "ai-monitor",
+        "isDefault": true
+      },
+      {
+        "Label": "Prompts",
+        "Icon": "fa-solid fa-comment-dots",
+        "ResourceType": "ai-prompts",
+        "isDefault": false
+      },
+      {
+        "Label": "Agents",
+        "Icon": "fa-solid fa-robot",
+        "ResourceType": "ai-agents",
+        "isDefault": false
+      },
+      {
+        "Label": "Models",
+        "Icon": "fa-solid fa-microchip",
+        "ResourceType": "ai-models",
+        "isDefault": false
+      },
+      {
+        "Label": "Configuration",
+        "Icon": "fa-solid fa-cogs",
+        "ResourceType": "ai-config",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "7ACD423E-F36B-1410-8DAC-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2025-11-21T21:09:21.354Z",
+    "checksum": "ea2dbd9c9a78626d559a571d44be210f54cd0148bc3b3fd9747fe3c3f0be73fb"
+  }
+}

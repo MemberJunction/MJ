@@ -142,7 +142,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Handle navigation item click
    */
   onNavItemClick(navItem: any): void {
-    if (!this.activeApp) return;
+    console.log('[ShellComponent] Nav item clicked:', navItem);
+    if (!this.activeApp) {
+      console.log('[ShellComponent] No active app, ignoring nav click');
+      return;
+    }
 
     // Create tab request for nav item
     const tabRequest: any = {
@@ -166,6 +170,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       tabRequest.Route = navItem.Route;
     }
 
+    console.log('[ShellComponent] Opening tab for nav item:', tabRequest);
     this.workspaceManager.OpenTab(tabRequest, this.activeApp.GetColor());
   }
 }

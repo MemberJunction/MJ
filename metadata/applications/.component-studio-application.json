@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Component Studio",
+    "Description": "Build and manage reusable UI components",
+    "Icon": "fa-solid fa-puzzle-piece",
+    "DefaultForNewUser": false,
+    "Color": "#2196f3",
+    "ClassName": "BaseApplication",
+    "DefaultNavItems": null
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "ADDAD2F1-BA9A-442C-A08A-6E461F60985B"
+  },
+  "sync": {
+    "lastModified": "2025-11-21T21:09:21.392Z",
+    "checksum": "e9ca9a55da81e56a9362aca5547c3479b0887f7215669f08a49492fddda422dc"
+  }
+}
