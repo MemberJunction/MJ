@@ -4,7 +4,7 @@
  */
 
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { AIAgentEntity, AIAgentRunEntity, TestEntity, TestRunEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
@@ -633,13 +633,13 @@ export class AgentEvalDriver extends BaseTestDriver {
 
     /**
      * Extract output payload from agent run.
-     * Uses FinalPayloadObject property which contains the agent's output that should be chained to next turn.
+     * Parses the FinalPayload string property to get the agent's output for chaining to next turn.
      * @private
      */
     private extractOutputPayload(agentRun: AIAgentRunEntity): Record<string, unknown> {
-        // FinalPayloadObject is the parsed JSON object from FinalPayload string
-        // At runtime, AIAgentRunEntity is actually AIAgentRunEntityExtended which has this property
-        const finalPayloadObject = (agentRun as any).FinalPayloadObject;
+        // Parse the FinalPayload string property (which exists on base AIAgentRunEntity)
+        // SafeJSONParse returns the parsed object or an empty object if parsing fails
+        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload);
         return finalPayloadObject || {};
     }
 
