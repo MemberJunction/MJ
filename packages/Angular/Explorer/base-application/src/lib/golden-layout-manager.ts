@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { LogError } from '@memberjunction/core';
 import { WorkspaceConfiguration, LayoutConfig as WorkspaceLayoutConfig, LayoutNode } from './interfaces/workspace-configuration.interface';
 
 // Golden Layout interfaces - defined here to avoid compile-time dependency
@@ -154,13 +155,11 @@ export class GoldenLayoutManager {
    * Initialize Golden Layout in the specified container element
    */
   Initialize(element: HTMLElement): void {
-    console.log('[GoldenLayoutManager] Initialize called, element:', element);
     this.containerElement = element;
 
     // Import Golden Layout dynamically at runtime
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { VirtualLayout } = require('golden-layout');
-    console.log('[GoldenLayoutManager] Golden Layout module loaded:', !!VirtualLayout);
 
     // Create layout with empty config
     const config: GLLayoutConfig = {
@@ -176,15 +175,11 @@ export class GoldenLayoutManager {
       }
     };
 
-    console.log('[GoldenLayoutManager] Creating VirtualLayout with config:', config);
-
     this.layout = new VirtualLayout(
       this.containerElement,
       this.bindComponentEventListener.bind(this),
       this.unbindComponentEventListener.bind(this)
     ) as GLVirtualLayout;
-
-    console.log('[GoldenLayoutManager] VirtualLayout created:', !!this.layout);
 
     // Subscribe to state changes
     this.layout.on('stateChanged', () => {
@@ -206,13 +201,11 @@ export class GoldenLayoutManager {
 
     // Load the empty config to establish root structure
     // This MUST be done before adding any components
-    console.log('[GoldenLayoutManager] Loading initial empty layout');
     this.layout.loadLayout(config);
 
     // CRITICAL: Set the size of Golden Layout to match the container
     // Without this, all internal elements will have height: 0
     const rect = this.containerElement.getBoundingClientRect();
-    console.log('[GoldenLayoutManager] Setting layout size:', rect.width, 'x', rect.height);
     this.layout.setSize(rect.width, rect.height);
 
     // Retry setSize after a delay to handle timing issues with flexbox layout
@@ -220,7 +213,6 @@ export class GoldenLayoutManager {
     setTimeout(() => {
       if (this.layout && this.containerElement) {
         const newRect = this.containerElement.getBoundingClientRect();
-        console.log('[GoldenLayoutManager] Retrying setSize after delay:', newRect.width, 'x', newRect.height);
         this.layout.setSize(newRect.width, newRect.height);
       }
     }, 100);
@@ -229,13 +221,10 @@ export class GoldenLayoutManager {
     this.resizeObserver = new ResizeObserver(() => {
       if (this.layout && this.containerElement) {
         const newRect = this.containerElement.getBoundingClientRect();
-        console.log('[GoldenLayoutManager] Container resized, updating layout:', newRect.width, 'x', newRect.height);
         this.layout.setSize(newRect.width, newRect.height);
       }
     });
     this.resizeObserver.observe(this.containerElement);
-
-    console.log('[GoldenLayoutManager] Event listeners attached, initialization complete');
   }
 
   /**
@@ -258,13 +247,10 @@ export class GoldenLayoutManager {
    * Add a new tab to the layout
    */
   AddTab(state: TabComponentState): void {
-    console.log('[GoldenLayoutManager] AddTab called:', state.tabId, state.title);
     if (!this.layout) {
-      console.error('[GoldenLayoutManager] Layout not initialized');
+      LogError('GoldenLayoutManager: Layout not initialized');
       return;
     }
-
-    console.log('[GoldenLayoutManager] Adding component with state:', state);
 
     try {
       // Use the addComponent method like the prototype does!
@@ -273,9 +259,8 @@ export class GoldenLayoutManager {
         state as unknown as Record<string, unknown>,  // componentState
         state.title  // title
       );
-      console.log('[GoldenLayoutManager] Tab added successfully using addComponent()');
     } catch (error) {
-      console.error('[GoldenLayoutManager] Failed to add tab:', error);
+      LogError('GoldenLayoutManager: Failed to add tab - ' + (error as Error).message);
     }
   }
 
@@ -324,13 +309,12 @@ export class GoldenLayoutManager {
    */
   LoadLayout(config: WorkspaceLayoutConfig): void {
     if (!this.layout) {
-      console.error('Layout not initialized');
+      LogError('GoldenLayoutManager: Layout not initialized');
       return;
     }
 
     // Don't load empty layouts - Golden Layout doesn't handle them well
     if (!config.root.content || config.root.content.length === 0) {
-      console.log('Skipping load of empty layout');
       return;
     }
 
@@ -338,7 +322,7 @@ export class GoldenLayoutManager {
       const glConfig = this.convertToGoldenLayoutConfig(config);
       this.layout.loadLayout(glConfig);
     } catch (error) {
-      console.error('Failed to load layout:', error);
+      LogError('GoldenLayoutManager: Failed to load layout - ' + (error as Error).message);
     }
   }
 

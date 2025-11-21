@@ -1,4 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
+import { DashboardEntity, DashboardUserPreferenceEntity } from '@memberjunction/core-entities';
 import { NavItem } from './interfaces/nav-item.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
 
@@ -76,10 +78,13 @@ export class BaseApplication {
 
   /**
    * Creates the default tab request when user switches to this app.
+   * If app has navigation items, uses the first nav item.
+   * If app has no nav items, loads the first available dashboard preference for this app.
    * Override in subclass for custom default tab logic.
    */
-  CreateDefaultTab(): TabRequest | null {
+  async CreateDefaultTab(): Promise<TabRequest | null> {
     const navItems = this.GetNavItems();
+
     if (navItems.length > 0) {
       const firstItem = navItems[0];
       const tabRequest: TabRequest = {
@@ -110,6 +115,72 @@ export class BaseApplication {
 
       return tabRequest;
     }
+
+    // No nav items defined - try to load default dashboard for this app
+    return await this.loadDefaultDashboard();
+  }
+
+  /**
+   * Loads the default dashboard for this app from DashboardUserPreference.
+   * Uses a simple cascading pattern:
+   * For the app scope: return user preferences if they exist, otherwise system defaults
+   * Returns null if no dashboards are available.
+   */
+  private async loadDefaultDashboard(): Promise<TabRequest | null> {
+    try {
+      const md = new Metadata();
+      const rv = new RunView();
+      const entity = md.EntityByName('MJ: Dashboard User Preferences');
+      const currentUserId = md.CurrentUser?.ID;
+
+      if (!currentUserId) {
+        console.log(`[${this.Name}] No current user, returning null`);
+        return null;
+      }
+
+      // Build the cascading filter following the legacy pattern:
+      // Show user preferences for this app, OR show system defaults if user has no preferences
+      const userFilter = `UserID='${currentUserId}' AND Scope='App' AND ApplicationID='${this.ID}'`;
+      const baseCondition = `Scope='App' AND ApplicationID='${this.ID}'`;
+
+      // Single query that returns:
+      // 1. User preferences if they exist for this app
+      // 2. System defaults (UserID IS NULL) if user has no preferences for this app
+      const filter = `(${userFilter})
+                      OR
+                      (UserID IS NULL AND ${baseCondition} AND
+                       NOT EXISTS (SELECT 1 FROM [${entity.SchemaName}].vwDashboardUserPreferences dup2
+                                  WHERE ${userFilter}))`;
+
+      const result = await rv.RunView<DashboardUserPreferenceEntity>({
+        EntityName: 'MJ: Dashboard User Preferences',
+        ExtraFilter: filter,
+        OrderBy: 'DisplayOrder ASC',
+        MaxRows: 1,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results && result.Results.length > 0) {
+        const preference = result.Results[0];
+        if (preference.DashboardID) {
+          return {
+            ApplicationId: this.ID,
+            Title: preference.Dashboard,
+            ResourceType: 'Dashboards',
+            ResourceRecordId: preference.DashboardID,
+            Configuration: {
+              resourceType: 'Dashboards',
+              recordId: preference.DashboardID
+            }
+          };
+        }
+      } else {
+        console.log(`[${this.Name}] No results found. Success:`, result.Success, 'Results:', result.Results?.length);
+      }
+    } catch (error) {
+      console.error(`[${this.Name}] Error loading default dashboard:`, error);
+    }
+
     return null;
   }
 

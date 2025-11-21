@@ -88,7 +88,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to configuration changes to sync tabs
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(config => {
-        console.log('[TabContainer] Configuration changed, layoutInitialized:', this.layoutInitialized);
         if (config && this.layoutInitialized) {
           this.syncTabsWithConfiguration(config.tabs);
         }
@@ -97,29 +96,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    console.log('[TabContainer] ngAfterViewInit - initializing Golden Layout');
     // Initialize Golden Layout
     this.layoutManager.Initialize(this.glContainer.nativeElement);
 
     // Mark layout as initialized
     this.layoutInitialized = true;
 
-    // Add a test tab to verify Golden Layout is working
-    console.log('[TabContainer] Adding test "Hello World" tab');
-    this.layoutManager.AddTab({
-      tabId: 'test-hello-world',
-      appId: 'test',
-      appColor: '#ff0000',
-      title: 'Hello World Test',
-      route: '',
-      isPinned: false,
-      isLoaded: false
-    });
-
     // Load saved layout
     const config = this.workspaceManager.GetConfiguration();
     if (config) {
-      console.log('[TabContainer] Loading initial configuration with', config.tabs.length, 'tabs');
       this.layoutManager.LoadLayout(config.layout);
 
       // Create tabs from configuration
@@ -151,7 +136,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Create a tab in Golden Layout from workspace tab data
    */
   private createTab(tab: WorkspaceTab): void {
-    console.log('[TabContainer] createTab called for:', tab.id, tab.title);
     const app = this.appManager.GetAppById(tab.applicationId);
     const appColor = app?.GetColor() || '#757575';
 
@@ -165,7 +149,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       isLoaded: false
     };
 
-    console.log('[TabContainer] Adding tab to layout manager:', state);
     this.layoutManager.AddTab(state);
   }
 
@@ -230,14 +213,13 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Wire up events
       instance.LoadCompleteEvent = () => {
-        console.log('Tab content loaded:', tab.title);
+        // Tab content loaded
       };
 
       instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
         // Update tab title if needed
         if (entity && entity.Get && entity.Get('Name')) {
           // TODO: Implement UpdateTabTitle in WorkspaceStateManager
-          console.log('Tab record saved:', entity.Get('Name'));
         }
       };
 
@@ -266,20 +248,16 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async getResourceDataFromTab(tab: WorkspaceTab): Promise<ResourceData | null> {
     const config = tab.configuration;
-    console.log('[TabContainer] getResourceDataFromTab - config:', config);
 
     // Extract resource type from configuration or route
     let resourceType = config['resourceType'] as string;
-    console.log('[TabContainer] getResourceDataFromTab - resourceType from config:', resourceType);
 
     if (!resourceType && config['route']) {
       // Parse route to determine resource type
       resourceType = this.getResourceTypeFromRoute(config['route'] as string);
-      console.log('[TabContainer] getResourceDataFromTab - resourceType from route:', resourceType);
     }
 
     if (!resourceType) {
-      console.log('[TabContainer] getResourceDataFromTab - NO resourceType found, returning null');
       return null;
     }
 
@@ -290,7 +268,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       Configuration: config
     });
 
-    console.log('[TabContainer] getResourceDataFromTab - created ResourceData:', resourceData);
     return resourceData;
   }
 
@@ -308,7 +285,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   
       const result = ds.Results.find(r => r.Code.trim().toLowerCase() === 'resourcetypes') 
       if (result && result.Results?.length > 0) {
-        const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase());
+        const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase()) as ResourceTypeEntity;
         if (rt) {
           return rt.ID;
         }
@@ -369,19 +346,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Sync tabs with configuration changes
    */
   private syncTabsWithConfiguration(tabs: WorkspaceTab[]): void {
-    console.log('[TabContainer] syncTabsWithConfiguration called with', tabs.length, 'tabs');
-
     // Get existing tab IDs from Golden Layout
     const existingTabIds = this.layoutManager.GetAllTabIds();
-    console.log('[TabContainer] Existing tabs in layout:', existingTabIds);
 
     // Create tabs that don't exist yet
     tabs.forEach(tab => {
       if (!existingTabIds.includes(tab.id)) {
-        console.log('[TabContainer] Creating new tab:', tab.id, tab.title);
         this.createTab(tab);
       } else {
-        console.log('[TabContainer] Updating existing tab:', tab.id);
         // Update styling for existing tabs
         const app = this.appManager.GetAppById(tab.applicationId);
         this.layoutManager.UpdateTabStyle(tab.id, {

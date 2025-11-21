@@ -11,8 +11,11 @@ export function LoadChatConversationsResource() {
 
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
+ * Extends BaseResourceComponent to work with the resource type system
  * Displays conversation list sidebar + active conversation chat interface
+ * Designed to work with the tab system for multi-tab conversation management
  */
+@RegisterClass(BaseResourceComponent, 'chat-conversations')
 @Component({
   selector: 'mj-chat-conversations-resource',
   template: `
@@ -61,7 +64,6 @@ export function LoadChatConversationsResource() {
   `],
   encapsulation: ViewEncapsulation.None
 })
-@RegisterClass(BaseResourceComponent, 'chat-conversations')
 export class ChatConversationsResource extends BaseResourceComponent {
   public currentUser: any = null;
 
@@ -75,14 +77,23 @@ export class ChatConversationsResource extends BaseResourceComponent {
     }, 100);
   }
 
+  /**
+   * Get the environment ID from configuration or use default
+   */
   get environmentId(): string {
     return this.Data?.Configuration?.environmentId || EnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
+  /**
+   * Get the active conversation ID from configuration (if specified)
+   */
   get activeConversationId(): string | undefined {
     return this.Data?.Configuration?.conversationId;
   }
 
+  /**
+   * Get the display name for chat conversations
+   */
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     // If we have a specific conversation ID, we could load the conversation name
     // For now, just return a generic name
@@ -92,6 +103,9 @@ export class ChatConversationsResource extends BaseResourceComponent {
     return 'Conversations';
   }
 
+  /**
+   * Get the icon class for chat conversations
+   */
   async GetResourceIconClass(data: ResourceData): Promise<string> {
     return 'fa-solid fa-comments';
   }

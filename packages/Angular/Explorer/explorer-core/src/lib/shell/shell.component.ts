@@ -71,15 +71,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Subscribe to active app changes
     this.subscriptions.push(
-      this.appManager.ActiveApp.subscribe(app => {
-        console.log('[Shell] Active app changed:', app?.Name);
+      this.appManager.ActiveApp.subscribe(async app => {
+        console.log('[ShellComponent] ActiveApp changed:', app?.Name);
         this.activeApp = app;
 
         // Create default tab when app is activated
         if (app) {
-          const tabRequest = app.CreateDefaultTab();
-          console.log('[Shell] Creating default tab:', tabRequest);
+          console.log('[ShellComponent] Creating default tab for app:', app.Name);
+          const tabRequest = await app.CreateDefaultTab();
+          console.log('[ShellComponent] Default tab request:', tabRequest);
           if (tabRequest) {
+            console.log('[ShellComponent] Opening tab:', tabRequest.Title);
             this.tabService.OpenTab(tabRequest);
           }
         }
@@ -128,7 +130,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appTabs.length === 0) {
       const app = this.appManager.GetAppById(appId);
       if (app) {
-        const defaultTab = app.CreateDefaultTab();
+        const defaultTab = await app.CreateDefaultTab();
         if (defaultTab) {
           this.workspaceManager.OpenTab(defaultTab, app.GetColor());
         }

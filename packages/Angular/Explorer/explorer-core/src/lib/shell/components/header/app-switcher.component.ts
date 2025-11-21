@@ -23,12 +23,12 @@ export class AppSwitcherComponent {
    */
   get apps(): BaseApplication[] {
     const apps = this.appManager.GetAllApps();
-    console.log('[AppSwitcher] Apps loaded:', apps.map(a => ({
-      Name: a.Name,
-      Color: a.Color,
-      GetColor: a.GetColor(),
-      Icon: a.Icon
-    })));
+    // console.log('[AppSwitcher] Apps loaded:', apps.map(a => ({
+    //   Name: a.Name,
+    //   Color: a.Color,
+    //   GetColor: a.GetColor(),
+    //   Icon: a.Icon
+    // })));
     return apps;
   }
 
