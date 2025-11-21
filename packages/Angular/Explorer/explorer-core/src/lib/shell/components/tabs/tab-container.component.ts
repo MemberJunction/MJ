@@ -23,7 +23,7 @@ import {
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -294,18 +294,28 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     return resourceData;
   }
 
+  private static _resourceTypesDataset: DatasetResultType | null = null;
   private async getResourceTypeId(resourceType: string): Promise<string> {
-    const rv = new RunView();
-    const result = await rv.RunView<ResourceTypeEntity>({
-      EntityName: "Resource Types",
-      ExtraFilter: "Name ='" + resourceType + "'",
-    })
-    if (result && result.Success && result.Results.length > 0) {
-      return result.Results[0].ID;
+    // use the cached dataset for this
+    const md = new Metadata();
+    const ds = TabContainerComponent._resourceTypesDataset || await md.GetDatasetByName("ResourceTypes");
+    if (!ds || !ds.Success || ds.Results.length === 0) {
+      throw new Error('ResourceTypes dataset not found');
     }
     else {
-      return '';
+      if (!TabContainerComponent._resourceTypesDataset)
+        TabContainerComponent._resourceTypesDataset = ds; // store this for next time
+  
+      const result = ds.Results.find(r => r.Code.trim().toLowerCase() === 'resourcetypes') 
+      if (result && result.Results?.length > 0) {
+        const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase());
+        if (rt) {
+          return rt.ID;
+        }
+      }
     }
+
+    throw new Error(`ResourceType ID not found for type: ${resourceType}`);
   }
 
   /**
