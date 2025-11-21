@@ -68,6 +68,21 @@ interface QueryGenerationPromptResponse {
   }>;
 }
 
+interface QueryFixResponse extends QuerySQL {
+  fixExplanation?: string;
+}
+
+interface QueryFixContext {
+  schema: SchemaDefinition;
+  focusTable: TableDefinition;
+  queryPlan: QueryPlan;
+  currentSQL: string;
+  errorMessage: string;
+  attemptNumber: number;
+  maxAttempts: number;
+  previousAttempts: Array<{ sql: string; error: string }>;
+}
+
 export class SampleQueryGenerator {
   private totalTokensUsed: number = 0;
   private totalCost: number = 0;
@@ -258,9 +273,9 @@ export class SampleQueryGenerator {
           modelUsed: this.model
         };
 
-        // Validate the query if enabled
+        // Validate the query if enabled (with fix attempts)
         if (this.config.maxExecutionTime > 0) {
-          await this.validateQuery(completeQuery);
+          await this.validateAndFixQuery(completeQuery, schema, focusTable, plan);
         }
 
         queries.push(completeQuery);
@@ -528,7 +543,102 @@ export class SampleQueryGenerator {
     return queries;
   }
 
-  private async validateQuery(query: SampleQuery): Promise<void> {
+  /**
+   * Validate a query and attempt to fix it if validation fails
+   */
+  private async validateAndFixQuery(
+    query: SampleQuery,
+    schema: SchemaDefinition,
+    focusTable: TableDefinition,
+    queryPlan: QueryPlan
+  ): Promise<void> {
+    const enableFix = this.config.enableQueryFix !== false; // Default to true
+    const maxAttempts = this.config.maxFixAttempts ?? 3;
+
+    // Initialize fix tracking
+    query.fixAttempts = 0;
+    query.fixHistory = [];
+
+    // Initial validation
+    const validationResult = await this.executeValidation(query);
+
+    if (validationResult.success) {
+      return; // Query is valid, no fix needed
+    }
+
+    // If fix is disabled or error occurred, just record the failure
+    if (!enableFix || maxAttempts <= 0) {
+      query.validated = false;
+      query.validationError = validationResult.errorMessage;
+      LogError(`[SampleQueryGenerator] Query validation failed: ${query.name} - ${query.validationError}`);
+      return;
+    }
+
+    // Attempt to fix the query
+    let currentSQL = query.sqlQuery;
+    let currentError = validationResult.errorMessage;
+    const previousAttempts: Array<{ sql: string; error: string }> = [];
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      LogStatus(`[SampleQueryGenerator] Attempting to fix query: ${query.name} (attempt ${attempt}/${maxAttempts})`);
+
+      // Record the failed attempt
+      previousAttempts.push({ sql: currentSQL, error: currentError });
+      query.fixHistory = [...previousAttempts];
+      query.fixAttempts = attempt;
+
+      try {
+        // Get fixed SQL from LLM
+        const fixedSQL = await this.fixQuery({
+          schema,
+          focusTable,
+          queryPlan,
+          currentSQL,
+          errorMessage: currentError,
+          attemptNumber: attempt,
+          maxAttempts,
+          previousAttempts
+        });
+
+        // Update query with fixed SQL
+        query.sqlQuery = fixedSQL.sqlQuery;
+        query.parameters = fixedSQL.parameters;
+        query.sampleResultColumns = fixedSQL.sampleResultColumns;
+        query.filteringRules = fixedSQL.filteringRules;
+        query.aggregationRules = fixedSQL.aggregationRules;
+        query.joinRules = fixedSQL.joinRules;
+        if (fixedSQL.alignmentNotes) {
+          query.alignmentNotes = fixedSQL.alignmentNotes;
+        }
+
+        // Validate the fixed query
+        const fixValidation = await this.executeValidation(query);
+
+        if (fixValidation.success) {
+          LogStatus(`[SampleQueryGenerator] ✓ Query fixed successfully on attempt ${attempt}: ${query.name}`);
+          return;
+        }
+
+        // Update for next attempt
+        currentSQL = query.sqlQuery;
+        currentError = fixValidation.errorMessage;
+
+      } catch (error) {
+        LogError(`[SampleQueryGenerator] Fix attempt ${attempt} failed for ${query.name}: ${(error as Error).message}`);
+        currentError = (error as Error).message;
+      }
+    }
+
+    // All fix attempts failed
+    query.validated = false;
+    query.validationError = currentError;
+    LogError(`[SampleQueryGenerator] Query could not be fixed after ${maxAttempts} attempts: ${query.name}`);
+  }
+
+  /**
+   * Execute validation on a query and return result
+   */
+  private async executeValidation(query: SampleQuery): Promise<{ success: boolean; errorMessage: string }> {
     try {
       const validationQuery = this.prepareValidationQuery(query.sqlQuery);
 
@@ -544,15 +654,67 @@ export class SampleQueryGenerator {
         LogStatus(
           `[SampleQueryGenerator] Query validated: ${query.name} (${executionTime}ms, ${result.data.length} rows)`
         );
+        return { success: true, errorMessage: '' };
       } else {
-        query.validated = false;
-        query.validationError = result.errorMessage || 'Query returned no results';
-        LogError(`[SampleQueryGenerator] Query validation failed: ${query.name} - ${query.validationError}`);
+        const errorMessage = result.errorMessage || 'Query returned no results';
+        return { success: false, errorMessage };
       }
     } catch (error) {
+      return { success: false, errorMessage: (error as Error).message };
+    }
+  }
+
+  /**
+   * Use LLM to fix a failed query
+   */
+  private async fixQuery(context: QueryFixContext): Promise<QuerySQL> {
+    const relatedTables = this.getRelatedTables(context.schema, context.focusTable);
+    const focusTableContext = this.convertToTableContext(context.focusTable);
+    const relatedTablesContext = relatedTables.map(t => this.convertToTableContext(t));
+
+    const promptContext = {
+      schemaName: context.schema.name,
+      databaseType: this.getDatabaseType(),
+      focusTable: context.focusTable.name,
+      tableInfo: focusTableContext,
+      relatedTables: relatedTablesContext,
+      queryPlan: context.queryPlan,
+      currentSQL: context.currentSQL,
+      errorMessage: context.errorMessage,
+      attemptNumber: context.attemptNumber,
+      maxAttempts: context.maxAttempts,
+      previousAttempts: context.previousAttempts
+    };
+
+    const result = await this.promptEngine.executePrompt<QueryFixResponse>(
+      'query-fix',
+      promptContext,
+      {
+        responseFormat: 'JSON',
+        maxTokens: this.maxTokens
+      }
+    );
+
+    this.totalTokensUsed += result.tokensUsed;
+    this.totalCost += result.cost || 0;
+
+    if (!result.success || !result.result) {
+      throw new Error(`Query fix failed: ${result.errorMessage || 'Unknown error'}`);
+    }
+
+    if (result.result.fixExplanation) {
+      LogStatus(`[SampleQueryGenerator] Fix explanation: ${result.result.fixExplanation}`);
+    }
+
+    return result.result;
+  }
+
+  private async validateQuery(query: SampleQuery): Promise<void> {
+    const validationResult = await this.executeValidation(query);
+    if (!validationResult.success) {
       query.validated = false;
-      query.validationError = (error as Error).message;
-      LogError(`[SampleQueryGenerator] Query execution error: ${query.name} - ${query.validationError}`);
+      query.validationError = validationResult.errorMessage;
+      LogError(`[SampleQueryGenerator] Query validation failed: ${query.name} - ${query.validationError}`);
     }
   }
 
