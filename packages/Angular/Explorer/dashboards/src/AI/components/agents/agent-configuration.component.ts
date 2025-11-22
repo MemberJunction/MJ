@@ -276,7 +276,10 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   }
 
   public openAgentRecord(agentId: string): void {
-    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: agentId });
+    console.log('AgentConfigurationComponent.openAgentRecord called with agentId:', agentId);
+    const eventData = { entityName: 'AI Agents', recordId: agentId };
+    console.log('AgentConfigurationComponent emitting openEntityRecord:', eventData);
+    this.openEntityRecord.emit(eventData);
   }
 
   public createNewAgent(): void {
@@ -303,7 +306,10 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   }
 
   public onOpenRecord(entityName: string, recordId: string): void {
-    this.openEntityRecord.emit({ entityName: entityName, recordId: recordId });
+    console.log('AgentConfigurationComponent.onOpenRecord called:', { entityName, recordId });
+    const eventData = { entityName: entityName, recordId: recordId };
+    console.log('AgentConfigurationComponent emitting openEntityRecord:', eventData);
+    this.openEntityRecord.emit(eventData);
   }
 
   public getExecutionModeColor(mode: string): string {

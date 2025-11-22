@@ -131,10 +131,14 @@ export class DashboardResource extends BaseResourceComponent {
 
             // handle open entity record events in MJ Explorer with routing
             instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
+                console.log('DashboardResource OpenEntityRecord event received:', data);
                 // check to see if the data has entityname/pkey
                 if (data && data.EntityName && data.RecordPKey) {
+                    console.log('DashboardResource calling NavigationService.OpenEntityRecord:', data.EntityName, data.RecordPKey);
                     // Use NavigationService to open entity record in new tab
                     this.navigationService.OpenEntityRecord(data.EntityName, data.RecordPKey);
+                } else {
+                    console.log('DashboardResource - invalid data, missing EntityName or RecordPKey:', data);
                 }
             });
 

@@ -23,11 +23,11 @@ interface AIDashboardState {
 })
 @RegisterClass(BaseDashboard, 'AIDashboard')
 export class AIDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
-  
+
   public isLoading = false;
   public activeTab = 'monitoring'; // Default tab changed to monitoring
   public selectedIndex = 0; // Track selected navigation index - default to monitoring (index 0)
-  
+
   // Component states
   public modelManagementState: any = null;
   public promptManagementState: any = null;
@@ -64,6 +64,7 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   constructor(private cdr: ChangeDetectorRef) {
     super();
+    console.log('AIDashboardComponent constructor called');
     this.setupStateManagement();
     this.updateNavigationSelection();
   }
@@ -216,14 +217,22 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   // Handle entity record opening from sub-components
   public onOpenEntityRecord(data: {entityName: string; recordId: string} | Event): void {
+    console.log('AI Dashboard onOpenEntityRecord called with:', data);
+
     // Type guard to check if it's the correct event type
     if (data && typeof data === 'object' && 'entityName' in data && 'recordId' in data) {
       const entityData = data as {entityName: string; recordId: string};
+      console.log('AI Dashboard creating composite key for:', entityData);
       const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: entityData.recordId }]);
-      this.OpenEntityRecord.emit({
+
+      const eventData = {
         EntityName: entityData.entityName,
         RecordPKey: compositeKey
-      });
+      };
+      console.log('AI Dashboard emitting OpenEntityRecord:', eventData);
+      this.OpenEntityRecord.emit(eventData);
+    } else {
+      console.log('AI Dashboard - data does not match expected format:', data);
     }
   }
 
