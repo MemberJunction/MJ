@@ -78,6 +78,11 @@ mj-tab-container .lm_item_container {
   background: white !important;
 }
 
+/* Tab content wrapper - allow scrolling */
+.tab-content-wrapper {
+  overflow: auto !important;
+}
+
 /* Make tabs larger and easier to click */
 mj-tab-container .lm_header {
   height: 38px !important;

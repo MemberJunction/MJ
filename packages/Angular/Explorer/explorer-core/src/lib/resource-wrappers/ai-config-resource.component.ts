@@ -1,11 +1,11 @@
 import { Component, ViewEncapsulation } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
+import { CompositeKey, Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 
 export function LoadAIConfigResource() {
-  const test = new AIConfigResource();
+  // Function for registration - actual instances created by Angular DI
 }
 
 @RegisterClass(BaseResourceComponent, 'ai-config')
@@ -14,7 +14,8 @@ export function LoadAIConfigResource() {
   template: `
     <div class="ai-config-container">
       <app-system-configuration
-        *ngIf="currentUser">
+        *ngIf="currentUser"
+        (openEntityRecord)="onOpenEntityRecord($event)">
       </app-system-configuration>
     </div>
   `,
@@ -31,10 +32,21 @@ export function LoadAIConfigResource() {
 export class AIConfigResource extends BaseResourceComponent {
   public currentUser: any = null;
 
+  constructor(private navigationService: NavigationService) {
+    super();
+  }
+
   ngOnInit() {
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
     setTimeout(() => this.NotifyLoadComplete(), 100);
+  }
+
+  onOpenEntityRecord(data: {entityName: string; recordId: string}): void {
+    if (data && data.entityName && data.recordId) {
+      const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.recordId }]);
+      this.navigationService.OpenEntityRecord(data.entityName, compositeKey);
+    }
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
