@@ -171,12 +171,14 @@ export class BaseApplication {
         if (preference.DashboardID) {
           return {
             ApplicationId: this.ID,
-            Title: preference.Dashboard,
+            Title: this.Name, // Use app name instead of dashboard name
             ResourceType: 'Dashboards',
             ResourceRecordId: preference.DashboardID,
             Configuration: {
               resourceType: 'Dashboards',
-              recordId: preference.DashboardID
+              recordId: preference.DashboardID,
+              appName: this.Name,  // Mark this as an app-level dashboard
+              isAppDefault: true   // Flag to indicate this is the app's default view
             }
           };
         }

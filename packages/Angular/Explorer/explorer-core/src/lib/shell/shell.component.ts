@@ -88,14 +88,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
 
-        // Create default tab when app is activated ONLY if app has no tabs yet
+        // Create default tab when app is activated ONLY if:
+        // 1. App has no tabs yet
+        // 2. We're not loading from a URL that will create its own tab
         if (app) {
           const existingTabs = this.workspaceManager.GetAppTabs(app.ID);
 
           if (existingTabs.length === 0) {
-            const tabRequest = await app.CreateDefaultTab();
-            if (tabRequest) {
-              this.tabService.OpenTab(tabRequest);
+            // Check if we're loading from a URL that will create a tab
+            const currentUrl = this.router.url;
+            const hasResourceUrl = currentUrl.includes('/app/') ||
+                                   currentUrl.includes('/resource/');
+
+            // Only create default tab if we're NOT loading from a resource URL
+            if (!hasResourceUrl) {
+              const tabRequest = await app.CreateDefaultTab();
+              if (tabRequest) {
+                this.tabService.OpenTab(tabRequest);
+              }
             }
           }
         }
@@ -106,24 +116,41 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.appManager.Applications.subscribe(async apps => {
         if (apps.length > 0 && !this.appManager.GetActiveApp()) {
-          // Check if URL specifies an app
-          const routeAppName = this.route.snapshot.params['appName'];
+          // Check if URL specifies an app by parsing the browser URL
+          const currentUrl = this.router.url;
+          const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
 
-          if (routeAppName) {
+          if (appMatch) {
+            const routeAppName = decodeURIComponent(appMatch[1]);
             // Find the app from the URL
             const urlApp = apps.find(a =>
-              a.Name.trim().toLowerCase() === decodeURIComponent(routeAppName).trim().toLowerCase()
+              a.Name.trim().toLowerCase() === routeAppName.trim().toLowerCase()
             );
 
             if (urlApp) {
               await this.appManager.SetActiveApp(urlApp.ID);
+
+              // If the URL is just /app/:appName (no nav item), we need to let the app
+              // create its default tab since ResourceResolver doesn't handle this
+              const hasNavItem = currentUrl.match(/\/app\/[^\/]+\/[^\/]+/);
+              if (!hasNavItem) {
+                // This is just /app/:appName - let it create the default tab
+                const existingTabs = this.workspaceManager.GetAppTabs(urlApp.ID);
+                if (existingTabs.length === 0) {
+                  const tabRequest = await urlApp.CreateDefaultTab();
+                  if (tabRequest) {
+                    this.tabService.OpenTab(tabRequest);
+                  }
+                }
+              }
+
               return;
             }
           }
 
           // ONLY set default app if URL doesn't specify an app at all
           // If URL has /app/:appName but we didn't find it above, don't set a default
-          if (!routeAppName) {
+          if (!appMatch) {
             await this.appManager.SetActiveApp(apps[0].ID);
           }
         }
@@ -194,8 +221,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Build resource URL from tab configuration
     const resourceUrl = this.buildResourceUrl(activeTab);
     if (resourceUrl) {
-      // Navigate to the resource URL without triggering full navigation
-      this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+      // Only update URL if it's different from current URL to avoid navigation loops
+      const currentUrl = this.router.url.split('?')[0]; // Remove query params for comparison
+      const newUrl = resourceUrl.split('?')[0];
+
+      if (currentUrl !== newUrl) {
+        // Navigate to the resource URL without triggering full navigation
+        this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+      }
     }
   }
 
@@ -218,6 +251,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       return url;
+    }
+
+    // If this is an app's default dashboard (no nav items), use app-level URL
+    if (config.isAppDefault && config.appName) {
+      return `/app/${encodeURIComponent(config.appName)}`;
     }
 
     switch (resourceType) {
@@ -288,15 +326,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   async onAppSwitch(appId: string): Promise<void> {
     await this.appManager.SetActiveApp(appId);
 
-    // Check if app has any tabs, if not open default
+    // Check if app has any tabs
     const appTabs = this.workspaceManager.GetAppTabs(appId);
     if (appTabs.length === 0) {
+      // No tabs - create default tab (will trigger URL sync via workspace config subscription)
       const app = this.appManager.GetAppById(appId);
       if (app) {
         const defaultTab = await app.CreateDefaultTab();
         if (defaultTab) {
           this.workspaceManager.OpenTab(defaultTab, app.GetColor());
         }
+      }
+    } else {
+      // App has existing tabs - activate the first one and sync URL
+      const firstTab = appTabs[0];
+      this.workspaceManager.SetActiveTab(firstTab.id);
+
+      // The workspace configuration subscription will trigger URL sync
+      // but we can also manually trigger it here to ensure immediate update
+      const resourceUrl = this.buildResourceUrl(firstTab);
+      if (resourceUrl) {
+        this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
       }
     }
   }

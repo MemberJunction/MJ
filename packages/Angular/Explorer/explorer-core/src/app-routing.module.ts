@@ -172,6 +172,26 @@ export class ResourceResolver implements Resolve<void> {
 
     const md = new Metadata();
 
+    // Handle app-level navigation: /app/:appName (no nav item - app default)
+    if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
+      const appName = decodeURIComponent(route.params['appName']);
+
+      // Find the app
+      const app = md.Applications.find(a =>
+        a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
+      );
+
+      if (!app) {
+        LogError(`Application ${appName} not found in metadata`);
+        return;
+      }
+
+      // Let the app create its default tab (will load default dashboard if no nav items)
+      // The shell component will handle this after setting the active app
+      // We don't need to do anything here - just return to allow the app to activate
+      return;
+    }
+
     // Handle app navigation: /app/:appName/:navItemName
     if (route.params['appName'] !== undefined && route.params['navItemName'] !== undefined) {
       const appName = decodeURIComponent(route.params['appName']);
@@ -406,6 +426,12 @@ const routes: Routes = [
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },
   {
     path: 'app/:appName/:navItemName',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'app/:appName',
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
