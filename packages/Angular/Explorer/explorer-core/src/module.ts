@@ -50,6 +50,7 @@ import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { DashboardsModule } from '@memberjunction/ng-dashboards';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
+import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
 import { ChatWrapperComponent } from './lib/chat-wrapper/chat-wrapper.component';
@@ -104,6 +105,7 @@ import { AIPromptsResource } from './lib/resource-wrappers/ai-prompts-resource.c
 import { AIAgentsResource } from './lib/resource-wrappers/ai-agents-resource.component';
 import { AIModelsResource } from './lib/resource-wrappers/ai-models-resource.component';
 import { AIConfigResource } from './lib/resource-wrappers/ai-config-resource.component';
+import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
@@ -158,6 +160,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     AIAgentsResource,
     AIModelsResource,
     AIConfigResource,
+    ArtifactResource,
     TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
     StyleGuideTestComponent
@@ -216,7 +219,8 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DragDropModule,
     CardModule,
     AvatarModule,
-    AITestHarnessModule
+    AITestHarnessModule,
+    ArtifactsModule
   ],
   exports: [
     FormToolbarComponent,

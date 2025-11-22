@@ -102,11 +102,30 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       })
     );
 
-    // Subscribe to applications loading - set first app as active when loaded
+    // Subscribe to applications loading - set app based on URL or default to first
     this.subscriptions.push(
       this.appManager.Applications.subscribe(async apps => {
         if (apps.length > 0 && !this.appManager.GetActiveApp()) {
-          await this.appManager.SetActiveApp(apps[0].ID);
+          // Check if URL specifies an app
+          const routeAppName = this.route.snapshot.params['appName'];
+
+          if (routeAppName) {
+            // Find the app from the URL
+            const urlApp = apps.find(a =>
+              a.Name.trim().toLowerCase() === decodeURIComponent(routeAppName).trim().toLowerCase()
+            );
+
+            if (urlApp) {
+              await this.appManager.SetActiveApp(urlApp.ID);
+              return;
+            }
+          }
+
+          // ONLY set default app if URL doesn't specify an app at all
+          // If URL has /app/:appName but we didn't find it above, don't set a default
+          if (!routeAppName) {
+            await this.appManager.SetActiveApp(apps[0].ID);
+          }
         }
       })
     );
@@ -137,43 +156,121 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle deep link parameters from URL (?tab=id1&tab=id2...)
+   * Handle deep links from URL
+   * Resource URLs like /resource/record/Companies/123 are handled by ResourceResolver
+   * Legacy ?tab= params are supported for backward compatibility
    */
   private handleDeepLink(): void {
     const queryParams = this.route.snapshot.queryParams;
     const tabParam = queryParams['tab'];
 
-    if (!tabParam) {
-      return;
+    // Legacy support for ?tab= parameters
+    if (tabParam) {
+      const tabIds = Array.isArray(tabParam) ? tabParam : [tabParam];
+      if (tabIds.length > 0) {
+        this.workspaceManager.SetActiveTab(tabIds[0]);
+      }
     }
 
-    // Support multiple ?tab= parameters
-    const tabIds = Array.isArray(tabParam) ? tabParam : [tabParam];
-
-    if (tabIds.length > 0) {
-      // If URL specifies 2+ tabs, ensure tab bar is visible
-      // This will be handled automatically by shouldShowTabs logic
-
-      // Activate the first tab in the URL
-      this.workspaceManager.SetActiveTab(tabIds[0]);
-    }
+    // Note: Resource URLs like /resource/record/EntityName/123 are automatically
+    // handled by the ResourceResolver which raises MJ events that the workspace
+    // manager listens to. No additional handling needed here.
   }
 
   /**
-   * Sync URL query parameters with workspace state
+   * Sync URL with active tab's resource
    */
   private syncUrlWithWorkspace(config: any): void {
     if (!config.activeTabId) {
       return;
     }
 
-    // Update URL with active tab ID (without triggering navigation)
-    this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { tab: config.activeTabId },
-      queryParamsHandling: 'merge',
-      replaceUrl: true
-    });
+    // Find the active tab
+    const activeTab = config.tabs?.find((tab: any) => tab.id === config.activeTabId);
+    if (!activeTab) {
+      return;
+    }
+
+    // Build resource URL from tab configuration
+    const resourceUrl = this.buildResourceUrl(activeTab);
+    if (resourceUrl) {
+      // Navigate to the resource URL without triggering full navigation
+      this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+    }
+  }
+
+  /**
+   * Build a shareable resource URL from tab data
+   */
+  private buildResourceUrl(tab: any): string | null {
+    const config = tab.configuration || {};
+    const resourceType = config.resourceType?.toLowerCase();
+    const recordId = tab.resourceRecordId;
+
+    // If this is an app nav item, build app-based URL
+    if (config.appName && config.navItemName) {
+      let url = `/app/${encodeURIComponent(config.appName)}/${encodeURIComponent(config.navItemName)}`;
+
+      // Add query params if present
+      if (config.queryParams && Object.keys(config.queryParams).length > 0) {
+        const params = new URLSearchParams(config.queryParams);
+        url += `?${params.toString()}`;
+      }
+
+      return url;
+    }
+
+    switch (resourceType) {
+      case 'records':
+        // /resource/record/:entityName/:recordId
+        const entityName = config.Entity || config.entity;
+        if (entityName && recordId) {
+          return `/resource/record/${encodeURIComponent(entityName)}/${recordId}`;
+        }
+        break;
+
+      case 'user views':
+        // Check if it's a dynamic view
+        if (config.isDynamic || recordId === 'dynamic') {
+          // /resource/view/dynamic/:entityName?ExtraFilter=...
+          const entityName = config.Entity || config.entity;
+          if (entityName) {
+            let url = `/resource/view/dynamic/${encodeURIComponent(entityName)}`;
+            if (config.ExtraFilter || config.extraFilter) {
+              const filter = config.ExtraFilter || config.extraFilter;
+              url += `?ExtraFilter=${encodeURIComponent(filter)}`;
+            }
+            return url;
+          }
+        } else if (recordId) {
+          // /resource/view/:viewId (saved view)
+          return `/resource/view/${recordId}`;
+        }
+        break;
+
+      case 'dashboards':
+        // /resource/dashboard/:dashboardId
+        if (recordId) {
+          return `/resource/dashboard/${recordId}`;
+        }
+        break;
+
+      case 'artifacts':
+        // /resource/artifact/:artifactId
+        if (recordId) {
+          return `/resource/artifact/${recordId}`;
+        }
+        break;
+
+      case 'queries':
+        // /resource/query/:queryId
+        if (recordId) {
+          return `/resource/query/${recordId}`;
+        }
+        break;
+    }
+
+    return null;
   }
 
   ngAfterViewInit(): void {

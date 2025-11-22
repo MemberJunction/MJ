@@ -13,6 +13,7 @@ import { LoadAIPromptsResource } from "./ai-prompts-resource.component";
 import { LoadAIAgentsResource } from "./ai-agents-resource.component";
 import { LoadAIModelsResource } from "./ai-models-resource.component";
 import { LoadAIConfigResource } from "./ai-config-resource.component";
+import { LoadArtifactResource } from "./artifact-resource.component";
 
 export function LoadResourceWrappers()
 {
@@ -31,4 +32,5 @@ export function LoadResourceWrappers()
     LoadAIAgentsResource();
     LoadAIModelsResource();
     LoadAIConfigResource();
+    LoadArtifactResource();
 }

@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { WorkspaceStateManager, NavItem, TabRequest } from '@memberjunction/ng-base-application';
+import { WorkspaceStateManager, NavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
@@ -22,7 +22,10 @@ export class NavigationService implements OnDestroy {
   private shiftKeyPressed = false;
   private subscriptions: Subscription[] = [];
 
-  constructor(private workspaceManager: WorkspaceStateManager) {
+  constructor(
+    private workspaceManager: WorkspaceStateManager,
+    private appManager: ApplicationManager
+  ) {
     this.setupGlobalShiftKeyDetection();
   }
 
@@ -88,6 +91,10 @@ export class NavigationService implements OnDestroy {
   public OpenNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
     const forceNew = this.shouldForceNewTab(options);
 
+    // Get the app to find its name
+    const app = this.appManager.GetAppById(appId);
+    const appName = app?.Name || '';
+
     const request: TabRequest = {
       ApplicationId: appId,
       Title: navItem.Label,
@@ -95,6 +102,9 @@ export class NavigationService implements OnDestroy {
         route: navItem.Route,
         resourceType: navItem.ResourceType,
         recordId: navItem.RecordId,
+        appName: appName,  // Store app name for URL building
+        appId: appId,
+        navItemName: navItem.Label,  // Store nav item name for URL building
         ...(navItem.Configuration || {})
       },
       IsPinned: options?.pinTab || false
@@ -231,6 +241,98 @@ export class NavigationService implements OnDestroy {
         recordId: reportId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
       ResourceRecordId: reportId,
+      IsPinned: options?.pinTab || false
+    };
+
+    if (forceNew) {
+      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+    } else {
+      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+    }
+  }
+
+  /**
+   * Open an artifact (system-wide resource)
+   * Artifacts are versioned content containers (reports, dashboards, UI components, etc.)
+   */
+  public OpenArtifact(
+    artifactId: string,
+    artifactName?: string,
+    options?: NavigationOptions
+  ): string {
+    const forceNew = this.shouldForceNewTab(options);
+
+    const request: TabRequest = {
+      ApplicationId: SYSTEM_APP_ID,
+      Title: artifactName || `Artifact - ${artifactId}`,
+      Configuration: {
+        resourceType: 'Artifacts',
+        artifactId,
+        recordId: artifactId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+      },
+      ResourceRecordId: artifactId,
+      IsPinned: options?.pinTab || false
+    };
+
+    if (forceNew) {
+      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+    } else {
+      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+    }
+  }
+
+  /**
+   * Open a dynamic view (system-wide resource)
+   * Dynamic views are entity-based views with custom filters, not saved views
+   */
+  public OpenDynamicView(
+    entityName: string,
+    extraFilter?: string,
+    options?: NavigationOptions
+  ): string {
+    const forceNew = this.shouldForceNewTab(options);
+
+    const filterSuffix = extraFilter ? ' (Filtered)' : '';
+    const request: TabRequest = {
+      ApplicationId: SYSTEM_APP_ID,
+      Title: `${entityName}${filterSuffix}`,
+      Configuration: {
+        resourceType: 'User Views',
+        Entity: entityName,
+        ExtraFilter: extraFilter,
+        isDynamic: true,
+        recordId: 'dynamic'  // Special marker for dynamic views
+      },
+      ResourceRecordId: 'dynamic',
+      IsPinned: options?.pinTab || false
+    };
+
+    if (forceNew) {
+      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+    } else {
+      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+    }
+  }
+
+  /**
+   * Open a query (system-wide resource)
+   */
+  public OpenQuery(
+    queryId: string,
+    queryName: string,
+    options?: NavigationOptions
+  ): string {
+    const forceNew = this.shouldForceNewTab(options);
+
+    const request: TabRequest = {
+      ApplicationId: SYSTEM_APP_ID,
+      Title: queryName,
+      Configuration: {
+        resourceType: 'Queries',
+        queryId,
+        recordId: queryId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+      },
+      ResourceRecordId: queryId,
       IsPinned: options?.pinTab || false
     };
 

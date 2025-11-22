@@ -17,12 +17,13 @@ import {
 } from './public-api';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
-import { LogError, Metadata } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { EventCodes, SharedService, BaseNavigationComponent } from '@memberjunction/ng-shared';
+import { EventCodes, SharedService, BaseNavigationComponent, NavigationService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { SkipChatWrapperComponent } from '@memberjunction/ng-ask-skip';
+import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
   storedRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
@@ -138,7 +139,14 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   providedIn: 'root',
 })
 export class ResourceResolver implements Resolve<void> {
-  constructor(private sharedService: SharedService, private router: Router) {
+  private processedUrls = new Set<string>();
+
+  constructor(
+    private sharedService: SharedService,
+    private router: Router,
+    private appManager: ApplicationManager,
+    private tabService: TabService
+  ) {
     // Subscribe to router events
     this.router.events.subscribe(event => {
       // if (event instanceof NavigationEnd) {
@@ -150,81 +158,213 @@ export class ResourceResolver implements Resolve<void> {
       // if (event instanceof NavigationCancel) {
       //   LogError(`NavigationCancel: ${event.reason}`);
       // }
-    });    
+    });
   }
 
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
-    let resourceType = route.params['resourceType'];
-    const resourceRecordId = route.params['resourceRecordId'];
-    if (resourceType !== undefined && resourceRecordId !== undefined) {
-      resourceType = this.sharedService.mapResourceTypeRouteSegmentToName(resourceType);
-
-      const data: ResourceData = new ResourceData({
-        Name: '',
-        ResourceRecordID: resourceRecordId,
-        ResourceTypeID: this.sharedService.ResourceTypeByName(resourceType)?.ID,
-        Configuration: {},
-      });
-
-      let code: EventCodes = EventCodes.AddDashboard;
-      const entityNameDecoded = decodeURIComponent(route.queryParams['Entity'] || route.queryParams['entity']);
-      const md = new Metadata();
-      switch (resourceType.trim().toLowerCase()) {
-        case 'lists':
-          code = EventCodes.ListClicked
-          break;
-        case 'user views':
-          code = EventCodes.ViewClicked;
-          break;
-        case 'dashboards':
-          code = EventCodes.AddDashboard;
-          break;
-        case 'reports':
-          code = EventCodes.AddReport;
-          break;
-        case 'queries':
-          code = EventCodes.AddQuery;
-          break;
-        case 'records':
-          code = EventCodes.EntityRecordClicked;
-          data.Configuration.Entity = entityNameDecoded; // Entity or entity is specified for this resource type since resource record id isn't good enough
-          const newRecordVals = route.queryParams['NewRecordValues'] || route.queryParams['newRecordValues'];
-          if (newRecordVals) {
-            data.Configuration.NewRecordValues = decodeURIComponent(newRecordVals);  
-          }
-          data.Configuration.___rawQueryParams = route.queryParams;
-          if (data.Configuration.Entity === undefined || data.Configuration.Entity === null) {
-            LogError('No Entity provided in the URL, must have Entity as a query parameter for this resource type');
-            return;  
-          }
-          else {
-            const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
-            if (!entityInfo) {
-              LogError(`Entity ${data.Configuration.Entity} not found in metadata`);
-              return;
-            }
-          }
-          break;
-        case 'search results':
-          code = EventCodes.RunSearch;
-          data.Configuration.Entity = entityNameDecoded;
-          data.Configuration.SearchInput = resourceRecordId;
-          data.ResourceRecordID = 0; /*tell nav to create new tab*/
-          break;
-        default:
-          LogError(`Unsupported resource type: ${resourceType}`);
-          // Handle the unsupported resource type error appropriately
-          return;           
-      }
-      MJGlobal.Instance.RaiseEvent({
-        component: this,
-        event: MJEventType.ComponentEvent,
-        eventCode: code,
-        args: data,
-      });
-    } else {
-      LogError(`ResourceType: ${resourceType} or ResourceRecordId: ${resourceRecordId} is undefined in the route parameters`);
+    // Prevent duplicate processing of the same URL
+    if (this.processedUrls.has(state.url)) {
+      console.log('[ResourceResolver] Already processed URL:', state.url);
+      return;
     }
+    this.processedUrls.add(state.url);
+    console.log('[ResourceResolver] Processing URL:', state.url);
+
+    const md = new Metadata();
+
+    // Handle app navigation: /app/:appName/:navItemName
+    if (route.params['appName'] !== undefined && route.params['navItemName'] !== undefined) {
+      const appName = decodeURIComponent(route.params['appName']);
+      const navItemName = decodeURIComponent(route.params['navItemName']);
+
+      // Find the app
+      const app = md.Applications.find(a =>
+        a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
+      );
+
+      if (!app) {
+        LogError(`Application ${appName} not found in metadata`);
+        return;
+      }
+
+      // Get nav items from the app's DefaultNavItems JSON
+      let navItems: any[] = [];
+      if (app.DefaultNavItems) {
+        try {
+          navItems = JSON.parse(app.DefaultNavItems);
+        } catch (e) {
+          LogError(`Failed to parse DefaultNavItems for app ${appName}`);
+          console.error(e);
+          return;
+        }
+      }
+
+      // Find the nav item by label (case-insensitive)
+      const navItem = navItems.find(item =>
+        item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
+      );
+
+      if (!navItem) {
+        LogError(`Nav item ${navItemName} not found in app ${appName}`);
+        return;
+      }
+
+      // Get the resource type from the nav item
+      if (!navItem.ResourceType) {
+        LogError(`Nav item ${navItemName} has no ResourceType defined`);
+        return;
+      }
+
+      // NOTE: Don't set active app here - the shell component handles that
+      // based on the URL to avoid navigation loops
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: app.ID,
+        Title: navItem.Label,
+        Configuration: {
+          route: navItem.Route,
+          resourceType: navItem.ResourceType,
+          recordId: navItem.RecordId,
+          appName: appName,
+          appId: app.ID,
+          navItemName: navItem.Label,
+          ...(navItem.Configuration || {}),
+          queryParams: route.queryParams
+        },
+        IsPinned: false
+      });
+      return;
+    }
+
+    // Determine resource type and record ID based on the route path
+    if (route.params['recordId'] !== undefined && route.params['entityName'] !== undefined) {
+      // /resource/record/:entityName/:recordId
+      const entityName = decodeURIComponent(route.params['entityName']);
+      const recordId = route.params['recordId'];
+
+      const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+      if (!entityInfo) {
+        LogError(`Entity ${entityName} not found in metadata`);
+        return;
+      }
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `${entityName} - ${recordId}`,
+        Configuration: {
+          resourceType: 'Records',
+          Entity: entityName,
+          recordId: recordId
+        },
+        ResourceRecordId: recordId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['viewId'] !== undefined) {
+      // /resource/view/:viewId (saved views)
+      const viewId = route.params['viewId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `View - ${viewId}`,
+        Configuration: {
+          resourceType: 'User Views',
+          viewId,
+          recordId: viewId
+        },
+        ResourceRecordId: viewId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.url.length >= 3 && route.url[1].path === 'view' && route.url[2].path === 'dynamic') {
+      // /resource/view/dynamic/:entityName
+      const entityName = decodeURIComponent(route.params['entityName']);
+      const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+
+      const filterSuffix = extraFilter ? ' (Filtered)' : '';
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `${entityName}${filterSuffix}`,
+        Configuration: {
+          resourceType: 'User Views',
+          Entity: entityName,
+          ExtraFilter: extraFilter,
+          isDynamic: true,
+          recordId: 'dynamic'
+        },
+        ResourceRecordId: 'dynamic',
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['dashboardId'] !== undefined) {
+      // /resource/dashboard/:dashboardId
+      const dashboardId = route.params['dashboardId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Dashboard - ${dashboardId}`,
+        Configuration: {
+          resourceType: 'Dashboards',
+          dashboardId,
+          recordId: dashboardId
+        },
+        ResourceRecordId: dashboardId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['artifactId'] !== undefined) {
+      // /resource/artifact/:artifactId
+      const artifactId = route.params['artifactId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Artifact - ${artifactId}`,
+        Configuration: {
+          resourceType: 'Artifacts',
+          artifactId,
+          recordId: artifactId
+        },
+        ResourceRecordId: artifactId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['queryId'] !== undefined) {
+      // /resource/query/:queryId
+      const queryId = route.params['queryId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Query - ${queryId}`,
+        Configuration: {
+          resourceType: 'Queries',
+          queryId,
+          recordId: queryId
+        },
+        ResourceRecordId: queryId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    LogError(`Unable to parse resource route parameters from URL: ${state.url}`);
   }
 }
 
@@ -263,12 +403,45 @@ const routes: Routes = [
   },
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },
   { path: 'style-guide-test', component: StyleGuideTestComponent, canActivate: [AuthGuard] },
-  { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
-  { path: 'app/:appName/:entityName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
-  { path: 'app/:appName/:entityName/:folderID', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },
   {
-    path: 'resource/:resourceType/:resourceRecordId',
+    path: 'app/:appName/:navItemName',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/record/:entityName/:recordId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/view/dynamic/:entityName',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/view/:viewId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/dashboard/:dashboardId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/artifact/:artifactId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/query/:queryId',
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
