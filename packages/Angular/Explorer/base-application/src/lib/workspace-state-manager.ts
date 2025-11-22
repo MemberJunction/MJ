@@ -24,6 +24,7 @@ export class WorkspaceStateManager {
   private configuration$ = new BehaviorSubject<WorkspaceConfiguration | null>(null);
   private saveRequest$ = new Subject<void>();
   private loading$ = new BehaviorSubject<boolean>(false);
+  private tabBarVisible$ = new BehaviorSubject<boolean>(true);
   private initialized = false;
 
   constructor() {
@@ -32,6 +33,14 @@ export class WorkspaceStateManager {
       debounceTime(500) // Wait 500ms after last change
     ).subscribe(() => {
       this.persistConfiguration();
+    });
+
+    // Update tab bar visibility whenever configuration changes
+    this.configuration$.subscribe(config => {
+      if (config) {
+        const shouldShow = this.shouldShowTabs(config);
+        this.tabBarVisible$.next(shouldShow);
+      }
     });
   }
 
@@ -50,10 +59,41 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Observable of tab bar visibility
+   * Returns false when only 1 tab exists and no tabs are pinned
+   * Returns true when 2+ tabs exist OR any tabs are pinned
+   */
+  get TabBarVisible(): Observable<boolean> {
+    return this.tabBarVisible$.asObservable();
+  }
+
+  /**
    * Get current configuration synchronously
    */
   GetConfiguration(): WorkspaceConfiguration | null {
     return this.configuration$.value;
+  }
+
+  /**
+   * Determine if tab bar should be visible
+   * - Hide if only 1 tab and no pinned tabs (single-resource view)
+   * - Show if 2+ tabs OR any pinned tabs exist
+   */
+  private shouldShowTabs(config: WorkspaceConfiguration): boolean {
+    const tabs = config.tabs || [];
+
+    // Always hide if no tabs (shouldn't happen, but defensive)
+    if (tabs.length === 0) {
+      return false;
+    }
+
+    // Check if any tabs are pinned
+    const hasPinnedTabs = tabs.some(tab => tab.isPinned);
+
+    // Show tabs if:
+    // - 2 or more tabs exist, OR
+    // - Any tab is pinned (user wants persistent workspace)
+    return tabs.length > 1 || hasPinnedTabs;
   }
 
   /**
@@ -139,6 +179,68 @@ export class WorkspaceStateManager {
   UpdateConfiguration(config: WorkspaceConfiguration): void {
     this.configuration$.next(config);
     this.requestSave();
+  }
+
+  /**
+   * Force creation of a new tab, never replacing temporary tabs
+   * Used for Shift+Click behavior and power user workflows
+   */
+  OpenTabForced(request: TabRequest, appColor: string): string {
+    const config = this.configuration$.value;
+    if (!config) {
+      throw new Error('Configuration not initialized');
+    }
+
+    // Check for existing tab - match by resource type and record ID
+    const existingTab = config.tabs.find(tab => {
+      if (tab.applicationId !== request.ApplicationId) return false;
+
+      // For resource-based tabs, match by resourceType in configuration
+      if (request.Configuration?.resourceType) {
+        const requestRecordId = request.ResourceRecordId || '';
+        const tabRecordId = tab.resourceRecordId || '';
+        return tab.configuration.resourceType === request.Configuration.resourceType &&
+               tabRecordId === requestRecordId;
+      }
+
+      // Legacy: match by entity and viewId
+      const requestRecordId = request.ResourceRecordId || '';
+      const tabRecordId = tab.resourceRecordId || '';
+      return tab.configuration.entity === request.Configuration?.entity &&
+             tab.configuration.viewId === request.Configuration?.viewId &&
+             tabRecordId === requestRecordId;
+    });
+
+    if (existingTab) {
+      // Focus existing tab instead of creating duplicate
+      const updatedConfig = {
+        ...config,
+        activeTabId: existingTab.id
+      };
+      this.UpdateConfiguration(updatedConfig);
+      return existingTab.id;
+    }
+
+    // ALWAYS create new tab - never replace temporary tabs
+    const newTab: WorkspaceTab = {
+      id: this.generateUUID(),
+      applicationId: request.ApplicationId,
+      title: request.Title,
+      resourceTypeId: request.ResourceTypeId || '',
+      resourceRecordId: request.ResourceRecordId || '',
+      isPinned: request.IsPinned || false,
+      sequence: config.tabs.length,
+      lastAccessedAt: new Date().toISOString(),
+      configuration: request.Configuration || {}
+    };
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: [...config.tabs, newTab],
+      activeTabId: newTab.id
+    });
+
+    return newTab.id;
   }
 
   /**

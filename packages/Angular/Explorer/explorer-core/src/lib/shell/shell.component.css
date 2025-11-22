@@ -18,6 +18,32 @@ mj-tab-container {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Hide Golden Layout tab headers when only one tab */
+mj-tab-container.hide-tab-bar ::ng-deep .lm_header {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease-in-out, max-height 0.2s ease-in-out;
+}
+
+/* Show tab headers when multiple tabs */
+mj-tab-container:not(.hide-tab-bar) ::ng-deep .lm_header {
+  opacity: 1;
+  max-height: 40px;
+  transition: opacity 0.2s ease-in-out, max-height 0.2s ease-in-out;
+}
+
+/* Adjust content area height when tabs hidden */
+mj-tab-container.hide-tab-bar ::ng-deep .lm_content {
+  height: 100% !important;
+}
+
+/* Ensure smooth transitions */
+mj-tab-container ::ng-deep .lm_stack {
+  transition: all 0.2s ease-in-out;
 }
 
 .shell-header {

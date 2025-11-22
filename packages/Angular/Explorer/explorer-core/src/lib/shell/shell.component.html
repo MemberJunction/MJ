@@ -1,4 +1,4 @@
-<div class="shell-container" *ngIf="!loading">
+<div class="shell-container" *ngIf="!loading" [class.tabs-visible]="tabBarVisible">
   <!-- Header -->
   <header class="shell-header">
     <!-- App Switcher -->
@@ -33,8 +33,8 @@
     </div>
   </header>
 
-  <!-- Tab Container -->
-  <mj-tab-container></mj-tab-container>
+  <!-- Tab Container - with dynamic tab bar visibility -->
+  <mj-tab-container [class.hide-tab-bar]="!tabBarVisible"></mj-tab-container>
 </div>
 
 <!-- Loading State -->

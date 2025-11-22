@@ -20,6 +20,9 @@ export interface TabRequest {
   /** Resource record ID for matching existing tabs */
   ResourceRecordId?: string;
 
+  /** Whether this tab should be pinned (permanent) */
+  IsPinned?: boolean;
+
   /** Tab-specific configuration */
   Configuration?: Record<string, unknown>;
 }

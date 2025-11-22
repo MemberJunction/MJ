@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import {
   ApplicationManager,
@@ -9,6 +10,8 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { NavigationService } from '../services/navigation.service';
+import { NavItemClickEvent } from './components/header/app-nav.component';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -29,12 +32,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   activeApp: BaseApplication | null = null;
   loading = true;
   initialized = false;
+  tabBarVisible = true; // Controlled by workspace manager
 
   constructor(
     private appManager: ApplicationManager,
     private workspaceManager: WorkspaceStateManager,
     private layoutManager: GoldenLayoutManager,
-    private tabService: TabService
+    private tabService: TabService,
+    private navigationService: NavigationService,
+    private route: ActivatedRoute,
+    private router: Router
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -68,6 +75,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     } else {
       throw new Error('No current user found');
     }
+
+    // Subscribe to tab bar visibility changes
+    this.subscriptions.push(
+      this.workspaceManager.TabBarVisible.subscribe(visible => {
+        this.tabBarVisible = visible;
+      })
+    );
 
     // Subscribe to active app changes
     this.subscriptions.push(
@@ -106,8 +120,60 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       })
     );
 
+    // Subscribe to workspace configuration changes to sync URL
+    this.subscriptions.push(
+      this.workspaceManager.Configuration.subscribe(config => {
+        if (config && this.initialized) {
+          this.syncUrlWithWorkspace(config);
+        }
+      })
+    );
+
+    // Check for deep link parameters on initialization
+    this.handleDeepLink();
+
     this.initialized = true;
     this.loading = false;
+  }
+
+  /**
+   * Handle deep link parameters from URL (?tab=id1&tab=id2...)
+   */
+  private handleDeepLink(): void {
+    const queryParams = this.route.snapshot.queryParams;
+    const tabParam = queryParams['tab'];
+
+    if (!tabParam) {
+      return;
+    }
+
+    // Support multiple ?tab= parameters
+    const tabIds = Array.isArray(tabParam) ? tabParam : [tabParam];
+
+    if (tabIds.length > 0) {
+      // If URL specifies 2+ tabs, ensure tab bar is visible
+      // This will be handled automatically by shouldShowTabs logic
+
+      // Activate the first tab in the URL
+      this.workspaceManager.SetActiveTab(tabIds[0]);
+    }
+  }
+
+  /**
+   * Sync URL query parameters with workspace state
+   */
+  private syncUrlWithWorkspace(config: any): void {
+    if (!config.activeTabId) {
+      return;
+    }
+
+    // Update URL with active tab ID (without triggering navigation)
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: config.activeTabId },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
   }
 
   ngAfterViewInit(): void {
@@ -139,45 +205,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle navigation item click
+   * Handle navigation item click with shift-key detection
    */
-  onNavItemClick(navItem: any): void {
-    console.log('[Shell] onNavItemClick() called with:', navItem);
+  onNavItemClick(event: NavItemClickEvent): void {
     if (!this.activeApp) {
-      console.log('[Shell] ERROR: No active app, ignoring nav click');
+      console.error('[Shell] No active app, ignoring nav click');
       return;
     }
 
-    console.log('[Shell] Active app:', this.activeApp.Name, this.activeApp.ID);
+    const { item, shiftKey } = event;
 
-    // Create tab request for nav item
-    const tabRequest: any = {
-      ApplicationId: this.activeApp.ID,
-      Title: navItem.Label
-    };
-
-    // Handle resource-based nav items
-    if (navItem.ResourceType) {
-      console.log('[Shell] Resource-based nav item:', navItem.ResourceType);
-      tabRequest.ResourceType = navItem.ResourceType;
-      tabRequest.ResourceRecordId = navItem.RecordId || null;
-      // Put resourceType in Configuration so it gets stored properly
-      tabRequest.Configuration = {
-        resourceType: navItem.ResourceType,
-        recordId: navItem.RecordId,
-        ...(navItem.Configuration || {})
-      };
-    }
-    // Handle route-based nav items (legacy)
-    else if (navItem.Route) {
-      console.log('[Shell] Route-based nav item:', navItem.Route);
-      tabRequest.Route = navItem.Route;
-    } else {
-      console.log('[Shell] WARNING: Nav item has neither ResourceType nor Route');
-    }
-
-    console.log('[Shell] Calling workspaceManager.OpenTab() with:', tabRequest);
-    this.workspaceManager.OpenTab(tabRequest, this.activeApp.GetColor());
-    console.log('[Shell] OpenTab() call completed');
+    // Use NavigationService with forceNewTab option if shift was pressed
+    this.navigationService.openNavItem(
+      this.activeApp.ID,
+      item,
+      this.activeApp.GetColor(),
+      { forceNewTab: shiftKey }
+    );
   }
 }

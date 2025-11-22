@@ -24,6 +24,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
+import { ComponentCacheManager } from './component-cache-manager';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -47,8 +48,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private layoutInitialized = false;
 
-  // Track component references for cleanup
+  // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
+
+  // NEW: Smart component cache for preserving state across tab switches
+  private cacheManager: ComponentCacheManager;
 
   // Context menu state
   contextMenuVisible = false;
@@ -62,7 +66,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     private appManager: ApplicationManager,
     private appRef: ApplicationRef,
     private environmentInjector: EnvironmentInjector
-  ) {}
+  ) {
+    // Initialize component cache manager
+    this.cacheManager = new ComponentCacheManager(this.appRef);
+  }
 
   ngOnInit(): void {
     // Subscribe to tab events
@@ -133,9 +140,13 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
 
-    // Cleanup all dynamic components
+    // Clear the component cache (destroys all components)
+    this.cacheManager.clearCache();
+
+    // Cleanup any legacy componentRefs
     this.componentRefs.forEach((ref, tabId) => {
-      this.cleanupTabComponent(tabId);
+      this.appRef.detachView(ref.hostView);
+      ref.destroy();
     });
     this.componentRefs.clear();
   }
@@ -173,6 +184,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /**
    * Load content into a tab container
+   * Uses component cache to reuse components for same resources
    */
   private async loadTabContent(tabId: string, container: unknown): Promise<void> {
     try {
@@ -195,6 +207,39 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         LogError(`Unable to create ResourceData for tab: ${tab.title}`);
         return;
       }
+
+      // Clear any existing content from the container (important for tab reuse)
+      glContainer.element.innerHTML = '';
+
+      // Check if we have a cached component for this resource
+      const cached = this.cacheManager.getCachedComponent(
+        resourceData.ResourceType,
+        resourceData.ResourceRecordID || '',
+        tab.applicationId
+      );
+
+      if (cached) {
+        console.log(`♻️ Reusing cached component for ${resourceData.ResourceType}`);
+
+        // Reattach the cached wrapper element
+        glContainer.element.appendChild(cached.wrapperElement);
+
+        // Mark as attached to this tab
+        this.cacheManager.markAsAttached(
+          resourceData.ResourceType,
+          resourceData.ResourceRecordID || '',
+          tab.applicationId,
+          tabId
+        );
+
+        // Keep legacy componentRefs map updated
+        this.componentRefs.set(tabId, cached.componentRef);
+
+        return;
+      }
+
+      // No cached component found - create new one
+      console.log(`🆕 Creating new component for ${resourceData.ResourceType}`);
 
       // Get the component registration for this resource type
       const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
@@ -231,10 +276,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       };
 
-      // Clear any existing content from the container (important for tab reuse)
-      // This prevents accumulation of wrapper divs when temporary tabs are replaced
-      glContainer.element.innerHTML = '';
-
       // Create a container div for the component
       const componentElement = document.createElement('div');
       componentElement.className = 'tab-content-wrapper';
@@ -247,7 +288,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Add to Golden Layout container
       glContainer.element.appendChild(componentElement);
 
-      // Store reference for cleanup
+      // Cache the component for future reuse
+      this.cacheManager.cacheComponent(
+        componentRef as ComponentRef<BaseResourceComponent>,
+        componentElement,
+        resourceData,
+        tabId
+      );
+
+      // Store reference for cleanup (legacy)
       this.componentRefs.set(tabId, componentRef as ComponentRef<BaseResourceComponent>);
 
     } catch (e) {
@@ -350,13 +399,24 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /**
    * Cleanup a tab's component
+   * Detaches from DOM but keeps in cache for potential reuse
    */
   private cleanupTabComponent(tabId: string): void {
-    const componentRef = this.componentRefs.get(tabId);
-    if (componentRef) {
-      this.appRef.detachView(componentRef.hostView);
-      componentRef.destroy();
+    // First, try to detach from cache (preserves component for reuse)
+    const cachedInfo = this.cacheManager.markAsDetached(tabId);
+
+    if (cachedInfo) {
+      console.log(`📎 Detached component from tab ${tabId}, available for reuse`);
+      // Remove from legacy componentRefs but keep in cache
       this.componentRefs.delete(tabId);
+    } else {
+      // Fallback: destroy if not in cache (shouldn't happen in normal flow)
+      const componentRef = this.componentRefs.get(tabId);
+      if (componentRef) {
+        this.appRef.detachView(componentRef.hostView);
+        componentRef.destroy();
+        this.componentRefs.delete(tabId);
+      }
     }
   }
 

@@ -2,6 +2,14 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 
 /**
+ * Event emitted when a nav item is clicked
+ */
+export interface NavItemClickEvent {
+  item: NavItem;
+  shiftKey: boolean;
+}
+
+/**
  * Horizontal navigation items for the current app.
  */
 @Component({
@@ -11,7 +19,7 @@ import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction
 })
 export class AppNavComponent implements OnInit, OnChanges {
   @Input() app: BaseApplication | null = null;
-  @Output() navItemClick = new EventEmitter<NavItem>();
+  @Output() navItemClick = new EventEmitter<NavItemClickEvent>();
 
   constructor(private workspaceManager: WorkspaceStateManager) {}
 
@@ -41,8 +49,11 @@ export class AppNavComponent implements OnInit, OnChanges {
   /**
    * Handle nav item click
    */
-  onNavClick(item: NavItem): void {
-    this.navItemClick.emit(item);
+  onNavClick(item: NavItem, event?: MouseEvent): void {
+    this.navItemClick.emit({
+      item,
+      shiftKey: event?.shiftKey || false
+    });
   }
 
   /**
