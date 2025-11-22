@@ -487,6 +487,29 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.contextMenuY = y;
     this.contextMenuTabId = tabId;
     this.contextMenuVisible = true;
+
+    // Close menu when clicking outside - use setTimeout to avoid immediate trigger
+    setTimeout(() => {
+      const clickHandler = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.context-menu')) {
+          this.hideContextMenu();
+          document.removeEventListener('click', clickHandler);
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+
+      const keyHandler = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          this.hideContextMenu();
+          document.removeEventListener('click', clickHandler);
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+
+      document.addEventListener('click', clickHandler);
+      document.addEventListener('keydown', keyHandler);
+    }, 0);
   }
 
   /**
