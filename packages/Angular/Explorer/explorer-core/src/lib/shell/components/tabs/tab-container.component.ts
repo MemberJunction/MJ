@@ -89,6 +89,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         if (tabId) {
           this.workspaceManager.SetActiveTab(tabId);
         }
+      }),
+      this.layoutManager.TabDoubleClicked.subscribe(tabId => {
+        this.workspaceManager.TogglePin(tabId);
+      }),
+      this.layoutManager.TabRightClicked.subscribe(event => {
+        this.showContextMenu(event.x, event.y, event.tabId);
       })
     );
 
@@ -132,9 +138,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         this.layoutManager.FocusTab(config.activeTabId);
       }
     }
-
-    // Set up event listeners for tab interactions
-    this.setupTabEventListeners();
   }
 
   ngOnDestroy(): void {
@@ -475,67 +478,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  /**
-   * Set up event listeners for tab interactions
-   */
-  private setupTabEventListeners(): void {
-    const container = this.glContainer.nativeElement;
-
-    // Double-click to toggle pin
-    container.addEventListener('dblclick', (e: MouseEvent) => {
-      const tabElement = (e.target as HTMLElement).closest('.lm_tab');
-      if (tabElement) {
-        const tabId = this.getTabIdFromElement(tabElement as HTMLElement);
-        if (tabId) {
-          this.workspaceManager.TogglePin(tabId);
-        }
-      }
-    });
-
-    // Right-click for context menu
-    container.addEventListener('contextmenu', (e: MouseEvent) => {
-      const tabElement = (e.target as HTMLElement).closest('.lm_tab');
-      if (tabElement) {
-        e.preventDefault();
-        const tabId = this.getTabIdFromElement(tabElement as HTMLElement);
-        if (tabId) {
-          this.showContextMenu(e.clientX, e.clientY, tabId);
-        }
-      }
-    });
-
-    // Click on pin icon to unpin
-    container.addEventListener('click', (e: MouseEvent) => {
-      const pinIcon = (e.target as HTMLElement).closest('.pin-icon');
-      if (pinIcon) {
-        const tabElement = pinIcon.closest('.lm_tab');
-        if (tabElement) {
-          const tabId = this.getTabIdFromElement(tabElement as HTMLElement);
-          if (tabId) {
-            this.workspaceManager.TogglePin(tabId);
-          }
-        }
-      }
-    });
-
-    // Close context menu on outside click
-    document.addEventListener('click', () => {
-      this.contextMenuVisible = false;
-    });
-  }
-
-  /**
-   * Get tab ID from tab element
-   */
-  private getTabIdFromElement(element: HTMLElement): string | null {
-    // Get from container state
-    const container = this.layoutManager.GetContainer(element.dataset['tabId'] || '');
-    if (container) {
-      const state = (container as { state: unknown }).state as unknown as TabComponentState;
-      return state?.tabId || null;
-    }
-    return element.dataset['tabId'] || null;
-  }
 
   /**
    * Show context menu

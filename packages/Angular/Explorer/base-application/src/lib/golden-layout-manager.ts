@@ -116,6 +116,8 @@ export class GoldenLayoutManager {
   private tabClosed$ = new Subject<string>();
   private layoutChanged$ = new Subject<LayoutChangedEvent>();
   private activeTab$ = new BehaviorSubject<string | null>(null);
+  private tabDoubleClicked = new Subject<string>();
+  private tabRightClicked = new Subject<{ tabId: string; x: number; y: number }>();
 
   // Track loaded tabs for lazy loading
   private loadedTabs = new Set<string>();
@@ -149,6 +151,20 @@ export class GoldenLayoutManager {
    */
   get ActiveTab(): Observable<string | null> {
     return this.activeTab$.asObservable();
+  }
+
+  /**
+   * Observable for tab double-click events (to toggle pin status)
+   */
+  get TabDoubleClicked(): Observable<string> {
+    return this.tabDoubleClicked.asObservable();
+  }
+
+  /**
+   * Observable for tab right-click events (to show context menu)
+   */
+  get TabRightClicked(): Observable<{ tabId: string; x: number; y: number }> {
+    return this.tabRightClicked.asObservable();
   }
 
   /**
@@ -457,6 +473,59 @@ export class GoldenLayoutManager {
     const titleElement = tabElement.querySelector('.lm_title') as HTMLElement;
     if (titleElement) {
       titleElement.style.fontStyle = state.isPinned ? 'normal' : 'italic';
+    }
+
+    // Add event listeners if not already added (use data attribute to track)
+    if (!tabElement.hasAttribute('data-events-attached')) {
+      tabElement.setAttribute('data-events-attached', 'true');
+
+      // Double-click to toggle pin
+      tabElement.addEventListener('dblclick', (e: Event) => {
+        e.stopPropagation();
+        this.tabDoubleClicked.next(state.tabId);
+      });
+
+      // Right-click for context menu
+      tabElement.addEventListener('contextmenu', (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.tabRightClicked.next({ tabId: state.tabId, x: e.clientX, y: e.clientY });
+      });
+    }
+
+    // Handle pin icon
+    if (state.isPinned) {
+      // Add pin icon if not present
+      if (!tabElement.querySelector('.pin-icon')) {
+        const pinIcon = document.createElement('i');
+        pinIcon.className = 'fa-solid fa-thumbtack pin-icon';
+        pinIcon.style.cssText = `
+          position: absolute;
+          right: 4px;
+          top: 50%;
+          transform: translateY(-50%) rotate(45deg);
+          font-size: 9px;
+          color: #9e9e9e;
+          width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        `;
+        // Click on pin to unpin
+        pinIcon.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.tabDoubleClicked.next(state.tabId);
+        });
+        tabElement.appendChild(pinIcon);
+      }
+    } else {
+      // Remove pin icon if present
+      const pinIcon = tabElement.querySelector('.pin-icon');
+      if (pinIcon) {
+        pinIcon.remove();
+      }
     }
   }
 
