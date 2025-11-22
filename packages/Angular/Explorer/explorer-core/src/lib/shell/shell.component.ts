@@ -258,6 +258,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       return `/app/${encodeURIComponent(config.appName)}`;
     }
 
+    // Fallback: If tab belongs to a non-system app but doesn't have appName/navItemName,
+    // try to reconstruct the URL from the ApplicationId and tab title
+    if (tab.applicationId && tab.applicationId !== '__explorer') {
+      const app = this.appManager.GetAppById(tab.applicationId);
+      if (app) {
+        const navItems = app.GetNavItems();
+        // Try to find the nav item by matching the tab title
+        const navItem = navItems.find(item =>
+          item.Label?.trim().toLowerCase() === tab.title?.trim().toLowerCase()
+        );
+
+        if (navItem) {
+          let url = `/app/${encodeURIComponent(app.Name)}/${encodeURIComponent(navItem.Label)}`;
+
+          // Add query params if present
+          if (config.queryParams && Object.keys(config.queryParams).length > 0) {
+            const params = new URLSearchParams(config.queryParams);
+            url += `?${params.toString()}`;
+          }
+
+          return url;
+        }
+      }
+    }
+
     switch (resourceType) {
       case 'records':
         // /resource/record/:entityName/:recordId
