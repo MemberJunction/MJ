@@ -58,8 +58,4 @@ export * from './lib/services/system-validation.service'
 export * from './lib/services/startup-validation.service'
 export * from './lib/system-validation/system-validation-banner.component'
 
-// Navigation services
-export * from './lib/services/navigation.service'
-export * from './lib/services/navigation.interfaces'
-
 export * from './module';

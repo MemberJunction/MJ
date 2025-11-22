@@ -1,6 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, TabRequest } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
+import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 
@@ -84,7 +85,7 @@ export class NavigationService implements OnDestroy {
   /**
    * Open a navigation item within an app
    */
-  openNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
+  public OpenNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
@@ -112,37 +113,51 @@ export class NavigationService implements OnDestroy {
    * Open an entity record view
    * System-wide resource using __explorer app ID and neutral color
    */
-  openEntityRecord(
+  public OpenEntityRecord(
     entityName: string,
-    recordId: string,
+    recordPkey: CompositeKey,
     options?: NavigationOptions
   ): string {
+    console.log('NavigationService.OpenEntityRecord called:', {
+      entityName,
+      recordPkey: recordPkey.ToURLSegment(),
+      systemAppId: SYSTEM_APP_ID,
+      color: this.ExplorerAppColor,
+      options
+    });
+
     const forceNew = this.shouldForceNewTab(options);
 
+    const recordId = recordPkey.ToURLSegment();
     const request: TabRequest = {
       ApplicationId: SYSTEM_APP_ID,
       Title: `${entityName} - ${recordId}`,
       Configuration: {
-        resourceType: 'entity-record',
-        entityName,
-        recordId
+        resourceType: 'Records',
+        Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
+        recordId: recordId   // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
+      ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false
     };
 
+    console.log('NavigationService.OpenEntityRecord request:', request, 'forceNew:', forceNew);
+
     if (forceNew) {
-      // Always create a new tab
-      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      const tabId = this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      console.log('NavigationService.OpenEntityRecord created new tab:', tabId);
+      return tabId;
     } else {
-      // Use existing OpenTab logic (may replace temporary tab)
-      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      const tabId = this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      console.log('NavigationService.OpenEntityRecord opened tab:', tabId);
+      return tabId;
     }
   }
 
   /**
    * Open a view (system-wide resource)
    */
-  openView(
+  public OpenView(
     viewId: string,
     viewName: string,
     options?: NavigationOptions
@@ -153,9 +168,11 @@ export class NavigationService implements OnDestroy {
       ApplicationId: SYSTEM_APP_ID,
       Title: viewName,
       Configuration: {
-        resourceType: 'view',
-        viewId
+        resourceType: 'User Views',
+        viewId,
+        recordId: viewId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
+      ResourceRecordId: viewId,
       IsPinned: options?.pinTab || false
     };
 
@@ -169,7 +186,7 @@ export class NavigationService implements OnDestroy {
   /**
    * Open a dashboard (system-wide resource)
    */
-  openDashboard(
+  public OpenDashboard(
     dashboardId: string,
     dashboardName: string,
     options?: NavigationOptions
@@ -180,9 +197,11 @@ export class NavigationService implements OnDestroy {
       ApplicationId: SYSTEM_APP_ID,
       Title: dashboardName,
       Configuration: {
-        resourceType: 'dashboard',
-        dashboardId
+        resourceType: 'Dashboards',
+        dashboardId,
+        recordId: dashboardId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
+      ResourceRecordId: dashboardId,
       IsPinned: options?.pinTab || false
     };
 
@@ -196,7 +215,7 @@ export class NavigationService implements OnDestroy {
   /**
    * Open a report (system-wide resource)
    */
-  openReport(
+  public OpenReport(
     reportId: string,
     reportName: string,
     options?: NavigationOptions
@@ -207,9 +226,11 @@ export class NavigationService implements OnDestroy {
       ApplicationId: SYSTEM_APP_ID,
       Title: reportName,
       Configuration: {
-        resourceType: 'report',
-        reportId
+        resourceType: 'Reports',
+        reportId,
+        recordId: reportId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
+      ResourceRecordId: reportId,
       IsPinned: options?.pinTab || false
     };
 

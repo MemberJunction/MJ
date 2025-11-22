@@ -23,10 +23,7 @@ mj-tab-container {
 
 /* Hide Golden Layout tab headers when only one tab */
 mj-tab-container.hide-tab-bar ::ng-deep .lm_header {
-  opacity: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: opacity 0.2s ease-in-out, max-height 0.2s ease-in-out;
+  display: none;
 }
 
 /* Show tab headers when multiple tabs */

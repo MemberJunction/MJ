@@ -1,5 +1,5 @@
 import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef } from '@angular/core';
-import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
@@ -30,7 +30,10 @@ export class DashboardResource extends BaseResourceComponent {
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
 
-    constructor(private viewContainer: ViewContainerRef) {
+    constructor(
+        private viewContainer: ViewContainerRef,
+        private navigationService: NavigationService
+    ) {
         super();
     }
 
@@ -126,15 +129,13 @@ export class DashboardResource extends BaseResourceComponent {
                 userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
             };
 
-            // handle open entity record events in MJ Explorer with routing                  
+            // handle open entity record events in MJ Explorer with routing
             instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
-            // check to see if the data has entityname/pkey
-            if (data && data.EntityName && data.RecordPKey) {
-                // open the record in the explorer
-                SharedService.Instance.OpenEntityRecord(data.EntityName, data.RecordPKey);
-                // this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
-                //                      { queryParams: { Entity: data.EntityName } })                      
-            }
+                // check to see if the data has entityname/pkey
+                if (data && data.EntityName && data.RecordPKey) {
+                    // Use NavigationService to open entity record in new tab
+                    this.navigationService.OpenEntityRecord(data.EntityName, data.RecordPKey);
+                }
             });
 
             instance.UserStateChanged.subscribe(async (userState: any) => {

@@ -10,7 +10,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { NavigationService } from '../services/navigation.service';
+import { NavigationService } from '@memberjunction/ng-shared';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 
 /**
@@ -216,7 +216,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const { item, shiftKey } = event;
 
     // Use NavigationService with forceNewTab option if shift was pressed
-    this.navigationService.openNavItem(
+    this.navigationService.OpenNavItem(
       this.activeApp.ID,
       item,
       this.activeApp.GetColor(),
