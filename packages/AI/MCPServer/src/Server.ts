@@ -5,7 +5,9 @@ import * as sql from "mssql";
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntity } from "@memberjunction/core-entities";
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
 
@@ -120,7 +122,32 @@ function addToolWithFilter(toolConfig: Parameters<typeof server.addTool>[0]): vo
         return; // Skip this tool
     }
 
-    addToolWithFilter(toolConfig);
+    server.addTool(toolConfig);
+}
+
+/**
+ * Smart text truncation that preserves beginning and end of content
+ * Used for large input/output data in agent run diagnostics
+ */
+function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+    if (!text) {
+        return { value: '', truncated: false };
+    }
+
+    if (maxChars === 0 || text.length <= maxChars) {
+        return { value: text, truncated: false };
+    }
+
+    // Keep 70% from start, 30% from end
+    const startChars = Math.floor(maxChars * 0.7);
+    const endChars = maxChars - startChars;
+    const truncatedCount = text.length - startChars - endChars;
+
+    const truncated = text.substring(0, startChars) +
+        `\n\n[... ${truncatedCount} characters truncated ...]\n\n` +
+        text.substring(text.length - endChars);
+
+    return { value: truncated, truncated: true };
 }
 
 // Initialize database and setup tools
@@ -160,6 +187,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         await loadEntityTools(contextUser);
         await loadActionTools(contextUser);
         await loadAgentTools(contextUser);
+        loadAgentRunDiagnosticTools(contextUser);
         console.log("Tools loaded successfully.");
         
         // Configure server options
@@ -388,6 +416,243 @@ async function loadAgentTools(contextUser: UserInfo) {
             });
         }
     }
+}
+
+/**
+ * Load agent run diagnostic tools for debugging and auditing agent executions
+ */
+function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
+    // Tool 1: List Recent Agent Runs
+    addToolWithFilter({
+        name: "List_Recent_Agent_Runs",
+        description: "Fast query for recent AI agent runs with optional filtering by agent name, status, and date range",
+        parameters: z.object({
+            agentName: z.string().optional().describe("Filter by agent name (partial match)"),
+            status: z.enum(['Success', 'Failed', 'Running', 'Cancelled', 'all']).default('all').describe("Filter by run status"),
+            days: z.number().default(7).describe("Number of days to look back"),
+            limit: z.number().default(10).describe("Maximum number of runs to return")
+        }),
+        async execute(props: { agentName?: string; status: string; days: number; limit: number }) {
+            const rv = new RunView();
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - props.days);
+            const dateFilter = `StartedAt >= '${cutoffDate.toISOString()}'`;
+
+            let filter = dateFilter;
+            if (props.agentName) {
+                filter += ` AND Agent LIKE '%${props.agentName}%'`;
+            }
+            if (props.status !== 'all') {
+                filter += ` AND Status = '${props.status}'`;
+            }
+
+            const result = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: filter,
+                OrderBy: 'StartedAt DESC',
+                MaxRows: props.limit,
+                Fields: ['ID', 'AgentID', 'Agent', 'Status', 'StartedAt', 'CompletedAt', 'TotalTokensUsed', 'TotalCost', 'ErrorMessage']
+            }, contextUser);
+
+            if (!result.Success) {
+                return JSON.stringify({ error: result.ErrorMessage });
+            }
+
+            return JSON.stringify(result.Results);
+        }
+    });
+
+    // Tool 2: Get Agent Run Summary
+    addToolWithFilter({
+        name: "Get_Agent_Run_Summary",
+        description: "Comprehensive summary of an agent run with step-level metadata (excludes large I/O data)",
+        parameters: z.object({
+            runId: z.string().describe("The agent run ID to summarize")
+        }),
+        async execute(props: { runId: string }) {
+            const md = new Metadata();
+            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+            const loaded = await agentRun.Load(props.runId);
+
+            if (!loaded) {
+                return JSON.stringify({ error: "Agent run not found" });
+            }
+
+            // Load all steps for this run
+            const rv = new RunView();
+            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID = '${props.runId}'`,
+                OrderBy: 'StepNumber',
+                Fields: ['ID', 'StepNumber', 'StepName', 'StepType', 'Status', 'StartedAt', 'CompletedAt', 'ErrorMessage'],
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!stepsResult.Success) {
+                return JSON.stringify({ error: stepsResult.ErrorMessage });
+            }
+
+            const steps = stepsResult.Results || [];
+            const errorSteps = steps.filter(s => s.ErrorMessage);
+
+            const summary = {
+                runId: agentRun.ID,
+                agentName: agentRun.Agent,
+                agentId: agentRun.AgentID,
+                status: agentRun.Status,
+                startedAt: agentRun.StartedAt?.toISOString(),
+                completedAt: agentRun.CompletedAt?.toISOString(),
+                duration: agentRun.CompletedAt && agentRun.StartedAt
+                    ? agentRun.CompletedAt.getTime() - agentRun.StartedAt.getTime()
+                    : null,
+                totalTokens: agentRun.TotalTokensUsed,
+                totalCost: agentRun.TotalCost,
+                stepCount: steps.length,
+                hasErrors: errorSteps.length > 0,
+                errorCount: errorSteps.length,
+                steps: steps.map(s => ({
+                    stepNumber: s.StepNumber,
+                    stepId: s.ID,
+                    stepName: s.StepName,
+                    stepType: s.StepType,
+                    status: s.Status,
+                    duration: s.CompletedAt && s.StartedAt
+                        ? new Date(s.CompletedAt).getTime() - new Date(s.StartedAt).getTime()
+                        : null,
+                    errorMessage: s.ErrorMessage || undefined
+                })),
+                firstError: errorSteps.length > 0 ? {
+                    stepNumber: errorSteps[0].StepNumber,
+                    stepName: errorSteps[0].StepName,
+                    message: errorSteps[0].ErrorMessage
+                } : undefined
+            };
+
+            return JSON.stringify(summary);
+        }
+    });
+
+    // Tool 3: Get Agent Run Step Detail
+    addToolWithFilter({
+        name: "Get_Agent_Run_Step_Detail",
+        description: "Detailed information about a specific step including input/output data with smart truncation",
+        parameters: z.object({
+            runId: z.string().describe("The agent run ID"),
+            stepNumber: z.number().describe("The step number to retrieve (1-based)"),
+            maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
+        }),
+        async execute(props: { runId: string; stepNumber: number; maxChars: number }) {
+            const rv = new RunView();
+            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID = '${props.runId}'`,
+                OrderBy: 'StepNumber',
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!stepsResult.Success) {
+                return JSON.stringify({ error: stepsResult.ErrorMessage });
+            }
+
+            const steps = stepsResult.Results || [];
+            if (props.stepNumber < 1 || props.stepNumber > steps.length) {
+                return JSON.stringify({ error: `Invalid step number. Run has ${steps.length} steps.` });
+            }
+
+            const step = steps[props.stepNumber - 1];
+            const inputData = truncateText(step.InputData, props.maxChars);
+            const outputData = truncateText(step.OutputData, props.maxChars);
+
+            const detail = {
+                stepNumber: step.StepNumber,
+                stepId: step.ID,
+                stepName: step.StepName,
+                stepType: step.StepType,
+                status: step.Status,
+                startedAt: step.StartedAt ? new Date(step.StartedAt).toISOString() : null,
+                completedAt: step.CompletedAt ? new Date(step.CompletedAt).toISOString() : null,
+                duration: step.CompletedAt && step.StartedAt
+                    ? new Date(step.CompletedAt).getTime() - new Date(step.StartedAt).getTime()
+                    : null,
+                input: {
+                    data: inputData.value,
+                    truncated: inputData.truncated,
+                    originalLength: step.InputData?.length || 0
+                },
+                output: {
+                    data: outputData.value,
+                    truncated: outputData.truncated,
+                    originalLength: step.OutputData?.length || 0
+                },
+                errorMessage: step.ErrorMessage || undefined
+            };
+
+            return JSON.stringify(detail);
+        }
+    });
+
+    // Tool 4: Get Agent Run Step Full Data
+    addToolWithFilter({
+        name: "Get_Agent_Run_Step_Full_Data",
+        description: "Export complete untruncated step data to JSON file for detailed analysis",
+        parameters: z.object({
+            runId: z.string().describe("The agent run ID"),
+            stepNumber: z.number().describe("The step number to retrieve (1-based)"),
+            outputFile: z.string().optional().describe("File path to write JSON output (optional)")
+        }),
+        async execute(props: { runId: string; stepNumber: number; outputFile?: string }) {
+            const rv = new RunView();
+            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID = '${props.runId}'`,
+                OrderBy: 'StepNumber',
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!stepsResult.Success) {
+                return JSON.stringify({ error: stepsResult.ErrorMessage });
+            }
+
+            const steps = stepsResult.Results || [];
+            if (props.stepNumber < 1 || props.stepNumber > steps.length) {
+                return JSON.stringify({ error: `Invalid step number. Run has ${steps.length} steps.` });
+            }
+
+            const step = steps[props.stepNumber - 1];
+            const stepData = step.GetAll();
+
+            // Determine output file path
+            const runIdShort = props.runId.substring(0, 8);
+            const defaultFile = `./agent-run-${runIdShort}-step-${props.stepNumber}.json`;
+            const filePath = path.resolve(process.cwd(), props.outputFile || defaultFile);
+
+            // Write to file
+            const jsonContent = JSON.stringify(stepData, null, 2);
+            await fs.writeFile(filePath, jsonContent, 'utf-8');
+
+            const response: Record<string, unknown> = {
+                success: true,
+                message: `Step data exported to file`,
+                filePath: filePath,
+                fileSize: jsonContent.length,
+                stepSummary: {
+                    stepNumber: step.StepNumber,
+                    stepName: step.StepName,
+                    status: step.Status,
+                    inputLength: step.InputData?.length || 0,
+                    outputLength: step.OutputData?.length || 0
+                }
+            };
+
+            // Include inline data if small enough
+            if (jsonContent.length < 10000) {
+                response.inlineData = stepData;
+                response.note = "Data included inline (file also saved)";
+            }
+
+            return JSON.stringify(response);
+        }
+    });
 }
 
 async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<AIAgentEntityExtended[]> {
@@ -814,6 +1079,12 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}) 
 
         // Add built-in tool
         registeredToolNames.push("Get_All_Entities");
+
+        // Add agent run diagnostic tools
+        registeredToolNames.push("List_Recent_Agent_Runs");
+        registeredToolNames.push("Get_Agent_Run_Summary");
+        registeredToolNames.push("Get_Agent_Run_Step_Detail");
+        registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
 
         const contextUser = UserCache.Instance.Users[0];
 
