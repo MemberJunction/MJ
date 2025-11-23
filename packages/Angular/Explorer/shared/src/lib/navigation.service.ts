@@ -86,6 +86,66 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Check if we're in single-resource mode (1 unpinned tab, tabs hidden)
+   * When transitioning from single-resource to tabs via shift+click,
+   * we need to preserve the current tab by pinning it
+   */
+  private handleSingleResourceModeTransition(forceNew: boolean, newRequest: TabRequest): void {
+    if (!forceNew) {
+      return; // Normal navigation, not forcing new tab
+    }
+
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config || !config.tabs || config.tabs.length !== 1) {
+      return; // Not in single-resource mode
+    }
+
+    const currentTab = config.tabs[0];
+    if (currentTab.isPinned) {
+      return; // Already pinned, not single-resource mode
+    }
+
+    // We're in single-resource mode and user is forcing a new tab
+    // Check if the new request is for a DIFFERENT resource
+    const isSameResource = this.isSameResource(currentTab, newRequest);
+
+    if (isSameResource) {
+      return; // Same resource, just let normal logic handle it
+    }
+
+    // Different resource! Pin the current tab to preserve it
+    console.log('[NavigationService] Single-resource mode: pinning current tab before opening new tab');
+    this.workspaceManager.TogglePin(currentTab.id);
+  }
+
+  /**
+   * Check if a tab request matches an existing tab's resource
+   */
+  private isSameResource(tab: any, request: TabRequest): boolean {
+    // Different apps = different resources
+    if (tab.applicationId !== request.ApplicationId) {
+      return false;
+    }
+
+    // For resource-based tabs, compare resourceType and recordId
+    if (request.Configuration?.resourceType) {
+      const requestRecordId = request.ResourceRecordId || '';
+      const tabRecordId = tab.resourceRecordId || '';
+      return tab.configuration?.resourceType === request.Configuration.resourceType &&
+             tabRecordId === requestRecordId;
+    }
+
+    // For app nav items, compare appName and navItemName
+    if (request.Configuration?.appName && request.Configuration?.navItemName) {
+      return tab.configuration?.appName === request.Configuration.appName &&
+             tab.configuration?.navItemName === request.Configuration.navItemName;
+    }
+
+    // Fallback to basic comparison
+    return false;
+  }
+
+  /**
    * Open a navigation item within an app
    */
   public OpenNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
@@ -109,6 +169,9 @@ export class NavigationService implements OnDestroy {
       },
       IsPinned: options?.pinTab || false
     };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       // Always create a new tab
@@ -153,6 +216,9 @@ export class NavigationService implements OnDestroy {
 
     console.log('NavigationService.OpenEntityRecord request:', request, 'forceNew:', forceNew);
 
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
     if (forceNew) {
       const tabId = this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
       console.log('NavigationService.OpenEntityRecord created new tab:', tabId);
@@ -186,6 +252,9 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
     } else {
@@ -214,6 +283,9 @@ export class NavigationService implements OnDestroy {
       ResourceRecordId: dashboardId,
       IsPinned: options?.pinTab || false
     };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
@@ -244,6 +316,9 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
     } else {
@@ -273,6 +348,9 @@ export class NavigationService implements OnDestroy {
       ResourceRecordId: artifactId,
       IsPinned: options?.pinTab || false
     };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
@@ -307,6 +385,9 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
     } else {
@@ -335,6 +416,9 @@ export class NavigationService implements OnDestroy {
       ResourceRecordId: queryId,
       IsPinned: options?.pinTab || false
     };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
