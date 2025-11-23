@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-grid.spec.json",
+  "description": "Valid shared component for query result display"
+}

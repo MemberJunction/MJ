@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/competitive-analysis.spec.json",
+  "description": "Valid component demonstrating competitive analysis visualization"
+}

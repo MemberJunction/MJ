@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/event-submissions-by-status.spec.json",
+  "description": "Valid component demonstrating event submissions grouped by status"
+}

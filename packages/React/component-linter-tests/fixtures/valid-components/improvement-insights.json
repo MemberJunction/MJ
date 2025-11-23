@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/improvement-insights.spec.json",
+  "description": "Valid component demonstrating improvement insights analysis"
+}

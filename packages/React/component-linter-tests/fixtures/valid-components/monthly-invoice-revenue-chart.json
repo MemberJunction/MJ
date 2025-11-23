@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/monthly-invoice-revenue-chart.spec.json",
+  "description": "Valid component demonstrating correct drill-down pattern for time-based aggregation"
+}

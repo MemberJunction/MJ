@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/product-revenue-matrix.spec.json",
+  "description": "Valid component demonstrating product revenue matrix with treemap and table"
+}

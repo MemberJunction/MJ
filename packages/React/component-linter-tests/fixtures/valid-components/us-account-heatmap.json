@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/us-account-heatmap.spec.json",
+  "description": "Valid component demonstrating US account heatmap"
+}

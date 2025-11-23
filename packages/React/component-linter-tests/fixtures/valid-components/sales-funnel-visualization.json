@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/sales-funnel-visualization.spec.json",
+  "description": "Valid component demonstrating sales funnel visualization"
+}

@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/relationship-map.spec.json",
+  "description": "Valid component demonstrating relationship map visualization"
+}

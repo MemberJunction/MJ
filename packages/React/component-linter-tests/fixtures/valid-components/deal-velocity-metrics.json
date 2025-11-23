@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/deal-velocity-metrics.spec.json",
+  "description": "Valid component demonstrating deal velocity metrics dashboard"
+}

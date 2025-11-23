@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/customer-360-view.spec.json",
+  "description": "Valid component demonstrating customer 360 view with timeline and tabs"
+}

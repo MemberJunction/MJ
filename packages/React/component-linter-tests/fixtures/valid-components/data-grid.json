@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/data-grid.spec.json",
+  "description": "Valid shared component for flexible data table display"
+}
