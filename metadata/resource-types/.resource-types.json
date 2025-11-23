@@ -5,6 +5,7 @@
       "DisplayName": "Dashboards",
       "Description": "Dashboards contain collections of resources a user can browse",
       "Icon": "fa-solid fa-table-columns",
+      "DriverClass": "DashboardResource",
       "EntityID": "@lookup:Entities.Name=Dashboards",
       "CategoryEntityID": "@lookup:Entities.Name=Dashboard Categories"
     },
@@ -18,6 +19,7 @@
       "DisplayName": "Queries",
       "Description": "Queries contain stored queries that can be used as building blocks for analysis",
       "Icon": "fa-regular fa-file-code",
+      "DriverClass": "QueryResource",
       "EntityID": "@lookup:Entities.Name=Queries",
       "CategoryEntityID": "@lookup:Entities.Name=Query Categories"
     },
@@ -31,6 +33,7 @@
       "DisplayName": "Records",
       "Description": "Records are links to a specific row of data from a designated entity",
       "Icon": "fa-solid fa-rectangle-list",
+      "DriverClass": "RecordResource",
       "EntityID": null,
       "CategoryEntityID": null
     },
@@ -44,6 +47,7 @@
       "DisplayName": "Reports",
       "Description": "Reports are generated outputs from conversations a user has with the interface",
       "Icon": "fa-solid fa-chart-simple",
+      "DriverClass": "ReportResource",
       "EntityID": "@lookup:Entities.Name=Reports",
       "CategoryEntityID": "@lookup:Entities.Name=Report Categories"
     },
@@ -55,8 +59,9 @@
     "fields": {
       "Name": "Search Results",
       "DisplayName": "Search Results",
-      "Description": "Displasy the results of a user search",
+      "Description": "Display the results of a user search",
       "Icon": "fa-solid fa-magnifying-glass",
+      "DriverClass": "SearchResultsResource",
       "EntityID": null,
       "CategoryEntityID": null
     },
@@ -70,6 +75,7 @@
       "DisplayName": "Views",
       "Description": "User Views contain the metadata for the user viewing system of entity data",
       "Icon": "fa-solid fa-table",
+      "DriverClass": "ViewResource",
       "EntityID": "@lookup:Entities.Name=User Views",
       "CategoryEntityID": "@lookup:Entities.Name=User View Categories"
     },
@@ -83,6 +89,7 @@
       "DisplayName": "Lists",
       "Description": "Lists contains sets of records from an Entity",
       "Icon": "fa-solid fa-rectangle-list",
+      "DriverClass": "ListDetailResource",
       "EntityID": "@lookup:Entities.Name=Lists",
       "CategoryEntityID": "@lookup:Entities.Name=List Categories"
     },
@@ -96,6 +103,7 @@
       "DisplayName": "Conversations",
       "Description": "Conversations include those with AI systems as well as other users",
       "Icon": "fa-regular fa-comments",
+      "DriverClass": "ConversationResource",
       "EntityID": "@lookup:Entities.Name=Conversations",
       "CategoryEntityID": null
     },
@@ -105,11 +113,12 @@
   },
   {
     "fields": {
-      "Name": "chat-conversations",
-      "DisplayName": "Chat Conversations",
-      "Description": "Chat conversation interface with sidebar and message area",
-      "Icon": "fa-solid fa-comments",
-      "EntityID": null,
+      "Name": "Artifacts",
+      "DisplayName": "Artifacts",
+      "Description": "Versioned content artifacts including reports, dashboards, and forms",
+      "Icon": "fa-solid fa-file-code",
+      "DriverClass": "ArtifactResource",
+      "EntityID": "@lookup:Entities.Name=MJ: Conversation Artifacts",
       "CategoryEntityID": null
     },
     "primaryKey": {
@@ -118,121 +127,14 @@
   },
   {
     "fields": {
-      "Name": "chat-collections",
-      "DisplayName": "Chat Collections",
-      "Description": "Browse and manage collections of conversation artifacts",
-      "Icon": "fa-solid fa-folder-open",
+      "Name": "Custom",
+      "DisplayName": "Custom Resource",
+      "Description": "Application-specific custom resource component (DriverClass specified in NavItem)",
+      "Icon": "fa-solid fa-cube",
+      "DriverClass": null,
       "EntityID": null,
       "CategoryEntityID": null
-    },
-    "primaryKey": {
-      "ID": "6D129612-8D4B-4B63-A9EA-956719DCFA1B"
-    },
-    "sync": {
-      "lastModified": "2025-11-21T20:56:27.320Z",
-      "checksum": "179ab0ff84754cf17d43eb1baa51c3e8e0544dc64ced72affe1a524745fe7c6b"
     }
-  },
-  {
-    "fields": {
-      "Name": "chat-tasks",
-      "DisplayName": "Chat Tasks",
-      "Description": "View and manage tasks from conversations",
-      "Icon": "fa-solid fa-tasks",
-      "EntityID": null,
-      "CategoryEntityID": null
-    },
-    "primaryKey": {
-      "ID": "60BC22A6-3C22-45F1-9237-76AACE812285"
-    },
-    "sync": {
-      "lastModified": "2025-11-21T20:56:27.349Z",
-      "checksum": "557f04f6350f4aa0390f5ff905b10cda6c70ae56a54a2735af5ea4a5509d59cb"
-    }
-  },
-  {
-    "fields": {
-      "Name": "ai-monitor",
-      "DisplayName": "AI Monitor",
-      "Description": "Real-time monitoring of AI executions with KPIs and performance metrics",
-      "Icon": "fa-solid fa-chart-line",
-      "EntityID": null,
-      "CategoryEntityID": null
-    },
-    "primaryKey": {
-      "ID": "3E69CEB8-6EA7-4668-AC28-B98D707A5832"
-    },
-    "sync": {
-      "lastModified": "2025-11-21T20:56:27.364Z",
-      "checksum": "f188dbce760c08d2a2c0655258690844d5c07840ddbb89df5980bff25cc50b5d"
-    }
-  },
-  {
-    "fields": {
-      "Name": "ai-prompts",
-      "DisplayName": "AI Prompts",
-      "Description": "Manage AI prompts and prompt templates",
-      "Icon": "fa-solid fa-comment-dots",
-      "EntityID": null,
-      "CategoryEntityID": null
-    },
-    "primaryKey": {
-      "ID": "46DB8291-4297-409D-99BA-D171FAEC5C7B"
-    },
-    "sync": {
-      "lastModified": "2025-11-21T20:56:27.377Z",
-      "checksum": "ba1f4cb66820feda3ba9edff5f21ea5a5f36c16f93c81e13295a6339f4994807"
-    }
-  },
-  {
-    "fields": {
-      "Name": "ai-agents",
-      "DisplayName": "AI Agents",
-      "Description": "Configure and manage AI agents",
-      "Icon": "fa-solid fa-robot",
-      "EntityID": null,
-      "CategoryEntityID": null
-    },
-    "primaryKey": {
-      "ID": "776BD136-4849-4877-A13B-5A553E7CCED2"
-    },
-    "sync": {
-      "lastModified": "2025-11-21T20:56:27.390Z",
-      "checksum": "d58d1757695e97dae35cf794b00ceacc433c975532728651bd6821b9951a64b9"
-    }
-  },
-  {
-    "fields": {
-      "Name": "ai-models",
-      "DisplayName": "AI Models",
-      "Description": "Manage AI model configurations and priorities",
-      "Icon": "fa-solid fa-microchip",
-      "EntityID": null,
-      "CategoryEntityID": null
-    },
-    "primaryKey": {
-      "ID": "9CD4185D-2498-440C-91AA-533E5414474B"
-    },
-    "sync": {
-      "lastModified": "2025-11-21T20:56:27.403Z",
-      "checksum": "7ae7df63ec5653dd59422aa03e5d2d20bbe4f7827b9d14c44a318a4df6c4ab0e"
-    }
-  },
-  {
-    "fields": {
-      "Name": "ai-config",
-      "DisplayName": "AI Configuration",
-      "Description": "System-wide AI configuration settings",
-      "Icon": "fa-solid fa-cogs",
-      "EntityID": null,
-      "CategoryEntityID": null
-    },
-    "primaryKey": {
-      "ID": "C82D4A22-67AD-4A9C-B947-EFC8C892610E"
-    },
-    "sync": {
-      "lastModified": "2025-11-21T20:56:27.415Z",
-      "checksum": "6b1494900247f6a1af5e253b3990b680d92fce196658ee895d3412f75b365402"
-    }
+     
   }
 ]

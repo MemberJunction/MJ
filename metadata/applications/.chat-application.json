@@ -10,19 +10,22 @@
       {
         "Label": "Conversations",
         "Icon": "fa-solid fa-comments",
-        "ResourceType": "chat-conversations",
+        "ResourceType": "Custom",
+        "DriverClass": "ChatConversationsResource",
         "isDefault": true
       },
       {
         "Label": "Collections",
         "Icon": "fa-solid fa-folder-open",
-        "ResourceType": "chat-collections",
+        "ResourceType": "Custom",
+        "DriverClass": "ChatCollectionsResource",
         "isDefault": false
       },
       {
         "Label": "Tasks",
         "Icon": "fa-solid fa-tasks",
-        "ResourceType": "chat-tasks",
+        "ResourceType": "Custom",
+        "DriverClass": "ChatTasksResource",
         "isDefault": false
       }
     ]

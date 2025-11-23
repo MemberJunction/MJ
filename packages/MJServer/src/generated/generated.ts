@@ -24377,6 +24377,10 @@ export class MJResourceType_ {
     @MaxLength(16)
     CategoryEntityID?: string;
         
+    @Field({nullable: true, description: `The Angular component class name to instantiate for this resource type. NULL for Custom resource type (uses NavItem DriverClass instead).`}) 
+    @MaxLength(510)
+    DriverClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
@@ -24424,6 +24428,9 @@ export class CreateMJResourceTypeInput {
 
     @Field({ nullable: true })
     CategoryEntityID: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -24452,6 +24459,9 @@ export class UpdateMJResourceTypeInput {
 
     @Field({ nullable: true })
     CategoryEntityID?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

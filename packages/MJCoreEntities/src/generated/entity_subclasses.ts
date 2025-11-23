@@ -15642,6 +15642,11 @@ export const ResourceTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         * * Description: Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The Angular component class name to instantiate for this resource type. NULL for Custom resource type (uses NavItem DriverClass instead).`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -58334,6 +58339,19 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     }
     set CategoryEntityID(value: string | null) {
         this.Set('CategoryEntityID', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The Angular component class name to instantiate for this resource type. NULL for Custom resource type (uses NavItem DriverClass instead).
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
     }
 
     /**

@@ -10,31 +10,36 @@
       {
         "Label": "Monitor",
         "Icon": "fa-solid fa-chart-line",
-        "ResourceType": "ai-monitor",
+        "ResourceType": "Custom",
+        "DriverClass": "AIMonitorResource",
         "isDefault": true
       },
       {
         "Label": "Prompts",
         "Icon": "fa-solid fa-comment-dots",
-        "ResourceType": "ai-prompts",
+        "ResourceType": "Custom",
+        "DriverClass": "AIPromptsResource",
         "isDefault": false
       },
       {
         "Label": "Agents",
         "Icon": "fa-solid fa-robot",
-        "ResourceType": "ai-agents",
+        "ResourceType": "Custom",
+        "DriverClass": "AIAgentsResource",
         "isDefault": false
       },
       {
         "Label": "Models",
         "Icon": "fa-solid fa-microchip",
-        "ResourceType": "ai-models",
+        "ResourceType": "Custom",
+        "DriverClass": "AIModelsResource",
         "isDefault": false
       },
       {
         "Label": "Configuration",
         "Icon": "fa-solid fa-cogs",
-        "ResourceType": "ai-config",
+        "ResourceType": "Custom",
+        "DriverClass": "AIConfigResource",
         "isDefault": false
       }
     ]
