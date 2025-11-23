@@ -111,7 +111,9 @@
       "maxRowsInSample": 10,
       "maxTables": 10,
       "enableQueryFix": true,
-      "maxFixAttempts": 3
+      "maxFixAttempts": 3,
+      "enableQueryRefinement": true,
+      "maxRefinementAttempts": 1
     }
   },
   "output": {

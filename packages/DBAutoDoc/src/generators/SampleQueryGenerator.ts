@@ -83,6 +83,41 @@ interface QueryFixContext {
   previousAttempts: Array<{ sql: string; error: string }>;
 }
 
+interface QueryRefinementResponse {
+  decision: 'KEEP' | 'REFINE';
+  analysis: string;
+  issues: string[];
+  refinedQuery?: QuerySQL;
+  refinementExplanation?: string;
+}
+
+interface QueryRefinementContext {
+  schema: SchemaDefinition;
+  focusTable: TableDefinition;
+  queryPlan: QueryPlan;
+  currentSQL: string;
+  parameters: Array<{
+    name: string;
+    dataType: string;
+    description: string;
+    required: boolean;
+    defaultValue?: string;
+    exampleValues: string[];
+  }>;
+  sampleResultColumns: Array<{
+    name: string;
+    dataType: string;
+    description: string;
+    isMeasure: boolean;
+    isDimension: boolean;
+  }>;
+  sampleRows: Record<string, unknown>[];
+  totalRows: number;
+  refinementNumber: number;
+  maxRefinements: number;
+  previousRefinements: Array<{ sql: string; feedback: string }>;
+}
+
 export class SampleQueryGenerator {
   private totalTokensUsed: number = 0;
   private totalCost: number = 0;
@@ -273,9 +308,9 @@ export class SampleQueryGenerator {
           modelUsed: this.model
         };
 
-        // Validate the query if enabled (with fix attempts)
+        // Process the query through validation, fixing, and refinement
         if (this.config.maxExecutionTime > 0) {
-          await this.validateAndFixQuery(completeQuery, schema, focusTable, plan);
+          await this.processQueryGeneration(completeQuery, schema, focusTable, plan);
         }
 
         queries.push(completeQuery);
@@ -544,34 +579,142 @@ export class SampleQueryGenerator {
   }
 
   /**
-   * Validate a query and attempt to fix it if validation fails
+   * Main query processing loop: validate → fix → refine → repeat
+   * Uses a do-while pattern where refinement loops back to validation
    */
-  private async validateAndFixQuery(
+  private async processQueryGeneration(
     query: SampleQuery,
     schema: SchemaDefinition,
     focusTable: TableDefinition,
     queryPlan: QueryPlan
   ): Promise<void> {
-    const enableFix = this.config.enableQueryFix !== false; // Default to true
-    const maxAttempts = this.config.maxFixAttempts ?? 3;
+    const enableRefinement = this.config.enableQueryRefinement === true;
+    const maxRefinements = this.config.maxRefinementAttempts ?? 1;
 
-    // Initialize fix tracking
+    // Initialize tracking
     query.fixAttempts = 0;
     query.fixHistory = [];
+    query.refinementAttempts = 0;
+    query.refinementHistory = [];
+    query.wasRefined = false;
+
+    let refinementsUsed = 0;
+    let bestSuccessfulQuery: SampleQuery | null = null;
+    const previousRefinements: Array<{ sql: string; feedback: string }> = [];
+
+    // Main loop: validate/fix → refine → repeat
+    do {
+      // Step 1: Validate with fix attempts
+      const validationSuccess = await this.validateWithFixAttempts(query, schema, focusTable, queryPlan);
+
+      if (!validationSuccess) {
+        // If we have a previous successful version, restore it
+        if (bestSuccessfulQuery) {
+          LogError(`[SampleQueryGenerator] Refined query failed validation, restoring previous version: ${query.name}`);
+          this.restoreQueryState(query, bestSuccessfulQuery);
+          return;
+        }
+        // No successful version exists - query generation failed entirely
+        LogError(`[SampleQueryGenerator] Query generation failed for: ${query.name}`);
+        return;
+      }
+
+      // Save this successful version
+      bestSuccessfulQuery = this.copyQueryState(query);
+
+      // Step 2: Check if we should attempt refinement
+      if (!enableRefinement || refinementsUsed >= maxRefinements) {
+        // No more refinements - we're done
+        return;
+      }
+
+      // Step 3: Attempt refinement
+      if (!query.sampleResultRows || query.sampleResultRows.length === 0) {
+        LogStatus(`[SampleQueryGenerator] Skipping refinement for ${query.name} - no sample results`);
+        return;
+      }
+
+      LogStatus(`[SampleQueryGenerator] Analyzing results for refinement: ${query.name} (attempt ${refinementsUsed + 1}/${maxRefinements})`);
+
+      try {
+        const refinementResult = await this.analyzeAndRefineQuery({
+          schema,
+          focusTable,
+          queryPlan,
+          currentSQL: query.sqlQuery,
+          parameters: query.parameters,
+          sampleResultColumns: query.sampleResultColumns,
+          sampleRows: query.sampleResultRows,
+          totalRows: query.sampleResultRows.length,
+          refinementNumber: refinementsUsed + 1,
+          maxRefinements,
+          previousRefinements
+        });
+
+        refinementsUsed++;
+        query.refinementAttempts = refinementsUsed;
+
+        if (refinementResult.decision === 'KEEP') {
+          LogStatus(`[SampleQueryGenerator] ✓ Query results look good, keeping: ${query.name}`);
+          LogStatus(`[SampleQueryGenerator] Analysis: ${refinementResult.analysis}`);
+          return;
+        }
+
+        // Decision is REFINE
+        if (!refinementResult.refinedQuery) {
+          LogError(`[SampleQueryGenerator] Refinement requested but no refined query provided for: ${query.name}`);
+          return;
+        }
+
+        // Record the previous version
+        previousRefinements.push({
+          sql: query.sqlQuery,
+          feedback: refinementResult.analysis
+        });
+        query.refinementHistory = [...previousRefinements];
+
+        // Update query with refined SQL
+        this.applyRefinedSQL(query, refinementResult.refinedQuery);
+        query.wasRefined = true;
+
+        LogStatus(`[SampleQueryGenerator] Refinement: ${refinementResult.refinementExplanation}`);
+
+        // Loop back to validation with the refined query
+
+      } catch (error) {
+        LogError(`[SampleQueryGenerator] Refinement attempt ${refinementsUsed + 1} failed for ${query.name}: ${(error as Error).message}`);
+        return;
+      }
+
+    } while (refinementsUsed < maxRefinements);
+  }
+
+  /**
+   * Validate a query and attempt to fix it if validation fails
+   * Returns true if validation ultimately succeeds, false otherwise
+   */
+  private async validateWithFixAttempts(
+    query: SampleQuery,
+    schema: SchemaDefinition,
+    focusTable: TableDefinition,
+    queryPlan: QueryPlan
+  ): Promise<boolean> {
+    const enableFix = this.config.enableQueryFix !== false;
+    const maxAttempts = this.config.maxFixAttempts ?? 3;
 
     // Initial validation
     const validationResult = await this.executeValidation(query);
 
     if (validationResult.success) {
-      return; // Query is valid, no fix needed
+      return true;
     }
 
-    // If fix is disabled or error occurred, just record the failure
+    // If fix is disabled, fail immediately
     if (!enableFix || maxAttempts <= 0) {
       query.validated = false;
       query.validationError = validationResult.errorMessage;
       LogError(`[SampleQueryGenerator] Query validation failed: ${query.name} - ${query.validationError}`);
-      return;
+      return false;
     }
 
     // Attempt to fix the query
@@ -601,22 +744,14 @@ export class SampleQueryGenerator {
         });
 
         // Update query with fixed SQL
-        query.sqlQuery = fixedSQL.sqlQuery;
-        query.parameters = fixedSQL.parameters;
-        query.sampleResultColumns = fixedSQL.sampleResultColumns;
-        query.filteringRules = fixedSQL.filteringRules;
-        query.aggregationRules = fixedSQL.aggregationRules;
-        query.joinRules = fixedSQL.joinRules;
-        if (fixedSQL.alignmentNotes) {
-          query.alignmentNotes = fixedSQL.alignmentNotes;
-        }
+        this.applyRefinedSQL(query, fixedSQL);
 
         // Validate the fixed query
         const fixValidation = await this.executeValidation(query);
 
         if (fixValidation.success) {
           LogStatus(`[SampleQueryGenerator] ✓ Query fixed successfully on attempt ${attempt}: ${query.name}`);
-          return;
+          return true;
         }
 
         // Update for next attempt
@@ -633,6 +768,53 @@ export class SampleQueryGenerator {
     query.validated = false;
     query.validationError = currentError;
     LogError(`[SampleQueryGenerator] Query could not be fixed after ${maxAttempts} attempts: ${query.name}`);
+    return false;
+  }
+
+  /**
+   * Apply refined/fixed SQL to a query object
+   */
+  private applyRefinedSQL(query: SampleQuery, refinedSQL: QuerySQL): void {
+    query.sqlQuery = refinedSQL.sqlQuery;
+    query.parameters = refinedSQL.parameters;
+    query.sampleResultColumns = refinedSQL.sampleResultColumns;
+    query.filteringRules = refinedSQL.filteringRules;
+    query.aggregationRules = refinedSQL.aggregationRules;
+    query.joinRules = refinedSQL.joinRules;
+    if (refinedSQL.alignmentNotes) {
+      query.alignmentNotes = refinedSQL.alignmentNotes;
+    }
+  }
+
+  /**
+   * Copy query state for backup purposes
+   */
+  private copyQueryState(query: SampleQuery): SampleQuery {
+    return {
+      ...query,
+      parameters: [...query.parameters],
+      sampleResultColumns: [...query.sampleResultColumns],
+      sampleResultRows: [...query.sampleResultRows],
+      filteringRules: [...query.filteringRules],
+      aggregationRules: [...query.aggregationRules],
+      joinRules: [...query.joinRules]
+    };
+  }
+
+  /**
+   * Restore query state from a backup
+   */
+  private restoreQueryState(query: SampleQuery, backup: SampleQuery): void {
+    query.sqlQuery = backup.sqlQuery;
+    query.parameters = backup.parameters;
+    query.sampleResultColumns = backup.sampleResultColumns;
+    query.sampleResultRows = backup.sampleResultRows;
+    query.filteringRules = backup.filteringRules;
+    query.aggregationRules = backup.aggregationRules;
+    query.joinRules = backup.joinRules;
+    query.alignmentNotes = backup.alignmentNotes;
+    query.validated = backup.validated;
+    query.executionTime = backup.executionTime;
   }
 
   /**
@@ -704,6 +886,56 @@ export class SampleQueryGenerator {
 
     if (result.result.fixExplanation) {
       LogStatus(`[SampleQueryGenerator] Fix explanation: ${result.result.fixExplanation}`);
+    }
+
+    return result.result;
+  }
+
+  /**
+   * Use LLM to analyze query results and suggest refinements
+   */
+  private async analyzeAndRefineQuery(context: QueryRefinementContext): Promise<QueryRefinementResponse> {
+    const relatedTables = this.getRelatedTables(context.schema, context.focusTable);
+    const focusTableContext = this.convertToTableContext(context.focusTable);
+    const relatedTablesContext = relatedTables.map(t => this.convertToTableContext(t));
+
+    // Get column names from sample results
+    const resultColumnNames = context.sampleRows.length > 0
+      ? Object.keys(context.sampleRows[0])
+      : context.sampleResultColumns.map(c => c.name);
+
+    const promptContext = {
+      schemaName: context.schema.name,
+      databaseType: this.getDatabaseType(),
+      focusTable: context.focusTable.name,
+      tableInfo: focusTableContext,
+      relatedTables: relatedTablesContext,
+      queryPlan: context.queryPlan,
+      currentSQL: context.currentSQL,
+      parameters: context.parameters,
+      sampleResultColumns: context.sampleResultColumns,
+      sampleRows: context.sampleRows,
+      totalRows: context.totalRows,
+      resultColumnNames,
+      refinementNumber: context.refinementNumber,
+      maxRefinements: context.maxRefinements,
+      previousRefinements: context.previousRefinements
+    };
+
+    const result = await this.promptEngine.executePrompt<QueryRefinementResponse>(
+      'query-refinement',
+      promptContext,
+      {
+        responseFormat: 'JSON',
+        maxTokens: this.maxTokens
+      }
+    );
+
+    this.totalTokensUsed += result.tokensUsed;
+    this.totalCost += result.cost || 0;
+
+    if (!result.success || !result.result) {
+      throw new Error(`Query refinement failed: ${result.errorMessage || 'Unknown error'}`);
     }
 
     return result.result;
