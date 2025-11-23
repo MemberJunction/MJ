@@ -494,6 +494,7 @@ Available dbdoc commands:
 - `analyze` - Analyze database and generate documentation
 - `generate-queries` - Generate sample SQL queries from existing analysis state
 - `export` - Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)
+- `export-sample-queries` - Export sample queries to MemberJunction metadata format
 - `status` - Show analysis status and progress
 - `reset` - Reset analysis state
 
@@ -521,6 +522,19 @@ mj dbdoc generate-queries --from-state ./output/run-1/state.json
 mj dbdoc generate-queries --from-state ./output/run-1/state.json \
   --queries-per-table 10 \
   --output-dir ./queries
+
+# Export sample queries to MemberJunction metadata format
+mj dbdoc export-sample-queries \
+  --input ./output/sample-queries.json \
+  --output ./metadata/queries/.queries.json
+
+# Export with separate SQL files and category
+mj dbdoc export-sample-queries \
+  --input ./output/sample-queries.json \
+  --output ./metadata/queries/.queries.json \
+  --separate-sql-files \
+  --category "Database Documentation" \
+  --min-confidence 0.8
 
 # Export all formats
 mj dbdoc export --sql --markdown --html --csv --mermaid
@@ -560,6 +574,18 @@ mj dbdoc reset --force
 - `-c, --config <path>`: Path to config file for database connection and AI settings (default: ./config.json)
 - `--queries-per-table <number>`: Number of queries to generate per table (optional, overrides config)
 - `--max-execution-time <ms>`: Maximum execution time for query validation in milliseconds (optional, overrides config)
+
+**Export Sample Queries Command:**
+- `-i, --input <path>`: Path to sample-queries.json file from generate-queries (required)
+- `-o, --output <path>`: Output path for the .queries.json metadata file (required)
+- `--separate-sql-files`: Write SQL to separate files and use @file: references
+- `--sql-dir <name>`: Directory for SQL files when using --separate-sql-files (default: SQL)
+- `--category <name>`: Category name for @lookup reference (e.g., "Database Documentation")
+- `--status <value>`: Status to assign (Approved/Pending/Rejected/Expired, default: Pending)
+- `--min-confidence <value>`: Minimum confidence threshold to export (0-1, default: 0)
+- `--validated-only`: Only export queries that were successfully validated
+- `--append`: Append to existing metadata file instead of overwriting
+- `--include-primary-key`: Include primaryKey and sync fields (for updating existing records)
 
 **Export Command:**
 - `-s, --state-file <path>`: Path to state JSON file
@@ -640,11 +666,26 @@ Or generate separately from existing state:
 mj dbdoc generate-queries --from-state ./output/run-1/state.json
 ```
 
+**Export to MemberJunction Metadata:**
+
+Transform generated queries into MemberJunction's Query entity format for use with AI agents like Skip:
+```bash
+mj dbdoc export-sample-queries \
+  --input ./output/sample-queries.json \
+  --output ./metadata/queries/.queries.json \
+  --category "Database Documentation" \
+  --separate-sql-files
+
+# Then sync to database
+mj sync push ./metadata/queries/
+```
+
 **Use Cases:**
 - Training AI agents to generate consistent multi-query patterns
 - Creating reference examples for few-shot prompting
 - Documenting common query patterns for your database
 - Validating that related queries use consistent filtering logic
+- Syncing generated queries to MemberJunction's Query entity for use by Skip
 
 ---
 
