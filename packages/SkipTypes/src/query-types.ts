@@ -264,7 +264,7 @@ export class SkipQueryInfo implements IQueryInfoBase {
     /**
      * Entities referenced by this query
      */
-    Entities: SkipQueryEntityInfo[];
+    Entities?: SkipQueryEntityInfo[];
 }
 
 /**
