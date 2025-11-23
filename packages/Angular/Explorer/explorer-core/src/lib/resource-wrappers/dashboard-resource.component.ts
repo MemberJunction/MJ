@@ -14,7 +14,7 @@ export function LoadDashboardResource() {
  * Extends BaseResourceComponent to work with the resource type system
  * Dynamically routes between code-based and config-based dashboards based on dashboard type
  */
-@RegisterClass(BaseResourceComponent, 'Dashboards')
+@RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
     selector: 'mj-dashboard-resource',
     template: `<div #container class="dashboard-resource-container" style="width: 100%; height: 100%; overflow: auto;"></div>`,

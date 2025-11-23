@@ -315,6 +315,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async getResourceDataFromTab(tab: WorkspaceTab): Promise<ResourceData | null> {
     const config = tab.configuration;
+    console.log('[TabContainer.getResourceDataFromTab] Processing tab:', tab.title);
+    console.log('[TabContainer.getResourceDataFromTab] Tab configuration:', config);
 
     // Extract resource type from configuration or route
     let resourceType = config['resourceType'] as string;
@@ -322,32 +324,48 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!resourceType && config['route']) {
       // Parse route to determine resource type
       resourceType = this.getResourceTypeFromRoute(config['route'] as string);
+      console.log('[TabContainer.getResourceDataFromTab] Parsed resourceType from route:', resourceType);
     }
 
     if (!resourceType) {
+      console.error('[TabContainer.getResourceDataFromTab] No resourceType found in config or route');
       return null;
     }
+
+    console.log('[TabContainer.getResourceDataFromTab] ResourceType:', resourceType);
 
     // Determine the driver class to use for component instantiation
     let driverClass = resourceType; // Default: use resourceType as driver class
 
     // For Custom resource type, get DriverClass from configuration or ResourceType metadata
     if (resourceType.toLowerCase() === 'custom') {
+      console.log('[TabContainer.getResourceDataFromTab] Custom resource type detected');
       // Custom resource type uses NavItem's DriverClass
       driverClass = config['driverClass'] as string;
 
+      console.log('[TabContainer.getResourceDataFromTab] DriverClass from config:', driverClass);
+
       if (!driverClass) {
         LogError('Custom resource type requires driverClass in configuration');
+        console.error('[TabContainer.getResourceDataFromTab] Missing driverClass for Custom resource type');
         return null;
       }
     } else {
+      console.log('[TabContainer.getResourceDataFromTab] Standard resource type, looking up DriverClass from metadata');
       // For standard resource types, look up DriverClass from metadata
       const resourceTypeEntity = await this.getResourceTypeEntity(resourceType);
+      console.log('[TabContainer.getResourceDataFromTab] ResourceType entity:', resourceTypeEntity);
+
       if (resourceTypeEntity?.DriverClass) {
         driverClass = resourceTypeEntity.DriverClass;
+        console.log('[TabContainer.getResourceDataFromTab] Using DriverClass from metadata:', driverClass);
+      } else {
+        console.log('[TabContainer.getResourceDataFromTab] No DriverClass in metadata, using resourceType as fallback:', driverClass);
       }
       // If no DriverClass in metadata, fall back to resourceType (backward compatibility)
     }
+
+    console.log('[TabContainer.getResourceDataFromTab] Final driverClass:', driverClass);
 
     // Include applicationId and driverClass in configuration
     const resourceConfig = {
@@ -360,6 +378,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       ResourceTypeID: await this.getResourceTypeId(resourceType),
       ResourceRecordID: config['recordId'] as string || '',
       Configuration: resourceConfig
+    });
+
+    console.log('[TabContainer.getResourceDataFromTab] Created ResourceData:', {
+      resourceType: resourceData.ResourceType,
+      driverClass: resourceData.Configuration?.resourceTypeDriverClass,
+      recordId: resourceData.ResourceRecordID
     });
 
     return resourceData;

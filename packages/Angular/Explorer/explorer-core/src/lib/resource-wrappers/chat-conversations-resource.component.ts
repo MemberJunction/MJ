@@ -15,7 +15,7 @@ export function LoadChatConversationsResource() {
  * Displays conversation list sidebar + active conversation chat interface
  * Designed to work with the tab system for multi-tab conversation management
  */
-@RegisterClass(BaseResourceComponent, 'chat-conversations')
+@RegisterClass(BaseResourceComponent, 'ChatConversationsResource')
 @Component({
   selector: 'mj-chat-conversations-resource',
   template: `

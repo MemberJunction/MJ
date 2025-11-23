@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
-import { Subscription } from 'rxjs';
-import { filter, take } from 'rxjs/operators';
+import { Subscription, firstValueFrom } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import {
   ApplicationManager,
   WorkspaceStateManager,
@@ -78,19 +78,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     console.log('[Shell.initializeShell] Current user:', user.Name, user.ID);
 
-    // CRITICAL: Wait for Angular router to complete initial navigation
-    // router.url is '/' at this point, we need to wait for NavigationEnd
-    console.log('[Shell.initializeShell] Waiting for router NavigationEnd...');
-    await this.router.events.pipe(
-      filter(event => event instanceof NavigationEnd),
-      take(1)
-    ).toPromise();
-
-    // NOW check the actual URL after navigation completes
+    // Check the current URL to determine if we're loading from a URL-based navigation
     const currentUrl = this.router.url;
     this.urlBasedNavigation = currentUrl.includes('/app/') || currentUrl.includes('/resource/');
 
-    console.log('[Shell.initializeShell] Navigation complete, URL:', currentUrl);
+    console.log('[Shell.initializeShell] Current URL:', currentUrl);
     console.log('[Shell.initializeShell] URL-based navigation:', this.urlBasedNavigation);
 
     // CRITICAL: Wait for workspace initialization to complete

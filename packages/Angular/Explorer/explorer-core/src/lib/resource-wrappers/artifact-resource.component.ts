@@ -13,7 +13,7 @@ export function LoadArtifactResource() {
  * Wraps the artifact-viewer-panel component for tab-based display
  * Supports reports, dashboards, forms, and other artifact types
  */
-@RegisterClass(BaseResourceComponent, 'artifact')
+@RegisterClass(BaseResourceComponent, 'ArtifactResource')
 @Component({
   selector: 'mj-artifact-resource',
   template: `

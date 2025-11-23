@@ -13,7 +13,7 @@ export function LoadAIMonitorResource() {
  * Wraps the execution-monitoring component for tab-based display
  * Shows KPIs, live executions, and performance metrics for AI operations
  */
-@RegisterClass(BaseResourceComponent, 'ai-monitor')
+@RegisterClass(BaseResourceComponent, 'AIMonitorResource')
 @Component({
   selector: 'mj-ai-monitor-resource',
   template: `

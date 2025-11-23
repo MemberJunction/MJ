@@ -14,7 +14,7 @@ export function LoadChatCollectionsResource() {
  * Extends BaseResourceComponent to work with the resource type system
  * Shows all collections and their artifacts in a comprehensive view
  */
-@RegisterClass(BaseResourceComponent, 'chat-collections')
+@RegisterClass(BaseResourceComponent, 'ChatCollectionsResource')
 @Component({
   selector: 'mj-chat-collections-resource',
   template: `

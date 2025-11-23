@@ -8,7 +8,7 @@ export function LoadAIModelsResource() {
   // Function for registration - actual instances created by Angular DI
 }
 
-@RegisterClass(BaseResourceComponent, 'ai-models')
+@RegisterClass(BaseResourceComponent, 'AIModelsResource')
 @Component({
   selector: 'mj-ai-models-resource',
   template: `

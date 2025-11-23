@@ -7,7 +7,7 @@ export function LoadListDetailResource() {
     const test = new ListDetailResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.
 }
 
-@RegisterClass(BaseResourceComponent, 'Lists')
+@RegisterClass(BaseResourceComponent, 'ListDetailResource')
 @Component({
     selector: 'mj-list-detail-resource',
     template: `<mj-list-detail [ListID]="Data.ResourceRecordID"/>`

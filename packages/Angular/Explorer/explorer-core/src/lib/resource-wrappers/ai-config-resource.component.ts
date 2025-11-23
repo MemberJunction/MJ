@@ -8,7 +8,7 @@ export function LoadAIConfigResource() {
   // Function for registration - actual instances created by Angular DI
 }
 
-@RegisterClass(BaseResourceComponent, 'ai-config')
+@RegisterClass(BaseResourceComponent, 'AIConfigResource')
 @Component({
   selector: 'mj-ai-config-resource',
   template: `

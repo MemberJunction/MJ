@@ -14,7 +14,7 @@ export function LoadChatTasksResource() {
  * Extends BaseResourceComponent to work with the resource type system
  * Shows all tasks associated with conversations and artifacts
  */
-@RegisterClass(BaseResourceComponent, 'chat-tasks')
+@RegisterClass(BaseResourceComponent, 'ChatTasksResource')
 @Component({
   selector: 'mj-chat-tasks-resource',
   template: `

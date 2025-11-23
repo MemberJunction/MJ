@@ -8,7 +8,7 @@ export function LoadAIPromptsResource() {
   // Function for registration - actual instances created by Angular DI
 }
 
-@RegisterClass(BaseResourceComponent, 'ai-prompts')
+@RegisterClass(BaseResourceComponent, 'AIPromptsResource')
 @Component({
   selector: 'mj-ai-prompts-resource',
   template: `
