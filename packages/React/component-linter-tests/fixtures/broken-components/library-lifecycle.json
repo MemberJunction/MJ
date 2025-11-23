@@ -1,0 +1,13 @@
+{
+  "name": "TestComponent",
+  "description": "Component with library lifecycle violations (violates library-lifecycle rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  const chartRef = useRef(null);\n  // Wrong: storing instance in state causes re-renders\n  const [chartInstance, setChartInstance] = useState(null);\n  \n  useEffect(() => {\n    const chart = echarts.init(chartRef.current);\n    // Wrong: setting chart instance in state\n    setChartInstance(chart);\n    \n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Metrics',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n    \n    return () => chart.dispose();\n  }, []);\n  \n  // Wrong: using chartInstance from state which may be stale\n  useEffect(() => {\n    if (chartInstance && data.length > 0) {\n      chartInstance.setOption({\n        series: [{ data: data.map(d => d.Value) }]\n      });\n    }\n  }, [data, chartInstance]);\n  \n  // Wrong: re-initializing on every update\n  const handleRefresh = () => {\n    if (chartInstance) {\n      chartInstance.dispose();\n    }\n    const newChart = echarts.init(chartRef.current);\n    setChartInstance(newChart);\n  };\n  \n  return (\n    <div>\n      <h1>Metrics</h1>\n      <button onClick={handleRefresh}>Refresh</button>\n      <div ref={chartRef} style={{ width: '100%', height: 400 }} />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [
+    {
+      "name": "echarts",
+      "globalName": "echarts",
+      "url": "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"
+    }
+  ]
+}

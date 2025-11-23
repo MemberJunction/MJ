@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component syncing props to state with useEffect anti-pattern (violates prop-state-sync rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, initialData, filterValue }) {\n  // Anti-pattern: copying props to state\n  const [data, setData] = useState(initialData);\n  const [filter, setFilter] = useState(filterValue);\n  const [processedData, setProcessedData] = useState([]);\n  \n  // Anti-pattern: syncing props to state with useEffect\n  useEffect(() => {\n    setData(initialData);\n  }, [initialData]);\n  \n  // Anti-pattern: syncing filter prop to state\n  useEffect(() => {\n    setFilter(filterValue);\n  }, [filterValue]);\n  \n  // This creates unnecessary re-renders\n  useEffect(() => {\n    if (data && filter) {\n      const filtered = data.filter(item => \n        item.Name.includes(filter)\n      );\n      setProcessedData(filtered);\n    }\n  }, [data, filter]);\n  \n  return (\n    <div>\n      <h1>Data View</h1>\n      <input \n        value={filter} \n        onChange={e => setFilter(e.target.value)} \n      />\n      {processedData.map(item => (\n        <div key={item.ID}>{item.Name}</div>\n      ))}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

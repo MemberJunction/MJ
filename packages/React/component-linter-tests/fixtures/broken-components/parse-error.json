@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component with JavaScript parsing errors (violates parse-error rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Items',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n  \n  // Parse error: unexpected token\n  const calculate = (x) => {\n    return x * \n  };\n  \n  return (\n    <div>\n      <h1>Items</h1>\n      {data.map(item => (\n        <div key={item.ID}>{item.Name}</div>\n      ))}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}
