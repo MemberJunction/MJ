@@ -11,6 +11,13 @@ export interface NavItem {
   /** Resource type to load in a tab (alternative to Route) */
   ResourceType?: string;
 
+  /**
+   * Driver class name for Custom resource type
+   * When ResourceType is "Custom", this specifies the BaseResourceComponent subclass to instantiate
+   * For standard resource types, the DriverClass from ResourceType metadata is used instead
+   */
+  DriverClass?: string;
+
   /** Resource record ID (if opening a specific resource) */
   RecordId?: string;
 

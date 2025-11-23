@@ -11,6 +11,10 @@
     },
     "primaryKey": {
       "ID": "D8AFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.229Z",
+      "checksum": "94fa21dbe6febbb77961d81b9d55f23108a95b5f81ae1f2c132cadae8c91d0c0"
     }
   },
   {
@@ -25,6 +29,10 @@
     },
     "primaryKey": {
       "ID": "D9AFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.247Z",
+      "checksum": "9942faa8a2cdf24e23c93d737479659869c86c32c5c70a1ef42c3ff57d902e7c"
     }
   },
   {
@@ -39,6 +47,10 @@
     },
     "primaryKey": {
       "ID": "DAAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.167Z",
+      "checksum": "826be6cc740b44a35e59d662780c2bef29c57232d1023cfa54da5b25ef6738dd"
     }
   },
   {
@@ -53,6 +65,10 @@
     },
     "primaryKey": {
       "ID": "DBAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.263Z",
+      "checksum": "2c9cf215c74cbe2f9ed71d1b520c3b25ef8ae015faf3e0d1b251f5e81c9270d8"
     }
   },
   {
@@ -67,6 +83,10 @@
     },
     "primaryKey": {
       "ID": "DCAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.183Z",
+      "checksum": "62eaba704ce4958d9375af0ac02b0b97521713af1f4f4eee43738e17d2c6300a"
     }
   },
   {
@@ -81,6 +101,10 @@
     },
     "primaryKey": {
       "ID": "DDAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.283Z",
+      "checksum": "e95b3f27625ec20c88c5e4f11ca74c10bcc3664c80c25788713408e4876cd5c1"
     }
   },
   {
@@ -95,6 +119,10 @@
     },
     "primaryKey": {
       "ID": "E64D433E-F36B-1410-8560-0041FA62858A"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.298Z",
+      "checksum": "a7a3ebb63c6c95054250a3bbd9e6ead96b7c50c33f95c8efcfb3867e5eb6bad6"
     }
   },
   {
@@ -109,6 +137,10 @@
     },
     "primaryKey": {
       "ID": "81D4BC3D-9FEB-EF11-B01A-286B35C04427"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.197Z",
+      "checksum": "45a6d96179f323fea7546fb86d21560fb7afb47db9780decc347e8abcde51547"
     }
   },
   {
@@ -123,6 +155,10 @@
     },
     "primaryKey": {
       "ID": "6BA617C4-0CBA-4C79-B037-456DF4B03D3D"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.214Z",
+      "checksum": "26b2b310722df672b13b53e4321bcb0812891a67005bb0eab20e05fc4697d4c3"
     }
   },
   {
@@ -134,7 +170,13 @@
       "DriverClass": null,
       "EntityID": null,
       "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "DB542786-AA10-431B-85B0-7B08CFD5B968"
+    },
+    "sync": {
+      "lastModified": "2025-11-23T14:03:20.138Z",
+      "checksum": "f3a88509031b1f56600fa512a0ce12a25d709004e35fb28b2f6fcc66aecb54fd"
     }
-     
   }
 ]

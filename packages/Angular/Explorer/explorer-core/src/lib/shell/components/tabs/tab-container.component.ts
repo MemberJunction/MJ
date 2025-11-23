@@ -214,22 +214,25 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Clear any existing content from the container (important for tab reuse)
       glContainer.element.innerHTML = '';
 
+      // Get driver class for cache lookup (resolves to actual component class name)
+      const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
+
       // Check if we have a cached component for this resource
       const cached = this.cacheManager.getCachedComponent(
-        resourceData.ResourceType,
+        driverClass,
         resourceData.ResourceRecordID || '',
         tab.applicationId
       );
 
       if (cached) {
-        console.log(`♻️ Reusing cached component for ${resourceData.ResourceType}`);
+        console.log(`♻️ Reusing cached component for ${resourceData.ResourceType} (driver: ${driverClass})`);
 
         // Reattach the cached wrapper element
         glContainer.element.appendChild(cached.wrapperElement);
 
         // Mark as attached to this tab
         this.cacheManager.markAsAttached(
-          resourceData.ResourceType,
+          driverClass,
           resourceData.ResourceRecordID || '',
           tab.applicationId,
           tabId
@@ -242,16 +245,16 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       // No cached component found - create new one
-      console.log(`🆕 Creating new component for ${resourceData.ResourceType}`);
+      console.log(`🆕 Creating new component for ${resourceData.ResourceType} using driver class: ${driverClass}`);
 
-      // Get the component registration for this resource type
+      // Get the component registration using the driver class
       const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
         BaseResourceComponent,
-        resourceData.ResourceType
+        driverClass
       );
 
       if (!resourceReg) {
-        LogError(`Unable to find resource registration for ${resourceData.ResourceType}`);
+        LogError(`Unable to find resource registration for driver class: ${driverClass}`);
         return;
       }
 
@@ -325,15 +328,36 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       return null;
     }
 
-    // Include applicationId in configuration for proper tab reload detection
+    // Determine the driver class to use for component instantiation
+    let driverClass = resourceType; // Default: use resourceType as driver class
+
+    // For Custom resource type, get DriverClass from configuration or ResourceType metadata
+    if (resourceType.toLowerCase() === 'custom') {
+      // Custom resource type uses NavItem's DriverClass
+      driverClass = config['driverClass'] as string;
+
+      if (!driverClass) {
+        LogError('Custom resource type requires driverClass in configuration');
+        return null;
+      }
+    } else {
+      // For standard resource types, look up DriverClass from metadata
+      const resourceTypeEntity = await this.getResourceTypeEntity(resourceType);
+      if (resourceTypeEntity?.DriverClass) {
+        driverClass = resourceTypeEntity.DriverClass;
+      }
+      // If no DriverClass in metadata, fall back to resourceType (backward compatibility)
+    }
+
+    // Include applicationId and driverClass in configuration
     const resourceConfig = {
       ...config,
-      applicationId: tab.applicationId
+      applicationId: tab.applicationId,
+      resourceTypeDriverClass: driverClass  // Store resolved driver class for component lookup
     };
 
     const resourceData = new ResourceData({
       ResourceTypeID: await this.getResourceTypeId(resourceType),
-      ResourceType: resourceType,
       ResourceRecordID: config['recordId'] as string || '',
       Configuration: resourceConfig
     });
@@ -342,26 +366,35 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private static _resourceTypesDataset: DatasetResultType | null = null;
-  private async getResourceTypeId(resourceType: string): Promise<string> {
-    // use the cached dataset for this
+
+  /**
+   * Get ResourceType entity by name (includes DriverClass field)
+   */
+  private async getResourceTypeEntity(resourceType: string): Promise<ResourceTypeEntity | null> {
     const md = new Metadata();
     const ds = TabContainerComponent._resourceTypesDataset || await md.GetDatasetByName("ResourceTypes");
     if (!ds || !ds.Success || ds.Results.length === 0) {
-      throw new Error('ResourceTypes dataset not found');
-    }
-    else {
-      if (!TabContainerComponent._resourceTypesDataset)
-        TabContainerComponent._resourceTypesDataset = ds; // store this for next time
-  
-      const result = ds.Results.find(r => r.Code.trim().toLowerCase() === 'resourcetypes') 
-      if (result && result.Results?.length > 0) {
-        const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase()) as ResourceTypeEntity;
-        if (rt) {
-          return rt.ID;
-        }
-      }
+      return null;
     }
 
+    if (!TabContainerComponent._resourceTypesDataset) {
+      TabContainerComponent._resourceTypesDataset = ds; // cache for next time
+    }
+
+    const result = ds.Results.find(r => r.Code.trim().toLowerCase() === 'resourcetypes');
+    if (result && result.Results?.length > 0) {
+      const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase()) as ResourceTypeEntity;
+      return rt || null;
+    }
+
+    return null;
+  }
+
+  private async getResourceTypeId(resourceType: string): Promise<string> {
+    const rt = await this.getResourceTypeEntity(resourceType);
+    if (rt) {
+      return rt.ID;
+    }
     throw new Error(`ResourceType ID not found for type: ${resourceType}`);
   }
 

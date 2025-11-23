@@ -161,6 +161,7 @@ export class NavigationService implements OnDestroy {
       Configuration: {
         route: navItem.Route,
         resourceType: navItem.ResourceType,
+        driverClass: navItem.DriverClass,  // Pass through DriverClass for Custom resource type
         recordId: navItem.RecordId,
         appName: appName,  // Store app name for URL building
         appId: appId,
