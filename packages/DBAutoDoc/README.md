@@ -119,11 +119,25 @@ This generates:
       "maxExecutionTime": 30000,    // Query validation timeout (ms)
       "includeMultiQueryPatterns": true,  // Generate related query patterns
       "validateAlignment": true,    // Validate alignment between queries
-      "maxRowsInSample": 10         // Sample result rows to capture
+      "maxRowsInSample": 10,        // Sample result rows to capture
+      "enableQueryFix": true,       // Auto-fix failed queries (default: true)
+      "maxFixAttempts": 3,          // Max fix attempts per query (default: 3)
+      "enableQueryRefinement": true, // LLM-based result analysis (default: false)
+      "maxRefinementAttempts": 1    // Max refinement iterations (default: 1)
     }
   }
 }
 ```
+
+**Query Fix & Refinement:**
+
+When a generated query fails validation, DBAutoDoc can automatically attempt to fix it:
+- **Query Fix**: Passes the SQL, error message, and previous attempts to the LLM for correction
+- **Query Refinement**: Analyzes sample results and asks LLM if the query matches the business purpose
+
+The processing flow is: Generate → Validate/Fix → Refine → Validate/Fix → Done
+
+This iterative approach significantly improves query quality, with most queries succeeding after 1-2 fix attempts.
 
 **Key Configuration Settings:**
 - **`maxTables`**: Controls table selection
@@ -187,7 +201,51 @@ Optionally apply directly to database:
 db-auto-doc export --sql --apply
 ```
 
-### 5. Check Status
+### 5. Export Sample Queries to Metadata (Optional)
+
+Transform generated sample queries into MemberJunction metadata format for syncing to the database:
+
+```bash
+# Basic export
+db-auto-doc export-sample-queries \
+  --input ./output/sample-queries.json \
+  --output ./metadata/queries/.queries.json
+
+# Export with separate SQL files (uses @file: references)
+db-auto-doc export-sample-queries \
+  --input ./output/sample-queries.json \
+  --output ./metadata/queries/.queries.json \
+  --separate-sql-files
+
+# Set category and filter by quality
+db-auto-doc export-sample-queries \
+  --input ./output/sample-queries.json \
+  --output ./metadata/queries/.queries.json \
+  --category "Database Documentation" \
+  --status Approved \
+  --min-confidence 0.8 \
+  --validated-only
+```
+
+**Key Flags:**
+- `--input, -i`: Path to sample-queries.json from generate-queries
+- `--output, -o`: Output path for .queries.json metadata file
+- `--separate-sql-files`: Write SQL to separate files with `@file:` references
+- `--sql-dir`: Directory for SQL files (default: "SQL")
+- `--category`: Query category for `@lookup:Query Categories.Name=...`
+- `--status`: Status to assign (Approved/Pending/Rejected/Expired)
+- `--min-confidence`: Minimum confidence threshold (0-1)
+- `--validated-only`: Only export successfully validated queries
+- `--append`: Append to existing metadata file
+
+**After Export:**
+1. Review the generated metadata file
+2. Ensure the Query Category exists in the database
+3. Run: `npx mj-sync push ./metadata/queries/`
+
+This integrates DBAutoDoc-generated queries with MemberJunction's metadata system for use by AI agents like Skip.
+
+### 6. Check Status
 
 ```bash
 db-auto-doc status
@@ -200,7 +258,7 @@ Shows:
 - Token usage, cost, and duration
 - Guardrail status and warnings
 
-### 6. Resume Analysis
+### 7. Resume Analysis
 
 ```bash
 db-auto-doc analyze --resume ./db-doc-state.json
@@ -379,7 +437,11 @@ This rich context enables AI to make accurate inferences.
       "includeMultiQueryPatterns": true,
       "validateAlignment": true,
       "tokenBudget": 100000,
-      "maxRowsInSample": 10
+      "maxRowsInSample": 10,
+      "enableQueryFix": true,
+      "maxFixAttempts": 3,
+      "enableQueryRefinement": true,
+      "maxRefinementAttempts": 1
     },
     "guardrails": {
       "enabled": true,
@@ -782,12 +844,15 @@ Note: Sample query generation uses ~6× more API calls than description generati
 2. **Set token budget** - Prevents runaway costs (default: 100K tokens)
 3. **Start with 5 queries/table** - Good balance of coverage and cost
 4. **Enable alignment validation** - Ensures related queries use consistent logic
-5. **Review generated queries** - Verify SQL correctness before using for training
-6. **Use for few-shot prompting** - Include in AI agent system prompts as examples
-7. **Generate separately** - Use `generate-queries` command on existing state to avoid re-running full analysis
-8. **Focus on complex tables** - Skip simple lookup tables to save costs
-9. **Validate execution** - Enable `maxExecutionTime` to test queries run successfully
-10. **Document patterns** - Use generated queries to document common query patterns for your domain
+5. **Enable query fix** - Auto-fixes failed queries (up to 3 attempts by default)
+6. **Enable query refinement** - LLM analyzes results to improve query quality
+7. **Review generated queries** - Verify SQL correctness before using for training
+8. **Use for few-shot prompting** - Include in AI agent system prompts as examples
+9. **Generate separately** - Use `generate-queries` command on existing state to avoid re-running full analysis
+10. **Export to metadata** - Use `export-sample-queries` to sync queries to MemberJunction
+11. **Focus on complex tables** - Skip simple lookup tables to save costs
+12. **Validate execution** - Enable `maxExecutionTime` to test queries run successfully
+13. **Document patterns** - Use generated queries to document common query patterns for your domain
 
 ## Troubleshooting
 
