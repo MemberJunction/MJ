@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component with expensive computations not memoized (violates performance-memoization rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  const [filter, setFilter] = useState('');\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Products',\n        MaxRows: 10000\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n  \n  // Expensive computation recalculated on every render\n  const filteredData = data.filter(item => \n    item.Name.toLowerCase().includes(filter.toLowerCase())\n  );\n  \n  // Another expensive computation without memoization\n  const sortedData = filteredData.sort((a, b) => a.Name.localeCompare(b.Name));\n  \n  // Complex aggregation without useMemo\n  const totals = sortedData.reduce((acc, item) => {\n    acc.total += item.Price;\n    acc.count += 1;\n    return acc;\n  }, { total: 0, count: 0 });\n  \n  return (\n    <div>\n      <input value={filter} onChange={e => setFilter(e.target.value)} />\n      <p>Total: ${totals.total}, Count: {totals.count}</p>\n      {sortedData.map(item => (\n        <div key={item.ID}>{item.Name}</div>\n      ))}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}
