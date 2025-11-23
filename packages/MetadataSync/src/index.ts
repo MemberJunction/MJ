@@ -10,6 +10,8 @@ export { SQLLogger } from './lib/sql-logger';
 export { TransactionManager } from './lib/transaction-manager';
 export { JsonWriteHelper } from './lib/json-write-helper';
 export { FileWriteBatch } from './lib/file-write-batch';
+export { JsonPreprocessor } from './lib/json-preprocessor';
+export type { IncludeDirective } from './lib/json-preprocessor';
 
 // Deletion audit exports
 export { RecordDependencyAnalyzer } from './lib/record-dependency-analyzer';
