@@ -5095,8 +5095,13 @@ Correct pattern:
 
             // Build lists of valid props and events
             const specPropNames: string[] = depSpec.properties?.map(p => p.name).filter(Boolean) || [];
+            // Convert event names to their callback prop form (e.g., "dataPointClick" -> "onDataPointClick")
+            // This follows React's convention where events become "on" + PascalCase event name
             const specEventNames: string[] = depSpec.events?.map(e => e.name).filter(Boolean) || [];
-            const allValidProps = [...specPropNames, ...specEventNames];
+            const specEventPropNames: string[] = specEventNames.map(name =>
+              `on${name.charAt(0).toUpperCase()}${name.slice(1)}`
+            );
+            const allValidProps = [...specPropNames, ...specEventPropNames];
 
             // Get required props
             const requiredProps: string[] = [];
@@ -5263,6 +5268,11 @@ Correct pattern:
                 const suggestion = findClosestMatch(passedProp, allValidProps);
                 const loc = passedPropNodes.get(passedProp);
 
+                // Build informative message showing props and event handlers separately
+                const propsListStr = specPropNames.length > 0 ? `Properties: ${specPropNames.join(', ')}` : '';
+                const eventsListStr = specEventPropNames.length > 0 ? `Event handlers: ${specEventPropNames.join(', ')}` : '';
+                const expectedListStr = [propsListStr, eventsListStr].filter(Boolean).join('. ') || 'none';
+
                 if (suggestion) {
                   violations.push({
                     rule: 'dependency-prop-validation',
@@ -5278,7 +5288,7 @@ Correct pattern:
                     severity: 'medium',
                     line: loc?.loc?.start.line || openingElement.loc?.start.line || 0,
                     column: loc?.loc?.start.column || openingElement.loc?.start.column || 0,
-                    message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. Expected props and events: ${allValidProps.join(', ') || 'none'}.`,
+                    message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. ${expectedListStr}.`,
                     code: `${passedProp}={...}`
                   });
                 }
