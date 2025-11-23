@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/single-record-view.spec.json",
+  "description": "Valid shared component for single entity record display"
+}
