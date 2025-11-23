@@ -225,5 +225,5 @@ export interface IQueryInfoBase {
     /**
      * Entities referenced by this query
      */
-    Entities: IQueryEntityInfoBase[];
+    Entities?: IQueryEntityInfoBase[];
 }

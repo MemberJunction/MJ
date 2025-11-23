@@ -606,27 +606,43 @@ export class GraphQLSystemUserClient {
                 CreateQuerySystemUser(input: $input) {
                     Success
                     ErrorMessage
-                    QueryData
+                    ID
+                    Name
+                    Description
+                    CategoryID
+                    Category
+                    SQL
+                    Status
+                    QualityRank
+                    EmbeddingVector
+                    EmbeddingModelID
+                    EmbeddingModelName
                     Fields {
                         ID
                         QueryID
                         Name
                         Description
-                        Type
                         Sequence
                         SQLBaseType
                         SQLFullType
+                        SourceEntityID
+                        SourceEntity
+                        SourceFieldName
                         IsComputed
                         ComputationDescription
+                        IsSummary
+                        SummaryDescription
                     }
                     Parameters {
                         ID
                         QueryID
                         Name
+                        Description
                         Type
-                        DefaultValue
-                        Comments
                         IsRequired
+                        DefaultValue
+                        SampleValue
+                        ValidationFilters
                     }
                     Entities {
                         ID
@@ -645,13 +661,6 @@ export class GraphQLSystemUserClient {
 
             const result = await this.Client.request(query, { input }) as { CreateQuerySystemUser: CreateQueryResult };
             if (result && result.CreateQuerySystemUser) {
-                // Parse the QueryData JSON if it exists and was successful
-                if (result.CreateQuerySystemUser.Success && result.CreateQuerySystemUser.QueryData) {
-                    return {
-                        ...result.CreateQuerySystemUser,
-                        QueryData: result.CreateQuerySystemUser.QueryData // Already JSON string from resolver
-                    };
-                }
                 return result.CreateQuerySystemUser;
             } else {
                 return {
@@ -680,27 +689,43 @@ export class GraphQLSystemUserClient {
                 UpdateQuerySystemUser(input: $input) {
                     Success
                     ErrorMessage
-                    QueryData
+                    ID
+                    Name
+                    Description
+                    CategoryID
+                    Category
+                    SQL
+                    Status
+                    QualityRank
+                    EmbeddingVector
+                    EmbeddingModelID
+                    EmbeddingModelName
                     Fields {
                         ID
                         QueryID
                         Name
                         Description
-                        Type
                         Sequence
                         SQLBaseType
                         SQLFullType
+                        SourceEntityID
+                        SourceEntity
+                        SourceFieldName
                         IsComputed
                         ComputationDescription
+                        IsSummary
+                        SummaryDescription
                     }
                     Parameters {
                         ID
                         QueryID
                         Name
+                        Description
                         Type
-                        DefaultValue
-                        Comments
                         IsRequired
+                        DefaultValue
+                        SampleValue
+                        ValidationFilters
                     }
                     Entities {
                         ID
@@ -719,13 +744,6 @@ export class GraphQLSystemUserClient {
 
             const result = await this.Client.request(query, { input }) as { UpdateQuerySystemUser: UpdateQueryResult };
             if (result && result.UpdateQuerySystemUser) {
-                // Parse the QueryData JSON if it exists and was successful
-                if (result.UpdateQuerySystemUser.Success && result.UpdateQuerySystemUser.QueryData) {
-                    return {
-                        ...result.UpdateQuerySystemUser,
-                        QueryData: result.UpdateQuerySystemUser.QueryData // Already JSON string from resolver
-                    };
-                }
                 return result.UpdateQuerySystemUser;
             } else {
                 return {
@@ -764,7 +782,8 @@ export class GraphQLSystemUserClient {
                 DeleteQuerySystemResolver(ID: $ID, options: $options) {
                     Success
                     ErrorMessage
-                    QueryData
+                    ID
+                    Name
                 }
             }`
 
@@ -1875,12 +1894,16 @@ export interface QueryField {
     QueryID: string;
     Name: string;
     Description?: string;
-    Type?: string;
     Sequence: number;
     SQLBaseType?: string;
     SQLFullType?: string;
+    SourceEntityID?: string;
+    SourceEntity?: string;
+    SourceFieldName?: string;
     IsComputed: boolean;
     ComputationDescription?: string;
+    IsSummary?: boolean;
+    SummaryDescription?: string;
 }
 
 /**
@@ -1890,10 +1913,12 @@ export interface QueryParameter {
     ID: string;
     QueryID: string;
     Name: string;
+    Description?: string;
     Type: string;
-    DefaultValue?: string;
-    Comments?: string;
     IsRequired: boolean;
+    DefaultValue?: string;
+    SampleValue?: string;
+    ValidationFilters?: string;
 }
 
 /**
@@ -1929,9 +1954,49 @@ export interface CreateQueryResult {
      */
     ErrorMessage?: string;
     /**
-     * JSON string containing the complete created query data if successful (optional)
+     * Unique identifier of the created query (optional)
      */
-    QueryData?: string;
+    ID?: string;
+    /**
+     * Display name of the created query (optional)
+     */
+    Name?: string;
+    /**
+     * Description of the created query (optional)
+     */
+    Description?: string;
+    /**
+     * Category ID the query belongs to (optional)
+     */
+    CategoryID?: string;
+    /**
+     * Category name the query belongs to (optional)
+     */
+    Category?: string;
+    /**
+     * SQL query text (optional)
+     */
+    SQL?: string;
+    /**
+     * Query status: Pending, Approved, Rejected, or Expired (optional)
+     */
+    Status?: string;
+    /**
+     * Quality rank indicator (optional)
+     */
+    QualityRank?: number;
+    /**
+     * Embedding vector for semantic search (optional)
+     */
+    EmbeddingVector?: string;
+    /**
+     * ID of the embedding model used (optional)
+     */
+    EmbeddingModelID?: string;
+    /**
+     * Name of the embedding model used (optional)
+     */
+    EmbeddingModelName?: string;
     /**
      * Array of fields discovered in the query (optional)
      */
@@ -2029,9 +2094,49 @@ export interface UpdateQueryResult {
      */
     ErrorMessage?: string;
     /**
-     * JSON string containing the complete updated query data if successful (optional)
+     * Unique identifier of the updated query (optional)
      */
-    QueryData?: string;
+    ID?: string;
+    /**
+     * Display name of the updated query (optional)
+     */
+    Name?: string;
+    /**
+     * Description of the updated query (optional)
+     */
+    Description?: string;
+    /**
+     * Category ID the query belongs to (optional)
+     */
+    CategoryID?: string;
+    /**
+     * Category name the query belongs to (optional)
+     */
+    Category?: string;
+    /**
+     * SQL query text (optional)
+     */
+    SQL?: string;
+    /**
+     * Query status: Pending, Approved, Rejected, or Expired (optional)
+     */
+    Status?: string;
+    /**
+     * Quality rank indicator (optional)
+     */
+    QualityRank?: number;
+    /**
+     * Embedding vector for semantic search (optional)
+     */
+    EmbeddingVector?: string;
+    /**
+     * ID of the embedding model used (optional)
+     */
+    EmbeddingModelID?: string;
+    /**
+     * Name of the embedding model used (optional)
+     */
+    EmbeddingModelName?: string;
     /**
      * Array of fields discovered in the query (optional)
      */
@@ -2077,9 +2182,13 @@ export interface DeleteQueryResult {
      */
     ErrorMessage?: string;
     /**
-     * JSON string containing the deleted query data if successful (optional)
+     * Unique identifier of the deleted query (optional)
      */
-    QueryData?: string;
+    ID?: string;
+    /**
+     * Display name of the deleted query (optional)
+     */
+    Name?: string;
 }
 
  
