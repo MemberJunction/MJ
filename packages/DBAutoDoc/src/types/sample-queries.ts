@@ -91,6 +91,11 @@ export interface SampleQuery {
   fixAttempts?: number;
   fixHistory?: Array<{ sql: string; error: string }>;
 
+  /** Refinement tracking */
+  refinementAttempts?: number;
+  refinementHistory?: Array<{ sql: string; feedback: string }>;
+  wasRefined?: boolean;
+
   /** Generation metadata */
   generatedAt: string;
   confidence: number;
@@ -182,6 +187,8 @@ export interface SampleQueryGenerationConfig {
   maxTables?: number;  // Max tables to generate queries for (default: 10, set to 0 for all tables)
   enableQueryFix?: boolean;  // Enable automatic query fix attempts (default: true)
   maxFixAttempts?: number;  // Maximum number of fix attempts per query (default: 3)
+  enableQueryRefinement?: boolean;  // Enable LLM-based result analysis and refinement (default: false)
+  maxRefinementAttempts?: number;  // Maximum refinement iterations per query (default: 1)
 }
 
 export interface QueryGenerationContext {
