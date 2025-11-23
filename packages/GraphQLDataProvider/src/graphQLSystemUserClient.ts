@@ -632,13 +632,13 @@ export class GraphQLSystemUserClient {
                         ID
                         QueryID
                         EntityID
-                        EntityName
+                        Entity
                     }
                     Permissions {
                         ID
                         QueryID
                         RoleID
-                        RoleName
+                        Role
                     }
                 }
             }`
@@ -706,14 +706,13 @@ export class GraphQLSystemUserClient {
                         ID
                         QueryID
                         EntityID
-                        EntityName
-                        Sequence
+                        Entity
                     }
                     Permissions {
                         ID
                         QueryID
                         RoleID
-                        RoleName
+                        Role
                     }
                 }
             }`
@@ -1904,8 +1903,7 @@ export interface QueryEntity {
     ID: string;
     QueryID: string;
     EntityID: string;
-    EntityName?: string;
-    Sequence: number;
+    Entity?: string;
 }
 
 /**
@@ -1915,7 +1913,7 @@ export interface QueryPermission {
     ID: string;
     QueryID: string;
     RoleID: string;
-    RoleName?: string;
+    Role?: string;
 }
 
 /**

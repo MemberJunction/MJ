@@ -1,20 +1,30 @@
 /**
  * This file contains types related to database queries, stored queries, and data requests
  * within the Skip API system. These types define the structure for:
- * 
+ *
  * - Stored query metadata (SkipQueryInfo, SkipQueryFieldInfo)
  * - Data request specifications (SkipDataRequest, SkipDataRequestType)
  * - Learning cycle query change tracking (SkipLearningCycleQueryChange)
- * 
+ *
  * These types enable Skip to understand and work with pre-defined queries stored in the
  * MemberJunction metadata system, as well as handle dynamic data requests that Skip
  * generates during analysis. The query metadata includes information about query
  * parameters, field definitions, quality rankings, and approval status.
- * 
+ *
  * Data requests allow Skip to ask for additional data beyond what was initially provided,
  * either through custom SQL statements or by referencing stored queries. This capability
  * enables Skip to iteratively refine its analysis by gathering the exact data it needs.
+ *
+ * IMPORTANT: These types implement interfaces from @memberjunction/core to ensure
+ * consistency between MJ and Skip. Property names use PascalCase to match MJ conventions.
  */
+
+import {
+    IQueryInfoBase,
+    IQueryFieldInfoBase,
+    IQueryParameterInfoBase,
+    IQueryEntityInfoBase
+} from '@memberjunction/core';
 
 /**
  * Describes the different types of data requests the Skip API server can make for additional data.
@@ -55,106 +65,206 @@ export class SkipDataRequest {
  * Metadata about individual fields within a stored query, including their data types,
  * source entity mappings, and computed field information. This helps Skip understand
  * the structure and meaning of query results.
+ *
+ * Implements IQueryFieldInfoBase for consistency with MJCore types.
  */
-export class SkipQueryFieldInfo {
-    name: string;
-    queryID: string;
-    description: string;
-    sequence: number;
+export class SkipQueryFieldInfo implements IQueryFieldInfoBase {
+    /**
+     * Unique identifier for this field record
+     */
+    ID: string;
+    /**
+     * Foreign key to the parent query
+     */
+    QueryID: string;
+    /**
+     * Name of the field as it appears in query results
+     */
+    Name: string;
+    /**
+     * Description of what this field represents
+     */
+    Description: string;
+    /**
+     * Display order of this field in query results
+     */
+    Sequence: number;
     /**
      * The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
      */
-    sqlBaseType: string;
+    SQLBaseType: string;
     /**
      * The full SQL type for the field, for example datetime or nvarchar(10) etc.
      */
-    sqlFullType: string;
-    sourceEntityID: string;
-    sourceFieldName: string;
-    isComputed: boolean;
-    computationDescription: string;
-    isSummary: boolean;
-    summaryDescription: string;
-    createdAt: Date;
-    updatedAt: Date;
-    sourceEntity: string;
-}
-
-export class SkipQueryParamInfo {
-    name: string;
-    description: string;
-    type: string;
-    isRequired: boolean;
-    defaultValue: string;
-    createdAt: Date;
-    updatedAt: Date;        
+    SQLFullType: string;
+    /**
+     * Foreign key to the source entity this field comes from
+     */
+    SourceEntityID: string;
+    /**
+     * Name of the source entity
+     */
+    SourceEntity: string;
+    /**
+     * Name of the field in the source entity
+     */
+    SourceFieldName: string;
+    /**
+     * Whether this field is computed rather than directly selected
+     */
+    IsComputed: boolean;
+    /**
+     * Explanation of how this computed field is calculated
+     */
+    ComputationDescription: string;
+    /**
+     * Whether this field represents a summary/aggregate value
+     */
+    IsSummary: boolean;
+    /**
+     * Description of the summary calculation
+     */
+    SummaryDescription: string;
 }
 
 /**
- * Metadata about entities referenced by a query, including how the reference was detected
- * and the confidence level. This helps Skip understand which entities are involved in
- * each query and how they are being used.
+ * Parameter definitions for parameterized queries that use Nunjucks templates.
+ * Each parameter represents a dynamic value that can be passed when executing the query.
+ *
+ * Implements IQueryParameterInfoBase for consistency with MJCore types.
  */
-export class SkipQueryEntityInfo {
-    id: string;
-    queryID: string;
-    entityID: string;
-    entityName: string;
+export class SkipQueryParamInfo implements IQueryParameterInfoBase {
     /**
-     * Indicates how this entity-query relationship was identified. 
-     * "AI" means LLM analysis was used to parse the SQL/template and identify which MemberJunction entities are referenced.
-     * "Manual" means a user explicitly marked this entity as being used by the query.
+     * Unique identifier for this parameter record
      */
-    detectionMethod: 'AI' | 'Manual';
+    ID: string;
     /**
-     * Confidence score (0.00-1.00) indicating how certain the AI was that this entity is actually used in the query.
-     * Only populated when detectionMethod="AI". 
-     * Considers factors like: direct table references vs indirect joins, clear entity names vs ambiguous aliases, 
-     * and context from the query purpose.
+     * Foreign key to the parent query
      */
-    autoDetectConfidenceScore?: number;
-    createdAt: Date;
-    updatedAt: Date;
+    QueryID: string;
+    /**
+     * The name of the parameter as it appears in the template (e.g., {{parameterName}})
+     */
+    Name: string;
+    /**
+     * Human-readable description of what this parameter is for
+     */
+    Description: string;
+    /**
+     * Data type of the parameter for validation and type casting
+     */
+    Type: string;
+    /**
+     * Whether this parameter must be provided when executing the query
+     */
+    IsRequired: boolean;
+    /**
+     * Default value to use when parameter is not provided
+     */
+    DefaultValue: string;
+    /**
+     * Example value demonstrating the proper format for this parameter
+     */
+    SampleValue: string;
+    /**
+     * JSON array of Nunjucks filter definitions for value transformation
+     */
+    ValidationFilters: string;
+}
+
+/**
+ * Metadata about entities referenced by a query. This helps Skip understand which
+ * entities are involved in each query and how they are being used.
+ *
+ * Implements IQueryEntityInfoBase for consistency with MJCore types.
+ */
+export class SkipQueryEntityInfo implements IQueryEntityInfoBase {
+    /**
+     * Unique identifier for this entity reference record
+     */
+    ID: string;
+    /**
+     * Foreign key to the parent query
+     */
+    QueryID: string;
+    /**
+     * Foreign key to the referenced entity
+     */
+    EntityID: string;
+    /**
+     * Name of the referenced entity
+     */
+    Entity: string;
 }
 
 /**
  * Complete metadata about a stored query, including its SQL, approval status, quality ranking,
  * and field definitions. This information allows Skip to understand and utilize pre-built
  * queries for analysis and reporting.
+ *
+ * Implements IQueryInfoBase for consistency with MJCore types.
  */
-export class SkipQueryInfo {
-    id: string;
-    name: string;
-    description: string;
-    categoryID: string;
-    sql: string;
-    originalSQL: string;
-    feedback: string;
-    status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
-    qualityRank: number;
-    createdAt: Date;
-    updatedAt: Date;
-    category: string;
-    categoryPath: string;
-    fields: SkipQueryFieldInfo[];
-    params: SkipQueryParamInfo[];
+export class SkipQueryInfo implements IQueryInfoBase {
     /**
-     * Entities referenced by this query, including metadata about how the reference was detected
+     * Unique identifier for the query record
      */
-    entities?: SkipQueryEntityInfo[];
-
+    ID: string;
+    /**
+     * Name of the query for display and reference
+     */
+    Name: string;
+    /**
+     * Detailed description of what the query does and what data it returns
+     */
+    Description: string;
+    /**
+     * Foreign key reference to the Query Categories entity
+     */
+    CategoryID: string;
+    /**
+     * Category name from the related Query Categories entity
+     */
+    Category: string;
+    /**
+     * Full hierarchical path of the category (e.g., "/MJ/AI/Agents/")
+     */
+    CategoryPath: string;
+    /**
+     * The actual SQL query text to execute, may include Nunjucks template parameters
+     */
+    SQL: string;
+    /**
+     * Current status of the query in the approval workflow
+     */
+    Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    /**
+     * Value indicating the quality of the query, higher values mean better quality
+     */
+    QualityRank: number;
     /**
      * Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis
      */
-    embeddingVector?: string;
+    EmbeddingVector?: string;
     /**
-     * The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.
+     * The AI Model ID used to generate the embedding vector for this query. Required for vector similarity comparisons.
      */
-    embeddingModelID?: string;
+    EmbeddingModelID?: string;
     /**
      * The name of the AI Model used to generate the embedding vector for this query.
      */
-    embeddingModelName?: string; 
+    EmbeddingModelName?: string;
+    /**
+     * Field metadata for this query
+     */
+    Fields: SkipQueryFieldInfo[];
+    /**
+     * Parameter definitions for this parameterized query
+     */
+    Parameters: SkipQueryParamInfo[];
+    /**
+     * Entities referenced by this query
+     */
+    Entities: SkipQueryEntityInfo[];
 }
 
 /**

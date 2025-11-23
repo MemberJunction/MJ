@@ -20,6 +20,7 @@ export * from "./generic/transactionGroup";
 export * from "./generic/util";
 export * from "./generic/logging";
 export * from "./generic/queryInfo";
+export * from "./generic/queryInfoInterfaces";
 export * from "./generic/querySQLFilters";
 export * from "./generic/runQuerySQLFilterImplementations";
 export * from "./generic/libraryInfo";

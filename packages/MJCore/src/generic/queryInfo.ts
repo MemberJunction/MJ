@@ -3,13 +3,20 @@ import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
 import { UserInfo } from "./securityInfo";
 import { QueryCacheConfig } from "./QueryCacheConfig";
+import {
+    IQueryInfoBase,
+    IQueryFieldInfoBase,
+    IQueryParameterInfoBase,
+    IQueryEntityInfoBase,
+    IQueryPermissionInfoBase
+} from "./queryInfoInterfaces";
 
 /**
  * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. 
- * Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability 
+ * Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability
  * instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.
  */
-export class QueryInfo extends BaseInfo {
+export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     /**
      * Unique identifier for the query record
      */
@@ -382,7 +389,7 @@ export class QueryCategoryInfo extends BaseInfo {
 /**
  * Stores field-level metadata for queries including display names, data types, and formatting rules for result presentation.
  */
-export class QueryFieldInfo extends BaseInfo {
+export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
     /**
      * Name of the field as it appears in query results
      */
@@ -482,13 +489,13 @@ export class QueryFieldInfo extends BaseInfo {
 /**
  * Controls access to queries by defining which users and roles can run specific queries.
  */
-export class QueryPermissionInfo extends BaseInfo {
+export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInfoBase {
     /**
      * Foreign key to the query this permission applies to
      */
     public QueryID: string = null
     /**
-     * 
+     * Foreign key to the role that has permission
      */
     public RoleID: string = null
 
@@ -519,10 +526,10 @@ export class QueryPermissionInfo extends BaseInfo {
 }
 
 /**
- * Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries 
+ * Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries
  * that can be executed and serve as examples for AI.
  */
-export class QueryEntityInfo extends BaseInfo {
+export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
     /**
      * References the ID of the query in the Queries table
      */
@@ -588,7 +595,7 @@ export class QueryEntityInfo extends BaseInfo {
  * using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a 
  * self-documenting, type-safe query execution system.
  */
-export class QueryParameterInfo extends BaseInfo {
+export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoBase {
     /**
      * Foreign key to the query this parameter belongs to
      */
