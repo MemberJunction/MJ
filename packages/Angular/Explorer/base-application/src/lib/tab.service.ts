@@ -8,12 +8,16 @@ import { TabRequest } from './interfaces/tab-request.interface';
  * This service provides a way for any component in the app to request
  * that a new tab be opened without needing direct access to the
  * WorkspaceStateManager.
+ *
+ * Tab requests are queued and can be replayed when subscribers connect.
+ * This ensures requests aren't lost if they arrive before the shell is ready.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class TabService {
   private tabRequest$ = new Subject<TabRequest>();
+  private queuedRequests: TabRequest[] = [];
 
   /**
    * Observable of tab open requests
@@ -31,7 +35,29 @@ export class TabService {
       title: request.Title,
       config: request.Configuration
     });
+
+    // Store in queue for replay
+    this.queuedRequests.push(request);
+    console.log('[TabService.OpenTab] Queue size:', this.queuedRequests.length);
+
+    // Emit to current subscribers
     this.tabRequest$.next(request);
+  }
+
+  /**
+   * Get all queued tab requests (for replay on subscription)
+   */
+  GetQueuedRequests(): TabRequest[] {
+    console.log('[TabService.GetQueuedRequests] Returning', this.queuedRequests.length, 'queued requests');
+    return [...this.queuedRequests];
+  }
+
+  /**
+   * Clear the queue after requests have been processed
+   */
+  ClearQueue(): void {
+    console.log('[TabService.ClearQueue] Clearing', this.queuedRequests.length, 'processed requests');
+    this.queuedRequests = [];
   }
 
   /**

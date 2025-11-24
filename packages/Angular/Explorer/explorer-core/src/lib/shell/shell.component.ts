@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
-import { Subscription, firstValueFrom } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import {
   ApplicationManager,
@@ -30,6 +30,7 @@ import { NavItemClickEvent } from './components/header/app-nav.component';
 export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
+  private initialNavigationComplete = false; // Track if initial navigation has completed
 
   activeApp: BaseApplication | null = null;
   loading = true;
@@ -48,14 +49,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      MJGlobal.Instance.GetEventListener(true).subscribe(event => {
-        if (event.event === MJEventType.LoggedIn) {
-          // Initialize shell on login
-          this.initializeShell().catch(err => {
-            console.error('Error during shell initialization:', err);
-            this.loading = false;
-          });
-        }
+      // Wait for Angular router to complete initial navigation before initializing
+      // This ensures we get the correct URL from router.url instead of "/"
+      console.log('[Shell.ngOnInit] Waiting for initial navigation to complete...');
+
+      this.router.events.pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        filter(() => !this.initialNavigationComplete) // Only handle initial navigation
+      ).subscribe(event => {
+        console.log('[Shell.ngOnInit] NavigationEnd received, URL:', event.urlAfterRedirects);
+        this.initialNavigationComplete = true;
+
+        // Now that routing is complete, wait for login and initialize
+        MJGlobal.Instance.GetEventListener(true).subscribe(loginEvent => {
+          if (loginEvent.event === MJEventType.LoggedIn) {
+            console.log('[Shell.ngOnInit] LoggedIn event received, initializing shell...');
+            this.initializeShell().catch(err => {
+              console.error('Error during shell initialization:', err);
+              this.loading = false;
+            });
+          }
+        });
       });
     } catch (error) {
       console.error('Failed to initialize shell:', error);
@@ -200,61 +214,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to tab open requests from TabService
     this.subscriptions.push(
       this.tabService.TabRequests.subscribe(async request => {
-        console.log('[Shell.TabRequests.subscribe] Tab request received:', {
-          appId: request.ApplicationId,
-          title: request.Title,
-          config: request.Configuration
-        });
-
-        const app = this.appManager.GetAppById(request.ApplicationId);
-        const appColor = app?.GetColor() || '#757575';
-
-        console.log('[Shell.TabRequests.subscribe] App for tab:', app?.Name || 'not found');
-
-        // Determine if this is a URL-based tab request
-        const isUrlBasedTab = request.Configuration?.appName ||
-                             request.Configuration?.resourceType;
-
-        console.log('[Shell.TabRequests.subscribe] Is URL-based tab:', isUrlBasedTab);
-        console.log('[Shell.TabRequests.subscribe] urlBasedNavigation flag:', this.urlBasedNavigation);
-        console.log('[Shell.TabRequests.subscribe] initialized flag:', this.initialized);
-
-        const currentActiveApp = this.appManager.GetActiveApp();
-        console.log('[Shell.TabRequests.subscribe] Current active app:', currentActiveApp?.Name || 'none');
-
-        // CRITICAL: Only set the app as active if:
-        // 1. We're initialized (past the startup phase)
-        // 2. App is different from current
-        // 3. Either NOT in URL-based navigation mode, OR this IS a URL-based tab
-        const shouldSetActiveApp = this.initialized &&
-                                  app &&
-                                  currentActiveApp?.ID !== request.ApplicationId &&
-                                  (!this.urlBasedNavigation || isUrlBasedTab);
-
-        console.log('[Shell.TabRequests.subscribe] Should set active app:', shouldSetActiveApp);
-
-        if (shouldSetActiveApp) {
-          console.log('[Shell.TabRequests.subscribe] Setting active app to:', app.Name);
-          await this.appManager.SetActiveApp(request.ApplicationId);
-        } else {
-          console.log('[Shell.TabRequests.subscribe] Skipping SetActiveApp - reason:',
-            !this.initialized ? 'not initialized' :
-            !app ? 'no app' :
-            currentActiveApp?.ID === request.ApplicationId ? 'already active' :
-            'in URL navigation mode and not URL-based tab'
-          );
-        }
-
-        // Clear the URL navigation flag after first URL-based tab is processed
-        if (this.urlBasedNavigation && isUrlBasedTab) {
-          console.log('[Shell.TabRequests.subscribe] URL-based tab processed, clearing flag');
-          this.urlBasedNavigation = false;
-        }
-
-        console.log('[Shell.TabRequests.subscribe] Opening tab in workspace manager');
-        this.workspaceManager.OpenTab(request, appColor);
+        await this.processTabRequest(request);
       })
     );
+
+    // Replay any tab requests that were queued before we subscribed
+    // This handles the case where ResourceResolver creates requests before shell is ready
+    const queuedRequests = this.tabService.GetQueuedRequests();
+    if (queuedRequests.length > 0) {
+      console.log('[Shell.initializeShell] Replaying', queuedRequests.length, 'queued tab requests');
+      for (const request of queuedRequests) {
+        await this.processTabRequest(request);
+      }
+      this.tabService.ClearQueue();
+    }
 
     // Subscribe to workspace configuration changes to sync URL
     this.subscriptions.push(
@@ -297,9 +270,71 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
+   * Process a tab request (from subscription or replay)
+   */
+  private async processTabRequest(request: any): Promise<void> {
+    console.log('[Shell.processTabRequest] Processing tab request:', {
+      appId: request.ApplicationId,
+      title: request.Title,
+      config: request.Configuration
+    });
+
+    const app = this.appManager.GetAppById(request.ApplicationId);
+    const appColor = app?.GetColor() || '#757575';
+
+    console.log('[Shell.processTabRequest] App for tab:', app?.Name || 'not found');
+
+    // Determine if this is a URL-based tab request
+    // URL-based tabs have appName/resourceType BUT NOT isAppDefault
+    // (isAppDefault indicates workspace restoration, not URL navigation)
+    const isUrlBasedTab = (request.Configuration?.appName || request.Configuration?.resourceType) &&
+                         !request.Configuration?.isAppDefault;
+
+    console.log('[Shell.processTabRequest] Is URL-based tab:', isUrlBasedTab);
+    console.log('[Shell.processTabRequest] urlBasedNavigation flag:', this.urlBasedNavigation);
+    console.log('[Shell.processTabRequest] initialized flag:', this.initialized);
+
+    const currentActiveApp = this.appManager.GetActiveApp();
+    console.log('[Shell.processTabRequest] Current active app:', currentActiveApp?.Name || 'none');
+
+    // CRITICAL: Only set the app as active if:
+    // 1. We're initialized (past the startup phase)
+    // 2. App is different from current
+    // 3. Either NOT in URL-based navigation mode, OR this IS a URL-based tab
+    const shouldSetActiveApp = this.initialized &&
+                              app &&
+                              currentActiveApp?.ID !== request.ApplicationId &&
+                              (!this.urlBasedNavigation || isUrlBasedTab);
+
+    console.log('[Shell.processTabRequest] Should set active app:', shouldSetActiveApp);
+
+    if (shouldSetActiveApp) {
+      console.log('[Shell.processTabRequest] Setting active app to:', app.Name);
+      await this.appManager.SetActiveApp(request.ApplicationId);
+    } else {
+      console.log('[Shell.processTabRequest] Skipping SetActiveApp - reason:',
+        !this.initialized ? 'not initialized' :
+        !app ? 'no app' :
+        currentActiveApp?.ID === request.ApplicationId ? 'already active' :
+        'in URL navigation mode and not URL-based tab'
+      );
+    }
+
+    console.log('[Shell.processTabRequest] Opening tab in workspace manager');
+    this.workspaceManager.OpenTab(request, appColor);
+  }
+
+  /**
    * Sync URL with active tab's resource
    */
   private syncUrlWithWorkspace(config: any): void {
+    // Don't sync URL during URL-based navigation initialization
+    // This prevents workspace restoration from overriding the URL we're trying to navigate to
+    if (this.urlBasedNavigation) {
+      console.log('[Shell.syncUrlWithWorkspace] Skipping URL sync during URL-based navigation');
+      return;
+    }
+
     if (!config.activeTabId) {
       return;
     }
@@ -318,6 +353,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const newUrl = resourceUrl.split('?')[0];
 
       if (currentUrl !== newUrl) {
+        console.log('[Shell.syncUrlWithWorkspace] Syncing URL from workspace:', newUrl);
         // Navigate to the resource URL without triggering full navigation
         this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
       }
