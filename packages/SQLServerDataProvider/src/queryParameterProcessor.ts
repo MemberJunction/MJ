@@ -144,10 +144,12 @@ export class QueryParameterProcessor {
                             validatedParams[paramDef.Name] = date;
                             break;
                         case 'boolean':
+                            // Convert to 0/1 for SQL Server bit fields
+                            // This ensures proper SQL syntax: WHERE BitColumn = 1 (not WHERE BitColumn = true)
                             if (typeof finalValue === 'boolean') {
-                                validatedParams[paramDef.Name] = finalValue;
+                                validatedParams[paramDef.Name] = finalValue ? 1 : 0;
                             } else {
-                                validatedParams[paramDef.Name] = String(finalValue).toLowerCase() === 'true';
+                                validatedParams[paramDef.Name] = String(finalValue).toLowerCase() === 'true' ? 1 : 0;
                             }
                             break;
                         case 'array':
