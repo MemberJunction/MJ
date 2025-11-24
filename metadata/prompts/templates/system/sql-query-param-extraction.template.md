@@ -1,8 +1,21 @@
 You are an expert at parsing Nunjucks templates. You are also an expert at SQL Server queries. 
 Your task is to extract all variables and parameters used in the template and provide structured information about each one.
 
-## SQL Query Template: 
+## SQL Query Template:
 {{ templateText }}
+
+{% if entities and entities.length > 0 %}
+## Entity Metadata
+The following entities are referenced in this query. Use this information to determine the correct data types and generate appropriate sample values for parameters.
+
+{% for entity in entities %}
+### {{ entity.name }}
+Schema: {{ entity.schemaName }}, View: {{ entity.baseView }}
+Fields:
+{% for field in entity.fields %}- {{ field.name }}: {{ field.type }}{% if field.isPrimaryKey %} (PK){% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
 
 ## Instructions:
 Identify ALL variables used in the template, including:
@@ -30,23 +43,17 @@ Return a JSON array of parameter objects with this structure:
       "isRequired": true|false,
       "description": "Brief description of what this parameter is used for based on context",
       "usage": ["List of locations where this variable is used in the template"],
-      "defaultValue": "Default value if found in template (e.g., from default filter)"
+      "defaultValue": "Default value if found in template (e.g., from default filter)",
+      "sampleValue": "A realistic test value based on the parameter type and entity metadata (e.g., UUID for uniqueidentifier, valid date for datetime)"
     }
   ],
   "selectClause": [
     {
-        "name": "name of field in the result of the query",  
+        "name": "name of field in the result of the query",
         "dynamicName": true, // only true if the name of the field in the result is calculated in the nunjucks template. Uncommon but possible
         "description": "Description of what this field will contain",
         "type": "number|string|date|boolean",
         "optional": false // usually false, only true if the field is part of an IF block and sometimes not emitted based on parameter values
-    }
-  ],
-  "fromClause": [
-    {
-        "schemaName": "name of the schema the view or table is in",
-        "baseViewOrTable": "name of the view or table being selected from",
-        "alias": "if an alias was used in the query for this base view/table, indicate it here"
     }
   ]
 }
@@ -119,7 +126,8 @@ Example Output for the above template:
         "Conditional SELECT: SUM({% raw %}{{ extraSumField | sqlIdentifier }}{% endraw %}) {% raw %}{{ extraSumFieldAlias | sqlIdentifier }}{% endraw %}",
         "IF condition check: {% raw %}{% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}{% endraw %}"
       ],
-      "defaultValue": null
+      "defaultValue": null,
+      "sampleValue": "Revenue"
     },
     {
       "name": "extraSumFieldAlias",
@@ -130,7 +138,8 @@ Example Output for the above template:
         "Column alias: {% raw %}{{ extraSumFieldAlias | sqlIdentifier }}{% endraw %}",
         "IF condition check: {% raw %}{% if extraSumField != \"\" and extraSumFieldAlias != \"\" %}{% endraw %}"
       ],
-      "defaultValue": null
+      "defaultValue": null,
+      "sampleValue": "TotalRevenue"
     },
     {
       "name": "countryList",
@@ -140,7 +149,8 @@ Example Output for the above template:
       "usage": [
         "WHERE clause: a.Country IN {% raw %}{{ countryList | sqlIn }}{% endraw %}"
       ],
-      "defaultValue": null
+      "defaultValue": null,
+      "sampleValue": "USA,Canada,Mexico"
     },
     {
       "name": "minIndustryFirmCount",
@@ -150,7 +160,8 @@ Example Output for the above template:
       "usage": [
         "WHERE clause: i.NumFirms >= {% raw %}{{ minIndustryFirmCount | sqlNumber }}{% endraw %}"
       ],
-      "defaultValue": null
+      "defaultValue": null,
+      "sampleValue": "10"
     },
     {
       "name": "accountsCreatedOnOrAfter",
@@ -160,7 +171,8 @@ Example Output for the above template:
       "usage": [
         "WHERE clause: a.__mj_CreatedAt >= {% raw %}{{ accountsCreatedOnOrAfter | sqlDate }}{% endraw %}"
       ],
-      "defaultValue": null
+      "defaultValue": null,
+      "sampleValue": "2024-01-01"
     },
     {
       "name": "orderByClause",
@@ -171,7 +183,8 @@ Example Output for the above template:
         "ORDER BY clause: {% raw %}{{ orderByClause | sqlNoKeywordsExpression }}{% endraw %}",
         "IF condition check: {% raw %}{% if orderByClause %}{% endraw %}"
       ],
-      "defaultValue": null
+      "defaultValue": null,
+      "sampleValue": "TotalAccounts DESC"
     } 
   ],
   "selectClause": [
@@ -235,22 +248,6 @@ Example Output for the above template:
       "description": "Count of the # of cities in the country in this grouping",
       "type": "number",
       "optional": false
-    }
-  ],
-  "fromClause": [
-    {
-        "schemaName": "crm",
-        "baseViewOrTable": "vwAccounts",
-        "alias": "a"
-    },
-    {
-        "schemaName": "crm",
-        "baseViewOrTable": "vwIndustries",
-        "alias": "i"
-    },
-    {
-        "schemaName": "crm",
-        "baseViewOrTable": "vwCities"
     }
   ]
 }
