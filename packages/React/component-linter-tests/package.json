@@ -7,6 +7,7 @@
   "scripts": {
     "test": "ts-node run-tests.ts",
     "test:fixtures": "ts-node run-fixture-tests.ts",
+    "test:fixture": "ts-node lint-fixture.ts",
     "test:all": "npm test && npm run test:fixtures",
     "export:valid": "ts-node scripts/export-valid-components.ts",
     "build": "tsc"
