@@ -108,6 +108,11 @@ export class BaseApplication {
           recordId: firstItem.RecordId,
           ...(firstItem.Configuration || {})
         };
+
+        // For Custom resource types, include the DriverClass
+        if (firstItem.ResourceType === 'Custom' && firstItem.DriverClass) {
+          tabRequest.Configuration.driverClass = firstItem.DriverClass;
+        }
       }
       // Handle route-based nav items (legacy)
       else if (firstItem.Route) {

@@ -139,7 +139,8 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   providedIn: 'root',
 })
 export class ResourceResolver implements Resolve<void> {
-  private processedUrls = new Set<string>();
+  private processedUrls = new Map<string, number>();
+  private readonly URL_DEBOUNCE_MS = 100; // Allow same URL after 100ms
 
   constructor(
     private sharedService: SharedService,
@@ -164,13 +165,19 @@ export class ResourceResolver implements Resolve<void> {
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
     console.log('[ResourceResolver.resolve] Called with URL:', state.url);
 
-    // Prevent duplicate processing of the same URL
-    if (this.processedUrls.has(state.url)) {
-      console.log('[ResourceResolver.resolve] Already processed URL:', state.url);
+    // Prevent duplicate processing of the same URL within a short time window
+    // This allows legitimate re-navigation to the same URL (like app switching)
+    // while preventing rapid duplicate calls
+    const now = Date.now();
+    const lastProcessed = this.processedUrls.get(state.url);
+
+    if (lastProcessed && (now - lastProcessed) < this.URL_DEBOUNCE_MS) {
+      console.log('[ResourceResolver.resolve] Recently processed URL (debounced):', state.url);
       return;
     }
-    this.processedUrls.add(state.url);
-    console.log('[ResourceResolver.resolve] Processing URL for first time:', state.url);
+
+    this.processedUrls.set(state.url, now);
+    console.log('[ResourceResolver.resolve] Processing URL:', state.url);
 
     const md = new Metadata();
 
@@ -254,19 +261,29 @@ export class ResourceResolver implements Resolve<void> {
 
       // Queue tab request via TabService
       console.log('[ResourceResolver.resolve] Queuing tab request via TabService');
+
+      // Build configuration - include DriverClass for Custom resource types
+      const config: any = {
+        route: navItem.Route,
+        resourceType: navItem.ResourceType,
+        recordId: navItem.RecordId,
+        appName: appName,
+        appId: app.ID,
+        navItemName: navItem.Label,
+        ...(navItem.Configuration || {}),
+        queryParams: route.queryParams
+      };
+
+      // For Custom resource types, include the DriverClass
+      if (navItem.ResourceType === 'Custom' && navItem.DriverClass) {
+        config.driverClass = navItem.DriverClass;
+        console.log('[ResourceResolver.resolve] Added DriverClass for Custom resource:', navItem.DriverClass);
+      }
+
       this.tabService.OpenTab({
         ApplicationId: app.ID,
         Title: navItem.Label,
-        Configuration: {
-          route: navItem.Route,
-          resourceType: navItem.ResourceType,
-          recordId: navItem.RecordId,
-          appName: appName,
-          appId: app.ID,
-          navItemName: navItem.Label,
-          ...(navItem.Configuration || {}),
-          queryParams: route.queryParams
-        },
+        Configuration: config,
         IsPinned: false
       });
       console.log('[ResourceResolver.resolve] Tab request queued');
