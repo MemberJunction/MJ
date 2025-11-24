@@ -3652,8 +3652,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
 
-                // Pattern 1c: Ternary operator with length check
+                // Pattern 1c: Ternary operator with truthiness or length check
                 // e.g., arr.length > 0 ? arr[0] : fallback
+                // or: arr ? arr[0] : fallback
                 const parentPath = path.parentPath;
                 if (parentPath && t.isConditionalExpression(parentPath.node)) {
                   const conditional = parentPath.node;
@@ -3661,6 +3662,11 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   if (conditional.consequent === path.node && t.isIdentifier(object)) {
                     const arrayName = object.name;
                     const test = conditional.test;
+
+                    // Check for simple truthiness check: arr ? arr[0] : fallback
+                    if (t.isIdentifier(test) && test.name === arrayName) {
+                      isSafe = true;
+                    }
 
                     // Check for length comparisons in the test
                     const checkLengthInTest = (node: t.Node): boolean => {
@@ -3778,6 +3784,10 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                                   if ((operator === '!==' || operator === '!=') && checkValue === 0) {
                                     return 0;
                                   }
+                                  // arr.length === 0 or arr.length == 0 (with early return) means index 0 is safe after return
+                                  if ((operator === '===' || operator === '==') && checkValue === 0) {
+                                    return 0;
+                                  }
                                 }
                               }
                             }
@@ -3793,6 +3803,10 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                                   // N <= arr.length means indices 0 to N-1 are safe
                                   if (operator === '<=') {
                                     return checkValue - 1;
+                                  }
+                                  // 0 === arr.length or 0 == arr.length (with early return) means index 0 is safe after return
+                                  if ((operator === '===' || operator === '==') && checkValue === 0) {
+                                    return 0;
                                   }
                                 }
                               }
@@ -3901,6 +3915,30 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   isSafe = true;
                 }
 
+                // Pattern 4: Chained array methods that preserve or filter arrays
+                // e.g., Object.entries(obj).filter(...).sort(...)[0]
+                // These methods always return arrays, so accessing [0] won't throw
+                // (though it may return undefined if the result is empty)
+                if (!isSafe && t.isCallExpression(object)) {
+                  // Length-preserving methods: sort, reverse, fill, copyWithin
+                  // Array-returning methods: filter, map, slice, concat, flat, flatMap
+                  const arrayReturningMethods = [
+                    'sort', 'reverse', 'fill', 'copyWithin',  // mutating but return same array
+                    'filter', 'map', 'slice', 'concat', 'flat', 'flatMap',  // return new array
+                    'splice'  // returns removed elements as array
+                  ];
+
+                  // Check if the call is a chained array method
+                  if (t.isMemberExpression(object.callee) && t.isIdentifier(object.callee.property)) {
+                    const methodName = object.callee.property.name;
+                    if (arrayReturningMethods.includes(methodName)) {
+                      // This is an array method that returns an array
+                      // The access won't throw, though may return undefined
+                      isSafe = true;
+                    }
+                  }
+                }
+
                 if (!isSafe) {
                   violations.push({
                     rule: 'unsafe-array-operations',
@@ -3954,6 +3992,70 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   if (t.isLogicalExpression(grandParent) && grandParent.operator === '&&') {
                     if (t.isIdentifier(grandParent.left) && grandParent.left.name === object.name) {
                       hasGuard = true;
+                    }
+                  }
+
+                  // Walk up the && chain to find guards in chained expressions
+                  // e.g., !isDateField && data && data.length > 0
+                  if (!hasGuard) {
+                    // Find the containing if statement or logical expression
+                    let currentPath: NodePath | null = path.parentPath;
+                    while (currentPath) {
+                      if (t.isIfStatement(currentPath.node)) {
+                        const test = currentPath.node.test;
+                        // Check if test is a logical expression with && that includes our guard
+                        if (t.isLogicalExpression(test) && test.operator === '&&') {
+                          // Collect all operands in the && chain
+                          const collectAndOperands = (node: t.Node): t.Node[] => {
+                            if (t.isLogicalExpression(node) && node.operator === '&&') {
+                              return [...collectAndOperands(node.left), ...collectAndOperands(node.right)];
+                            }
+                            return [node];
+                          };
+
+                          const operands = collectAndOperands(test);
+
+                          // Find our data.length access in the operands
+                          let foundGuard = false;
+
+                          for (let i = 0; i < operands.length; i++) {
+                            const op = operands[i];
+
+                            // Check if this operand is our data check (guard)
+                            if (t.isIdentifier(op) && op.name === object.name) {
+                              foundGuard = true;
+                            }
+
+                            // Check if this operand contains our length access
+                            // Could be: data.length > 0, data.length === 0, etc.
+                            let containsLengthAccess = false;
+                            if (t.isBinaryExpression(op)) {
+                              // Check left side for our array.length
+                              if (t.isMemberExpression(op.left) &&
+                                  t.isIdentifier(op.left.object) &&
+                                  op.left.object.name === object.name &&
+                                  t.isIdentifier(op.left.property) &&
+                                  op.left.property.name === 'length') {
+                                containsLengthAccess = true;
+                              }
+                            } else if (t.isMemberExpression(op) &&
+                                       t.isIdentifier(op.object) &&
+                                       op.object.name === object.name) {
+                              containsLengthAccess = true;
+                            }
+
+                            if (containsLengthAccess) {
+                              // If we already found the guard before this, we're safe
+                              if (foundGuard) {
+                                hasGuard = true;
+                                break;
+                              }
+                            }
+                          }
+                        }
+                        break;
+                      }
+                      currentPath = currentPath.parentPath;
                     }
                   }
 
