@@ -31,6 +31,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
   private initialNavigationComplete = false; // Track if initial navigation has completed
+  private firstUrlSync = true; // Track if this is the first URL sync (for replaceUrl behavior)
 
   activeApp: BaseApplication | null = null;
   loading = true;
@@ -227,6 +228,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         await this.processTabRequest(request);
       }
       this.tabService.ClearQueue();
+
+      // Clear urlBasedNavigation flag after processing initial URL-based navigation
+      // This allows subsequent app/nav item changes to update the URL
+      if (this.urlBasedNavigation) {
+        console.log('[Shell.initializeShell] Initial URL-based navigation complete, enabling URL sync');
+        this.urlBasedNavigation = false;
+      }
     }
 
     // Subscribe to workspace configuration changes to sync URL
@@ -353,9 +361,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const newUrl = resourceUrl.split('?')[0];
 
       if (currentUrl !== newUrl) {
-        console.log('[Shell.syncUrlWithWorkspace] Syncing URL from workspace:', newUrl);
-        // Navigate to the resource URL without triggering full navigation
-        this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+        // Replace URL on first sync (initialization), push new history entries after that
+        // This enables browser back/forward buttons while avoiding duplicate history on load
+        const replaceUrl = this.firstUrlSync;
+        this.firstUrlSync = false;
+
+        console.log('[Shell.syncUrlWithWorkspace] Syncing URL from workspace:', newUrl, 'replaceUrl:', replaceUrl);
+        this.router.navigateByUrl(resourceUrl, { replaceUrl });
       }
     }
   }
