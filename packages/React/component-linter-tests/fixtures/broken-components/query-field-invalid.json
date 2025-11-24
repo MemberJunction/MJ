@@ -1,23 +1,23 @@
 {
   "name": "QueryFieldInvalidComponent",
-  "description": "Component accessing non-existent fields from query results (violates query-field-validation rule)",
-  "code": "function QueryFieldInvalidComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [report, setReport] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadReport() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'MonthlySalesReport',\n        CategoryPath: 'Reports/Sales',\n        Parameters: {\n          Year: 2024,\n          Month: 12\n        }\n      });\n\n      if (result.Success) {\n        // VIOLATION: Accessing fields that don't exist in query results\n        // The query only returns: SalesAmount, OrderCount, CustomerName, Region\n        const processedData = result.Results.map(row => ({\n          // Valid fields\n          amount: row.SalesAmount,\n          orders: row.OrderCount,\n          customer: row.CustomerName,\n          region: row.Region,\n          \n          // VIOLATION: 'Revenue' doesn't exist, should be 'SalesAmount'\n          revenue: row.Revenue,\n          \n          // VIOLATION: 'TotalOrders' doesn't exist, should be 'OrderCount'\n          totalOrders: row.TotalOrders,\n          \n          // VIOLATION: 'Client' doesn't exist, should be 'CustomerName'\n          client: row.Client,\n          \n          // VIOLATION: 'Territory' doesn't exist, should be 'Region'\n          territory: row.Territory,\n          \n          // VIOLATION: 'CreatedDate' doesn't exist in this query\n          date: row.CreatedDate\n        }));\n\n        setReport(processedData);\n      }\n\n      setLoading(false);\n    }\n    loadReport();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Monthly Sales Report</h1>\n      <table>\n        <thead>\n          <tr>\n            <th>Customer</th>\n            <th>Region</th>\n            <th>Amount</th>\n            <th>Orders</th>\n          </tr>\n        </thead>\n        <tbody>\n          {report.map((row, idx) => (\n            <tr key={idx}>\n              <td>{row.customer}</td>\n              <td>{row.region}</td>\n              <td>{row.amount}</td>\n              <td>{row.orders}</td>\n            </tr>\n          ))}\n        </tbody>\n      </table>\n    </div>\n  );\n}",
+  "description": "Component accessing non-existent fields on query results (violates query-field-validation rule)",
+  "code": "function QueryFieldInvalidComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [salesData, setSalesData] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    async function loadSalesData() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'SalesReport',\n          CategoryPath: 'Reports/Sales',\n          Parameters: {\n            year: 2024\n          }\n        });\n\n        if (result.Success) {\n          // Mix of valid and invalid field accesses\n          const data = result.Results.map(row => ({\n            // ✅ Valid fields - these exist in the query definition\n            account: row.AccountName,\n            revenue: row.Revenue,\n            quarter: row.Quarter,\n            year: row.Year,\n            \n            // ❌ VIOLATION: InvalidField doesn't exist in query definition\n            invalid: row.InvalidField,\n            \n            // ❌ VIOLATION: NonExistentProperty doesn't exist in query definition\n            fake: row.NonExistentProperty,\n            \n            // ❌ VIOLATION: Profit field not included in query definition\n            profit: row.Profit,\n            \n            // ❌ VIOLATION: CustomerName field not included in query definition\n            customer: row.CustomerName\n          }));\n          setSalesData(data);\n        } else {\n          setError(result.ErrorMessage);\n        }\n      } catch (err) {\n        setError(err.message);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadSalesData();\n  }, []);\n\n  if (loading) return <div>Loading sales data...</div>;\n  if (error) return <div className=\"error\">Error: {error}</div>;\n\n  return (\n    <div className=\"sales-report\">\n      <h1>Sales Report 2024</h1>\n      <table>\n        <thead>\n          <tr>\n            <th>Account</th>\n            <th>Revenue</th>\n            <th>Quarter</th>\n            <th>Invalid Field</th>\n          </tr>\n        </thead>\n        <tbody>\n          {salesData.map((row, index) => (\n            <tr key={index}>\n              <td>{row.account}</td>\n              <td>${row.revenue.toFixed(2)}</td>\n              <td>Q{row.quarter}</td>\n              {/* Using invalid field in display */}\n              <td>{row.invalid}</td>\n            </tr>\n          ))}\n        </tbody>\n      </table>\n      <div className=\"summary\">\n        <p>Total Records: {salesData.length}</p>\n        {/* Another invalid field access */}\n        <p>Profit: {salesData.reduce((sum, row) => sum + row.profit, 0)}</p>\n      </div>\n    </div>\n  );\n}",
   "componentType": "interactive",
   "libraries": [],
   "dataRequirements": {
+    "mode": "queries",
     "queries": [
       {
-        "name": "MonthlySalesReport",
+        "name": "SalesReport",
         "categoryPath": "Reports/Sales",
-        "parameters": [
-          { "name": "Year", "type": "int", "isRequired": true },
-          { "name": "Month", "type": "int", "isRequired": true }
-        ],
         "fields": [
-          { "name": "SalesAmount", "type": "decimal" },
-          { "name": "OrderCount", "type": "int" },
-          { "name": "CustomerName", "type": "nvarchar" },
-          { "name": "Region", "type": "nvarchar" }
+          { "name": "AccountName", "type": "nvarchar" },
+          { "name": "Revenue", "type": "decimal" },
+          { "name": "Quarter", "type": "int" },
+          { "name": "Year", "type": "int" }
+        ],
+        "parameters": [
+          { "name": "year", "type": "int", "isRequired": true }
         ]
       }
     ]
