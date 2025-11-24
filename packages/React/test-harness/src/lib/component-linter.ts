@@ -3163,8 +3163,98 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 return;
               }
 
-              // Only flag if we know the type is wrong (not unknown)
-              if (leftType.type !== 'unknown' && leftType.type !== 'number' && leftType.type !== 'Date') {
+              // Check if this operation is inside a typeof guard
+              // Pattern: if (typeof x === 'number') { ... x - y ... }
+              const isGuardedByTypeof = (variableNode: t.Node, expectedType: string): boolean => {
+                // Get the variable name if it's an identifier
+                let varName: string | null = null;
+                if (t.isIdentifier(variableNode)) {
+                  varName = variableNode.name;
+                } else {
+                  return false;
+                }
+
+                // Walk up the AST to find an if statement
+                let currentPath: NodePath | null = path.parentPath;
+                while (currentPath) {
+                  if (t.isIfStatement(currentPath.node)) {
+                    const test = currentPath.node.test;
+
+                    // Check for typeof guard pattern: typeof x === 'number'
+                    if (t.isBinaryExpression(test) && (test.operator === '===' || test.operator === '==')) {
+                      // Pattern 1: typeof x === 'number'
+                      if (t.isUnaryExpression(test.left) &&
+                          test.left.operator === 'typeof' &&
+                          t.isIdentifier(test.left.argument) &&
+                          test.left.argument.name === varName &&
+                          t.isStringLiteral(test.right) &&
+                          test.right.value === expectedType) {
+                        return true;
+                      }
+
+                      // Pattern 2: 'number' === typeof x
+                      if (t.isStringLiteral(test.left) &&
+                          test.left.value === expectedType &&
+                          t.isUnaryExpression(test.right) &&
+                          test.right.operator === 'typeof' &&
+                          t.isIdentifier(test.right.argument) &&
+                          test.right.argument.name === varName) {
+                        return true;
+                      }
+                    }
+
+                    // Check for && conjunction: typeof x === 'number' && typeof y === 'number'
+                    if (t.isLogicalExpression(test) && test.operator === '&&') {
+                      const checkLogicalExpression = (expr: t.Expression): boolean => {
+                        if (t.isBinaryExpression(expr) && (expr.operator === '===' || expr.operator === '==')) {
+                          // Pattern 1: typeof x === 'number'
+                          if (t.isUnaryExpression(expr.left) &&
+                              expr.left.operator === 'typeof' &&
+                              t.isIdentifier(expr.left.argument) &&
+                              expr.left.argument.name === varName &&
+                              t.isStringLiteral(expr.right) &&
+                              expr.right.value === expectedType) {
+                            return true;
+                          }
+
+                          // Pattern 2: 'number' === typeof x
+                          if (t.isStringLiteral(expr.left) &&
+                              expr.left.value === expectedType &&
+                              t.isUnaryExpression(expr.right) &&
+                              expr.right.operator === 'typeof' &&
+                              t.isIdentifier(expr.right.argument) &&
+                              expr.right.argument.name === varName) {
+                            return true;
+                          }
+                        }
+
+                        // Recursively check nested && expressions
+                        if (t.isLogicalExpression(expr) && expr.operator === '&&') {
+                          return checkLogicalExpression(expr.left as t.Expression) ||
+                                 checkLogicalExpression(expr.right as t.Expression);
+                        }
+
+                        return false;
+                      };
+
+                      if (checkLogicalExpression(test)) {
+                        return true;
+                      }
+                    }
+                  }
+
+                  currentPath = currentPath.parentPath;
+                }
+
+                return false;
+              };
+
+              // Check if both sides are guarded by typeof checks
+              const leftGuarded = isGuardedByTypeof(node.left, 'number');
+              const rightGuarded = isGuardedByTypeof(node.right, 'number');
+
+              // Only flag if we know the type is wrong (not unknown) AND not guarded by typeof
+              if (!leftGuarded && leftType.type !== 'unknown' && leftType.type !== 'number' && leftType.type !== 'Date') {
                 violations.push({
                   rule: 'type-mismatch-operation',
                   severity: 'high',
@@ -3175,7 +3265,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 });
               }
 
-              if (rightType.type !== 'unknown' && rightType.type !== 'number' && rightType.type !== 'Date') {
+              if (!rightGuarded && rightType.type !== 'unknown' && rightType.type !== 'number' && rightType.type !== 'Date') {
                 violations.push({
                   rule: 'type-mismatch-operation',
                   severity: 'high',
