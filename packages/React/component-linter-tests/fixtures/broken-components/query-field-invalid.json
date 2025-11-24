@@ -1,0 +1,25 @@
+{
+  "name": "QueryFieldInvalidComponent",
+  "description": "Component accessing non-existent fields from query results (violates query-field-validation rule)",
+  "code": "function QueryFieldInvalidComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [report, setReport] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadReport() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'MonthlySalesReport',\n        CategoryPath: 'Reports/Sales',\n        Parameters: {\n          Year: 2024,\n          Month: 12\n        }\n      });\n\n      if (result.Success) {\n        // VIOLATION: Accessing fields that don't exist in query results\n        // The query only returns: SalesAmount, OrderCount, CustomerName, Region\n        const processedData = result.Results.map(row => ({\n          // Valid fields\n          amount: row.SalesAmount,\n          orders: row.OrderCount,\n          customer: row.CustomerName,\n          region: row.Region,\n          \n          // VIOLATION: 'Revenue' doesn't exist, should be 'SalesAmount'\n          revenue: row.Revenue,\n          \n          // VIOLATION: 'TotalOrders' doesn't exist, should be 'OrderCount'\n          totalOrders: row.TotalOrders,\n          \n          // VIOLATION: 'Client' doesn't exist, should be 'CustomerName'\n          client: row.Client,\n          \n          // VIOLATION: 'Territory' doesn't exist, should be 'Region'\n          territory: row.Territory,\n          \n          // VIOLATION: 'CreatedDate' doesn't exist in this query\n          date: row.CreatedDate\n        }));\n\n        setReport(processedData);\n      }\n\n      setLoading(false);\n    }\n    loadReport();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Monthly Sales Report</h1>\n      <table>\n        <thead>\n          <tr>\n            <th>Customer</th>\n            <th>Region</th>\n            <th>Amount</th>\n            <th>Orders</th>\n          </tr>\n        </thead>\n        <tbody>\n          {report.map((row, idx) => (\n            <tr key={idx}>\n              <td>{row.customer}</td>\n              <td>{row.region}</td>\n              <td>{row.amount}</td>\n              <td>{row.orders}</td>\n            </tr>\n          ))}\n        </tbody>\n      </table>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "MonthlySalesReport",
+        "categoryPath": "Reports/Sales",
+        "parameters": [
+          { "name": "Year", "type": "int", "isRequired": true },
+          { "name": "Month", "type": "int", "isRequired": true }
+        ],
+        "fields": [
+          { "name": "SalesAmount", "type": "decimal" },
+          { "name": "OrderCount", "type": "int" },
+          { "name": "CustomerName", "type": "nvarchar" },
+          { "name": "Region", "type": "nvarchar" }
+        ]
+      }
+    ]
+  }
+}

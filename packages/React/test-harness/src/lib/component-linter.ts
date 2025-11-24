@@ -3,11 +3,13 @@ import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
 import type { EntityFieldInfo, EntityInfo, RunQueryResult, RunViewResult } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
 import { ComponentExecutionOptions } from './component-runner';
 import { StylesTypeAnalyzer } from './styles-type-analyzer';
+import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo } from './type-context';
 
 export interface LintResult {
   success: boolean;
@@ -2959,6 +2961,167 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     },
 
     {
+      name: 'query-parameter-type-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Skip if no queries in spec
+        if (!componentSpec?.dataRequirements?.queries || componentSpec.dataRequirements.queries.length === 0) {
+          return violations;
+        }
+
+        // Build a map of query parameters with their types
+        const queryParamsMap = new Map<string, Map<string, { type: string; sqlType: string }>>();
+        for (const query of componentSpec.dataRequirements.queries) {
+          if (query.parameters) {
+            const paramMap = new Map<string, { type: string; sqlType: string }>();
+            for (const param of query.parameters) {
+              // Extended parameter info includes type
+              const extParam = param as { name: string; type?: string };
+              if (extParam.type) {
+                paramMap.set(param.name.toLowerCase(), {
+                  type: mapSQLTypeToJSType(extParam.type),
+                  sqlType: extParam.type
+                });
+              }
+            }
+            if (paramMap.size > 0) {
+              queryParamsMap.set(query.name, paramMap);
+            }
+          }
+        }
+
+        // If no parameter type info available, skip validation
+        if (queryParamsMap.size === 0) {
+          return violations;
+        }
+
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+
+            // Check for utilities.rq.RunQuery
+            if (
+              t.isMemberExpression(callee) &&
+              t.isMemberExpression(callee.object) &&
+              t.isIdentifier(callee.object.object) &&
+              callee.object.object.name === 'utilities' &&
+              t.isIdentifier(callee.object.property) &&
+              callee.object.property.name === 'rq' &&
+              t.isIdentifier(callee.property) &&
+              callee.property.name === 'RunQuery'
+            ) {
+              // Get the first argument (RunQuery params object)
+              const runQueryParams = path.node.arguments[0];
+              if (!t.isObjectExpression(runQueryParams)) return;
+
+              // Find QueryName and Parameters
+              let queryName: string | null = null;
+              let parametersNode: t.ObjectExpression | null = null;
+
+              for (const prop of runQueryParams.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  if (prop.key.name === 'QueryName' && t.isStringLiteral(prop.value)) {
+                    queryName = prop.value.value;
+                  } else if (prop.key.name === 'Parameters' && t.isObjectExpression(prop.value)) {
+                    parametersNode = prop.value;
+                  }
+                }
+              }
+
+              // Skip if no query name or no parameters
+              if (!queryName || !parametersNode) return;
+
+              // Get the parameter types for this query
+              const paramTypes = queryParamsMap.get(queryName);
+              if (!paramTypes) return;
+
+              // Validate each parameter value type
+              for (const prop of parametersNode.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  const paramName = prop.key.name;
+                  const paramTypeInfo = paramTypes.get(paramName.toLowerCase());
+
+                  if (!paramTypeInfo) continue;
+
+                  const expectedType = paramTypeInfo.type;
+                  let actualType: string | null = null;
+                  let valueDesc: string = '';
+
+                  // Determine the actual type of the value
+                  if (t.isStringLiteral(prop.value)) {
+                    actualType = 'string';
+                    valueDesc = `'${prop.value.value}'`;
+                  } else if (t.isNumericLiteral(prop.value)) {
+                    actualType = 'number';
+                    valueDesc = String(prop.value.value);
+                  } else if (t.isBooleanLiteral(prop.value)) {
+                    actualType = 'boolean';
+                    valueDesc = String(prop.value.value);
+                  } else if (t.isNullLiteral(prop.value)) {
+                    actualType = 'null';
+                    valueDesc = 'null';
+                  } else if (t.isIdentifier(prop.value)) {
+                    // Variable - skip type checking (would need type inference)
+                    continue;
+                  } else if (t.isTemplateLiteral(prop.value)) {
+                    actualType = 'string';
+                    valueDesc = 'template string';
+                  } else {
+                    // Complex expression - skip
+                    continue;
+                  }
+
+                  // Check for type mismatch
+                  if (actualType && actualType !== expectedType) {
+                    // Special cases: allow null for nullable parameters
+                    if (actualType === 'null') {
+                      continue;
+                    }
+
+                    // Generate suggestion based on expected type
+                    let suggestion = '';
+                    if (expectedType === 'number' && actualType === 'string') {
+                      // If the string looks like a number, suggest removing quotes
+                      if (t.isStringLiteral(prop.value) && !isNaN(Number(prop.value.value))) {
+                        suggestion = `Use ${paramName}: ${prop.value.value} (without quotes)`;
+                      } else {
+                        suggestion = `Use a numeric value`;
+                      }
+                    } else if (expectedType === 'boolean' && actualType === 'string') {
+                      if (t.isStringLiteral(prop.value)) {
+                        const val = prop.value.value.toLowerCase();
+                        if (val === 'true' || val === 'false') {
+                          suggestion = `Use ${paramName}: ${val} (without quotes)`;
+                        } else {
+                          suggestion = `Use ${paramName}: true or ${paramName}: false`;
+                        }
+                      }
+                    } else if (expectedType === 'string' && actualType === 'number') {
+                      suggestion = `Use ${paramName}: '${valueDesc}'`;
+                    }
+
+                    violations.push({
+                      rule: 'query-parameter-type-validation',
+                      severity: 'high',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Parameter "${paramName}" has wrong type. Expected ${expectedType} (${paramTypeInfo.sqlType}), got ${actualType} (${valueDesc}).${suggestion ? ' ' + suggestion : ''}`,
+                      code: suggestion || `${paramName}: <${expectedType} value>`,
+                    });
+                  }
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
       name: 'runview-entity-validation',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -5027,6 +5190,176 @@ Correct pattern:
               });
             }
           },
+        });
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'entity-field-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Skip if no data requirements with entities
+        if (!componentSpec?.dataRequirements?.entities || componentSpec.dataRequirements.entities.length === 0) {
+          return violations;
+        }
+
+        // Build a map of entity names to their field names from metadata
+        const entityFieldsMap = new Map<string, Set<string>>();
+        const typeContext = new TypeContext(componentSpec);
+
+        for (const entityReq of componentSpec.dataRequirements.entities) {
+          const fields = typeContext.getEntityFieldTypesSync(entityReq.name);
+          if (fields.size > 0) {
+            entityFieldsMap.set(entityReq.name, new Set(fields.keys()));
+          }
+        }
+
+        // If we couldn't load any entity metadata, skip validation
+        if (entityFieldsMap.size === 0) {
+          return violations;
+        }
+
+        // Track variables that hold RunView results and their entity names
+        const runViewResultVars = new Map<string, string>(); // varName -> entityName
+        // Track variables that hold entity row arrays (from .Results)
+        const entityArrayVars = new Map<string, string>(); // varName -> entityName
+
+        // Helper function to validate field access within a callback body
+        const validateFieldAccessInCallback = (
+          callbackBody: t.Node,
+          paramName: string,
+          entityName: string
+        ) => {
+          const validFields = entityFieldsMap.get(entityName);
+          if (!validFields) return;
+
+          // Simple AST walk to find member expressions within callback body
+          const checkNode = (node: t.Node) => {
+            if (t.isMemberExpression(node)) {
+              // Skip if computed access (e.g., obj[prop])
+              if (node.computed) return;
+
+              // Check if accessing a field on the entity row variable
+              if (t.isIdentifier(node.object) &&
+                  node.object.name === paramName &&
+                  t.isIdentifier(node.property)) {
+                const fieldName = node.property.name;
+
+                if (!validFields.has(fieldName)) {
+                  // Get a sample of valid fields for the error message
+                  const availableFields = Array.from(validFields).slice(0, 10);
+                  const moreText = validFields.size > 10 ? ` and ${validFields.size - 10} more` : '';
+
+                  violations.push({
+                    rule: 'entity-field-validation',
+                    severity: 'critical',
+                    line: node.loc?.start.line || 0,
+                    column: node.loc?.start.column || 0,
+                    message: `Field "${fieldName}" does not exist on entity "${entityName}". Available fields: ${availableFields.join(', ')}${moreText}`,
+                    code: `${paramName}.${fieldName}`,
+                  });
+                }
+              }
+            }
+          };
+
+          // Walk the callback body to find all member expressions
+          traverse(callbackBody, {
+            MemberExpression(innerPath: NodePath<t.MemberExpression>) {
+              checkNode(innerPath.node);
+            },
+            noScope: true
+          });
+        };
+
+        // First pass: identify RunView result variables and their entity names
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (!t.isIdentifier(path.node.id)) return;
+            const varName = path.node.id.name;
+            const init = path.node.init;
+
+            if (!init) return;
+
+            // Check for await utilities.rv.RunView(...)
+            if (t.isAwaitExpression(init) && t.isCallExpression(init.argument)) {
+              const call = init.argument;
+              if (t.isMemberExpression(call.callee) &&
+                  t.isMemberExpression(call.callee.object) &&
+                  t.isIdentifier(call.callee.property) &&
+                  call.callee.property.name === 'RunView') {
+                // Extract EntityName from arguments
+                if (call.arguments.length > 0 && t.isObjectExpression(call.arguments[0])) {
+                  for (const prop of call.arguments[0].properties) {
+                    if (t.isObjectProperty(prop) &&
+                        t.isIdentifier(prop.key) &&
+                        prop.key.name === 'EntityName' &&
+                        t.isStringLiteral(prop.value)) {
+                      runViewResultVars.set(varName, prop.value.value);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            // Check for result.Results assignment
+            if (t.isMemberExpression(init) &&
+                t.isIdentifier(init.object) &&
+                t.isIdentifier(init.property) &&
+                init.property.name === 'Results') {
+              const sourceVar = init.object.name;
+              if (runViewResultVars.has(sourceVar)) {
+                entityArrayVars.set(varName, runViewResultVars.get(sourceVar)!);
+              }
+            }
+          },
+
+          // Track array element access like results[0] or items.map(item => ...)
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Handle array methods like map, forEach, filter
+            if (t.isMemberExpression(path.node.callee) &&
+                t.isIdentifier(path.node.callee.property)) {
+              const methodName = path.node.callee.property.name;
+              const arrayMethods = ['map', 'forEach', 'filter', 'find', 'some', 'every', 'reduce'];
+
+              if (arrayMethods.includes(methodName)) {
+                // Check if the array is an entity array
+                let entityName: string | undefined;
+
+                // Check if calling on a known entity array variable
+                if (t.isIdentifier(path.node.callee.object)) {
+                  entityName = entityArrayVars.get(path.node.callee.object.name);
+                }
+
+                // Check if calling on result.Results
+                if (t.isMemberExpression(path.node.callee.object) &&
+                    t.isIdentifier(path.node.callee.object.object) &&
+                    t.isIdentifier(path.node.callee.object.property) &&
+                    path.node.callee.object.property.name === 'Results') {
+                  const resultVar = path.node.callee.object.object.name;
+                  entityName = runViewResultVars.get(resultVar);
+                }
+
+                if (entityName && path.node.arguments.length > 0) {
+                  // Get the callback function
+                  const callback = path.node.arguments[0];
+                  if ((t.isArrowFunctionExpression(callback) || t.isFunctionExpression(callback)) &&
+                      callback.params.length > 0) {
+                    const param = callback.params[0];
+                    if (t.isIdentifier(param)) {
+                      // Validate field access within this callback's scope only
+                      validateFieldAccessInCallback(callback.body, param.name, entityName);
+                    }
+                  }
+                }
+              }
+            }
+          }
         });
 
         return violations;
@@ -9375,7 +9708,16 @@ const {
 
       traverse(ast, {
         CallExpression(path: NodePath<t.CallExpression>) {
-          if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') {
+          // Check for both useEffect and React.useEffect
+          const isUseEffect =
+            (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') ||
+            (t.isMemberExpression(path.node.callee) &&
+              t.isIdentifier(path.node.callee.object) &&
+              path.node.callee.object.name === 'React' &&
+              t.isIdentifier(path.node.callee.property) &&
+              path.node.callee.property.name === 'useEffect');
+
+          if (isUseEffect) {
             const firstArg = path.node.arguments[0];
             if (t.isArrowFunctionExpression(firstArg) || t.isFunctionExpression(firstArg)) {
               // Check if it returns a cleanup function
