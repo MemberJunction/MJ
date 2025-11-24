@@ -6332,6 +6332,44 @@ Correct pattern:
                     hasFallback = true;
                   }
 
+                  // Check if inside a null/undefined check (e.g., {value != null && ...})
+                  // Pattern: {property != null && <JSXElement>{property.toFixed()}</JSXElement>}
+                  let hasNullCheck = false;
+                  let currentPath: NodePath | null = path.parentPath;
+                  while (currentPath && !hasNullCheck) {
+                    const node = currentPath.node;
+
+                    // Check for logical && with null check on left side
+                    if (t.isLogicalExpression(node) && node.operator === '&&') {
+                      const left = node.left;
+
+                      // Pattern: property != null OR property !== null OR property !== undefined
+                      if (t.isBinaryExpression(left) &&
+                          (left.operator === '!=' || left.operator === '!==') &&
+                          t.isIdentifier(left.left) &&
+                          left.left.name === propertyName &&
+                          (t.isNullLiteral(left.right) ||
+                           (t.isIdentifier(left.right) && left.right.name === 'undefined'))) {
+                        hasNullCheck = true;
+                        break;
+                      }
+
+                      // Pattern: property != null in object access (objectName.property != null)
+                      if (t.isBinaryExpression(left) &&
+                          (left.operator === '!=' || left.operator === '!==') &&
+                          t.isMemberExpression(left.left) &&
+                          t.isIdentifier(left.left.property) &&
+                          left.left.property.name === propertyName &&
+                          (t.isNullLiteral(left.right) ||
+                           (t.isIdentifier(left.right) && left.right.name === 'undefined'))) {
+                        hasNullCheck = true;
+                        break;
+                      }
+                    }
+
+                    currentPath = currentPath.parentPath;
+                  }
+
                   // Skip if the object is a simple identifier (likely a calculated/local object)
                   // Pattern: metrics.winRate.toFixed() where metrics is an object with calculated values
                   // This is different from result.Results[0].Amount.toFixed() where we access entity fields
@@ -6345,7 +6383,7 @@ Correct pattern:
                     }
                   }
 
-                  if (!hasOptionalChaining && !hasFallback && !isCalculatedObject) {
+                  if (!hasOptionalChaining && !hasFallback && !hasNullCheck && !isCalculatedObject) {
                     // Check entity metadata for this field
                     const fieldInfo = checkFieldNullability(propertyName);
 
