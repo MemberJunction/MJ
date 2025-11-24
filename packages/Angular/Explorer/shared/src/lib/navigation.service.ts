@@ -86,9 +86,9 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Check if we're in single-resource mode (1 unpinned tab, tabs hidden)
-   * When transitioning from single-resource to tabs via shift+click,
-   * we need to preserve the current tab by pinning it
+   * Handle temporary tab preservation when forcing new tabs
+   * Rule: Only ONE tab should be temporary at a time
+   * When shift+clicking to force a new tab, pin the current active tab if it's temporary
    */
   private handleSingleResourceModeTransition(forceNew: boolean, newRequest: TabRequest): void {
     if (!forceNew) {
@@ -96,26 +96,22 @@ export class NavigationService implements OnDestroy {
     }
 
     const config = this.workspaceManager.GetConfiguration();
-    if (!config || !config.tabs || config.tabs.length !== 1) {
-      return; // Not in single-resource mode
+    if (!config || !config.tabs || config.tabs.length === 0) {
+      return; // No tabs to preserve
     }
 
-    const currentTab = config.tabs[0];
-    if (currentTab.isPinned) {
-      return; // Already pinned, not single-resource mode
+    // Find the currently active tab
+    const activeTab = config.tabs.find(tab => tab.id === config.activeTabId);
+    if (!activeTab) {
+      return; // No active tab
     }
 
-    // We're in single-resource mode and user is forcing a new tab
-    // Check if the new request is for a DIFFERENT resource
-    const isSameResource = this.isSameResource(currentTab, newRequest);
-
-    if (isSameResource) {
-      return; // Same resource, just let normal logic handle it
+    // If the active tab is NOT pinned (i.e., it's temporary), pin it to preserve it
+    // This maintains the "only one temporary tab" rule
+    if (!activeTab.isPinned) {
+      console.log('[NavigationService] Shift+click: pinning current temporary tab before creating new tab');
+      this.workspaceManager.TogglePin(activeTab.id);
     }
-
-    // Different resource! Pin the current tab to preserve it
-    console.log('[NavigationService] Single-resource mode: pinning current tab before opening new tab');
-    this.workspaceManager.TogglePin(currentTab.id);
   }
 
   /**

@@ -207,42 +207,19 @@ export class WorkspaceStateManager {
    * Used for Shift+Click behavior and power user workflows
    */
   OpenTabForced(request: TabRequest, appColor: string): string {
+    console.log('[WorkspaceStateManager.OpenTabForced] ALWAYS creating new tab:', {
+      appId: request.ApplicationId,
+      title: request.Title,
+      config: request.Configuration
+    });
+
     const config = this.configuration$.value;
     if (!config) {
       throw new Error('Configuration not initialized');
     }
 
-    // Check for existing tab - match by resource type and record ID
-    const existingTab = config.tabs.find(tab => {
-      if (tab.applicationId !== request.ApplicationId) return false;
-
-      // For resource-based tabs, match by resourceType in configuration
-      if (request.Configuration?.resourceType) {
-        const requestRecordId = request.ResourceRecordId || '';
-        const tabRecordId = tab.resourceRecordId || '';
-        return tab.configuration.resourceType === request.Configuration.resourceType &&
-               tabRecordId === requestRecordId;
-      }
-
-      // Legacy: match by entity and viewId
-      const requestRecordId = request.ResourceRecordId || '';
-      const tabRecordId = tab.resourceRecordId || '';
-      return tab.configuration.entity === request.Configuration?.entity &&
-             tab.configuration.viewId === request.Configuration?.viewId &&
-             tabRecordId === requestRecordId;
-    });
-
-    if (existingTab) {
-      // Focus existing tab instead of creating duplicate
-      const updatedConfig = {
-        ...config,
-        activeTabId: existingTab.id
-      };
-      this.UpdateConfiguration(updatedConfig);
-      return existingTab.id;
-    }
-
-    // ALWAYS create new tab - never replace temporary tabs
+    // OpenTabForced ALWAYS creates a new tab, even if one exists for this resource
+    // This is the whole point of "Forced" - for shift+click to open multiple tabs of same resource
     const newTab: WorkspaceTab = {
       id: this.generateUUID(),
       applicationId: request.ApplicationId,
@@ -254,6 +231,8 @@ export class WorkspaceStateManager {
       lastAccessedAt: new Date().toISOString(),
       configuration: request.Configuration || {}
     };
+
+    console.log('[WorkspaceStateManager.OpenTabForced] Created new tab:', newTab.id);
 
     this.UpdateConfiguration({
       ...config,

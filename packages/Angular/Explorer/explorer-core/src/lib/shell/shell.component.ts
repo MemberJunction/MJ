@@ -520,12 +520,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Handle navigation item click with shift-key detection
    */
   onNavItemClick(event: NavItemClickEvent): void {
+    console.log('[Shell.onNavItemClick] Nav item clicked:', {
+      itemLabel: event.item.Label,
+      shiftKey: event.shiftKey,
+      activeApp: this.activeApp?.Name
+    });
+
     if (!this.activeApp) {
-      console.error('[Shell] No active app, ignoring nav click');
+      console.error('[Shell.onNavItemClick] No active app, ignoring nav click');
       return;
     }
 
     const { item, shiftKey } = event;
+    console.log('[Shell.onNavItemClick] Calling NavigationService.OpenNavItem with forceNewTab:', shiftKey);
 
     // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
