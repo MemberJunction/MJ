@@ -1,0 +1,37 @@
+{
+  "name": "QueryParamVariableTypeMismatchComponent",
+  "description": "Component passing variables with WRONG types to query parameters (violates query-parameter-type-validation rule with type inference)",
+  "code": "function QueryParamVariableTypeMismatchComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [salesData, setSalesData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  // Variables with wrong types for query parameters\n  const yearString = '2024'; // This is a string, but Year parameter expects int (number)\n  const monthString = '12'; // This is a string, but Month parameter expects int (number)\n  const maxRecordsString = '100'; // This is a string, but MaxRecords parameter expects int (number)\n  const includeReturnsString = 'true'; // This is a string, but IncludeReturns parameter expects bit (boolean)\n  \n  // Some variables from entity data\n  const [userPrefs, setUserPrefs] = useState(null);\n\n  useEffect(() => {\n    async function loadUserPreferences() {\n      const prefResult = await utilities.rv.RunView({\n        EntityName: 'UserPreferences',\n        MaxRows: 1\n      });\n      \n      if (prefResult.Success && prefResult.Results.length > 0) {\n        setUserPrefs(prefResult.Results[0]);\n      }\n    }\n    loadUserPreferences();\n  }, []);\n\n  useEffect(() => {\n    async function loadSalesData() {\n      if (!userPrefs) return;\n\n      // Variables from entity fields with wrong types\n      const yearFromPrefs = userPrefs.PreferredYear; // PreferredYear is nvarchar (string), but Year param needs int\n      const regionCode = userPrefs.RegionCode; // RegionCode is int (number), but Region param needs nvarchar (string)\n      \n      // Computed values with wrong types\n      const includeFlag = 'yes'; // String, but IncludeReturns needs boolean\n      const recordLimit = '50'; // String, but MaxRecords needs number\n\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'SalesReport',\n          CategoryPath: 'Reports/Sales',\n          Parameters: {\n            // VIOLATION: Passing string variables where numbers expected\n            Year: yearString,\n            Month: monthString,\n            MaxRecords: maxRecordsString,\n            \n            // VIOLATION: Passing string where boolean expected\n            IncludeReturns: includeReturnsString,\n            \n            // VIOLATION: Passing string from entity field where number expected\n            QuarterNumber: yearFromPrefs,\n            \n            // VIOLATION: Passing number from entity field where string expected\n            Region: regionCode,\n            \n            // VIOLATION: More string/boolean mismatches\n            IncludeInactive: includeFlag,\n            Limit: recordLimit\n          }\n        });\n\n        if (result.Success) {\n          setSalesData(result.Results);\n        }\n      } catch (err) {\n        console.error(err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadSalesData();\n  }, [userPrefs]);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Sales Report</h1>\n      <p>Records: {salesData.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "UserPreferences",
+        "type": "view",
+        "maxRows": 1,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "PreferredYear", "type": "nvarchar" },
+          { "name": "RegionCode", "type": "int" }
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "name": "SalesReport",
+        "categoryPath": "Reports/Sales",
+        "parameters": [
+          { "name": "Year", "type": "int", "isRequired": true },
+          { "name": "Month", "type": "int", "isRequired": true },
+          { "name": "MaxRecords", "type": "int", "isRequired": false },
+          { "name": "IncludeReturns", "type": "bit", "isRequired": false },
+          { "name": "QuarterNumber", "type": "int", "isRequired": false },
+          { "name": "Region", "type": "nvarchar", "isRequired": false },
+          { "name": "IncludeInactive", "type": "bit", "isRequired": false },
+          { "name": "Limit", "type": "int", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

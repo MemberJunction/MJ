@@ -1,0 +1,40 @@
+{
+  "name": "QueryParamVariableCorrectComponent",
+  "description": "Demonstrates CORRECT variable type passing to query parameters - variables have proper types matching parameter specs",
+  "code": "function QueryParamVariableCorrectComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [salesData, setSalesData] = useState([]);\n  const [userPrefs, setUserPrefs] = useState(null);\n  const [loading, setLoading] = useState(true);\n\n  // CORRECT: Variables with proper types for query parameters\n  const currentYear = 2024; // number for Year parameter (int)\n  const currentMonth = 12; // number for Month parameter (int)\n  const maxRecords = 100; // number for MaxRecords parameter (int)\n  const includeReturns = true; // boolean for IncludeReturns parameter (bit)\n  const regionName = 'North'; // string for Region parameter (nvarchar)\n\n  useEffect(() => {\n    async function loadUserPreferences() {\n      const prefResult = await utilities.rv.RunView({\n        EntityName: 'UserPreferences',\n        MaxRows: 1\n      });\n      \n      if (prefResult.Success && prefResult.Results.length > 0) {\n        setUserPrefs(prefResult.Results[0]);\n      }\n    }\n    loadUserPreferences();\n  }, []);\n\n  useEffect(() => {\n    async function loadSalesData() {\n      if (!userPrefs) return;\n\n      // CORRECT: Variables from entity fields with proper types\n      const yearFromPrefs = userPrefs.PreferredYearNumber; // PreferredYearNumber is int (number)\n      const regionCode = userPrefs.RegionName; // RegionName is nvarchar (string)\n      const quarterNum = userPrefs.QuarterNumber; // QuarterNumber is int (number)\n      const includeInactive = userPrefs.IncludeInactive; // IncludeInactive is bit (boolean)\n      \n      // CORRECT: Computed values with proper types\n      const nextYear = currentYear + 1; // number\n      const recordLimit = Math.min(maxRecords, 200); // number\n      const shouldIncludeReturns = includeReturns && userPrefs.AllowReturns; // boolean\n      const fullRegionName = `Region-${regionCode}`; // string\n\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'SalesReport',\n          CategoryPath: 'Reports/Sales',\n          Parameters: {\n            // CORRECT: All parameters have matching types\n            Year: yearFromPrefs, // number to int\n            Month: currentMonth, // number to int\n            MaxRecords: recordLimit, // number to int\n            IncludeReturns: shouldIncludeReturns, // boolean to bit\n            QuarterNumber: quarterNum, // number to int\n            Region: regionCode, // string to nvarchar\n            IncludeInactive: includeInactive, // boolean to bit\n            Limit: maxRecords // number to int\n          }\n        });\n\n        if (result.Success) {\n          setSalesData(result.Results);\n        }\n      } catch (err) {\n        console.error('Failed to load sales data:', err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadSalesData();\n  }, [userPrefs, currentYear, currentMonth, maxRecords]);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Sales Report</h1>\n      <p>Records: {salesData.length}</p>\n      <p>Year: {currentYear}, Month: {currentMonth}</p>\n      <p>Region: {regionName}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "UserPreferences",
+        "type": "view",
+        "maxRows": 1,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "PreferredYearNumber", "type": "int" },
+          { "name": "RegionName", "type": "nvarchar" },
+          { "name": "QuarterNumber", "type": "int" },
+          { "name": "IncludeInactive", "type": "bit" },
+          { "name": "AllowReturns", "type": "bit" }
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "name": "SalesReport",
+        "categoryPath": "Reports/Sales",
+        "parameters": [
+          { "name": "Year", "type": "int", "isRequired": true },
+          { "name": "Month", "type": "int", "isRequired": true },
+          { "name": "MaxRecords", "type": "int", "isRequired": false },
+          { "name": "IncludeReturns", "type": "bit", "isRequired": false },
+          { "name": "QuarterNumber", "type": "int", "isRequired": false },
+          { "name": "Region", "type": "nvarchar", "isRequired": false },
+          { "name": "IncludeInactive", "type": "bit", "isRequired": false },
+          { "name": "Limit", "type": "int", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

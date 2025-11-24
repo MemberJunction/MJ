@@ -1,0 +1,33 @@
+{
+  "name": "EntityFieldDestructuringCorrectComponent",
+  "description": "Demonstrates CORRECT destructuring patterns with valid entity fields - only destructures fields that exist in the entity metadata",
+  "code": "function EntityFieldDestructuringCorrectComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [users, setUsers] = useState([]);\n  const [accounts, setAccounts] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      const [userResult, accountResult] = await Promise.all([\n        utilities.rv.RunView({ EntityName: 'Users', MaxRows: 100 }),\n        utilities.rv.RunView({ EntityName: 'Accounts', MaxRows: 50 })\n      ]);\n\n      if (userResult.Success) {\n        setUsers(userResult.Results);\n      }\n      \n      if (accountResult.Success) {\n        setAccounts(accountResult.Results);\n      }\n      \n      setLoading(false);\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Data Overview</h1>\n      \n      <section>\n        <h2>Users</h2>\n        <ul>\n          {users.map((user) => {\n            // CORRECT: Only destructuring fields that exist on Users entity\n            const { ID, Name, Email, Status } = user;\n            \n            return (\n              <li key={ID}>\n                <div>\n                  <strong>{Name}</strong> - {Email}\n                </div>\n                <div className=\"status\">\n                  Status: {Status}\n                </div>\n              </li>\n            );\n          })}\n        </ul>\n      </section>\n      \n      <section>\n        <h2>Accounts</h2>\n        <ul>\n          {accounts.map((account) => {\n            // CORRECT: Only destructuring fields that exist on Accounts entity\n            const { ID, Name, Type, Status } = account;\n            \n            return (\n              <li key={ID}>\n                <div>\n                  <strong>{Name}</strong>\n                </div>\n                <div>\n                  Type: {Type}, Status: {Status}\n                </div>\n              </li>\n            );\n          })}\n        </ul>\n      </section>\n      \n      {/* CORRECT: Destructuring at top level with valid fields */}\n      {users.length > 0 && (() => {\n        const firstUser = users[0];\n        // All these fields exist on Users entity\n        const { ID, Name, Email, Status } = firstUser;\n        \n        return (\n          <div className=\"first-user\">\n            <h3>Featured User</h3>\n            <p>ID: {ID}</p>\n            <p>Name: {Name}</p>\n            <p>Email: {Email}</p>\n            <p>Status: {Status}</p>\n          </div>\n        );\n      })()}\n      \n      {/* CORRECT: Nested destructuring with valid fields */}\n      {accounts.length > 0 && (() => {\n        const [firstAccount, secondAccount] = accounts;\n        const { Name: firstName, Type: firstType } = firstAccount;\n        const { Name: secondName, Type: secondType } = secondAccount || {};\n        \n        return (\n          <div className=\"featured-accounts\">\n            <h3>Top Accounts</h3>\n            <div>1. {firstName} ({firstType})</div>\n            {secondAccount && <div>2. {secondName} ({secondType})</div>}\n          </div>\n        );\n      })()}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Users",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Email", "type": "nvarchar" },
+          { "name": "Status", "type": "nvarchar" }
+        ]
+      },
+      {
+        "name": "Accounts",
+        "type": "view",
+        "maxRows": 50,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Type", "type": "nvarchar" },
+          { "name": "Status", "type": "nvarchar" }
+        ]
+      }
+    ]
+  }
+}

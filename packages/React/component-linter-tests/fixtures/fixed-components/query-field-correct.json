@@ -1,0 +1,28 @@
+{
+  "name": "QueryFieldCorrectComponent",
+  "description": "Demonstrates CORRECT query field usage - all accessed fields exist in query definition",
+  "code": "function QueryFieldCorrectComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [salesData, setSalesData] = useState([]);\n  const [summary, setSummary] = useState(null);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    async function loadSalesData() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'SalesReport',\n          CategoryPath: 'Reports/Sales',\n          Parameters: {\n            year: 2024,\n            minRevenue: 1000\n          }\n        });\n\n        if (result.Success) {\n          // ✅ CORRECT: All fields accessed exist in query definition\n          const data = result.Results.map(row => ({\n            account: row.AccountName,\n            revenue: row.Revenue,\n            quarter: row.Quarter,\n            year: row.Year,\n            region: row.Region,\n            productCategory: row.ProductCategory\n          }));\n          setSalesData(data);\n\n          // ✅ CORRECT: Using valid fields in filter operation\n          const highValueAccounts = result.Results.filter(row => row.Revenue > 10000);\n\n          // ✅ CORRECT: Using valid fields in reduce operation\n          const totalRevenue = result.Results.reduce((sum, row) => sum + row.Revenue, 0);\n          \n          // ✅ CORRECT: Using valid fields in find operation\n          const topAccount = result.Results.find(row => row.Revenue === Math.max(...result.Results.map(r => r.Revenue)));\n\n          // ✅ CORRECT: Multiple field accesses in complex aggregation\n          const quarterlyTotals = result.Results.reduce((acc, row) => {\n            const key = `Q${row.Quarter}-${row.Year}`;\n            acc[key] = (acc[key] || 0) + row.Revenue;\n            return acc;\n          }, {});\n\n          // ✅ CORRECT: Grouping by valid field\n          const byRegion = result.Results.reduce((acc, row) => {\n            if (!acc[row.Region]) {\n              acc[row.Region] = [];\n            }\n            acc[row.Region].push(row);\n            return acc;\n          }, {});\n\n          setSummary({\n            total: totalRevenue,\n            highValueCount: highValueAccounts.length,\n            topAccount: topAccount ? topAccount.AccountName : 'N/A',\n            quarterlyTotals,\n            regionCount: Object.keys(byRegion).length\n          });\n        } else {\n          setError(result.ErrorMessage);\n        }\n      } catch (err) {\n        setError(err.message);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadSalesData();\n  }, []);\n\n  if (loading) return <div>Loading sales data...</div>;\n  if (error) return <div className=\"error\">Error: {error}</div>;\n\n  return (\n    <div className=\"sales-dashboard\">\n      <h1>Sales Report 2024</h1>\n      \n      {summary && (\n        <div className=\"summary-cards\">\n          <div className=\"card\">\n            <h3>Total Revenue</h3>\n            <p>${summary.total.toFixed(2)}</p>\n          </div>\n          <div className=\"card\">\n            <h3>High Value Accounts</h3>\n            <p>{summary.highValueCount}</p>\n          </div>\n          <div className=\"card\">\n            <h3>Top Account</h3>\n            <p>{summary.topAccount}</p>\n          </div>\n          <div className=\"card\">\n            <h3>Regions</h3>\n            <p>{summary.regionCount}</p>\n          </div>\n        </div>\n      )}\n\n      <table className=\"sales-table\">\n        <thead>\n          <tr>\n            <th>Account</th>\n            <th>Region</th>\n            <th>Category</th>\n            <th>Quarter</th>\n            <th>Revenue</th>\n          </tr>\n        </thead>\n        <tbody>\n          {/* ✅ CORRECT: All field accesses are valid */}\n          {salesData.map((row, index) => (\n            <tr key={index}>\n              <td>{row.account}</td>\n              <td>{row.region}</td>\n              <td>{row.productCategory}</td>\n              <td>Q{row.quarter} {row.year}</td>\n              <td>${row.revenue.toFixed(2)}</td>\n            </tr>\n          ))}\n        </tbody>\n      </table>\n\n      {summary && summary.quarterlyTotals && (\n        <div className=\"quarterly-summary\">\n          <h3>Quarterly Breakdown</h3>\n          <ul>\n            {Object.entries(summary.quarterlyTotals).map(([quarter, total]) => (\n              <li key={quarter}>\n                {quarter}: ${total.toFixed(2)}\n              </li>\n            ))}\n          </ul>\n        </div>\n      )}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "SalesReport",
+        "categoryPath": "Reports/Sales",
+        "fields": [
+          { "name": "AccountName", "type": "nvarchar" },
+          { "name": "Revenue", "type": "decimal" },
+          { "name": "Quarter", "type": "int" },
+          { "name": "Year", "type": "int" },
+          { "name": "Region", "type": "nvarchar" },
+          { "name": "ProductCategory", "type": "nvarchar" }
+        ],
+        "parameters": [
+          { "name": "year", "type": "int", "isRequired": true },
+          { "name": "minRevenue", "type": "decimal", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

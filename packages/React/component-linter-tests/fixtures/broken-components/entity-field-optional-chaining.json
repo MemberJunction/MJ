@@ -1,0 +1,32 @@
+{
+  "name": "EntityFieldOptionalChainingComponent",
+  "description": "Component using optional chaining to access invalid entity fields (violates entity-field-validation rule)",
+  "code": "function EntityFieldOptionalChainingComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [user, setUser] = useState(null);\n  const [account, setAccount] = useState(null);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      const userResult = await utilities.rv.RunView({\n        EntityName: 'Users',\n        MaxRows: 1\n      });\n\n      if (userResult.Success && userResult.Results.length > 0) {\n        setUser(userResult.Results[0]);\n      }\n\n      const accountResult = await utilities.rv.RunView({\n        EntityName: 'Accounts',\n        MaxRows: 1\n      });\n\n      if (accountResult.Success && accountResult.Results.length > 0) {\n        setAccount(accountResult.Results[0]);\n      }\n\n      setLoading(false);\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>User Profile</h1>\n      \n      {/* VIOLATION: InvalidField doesn't exist on Users entity */}\n      <p>Invalid Field: {user?.InvalidField}</p>\n      \n      {/* VIOLATION: FakeProperty doesn't exist on Users entity */}\n      <p>Fake: {user?.FakeProperty || 'N/A'}</p>\n      \n      {/* VIOLATION: NonExistent doesn't exist on Users entity */}\n      <p>Non-existent: {user?.NonExistent?.toString()}</p>\n      \n      {/* VIOLATION: BadField doesn't exist on Accounts entity */}\n      <p>Account Bad: {account?.BadField}</p>\n      \n      {/* VIOLATION: WrongProperty doesn't exist on Accounts entity */}\n      <p>Wrong: {account?.WrongProperty ?? 'Default'}</p>\n      \n      {/* VIOLATION: Chained invalid access */}\n      <p>Chained: {user?.InvalidField?.NestedBad}</p>\n      \n      {/* These would be CORRECT if the fields existed */}\n      <p>Name: {user?.Name}</p>\n      <p>Email: {user?.Email}</p>\n      <p>Account Name: {account?.Name}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Users",
+        "type": "view",
+        "maxRows": 1,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Email", "type": "nvarchar" },
+          { "name": "Status", "type": "nvarchar" }
+        ]
+      },
+      {
+        "name": "Accounts",
+        "type": "view",
+        "maxRows": 1,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Type", "type": "nvarchar" }
+        ]
+      }
+    ]
+  }
+}

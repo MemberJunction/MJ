@@ -9,7 +9,8 @@ import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
 import { ComponentExecutionOptions } from './component-runner';
 import { StylesTypeAnalyzer } from './styles-type-analyzer';
-import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo } from './type-context';
+import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo, StandardTypes } from './type-context';
+import { TypeInferenceEngine } from './type-inference-engine';
 
 export interface LintResult {
   success: boolean;
@@ -3121,6 +3122,128 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       },
     },
 
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    // TYPE MISMATCH OPERATION RULE
+    // Validates that operations are type-safe (e.g., no arithmetic on strings, array methods on non-arrays)
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    {
+      name: 'type-mismatch-operation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Create type inference engine
+        const typeEngine = new TypeInferenceEngine(componentSpec);
+
+        // Run analysis synchronously (the async part is not needed for basic inference)
+        typeEngine.analyze(ast);
+
+        traverse(ast, {
+          // Check binary operations for type mismatches
+          BinaryExpression(path: NodePath<t.BinaryExpression>) {
+            const node = path.node;
+            const operator = node.operator;
+
+            // Skip comparison operators - they work with any types
+            if (['==', '!=', '===', '!==', '<', '<=', '>', '>=', 'in', 'instanceof'].includes(operator)) {
+              return;
+            }
+
+            // Check arithmetic operators (should be numbers)
+            if (['-', '*', '/', '%', '**', '|', '&', '^', '<<', '>>', '>>>'].includes(operator)) {
+              // Skip if left is PrivateName
+              if (t.isPrivateName(node.left)) return;
+
+              const leftType = typeEngine.inferExpressionType(node.left, path);
+              const rightType = typeEngine.inferExpressionType(node.right, path);
+
+              // Only flag if we know the type is wrong (not unknown)
+              if (leftType.type !== 'unknown' && leftType.type !== 'number') {
+                violations.push({
+                  rule: 'type-mismatch-operation',
+                  severity: 'high',
+                  line: node.loc?.start.line || 0,
+                  column: node.loc?.start.column || 0,
+                  message: `Arithmetic operator "${operator}" used with ${leftType.type} on left side. Expected number.`,
+                  code: `Convert to number: Number(value) ${operator} ...`,
+                });
+              }
+
+              if (rightType.type !== 'unknown' && rightType.type !== 'number') {
+                violations.push({
+                  rule: 'type-mismatch-operation',
+                  severity: 'high',
+                  line: node.loc?.start.line || 0,
+                  column: node.loc?.start.column || 0,
+                  message: `Arithmetic operator "${operator}" used with ${rightType.type} on right side. Expected number.`,
+                  code: `Convert to number: ... ${operator} Number(value)`,
+                });
+              }
+            }
+          },
+
+          // Check array method calls on non-arrays
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const node = path.node;
+
+            if (t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.property)) {
+              const methodName = node.callee.property.name;
+
+              // Array-specific methods
+              const arrayOnlyMethods = [
+                'push', 'pop', 'shift', 'unshift', 'splice', 'slice',
+                'map', 'filter', 'reduce', 'reduceRight', 'forEach',
+                'find', 'findIndex', 'some', 'every', 'flat', 'flatMap',
+                'sort', 'reverse', 'concat', 'join', 'fill', 'copyWithin'
+              ];
+
+              if (arrayOnlyMethods.includes(methodName)) {
+                const objectType = typeEngine.inferExpressionType(node.callee.object, path);
+
+                // Only flag if we know it's definitely not an array
+                if (objectType.type !== 'unknown' && objectType.type !== 'array') {
+                  violations.push({
+                    rule: 'type-mismatch-operation',
+                    severity: 'high',
+                    line: node.loc?.start.line || 0,
+                    column: node.loc?.start.column || 0,
+                    message: `Array method "${methodName}()" called on ${objectType.type}. This will fail at runtime.`,
+                    code: `Ensure value is an array before calling .${methodName}()`,
+                  });
+                }
+              }
+
+              // String-specific methods
+              const stringOnlyMethods = [
+                'charAt', 'charCodeAt', 'codePointAt', 'substring', 'substr',
+                'toUpperCase', 'toLowerCase', 'trim', 'trimStart', 'trimEnd',
+                'padStart', 'padEnd', 'repeat', 'split', 'match', 'replace',
+                'replaceAll', 'search', 'localeCompare', 'normalize'
+              ];
+
+              if (stringOnlyMethods.includes(methodName)) {
+                const objectType = typeEngine.inferExpressionType(node.callee.object, path);
+
+                // Only flag if we know it's definitely not a string
+                if (objectType.type !== 'unknown' && objectType.type !== 'string') {
+                  violations.push({
+                    rule: 'type-mismatch-operation',
+                    severity: 'high',
+                    line: node.loc?.start.line || 0,
+                    column: node.loc?.start.column || 0,
+                    message: `String method "${methodName}()" called on ${objectType.type}. This may fail at runtime.`,
+                    code: `Ensure value is a string or convert: String(value).${methodName}()`,
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
     {
       name: 'runview-entity-validation',
       appliesTo: 'all',
@@ -5366,6 +5489,180 @@ Correct pattern:
       },
     },
 
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    // query-field-validation
+    // Validates that accessed fields exist in the query result definition (from component spec)
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    {
+      name: 'query-field-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Skip if no data requirements with queries
+        if (!componentSpec?.dataRequirements?.queries || componentSpec.dataRequirements.queries.length === 0) {
+          return violations;
+        }
+
+        // Build a map of query names to their field names from spec
+        const queryFieldsMap = new Map<string, Set<string>>();
+        const typeContext = new TypeContext(componentSpec);
+
+        for (const queryReq of componentSpec.dataRequirements.queries) {
+          const fields = typeContext.getQueryFieldTypes(queryReq.name, queryReq.categoryPath);
+          if (fields && fields.size > 0) {
+            queryFieldsMap.set(queryReq.name, new Set(fields.keys()));
+          }
+        }
+
+        // If we couldn't load any query field metadata, skip validation
+        if (queryFieldsMap.size === 0) {
+          return violations;
+        }
+
+        // Track variables that hold RunQuery results and their query names
+        const runQueryResultVars = new Map<string, string>(); // varName -> queryName
+        // Track variables that hold query row arrays (from .Results)
+        const queryArrayVars = new Map<string, string>(); // varName -> queryName
+
+        // Helper function to validate field access within a callback body
+        const validateFieldAccessInCallback = (
+          callbackBody: t.Node,
+          paramName: string,
+          queryName: string
+        ) => {
+          const validFields = queryFieldsMap.get(queryName);
+          if (!validFields) return;
+
+          // Simple AST walk to find member expressions within callback body
+          const checkNode = (node: t.Node) => {
+            if (t.isMemberExpression(node)) {
+              // Skip if computed access (e.g., obj[prop])
+              if (node.computed) return;
+
+              // Check if accessing a field on the query row variable
+              if (t.isIdentifier(node.object) &&
+                  node.object.name === paramName &&
+                  t.isIdentifier(node.property)) {
+                const fieldName = node.property.name;
+
+                if (!validFields.has(fieldName)) {
+                  // Get a sample of valid fields for the error message
+                  const availableFields = Array.from(validFields).slice(0, 10);
+                  const moreText = validFields.size > 10 ? ` and ${validFields.size - 10} more` : '';
+
+                  violations.push({
+                    rule: 'query-field-validation',
+                    severity: 'critical',
+                    line: node.loc?.start.line || 0,
+                    column: node.loc?.start.column || 0,
+                    message: `Field "${fieldName}" does not exist on query "${queryName}". Available fields: ${availableFields.join(', ')}${moreText}`,
+                    code: `${paramName}.${fieldName}`,
+                  });
+                }
+              }
+            }
+          };
+
+          // Walk the callback body to find all member expressions
+          traverse(callbackBody, {
+            MemberExpression(innerPath: NodePath<t.MemberExpression>) {
+              checkNode(innerPath.node);
+            },
+            noScope: true
+          });
+        };
+
+        // First pass: identify RunQuery result variables and their query names
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (!t.isIdentifier(path.node.id)) return;
+            const varName = path.node.id.name;
+            const init = path.node.init;
+
+            if (!init) return;
+
+            // Check for await utilities.rq.RunQuery(...)
+            if (t.isAwaitExpression(init) && t.isCallExpression(init.argument)) {
+              const call = init.argument;
+              if (t.isMemberExpression(call.callee) &&
+                  t.isMemberExpression(call.callee.object) &&
+                  t.isIdentifier(call.callee.property) &&
+                  call.callee.property.name === 'RunQuery') {
+                // Extract QueryName from arguments
+                if (call.arguments.length > 0 && t.isObjectExpression(call.arguments[0])) {
+                  for (const prop of call.arguments[0].properties) {
+                    if (t.isObjectProperty(prop) &&
+                        t.isIdentifier(prop.key) &&
+                        prop.key.name === 'QueryName' &&
+                        t.isStringLiteral(prop.value)) {
+                      runQueryResultVars.set(varName, prop.value.value);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            // Check for result.Results assignment
+            if (t.isMemberExpression(init) &&
+                t.isIdentifier(init.object) &&
+                t.isIdentifier(init.property) &&
+                init.property.name === 'Results') {
+              const sourceVar = init.object.name;
+              if (runQueryResultVars.has(sourceVar)) {
+                queryArrayVars.set(varName, runQueryResultVars.get(sourceVar)!);
+              }
+            }
+          },
+
+          // Track array element access like results[0] or items.map(item => ...)
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Handle array methods like map, forEach, filter
+            if (t.isMemberExpression(path.node.callee) &&
+                t.isIdentifier(path.node.callee.property)) {
+              const methodName = path.node.callee.property.name;
+              const arrayMethods = ['map', 'forEach', 'filter', 'find', 'some', 'every', 'reduce'];
+
+              if (arrayMethods.includes(methodName)) {
+                // Check if the array is a query array
+                let queryName: string | undefined;
+
+                // Check if calling on a known query array variable
+                if (t.isIdentifier(path.node.callee.object)) {
+                  queryName = queryArrayVars.get(path.node.callee.object.name);
+                }
+
+                // Check if calling on result.Results
+                if (t.isMemberExpression(path.node.callee.object) &&
+                    t.isIdentifier(path.node.callee.object.object) &&
+                    t.isIdentifier(path.node.callee.object.property) &&
+                    path.node.callee.object.property.name === 'Results') {
+                  const resultVar = path.node.callee.object.object.name;
+                  queryName = runQueryResultVars.get(resultVar);
+                }
+
+                if (queryName && path.node.arguments.length > 0) {
+                  // Get the callback function
+                  const callback = path.node.arguments[0];
+                  if ((t.isArrowFunctionExpression(callback) || t.isFunctionExpression(callback)) &&
+                      callback.params.length > 0) {
+                    const param = callback.params[0];
+                    if (t.isIdentifier(param)) {
+                      // Validate field access within this callback's scope only
+                      validateFieldAccessInCallback(callback.body, param.name, queryName);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        return violations;
+      },
+    },
+
     {
       name: 'dependency-prop-validation',
       appliesTo: 'all',
@@ -5452,6 +5749,19 @@ Correct pattern:
         const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
 
         const reactSpecialProps = new Set(['children', 'key', 'ref']);
+
+        // Create type inference engine for variable type checking
+        const typeEngine = new TypeInferenceEngine(componentSpec);
+        typeEngine.analyze(ast);
+
+        // Helper to get the actual type of an expression (including variables)
+        function getExpressionType(expr: t.Expression | t.JSXEmptyExpression): string {
+          if (t.isJSXEmptyExpression(expr)) return 'unknown';
+
+          // Use type inference for identifiers and complex expressions
+          const inferredType = typeEngine.inferExpressionType(expr);
+          return inferredType.type;
+        }
 
         // Traverse JSX to find component usage
         traverse(ast, {
@@ -5555,7 +5865,7 @@ Correct pattern:
             }
 
             // ═══════════════════════════════════════════════════════════════
-            // 2. VALIDATE PROP TYPES
+            // 2. VALIDATE PROP TYPES (Enhanced with Type Inference)
             // ═══════════════════════════════════════════════════════════════
             if (depSpec.properties && Array.isArray(depSpec.properties)) {
               for (const [propName, attrNode] of passedPropNodes) {
@@ -5563,92 +5873,56 @@ Correct pattern:
                 if (propSpec && propSpec.type) {
                   const value = attrNode.value;
 
-                  // Type validation based on prop spec type
-                  if (propSpec.type === 'string') {
-                    // Check if value could be a string
-                    if (value && t.isJSXExpressionContainer(value)) {
-                      const expr = value.expression;
-                      // Check for obvious non-string types
-                      if (
-                        t.isNumericLiteral(expr) ||
-                        t.isBooleanLiteral(expr) ||
-                        t.isArrayExpression(expr) ||
-                        (t.isObjectExpression(expr) && !t.isTemplateLiteral(expr))
-                      ) {
-                        violations.push({
-                          rule: 'dependency-prop-validation',
-                          severity: 'high',
-                          line: attrNode.loc?.start.line || 0,
-                          column: attrNode.loc?.start.column || 0,
-                          message: `Prop "${propName}" on component "${elementName}" expects type "string" but received a different type.`,
-                          code: `${propName}={...}`,
-                        });
-                      }
+                  if (value && t.isJSXExpressionContainer(value)) {
+                    const expr = value.expression;
+                    if (t.isJSXEmptyExpression(expr)) continue;
+
+                    // Use type inference to get the actual type (works for literals AND variables)
+                    const actualType = getExpressionType(expr);
+
+                    // Skip if type is unknown (we can't prove it's wrong)
+                    if (actualType === 'unknown') continue;
+
+                    // Get the expected type (normalize it)
+                    const expectedType = propSpec.type.toLowerCase();
+
+                    // Check type compatibility
+                    let isCompatible = true;
+                    let normalizedExpected = expectedType;
+
+                    if (expectedType === 'string') {
+                      isCompatible = actualType === 'string';
+                    } else if (expectedType === 'number' || expectedType === 'int' || expectedType === 'integer' || expectedType === 'float') {
+                      isCompatible = actualType === 'number';
+                      normalizedExpected = 'number';
+                    } else if (expectedType === 'boolean' || expectedType === 'bool') {
+                      isCompatible = actualType === 'boolean';
+                      normalizedExpected = 'boolean';
+                    } else if (expectedType === 'array' || expectedType.startsWith('array<')) {
+                      isCompatible = actualType === 'array';
+                      normalizedExpected = 'array';
+                    } else if (expectedType === 'object') {
+                      // Objects, entity-rows, query-rows are all compatible with 'object'
+                      isCompatible = ['object', 'entity-row', 'query-row'].includes(actualType);
+                    } else if (expectedType === 'function') {
+                      isCompatible = actualType === 'function';
                     }
-                  } else if (propSpec.type === 'number') {
-                    // Check if value could be a number
-                    if (value && t.isJSXExpressionContainer(value)) {
-                      const expr = value.expression;
-                      if (t.isStringLiteral(expr) || t.isBooleanLiteral(expr) || t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
-                        violations.push({
-                          rule: 'dependency-prop-validation',
-                          severity: 'high',
-                          line: attrNode.loc?.start.line || 0,
-                          column: attrNode.loc?.start.column || 0,
-                          message: `Prop "${propName}" on component "${elementName}" expects type "number" but received a different type.`,
-                          code: `${propName}={...}`,
-                        });
+
+                    if (!isCompatible) {
+                      // Generate helpful message with variable name if it's an identifier
+                      let valueDesc = actualType;
+                      if (t.isIdentifier(expr)) {
+                        valueDesc = `variable "${expr.name}" (${actualType})`;
                       }
-                    }
-                  } else if (propSpec.type === 'boolean') {
-                    // Check if value could be a boolean
-                    if (value && t.isJSXExpressionContainer(value)) {
-                      const expr = value.expression;
-                      if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
-                        violations.push({
-                          rule: 'dependency-prop-validation',
-                          severity: 'high',
-                          line: attrNode.loc?.start.line || 0,
-                          column: attrNode.loc?.start.column || 0,
-                          message: `Prop "${propName}" on component "${elementName}" expects type "boolean" but received a different type.`,
-                          code: `${propName}={...}`,
-                        });
-                      }
-                    }
-                  } else if (propSpec.type === 'array' || propSpec.type.startsWith('Array<')) {
-                    // Check if value could be an array
-                    if (value && t.isJSXExpressionContainer(value)) {
-                      const expr = value.expression;
-                      if (
-                        t.isStringLiteral(expr) ||
-                        t.isNumericLiteral(expr) ||
-                        t.isBooleanLiteral(expr) ||
-                        (t.isObjectExpression(expr) && !t.isArrayExpression(expr))
-                      ) {
-                        violations.push({
-                          rule: 'dependency-prop-validation',
-                          severity: 'high',
-                          line: attrNode.loc?.start.line || 0,
-                          column: attrNode.loc?.start.column || 0,
-                          message: `Prop "${propName}" on component "${elementName}" expects type "array" but received a different type.`,
-                          code: `${propName}={...}`,
-                        });
-                      }
-                    }
-                  } else if (propSpec.type === 'object') {
-                    // Check if value could be an object
-                    if (value && t.isJSXExpressionContainer(value)) {
-                      const expr = value.expression;
-                      if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || t.isBooleanLiteral(expr) || t.isArrayExpression(expr)) {
-                        violations.push({
-                          rule: 'dependency-prop-validation',
-                          severity: 'high',
-                          line: attrNode.loc?.start.line || 0,
-                          column: attrNode.loc?.start.column || 0,
-                          message: `Prop "${propName}" on component "${elementName}" expects type "object" but received a different type.`,
-                          code: `${propName}={...}`,
-                        });
-                      }
+
+                      violations.push({
+                        rule: 'dependency-prop-validation',
+                        severity: 'high',
+                        line: attrNode.loc?.start.line || 0,
+                        column: attrNode.loc?.start.column || 0,
+                        message: `Prop "${propName}" on component "${elementName}" expects type "${normalizedExpected}" but received ${valueDesc}.`,
+                        code: `${propName}={<${normalizedExpected} value>}`,
+                      });
                     }
                   }
                 }

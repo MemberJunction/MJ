@@ -1,0 +1,23 @@
+{
+  "name": "TypeMismatchArrayMethodsComponent",
+  "description": "Component calling array methods on non-arrays and string methods on arrays (violates type-mismatch-operation rule)",
+  "code": "function TypeMismatchArrayMethodsComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [data, setData] = useState([]);\n  const [selectedItem, setSelectedItem] = useState(null);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Products',\n        MaxRows: 100\n      });\n\n      if (result.Success) {\n        setData(result.Results);\n        if (result.Results.length > 0) {\n          setSelectedItem(result.Results[0]);\n        }\n      }\n      setLoading(false);\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  // Variables from entity fields\n  const productName = selectedItem?.Name; // productName is string\n  const productCode = selectedItem?.Code; // productCode is string\n  const categoryId = selectedItem?.CategoryID; // categoryId is uniqueidentifier (string)\n  const price = selectedItem?.Price; // price is decimal (number)\n  \n  return (\n    <div>\n      <h1>Products</h1>\n      \n      {/* VIOLATION: Calling .map() on string field (Name) */}\n      <div>\n        Names: {productName?.map(char => char.toUpperCase())}\n      </div>\n      \n      {/* VIOLATION: Calling .filter() on string field (Code) */}\n      <div>\n        Filtered: {productCode?.filter(char => char !== '-')}\n      </div>\n      \n      {/* VIOLATION: Calling .reduce() on string field (CategoryID) */}\n      <div>\n        Reduced: {categoryId?.reduce((acc, char) => acc + char, '')}\n      </div>\n      \n      {/* VIOLATION: Calling .forEach() on number field (Price) */}\n      <div>\n        {price?.forEach(num => console.log(num))}\n      </div>\n      \n      {/* VIOLATION: Calling .find() on string */}\n      <div>\n        Found: {productName?.find(char => char === 'A')}\n      </div>\n      \n      {/* VIOLATION: Calling .some() on number */}\n      <div>\n        Has Some: {price?.some(n => n > 100)}\n      </div>\n      \n      {/* VIOLATION: Calling string methods on array (data is array) */}\n      <div>\n        Upper: {data.toUpperCase()}\n      </div>\n      \n      {/* VIOLATION: Calling .substring() on array */}\n      <div>\n        Substring: {data.substring(0, 5)}\n      </div>\n      \n      {/* VIOLATION: Calling .trim() on array */}\n      <div>\n        Trimmed: {data.trim()}\n      </div>\n      \n      {/* VIOLATION: Calling .split() on array */}\n      <div>\n        Split: {data.split(',')}\n      </div>\n      \n      {/* VIOLATION: Calling array method .slice() on string (this actually works but type inference should still flag it for consistency) */}\n      <div>\n        Sliced Name: {productName?.slice(0, 3)}\n      </div>\n      \n      {/* This would be CORRECT */}\n      <ul>\n        {data.map(product => (\n          <li key={product.ID}>{product.Name}</li>\n        ))}\n      </ul>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Products",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Code", "type": "nvarchar" },
+          { "name": "CategoryID", "type": "uniqueidentifier" },
+          { "name": "Price", "type": "decimal" }
+        ]
+      }
+    ]
+  }
+}
