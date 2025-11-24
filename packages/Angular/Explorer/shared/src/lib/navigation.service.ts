@@ -149,11 +149,22 @@ export class NavigationService implements OnDestroy {
    * Open a navigation item within an app
    */
   public OpenNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
+    console.log('[NavigationService.OpenNavItem] Called with:', {
+      appId,
+      navItemLabel: navItem.Label,
+      navItemResourceType: navItem.ResourceType,
+      navItemDriverClass: navItem.DriverClass,
+      appColor,
+      options
+    });
+
     const forceNew = this.shouldForceNewTab(options);
+    console.log('[NavigationService.OpenNavItem] forceNew:', forceNew);
 
     // Get the app to find its name
     const app = this.appManager.GetAppById(appId);
     const appName = app?.Name || '';
+    console.log('[NavigationService.OpenNavItem] App name:', appName);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -171,15 +182,23 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
+    console.log('[NavigationService.OpenNavItem] Tab request:', request);
+
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       // Always create a new tab
-      return this.workspaceManager.OpenTabForced(request, appColor);
+      console.log('[NavigationService.OpenNavItem] Opening forced new tab');
+      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
+      console.log('[NavigationService.OpenNavItem] Created tab:', tabId);
+      return tabId;
     } else {
       // Use existing OpenTab logic (may replace temporary tab)
-      return this.workspaceManager.OpenTab(request, appColor);
+      console.log('[NavigationService.OpenNavItem] Opening tab (may replace)');
+      const tabId = this.workspaceManager.OpenTab(request, appColor);
+      console.log('[NavigationService.OpenNavItem] Opened tab:', tabId);
+      return tabId;
     }
   }
 

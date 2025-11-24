@@ -290,6 +290,21 @@ export class WorkspaceStateManager {
         // Normalize empty/null/undefined to empty string for comparison
         const requestRecordId = request.ResourceRecordId || '';
         const tabRecordId = tab.resourceRecordId || '';
+
+        // For Custom resource types, also compare navItemName or driverClass
+        // to distinguish between different custom resources (Monitor vs Prompts vs Agents, etc.)
+        if (request.Configuration.resourceType === 'Custom') {
+          const requestNavItem = request.Configuration.navItemName || '';
+          const tabNavItem = tab.configuration?.navItemName || '';
+          const requestDriverClass = request.Configuration.driverClass || '';
+          const tabDriverClass = tab.configuration?.driverClass || '';
+
+          return tab.configuration.resourceType === request.Configuration.resourceType &&
+                 tabRecordId === requestRecordId &&
+                 (requestNavItem === tabNavItem || requestDriverClass === tabDriverClass);
+        }
+
+        // For standard resource types, match by resourceType and recordId
         return tab.configuration.resourceType === request.Configuration.resourceType &&
                tabRecordId === requestRecordId;
       }

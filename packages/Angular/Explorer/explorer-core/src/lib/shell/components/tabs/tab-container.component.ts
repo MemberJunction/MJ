@@ -497,8 +497,13 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         if (existingComponentRef) {
           const existingResourceData = existingComponentRef.instance.Data;
 
+          // For Custom resource types, also check driverClass to distinguish between different custom resources
+          const existingDriverClass = existingResourceData?.Configuration?.driverClass || existingResourceData?.Configuration?.resourceTypeDriverClass;
+          const newDriverClass = tab.configuration['driverClass'] || tab.configuration['resourceTypeDriverClass'];
+
           const needsReload = existingResourceData?.ResourceType !== tab.configuration['resourceType'] ||
-                             existingResourceData?.Configuration?.applicationId !== tab.applicationId;
+                             existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
+                             (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
           if (needsReload) {
             // Clean up old component
