@@ -1,7 +1,0 @@
-{
-  "name": "TestComponent",
-  "description": "Component using array reduce without initial value on potentially empty array (violates array-reduce-safety rule)",
-  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  const [total, setTotal] = useState(0);\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Accounts',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n        // Dangerous: reduce without initial value will throw on empty array\n        const sum = result.Results.reduce((acc, item) => acc + item.Amount);\n        setTotal(sum);\n      }\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Total: {total}</h1>\n      <p>Items: {data.length}</p>\n    </div>\n  );\n}",
-  "componentType": "interactive",
-  "libraries": []
-}

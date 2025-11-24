@@ -1,7 +1,0 @@
-{
-  "name": "TestComponent",
-  "description": "Child component trying to manage parent state directly (violates child-state-management rule)",
-  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, parentData, setParentData }) {\n  const [localData, setLocalData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Items',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setLocalData(result.Results || []);\n        // Child trying to set parent state directly\n        setParentData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n  \n  const handleClick = (item) => {\n    // Child modifying parent data directly\n    parentData.push(item);\n    setParentData([...parentData]);\n  };\n  \n  return (\n    <div>\n      <h1>Items</h1>\n      {localData.map(item => (\n        <div key={item.ID} onClick={() => handleClick(item)}>\n          {item.Name}\n        </div>\n      ))}\n    </div>\n  );\n}",
-  "componentType": "child",
-  "libraries": []
-}

@@ -1,6 +1,6 @@
 {
   "name": "TestComponent",
-  "description": "Component accessing RunView/RunQuery results incorrectly (violates validate-runview-runquery-result-access rule)",
+  "description": "Component accessing RunView/RunQuery results incorrectly (violates runview-runquery-result-validation rule)",
   "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [accounts, setAccounts] = useState([]);\n  const [invoices, setInvoices] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      const accountResult = await utilities.rv.RunView({\n        EntityName: 'Accounts',\n        MaxRows: 100\n      });\n      \n      // Wrong: accessing .data instead of .Results\n      setAccounts(accountResult.data || []);\n      \n      const invoiceResult = await utilities.rq.RunQuery({\n        QueryName: 'RecentInvoices',\n        CategoryPath: 'Reports/Finance'\n      });\n      \n      // Wrong: accessing .rows instead of .Results\n      setInvoices(invoiceResult.rows || []);\n      \n      // Wrong: accessing .length on result instead of Results.length\n      console.log('Total records:', accountResult.length);\n      \n      // Wrong: treating result as array directly\n      const firstAccount = accountResult[0];\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Dashboard</h1>\n      <p>Accounts: {accounts.length}</p>\n      <p>Invoices: {invoices.length}</p>\n    </div>\n  );\n}",
   "componentType": "interactive",
   "libraries": [],
