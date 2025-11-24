@@ -32,16 +32,5 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": [
-    {
-      "name": "ag-grid",
-      "version": "^31.0.1",
-      "globalVariable": "agGrid"
-    },
-    {
-      "name": "mathjs",
-      "version": "^12.2.1",
-      "globalVariable": "math"
-    }
-  ]
+  "libraries": []
 }

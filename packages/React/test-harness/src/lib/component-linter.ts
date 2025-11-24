@@ -3157,8 +3157,14 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
               const leftType = typeEngine.inferExpressionType(node.left, path);
               const rightType = typeEngine.inferExpressionType(node.right, path);
 
+              // Special case: Date - Date is valid (subtraction only)
+              if (operator === '-' && leftType.type === 'Date' && rightType.type === 'Date') {
+                // Date - Date produces a number (milliseconds), this is valid
+                return;
+              }
+
               // Only flag if we know the type is wrong (not unknown)
-              if (leftType.type !== 'unknown' && leftType.type !== 'number') {
+              if (leftType.type !== 'unknown' && leftType.type !== 'number' && leftType.type !== 'Date') {
                 violations.push({
                   rule: 'type-mismatch-operation',
                   severity: 'high',
@@ -3169,7 +3175,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 });
               }
 
-              if (rightType.type !== 'unknown' && rightType.type !== 'number') {
+              if (rightType.type !== 'unknown' && rightType.type !== 'number' && rightType.type !== 'Date') {
                 violations.push({
                   rule: 'type-mismatch-operation',
                   severity: 'high',
@@ -6236,7 +6242,20 @@ Correct pattern:
                     hasFallback = true;
                   }
 
-                  if (!hasOptionalChaining && !hasFallback) {
+                  // Skip if the object is a simple identifier (likely a calculated/local object)
+                  // Pattern: metrics.winRate.toFixed() where metrics is an object with calculated values
+                  // This is different from result.Results[0].Amount.toFixed() where we access entity fields
+                  let isCalculatedObject = false;
+                  if (t.isIdentifier(callee.object.object)) {
+                    const objectName = callee.object.object.name;
+                    // Common patterns for calculated/aggregated data objects
+                    const calculatedObjectNames = ['metrics', 'stats', 'totals', 'summary', 'aggregates', 'calculated', 'data'];
+                    if (calculatedObjectNames.includes(objectName.toLowerCase())) {
+                      isCalculatedObject = true;
+                    }
+                  }
+
+                  if (!hasOptionalChaining && !hasFallback && !isCalculatedObject) {
                     // Check entity metadata for this field
                     const fieldInfo = checkFieldNullability(propertyName);
 
@@ -7366,6 +7385,14 @@ const [state, setState] = useState(initialValue);`,
               if (t.isIdentifier(path.node.property)) {
                 const methodName = path.node.property.name;
 
+                // IMPORTANT: Check if it's a known runtime callback FIRST
+                // This prevents false positives when components mistakenly declare
+                // runtime callbacks as events in their spec
+                if (allowedCallbackMethods.has(methodName)) {
+                  // This is a valid runtime callback - allow it
+                  return;
+                }
+
                 // Check if it's trying to access an event
                 if (componentEvents.has(methodName)) {
                   violations.push({
@@ -7390,8 +7417,8 @@ function MyComponent({ ..., ${methodName} }) {
 }`,
                     },
                   });
-                } else if (!allowedCallbackMethods.has(methodName)) {
-                  // It's not an allowed callback method
+                } else {
+                  // It's not a runtime callback or an event - it's invalid
                   violations.push({
                     rule: 'callbacks-usage-validation',
                     severity: 'critical',
@@ -7425,6 +7452,12 @@ function MyComponent({ onCustomEvent }) {
               for (const prop of path.node.id.properties) {
                 if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                   const methodName = prop.key.name;
+
+                  // IMPORTANT: Check if it's a known runtime callback FIRST
+                  if (allowedCallbackMethods.has(methodName)) {
+                    // This is a valid runtime callback - allow it
+                    continue;
+                  }
 
                   if (componentEvents.has(methodName)) {
                     violations.push({

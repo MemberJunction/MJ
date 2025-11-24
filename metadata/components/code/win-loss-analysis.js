@@ -1,6 +1,6 @@
 function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   // Load DataExportPanel component
-  const DataExportPanel = components['DataExportPanel'];
+  const { DataExportPanel } = components;
   
   // Debug logging
   console.log('🔍 [WinLossAnalysis] Components available:', Object.keys(components || {}));
@@ -17,6 +17,7 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
   const [drillDownType, setDrillDownType] = useState(null);
   const [filterReason, setFilterReason] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'CloseDate', direction: 'desc' });
+  const [localSearchTerm, setLocalSearchTerm] = useState('');
   
   const componentRef = useRef(null);
   const gridRef = useRef(null);
@@ -404,8 +405,6 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
 
   // Drill-down Panel Component
   const DrillDownPanel = () => {
-    const [localSearchTerm, setLocalSearchTerm] = useState('');
-    
     if (!isPanelOpen || !drillDownData) return null;
 
     const handleSort = (key) => {

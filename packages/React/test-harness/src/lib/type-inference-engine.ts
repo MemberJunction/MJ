@@ -351,6 +351,11 @@ export class TypeInferenceEngine {
       return this.inferCallExpressionType(node, path);
     }
 
+    // New expressions (constructor calls like new Date())
+    if (t.isNewExpression(node)) {
+      return this.inferNewExpressionType(node, path);
+    }
+
     // Member expressions
     if (t.isMemberExpression(node)) {
       return this.inferMemberExpressionType(node, path);
@@ -492,6 +497,53 @@ export class TypeInferenceEngine {
       // Methods that return booleans
       if (['includes', 'some', 'every'].includes(methodName)) {
         return StandardTypes.boolean;
+      }
+    }
+
+    return StandardTypes.unknown;
+  }
+
+  /**
+   * Infer type for new expressions (constructor calls)
+   */
+  private inferNewExpressionType(node: t.NewExpression, path?: NodePath): TypeInfo {
+    // Check for common constructors
+    if (t.isIdentifier(node.callee)) {
+      const constructorName = node.callee.name;
+
+      // Date constructor
+      if (constructorName === 'Date') {
+        return { type: 'Date', fromMetadata: false };
+      }
+
+      // Array constructor
+      if (constructorName === 'Array') {
+        return { type: 'array', arrayElementType: StandardTypes.unknown };
+      }
+
+      // Object constructor
+      if (constructorName === 'Object') {
+        return { type: 'object', fields: new Map() };
+      }
+
+      // Map constructor
+      if (constructorName === 'Map') {
+        return { type: 'Map', fromMetadata: false };
+      }
+
+      // Set constructor
+      if (constructorName === 'Set') {
+        return { type: 'Set', fromMetadata: false };
+      }
+
+      // RegExp constructor
+      if (constructorName === 'RegExp') {
+        return { type: 'RegExp', fromMetadata: false };
+      }
+
+      // Error and related constructors
+      if (['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(constructorName)) {
+        return { type: 'Error', fromMetadata: false };
       }
     }
 
