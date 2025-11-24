@@ -388,6 +388,51 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Close all tabs except the specified one
+   */
+  CloseOtherTabs(tabId: string): void {
+    console.log('[WorkspaceStateManager.CloseOtherTabs] Closing all tabs except:', tabId);
+    const config = this.configuration$.value;
+    if (!config) return;
+
+    // Keep only the specified tab
+    const updatedTabs = config.tabs.filter(tab => tab.id === tabId);
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: updatedTabs,
+      activeTabId: tabId
+    });
+  }
+
+  /**
+   * Close all tabs to the right of the specified tab
+   */
+  CloseTabsToRight(tabId: string): void {
+    console.log('[WorkspaceStateManager.CloseTabsToRight] Closing tabs to the right of:', tabId);
+    const config = this.configuration$.value;
+    if (!config) return;
+
+    const tabIndex = config.tabs.findIndex(tab => tab.id === tabId);
+    if (tabIndex === -1) return;
+
+    // Keep only tabs up to and including the specified tab
+    const updatedTabs = config.tabs.slice(0, tabIndex + 1);
+
+    // Update active tab if it was closed
+    let activeTabId = config.activeTabId;
+    if (!updatedTabs.find(tab => tab.id === activeTabId)) {
+      activeTabId = tabId;
+    }
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: updatedTabs,
+      activeTabId
+    });
+  }
+
+  /**
    * Toggle pin state of a tab
    */
   TogglePin(tabId: string): void {

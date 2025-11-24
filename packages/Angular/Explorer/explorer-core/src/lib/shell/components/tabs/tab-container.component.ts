@@ -487,6 +487,17 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get existing tab IDs from Golden Layout
     const existingTabIds = this.layoutManager.GetAllTabIds();
 
+    // Get tab IDs from configuration
+    const configTabIds = tabs.map(tab => tab.id);
+
+    // Remove tabs that are no longer in configuration
+    existingTabIds.forEach(tabId => {
+      if (!configTabIds.includes(tabId)) {
+        console.log('[TabContainer.syncTabsWithConfiguration] Removing tab not in config:', tabId);
+        this.layoutManager.RemoveTab(tabId);
+      }
+    });
+
     // Create tabs that don't exist yet
     tabs.forEach(tab => {
       if (!existingTabIds.includes(tab.id)) {
@@ -607,6 +618,32 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   onContextClose(): void {
     if (this.contextMenuTabId) {
       this.layoutManager.RemoveTab(this.contextMenuTabId);
+    }
+    this.hideContextMenu();
+  }
+
+  /**
+   * Close all other tabs from context menu
+   */
+  onContextCloseOthers(): void {
+    console.log('[TabContainer.onContextCloseOthers] Called with tabId:', this.contextMenuTabId);
+    if (this.contextMenuTabId) {
+      const config = this.workspaceManager.GetConfiguration();
+      console.log('[TabContainer.onContextCloseOthers] Current tabs:', config?.tabs.length);
+      this.workspaceManager.CloseOtherTabs(this.contextMenuTabId);
+    }
+    this.hideContextMenu();
+  }
+
+  /**
+   * Close tabs to the right from context menu
+   */
+  onContextCloseToRight(): void {
+    console.log('[TabContainer.onContextCloseToRight] Called with tabId:', this.contextMenuTabId);
+    if (this.contextMenuTabId) {
+      const config = this.workspaceManager.GetConfiguration();
+      console.log('[TabContainer.onContextCloseToRight] Current tabs:', config?.tabs.length);
+      this.workspaceManager.CloseTabsToRight(this.contextMenuTabId);
     }
     this.hideContextMenu();
   }

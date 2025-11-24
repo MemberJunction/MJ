@@ -96,21 +96,37 @@ export class NavigationService implements OnDestroy {
     }
 
     const config = this.workspaceManager.GetConfiguration();
+    console.log('[NavigationService.handleSingleResourceModeTransition] Current config:', {
+      tabCount: config?.tabs?.length || 0,
+      activeTabId: config?.activeTabId,
+      tabs: config?.tabs?.map(t => ({ id: t.id, title: t.title, isPinned: t.isPinned }))
+    });
+
     if (!config || !config.tabs || config.tabs.length === 0) {
+      console.log('[NavigationService.handleSingleResourceModeTransition] No tabs to preserve');
       return; // No tabs to preserve
     }
 
     // Find the currently active tab
     const activeTab = config.tabs.find(tab => tab.id === config.activeTabId);
     if (!activeTab) {
+      console.log('[NavigationService.handleSingleResourceModeTransition] No active tab found');
       return; // No active tab
     }
+
+    console.log('[NavigationService.handleSingleResourceModeTransition] Active tab:', {
+      id: activeTab.id,
+      title: activeTab.title,
+      isPinned: activeTab.isPinned
+    });
 
     // If the active tab is NOT pinned (i.e., it's temporary), pin it to preserve it
     // This maintains the "only one temporary tab" rule
     if (!activeTab.isPinned) {
-      console.log('[NavigationService] Shift+click: pinning current temporary tab before creating new tab');
+      console.log('[NavigationService.handleSingleResourceModeTransition] Pinning current temporary tab before creating new tab');
       this.workspaceManager.TogglePin(activeTab.id);
+    } else {
+      console.log('[NavigationService.handleSingleResourceModeTransition] Active tab already pinned, no action needed');
     }
   }
 
