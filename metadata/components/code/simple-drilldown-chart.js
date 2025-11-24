@@ -230,7 +230,6 @@ function SimpleDrilldownChart({
                 pageSize={10}
                 filtering={true}
                 onRowClick={showSingleRecordView ? handleRowClick : undefined}
-                highlightedRow={selectedRecord}
                 utilities={utilities}
                 styles={styles}
                 components={components}
