@@ -1,0 +1,28 @@
+{
+  "name": "DataLoaderComponent",
+  "description": "Demonstrates CORRECT RunView/RunQuery result object access - using only valid properties (Success, Results, RowCount, ErrorMessage)",
+  "code": "function DataLoaderComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [viewData, setViewData] = useState([]);\n  const [queryData, setQueryData] = useState([]);\n  const [stats, setStats] = useState({ viewCount: 0, queryCount: 0 });\n  const [errors, setErrors] = useState([]);\n\n  useEffect(() => {\n    async function loadAllData() {\n      const errorList = [];\n      \n      // Load data from RunView\n      const viewResult = await utilities.rv.RunView({\n        EntityName: 'Products',\n        MaxRows: 100,\n        OrderBy: 'Name ASC'\n      });\n      \n      // CORRECT: Check Success property before accessing data\n      if (viewResult.Success) {\n        // CORRECT: Access Results property for the data array\n        setViewData(viewResult.Results || []);\n        // CORRECT: Access RowCount property for total count\n        setStats(prev => ({ ...prev, viewCount: viewResult.RowCount || 0 }));\n      } else {\n        // CORRECT: Access ErrorMessage property for error info\n        errorList.push(viewResult.ErrorMessage || 'Failed to load products');\n      }\n      \n      // Load data from RunQuery\n      const queryResult = await utilities.rq.RunQuery({\n        QueryName: 'CategorySummary',\n        CategoryPath: 'Reports/Products',\n        Parameters: {\n          activeOnly: true\n        }\n      });\n      \n      // CORRECT: Same pattern for RunQuery results\n      if (queryResult.Success) {\n        setQueryData(queryResult.Results || []);\n        setStats(prev => ({ ...prev, queryCount: queryResult.RowCount || 0 }));\n      } else {\n        errorList.push(queryResult.ErrorMessage || 'Failed to load category summary');\n      }\n      \n      setErrors(errorList);\n    }\n    \n    loadAllData();\n  }, []);\n\n  return (\n    <div className=\"data-loader\">\n      <h1>Data Loader</h1>\n      \n      {errors.length > 0 && (\n        <div className=\"errors\">\n          {errors.map((error, index) => (\n            <p key={index} className=\"error\">{error}</p>\n          ))}\n        </div>\n      )}\n      \n      <div className=\"stats\">\n        <p>Products loaded: {stats.viewCount}</p>\n        <p>Categories loaded: {stats.queryCount}</p>\n      </div>\n      \n      <div className=\"products\">\n        <h2>Products</h2>\n        <ul>\n          {viewData.map(product => (\n            <li key={product.ID}>{product.Name} - {product.Category}</li>\n          ))}\n        </ul>\n      </div>\n      \n      <div className=\"categories\">\n        <h2>Category Summary</h2>\n        <ul>\n          {queryData.map((category, index) => (\n            <li key={index}>{category.CategoryName}: {category.ProductCount} products</li>\n          ))}\n        </ul>\n      </div>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "mixed",
+    "entities": [
+      {
+        "name": "Products",
+        "fields": ["ID", "Name", "Category", "Price"],
+        "sortFields": ["Name", "Category"]
+      }
+    ],
+    "queries": [
+      {
+        "name": "CategorySummary",
+        "categoryPath": "Reports/Products",
+        "fields": ["CategoryName", "ProductCount"],
+        "entityNames": ["Products"],
+        "parameters": [
+          { "name": "activeOnly", "type": "boolean", "required": false }
+        ]
+      }
+    ]
+  }
+}

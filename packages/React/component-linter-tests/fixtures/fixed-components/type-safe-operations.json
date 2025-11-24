@@ -1,0 +1,17 @@
+{
+  "name": "TypeSafeCalculatorComponent",
+  "description": "Demonstrates CORRECT type-safe operations - proper type guards, null/undefined handling, and operations with matching types",
+  "code": "function TypeSafeCalculatorComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect, useMemo } = React;\n  const [data, setData] = useState([]);\n  const [filter, setFilter] = useState('');\n  const [minAmount, setMinAmount] = useState(0);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Transactions',\n        MaxRows: 1000\n      });\n      \n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n\n  // CORRECT: Type-safe computed values with proper type guards\n  const totalAmount = useMemo(() => {\n    return data.reduce((sum, item) => {\n      // CORRECT: Type guard before numeric operation\n      if (typeof item.Amount === 'number') {\n        return sum + item.Amount;\n      }\n      return sum;\n    }, 0);\n  }, [data]);\n\n  // CORRECT: Proper null/undefined handling\n  const averageAmount = useMemo(() => {\n    if (data.length === 0) return 0;\n    return totalAmount / data.length;\n  }, [totalAmount, data.length]);\n\n  // CORRECT: Type-safe filtering with string operations on strings\n  const filteredData = useMemo(() => {\n    return data.filter(item => {\n      // CORRECT: String operations on string values\n      const nameMatch = filter === '' || \n        (typeof item.Name === 'string' && item.Name.toLowerCase().includes(filter.toLowerCase()));\n      \n      // CORRECT: Numeric comparison with numbers\n      const amountMatch = typeof item.Amount === 'number' && item.Amount >= minAmount;\n      \n      return nameMatch && amountMatch;\n    });\n  }, [data, filter, minAmount]);\n\n  // CORRECT: Type-safe event handlers\n  const handleFilterChange = (e) => {\n    const value = e.target.value;\n    // CORRECT: String value for string state\n    setFilter(value);\n  };\n\n  const handleMinAmountChange = (e) => {\n    const value = e.target.value;\n    // CORRECT: Parse to number for number state, with fallback\n    const numValue = parseFloat(value);\n    setMinAmount(isNaN(numValue) ? 0 : numValue);\n  };\n\n  return (\n    <div className=\"calculator\">\n      <h1>Transaction Calculator</h1>\n      \n      <div className=\"filters\">\n        <input\n          type=\"text\"\n          placeholder=\"Filter by name\"\n          value={filter}\n          onChange={handleFilterChange}\n        />\n        <input\n          type=\"number\"\n          placeholder=\"Min amount\"\n          value={minAmount}\n          onChange={handleMinAmountChange}\n        />\n      </div>\n      \n      <div className=\"summary\">\n        <p>Total: ${totalAmount.toFixed(2)}</p>\n        <p>Average: ${averageAmount.toFixed(2)}</p>\n        <p>Filtered count: {filteredData.length}</p>\n      </div>\n      \n      <ul>\n        {filteredData.map(item => (\n          <li key={item.ID}>\n            {item.Name}: ${typeof item.Amount === 'number' ? item.Amount.toFixed(2) : '0.00'}\n          </li>\n        ))}\n      </ul>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Transactions",
+        "fields": ["ID", "Name", "Amount", "Date", "Category"],
+        "sortFields": ["Name", "Amount", "Date"]
+      }
+    ]
+  }
+}

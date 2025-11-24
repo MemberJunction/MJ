@@ -1,0 +1,17 @@
+{
+  "name": "UserListComponent",
+  "description": "Demonstrates CORRECT entity field access patterns - only accesses fields declared in dataRequirements and properly checks result.Success",
+  "code": "function UserListComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [users, setUsers] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    async function loadUsers() {\n      try {\n        const result = await utilities.rv.RunView({\n          EntityName: 'Users',\n          MaxRows: 100,\n          OrderBy: 'Name ASC'\n        });\n        \n        // CORRECT: Always check result.Success before accessing Results\n        if (result.Success) {\n          setUsers(result.Results || []);\n        } else {\n          // CORRECT: Use ErrorMessage property for error handling\n          setError(result.ErrorMessage || 'Failed to load users');\n        }\n      } catch (err) {\n        setError('An unexpected error occurred');\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadUsers();\n  }, []);\n\n  if (loading) return <div>Loading users...</div>;\n  if (error) return <div className=\"error\">{error}</div>;\n\n  return (\n    <div className=\"user-list\">\n      <h1>Users ({users.length})</h1>\n      <table>\n        <thead>\n          <tr>\n            <th>Name</th>\n            <th>Email</th>\n            <th>Status</th>\n          </tr>\n        </thead>\n        <tbody>\n          {users.map(user => (\n            <tr key={user.ID}>\n              {/* CORRECT: Only accessing fields declared in dataRequirements */}\n              <td>{user.Name}</td>\n              <td>{user.Email}</td>\n              <td>{user.Status}</td>\n            </tr>\n          ))}\n        </tbody>\n      </table>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Users",
+        "fields": ["ID", "Name", "Email", "Status"],
+        "sortFields": ["Name", "Email", "Status"]
+      }
+    ]
+  }
+}

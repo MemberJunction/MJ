@@ -1,0 +1,42 @@
+{
+  "name": "DependencyPropTypeMismatchComponent",
+  "description": "Component passing wrong prop types to dependency components (violates dependency-prop-validation rule)",
+  "code": "function DependencyPropTypeMismatchComponent({ utilities, components, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  const { DataGrid, ChartComponent } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Accounts',\n        MaxRows: 50\n      });\n      if (result.Success) {\n        setData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h1>Dashboard</h1>\n      \n      {/* VIOLATION: height should be number, not string */}\n      {/* VIOLATION: pageSize should be number, not string */}\n      {/* VIOLATION: filtering should be boolean, not string */}\n      <DataGrid\n        data={data}\n        entityName=\"Accounts\"\n        height=\"400\"\n        pageSize=\"20\"\n        filtering=\"true\"\n        sorting={true}\n      />\n\n      {/* VIOLATION: width should be number, not string */}\n      {/* VIOLATION: showLegend should be boolean, not number */}\n      {/* VIOLATION: title should be string, not number */}\n      <ChartComponent\n        data={data}\n        chartType=\"bar\"\n        width=\"600\"\n        height={300}\n        showLegend={1}\n        title={123}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Accounts",
+        "type": "view",
+        "maxRows": 50
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "type": "registry",
+      "properties": [
+        { "name": "data", "type": "array", "required": true },
+        { "name": "entityName", "type": "string", "required": true },
+        { "name": "height", "type": "number", "required": false },
+        { "name": "pageSize", "type": "number", "required": false },
+        { "name": "filtering", "type": "boolean", "required": false },
+        { "name": "sorting", "type": "boolean", "required": false }
+      ]
+    },
+    {
+      "name": "ChartComponent",
+      "type": "registry",
+      "properties": [
+        { "name": "data", "type": "array", "required": true },
+        { "name": "chartType", "type": "string", "required": true },
+        { "name": "width", "type": "number", "required": false },
+        { "name": "height", "type": "number", "required": false },
+        { "name": "showLegend", "type": "boolean", "required": false },
+        { "name": "title", "type": "string", "required": false }
+      ]
+    }
+  ]
+}

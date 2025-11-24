@@ -1,0 +1,55 @@
+{
+  "name": "ComprehensiveDashboardComponent",
+  "description": "Reference implementation demonstrating ALL correct type-safe patterns: entity field access, query parameters, dependency props, type-safe operations, and result handling",
+  "code": "function ComprehensiveDashboardComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, SummaryChart, DataTable }) {\n  const { useState, useEffect, useMemo, useCallback } = React;\n  \n  // State management\n  const [accounts, setAccounts] = useState([]);\n  const [reportData, setReportData] = useState([]);\n  const [selectedYear, setSelectedYear] = useState(2024);\n  const [filterText, setFilterText] = useState('');\n  const [loading, setLoading] = useState(true);\n  const [errors, setErrors] = useState([]);\n\n  // Load data on mount and when year changes\n  useEffect(() => {\n    async function loadData() {\n      setLoading(true);\n      const errorList = [];\n      \n      // Load accounts via RunView\n      const accountResult = await utilities.rv.RunView({\n        EntityName: 'Accounts',\n        MaxRows: 500,\n        OrderBy: 'Name ASC'\n      });\n      \n      // CORRECT: Check Success before accessing Results\n      if (accountResult.Success) {\n        setAccounts(accountResult.Results || []);\n      } else {\n        // CORRECT: Use ErrorMessage for error handling\n        errorList.push(accountResult.ErrorMessage || 'Failed to load accounts');\n      }\n      \n      // Load report via RunQuery with proper parameter types\n      const reportResult = await utilities.rq.RunQuery({\n        QueryName: 'AnnualAccountReport',\n        CategoryPath: 'Reports/Accounts',\n        Parameters: {\n          // CORRECT: Number parameter gets number value\n          year: selectedYear,\n          // CORRECT: String parameter gets string value\n          status: 'Active',\n          // CORRECT: Boolean parameter gets boolean value\n          includeInactive: false\n        }\n      });\n      \n      if (reportResult.Success) {\n        setReportData(reportResult.Results || []);\n      } else {\n        errorList.push(reportResult.ErrorMessage || 'Failed to load report');\n      }\n      \n      setErrors(errorList);\n      setLoading(false);\n    }\n    \n    loadData();\n  }, [selectedYear]);\n\n  // CORRECT: Type-safe filtering with proper type guards\n  const filteredAccounts = useMemo(() => {\n    if (filterText === '') return accounts;\n    \n    return accounts.filter(account => {\n      // CORRECT: Type guard before string operation\n      if (typeof account.Name === 'string') {\n        return account.Name.toLowerCase().includes(filterText.toLowerCase());\n      }\n      return false;\n    });\n  }, [accounts, filterText]);\n\n  // CORRECT: Type-safe calculations\n  const totalRevenue = useMemo(() => {\n    return reportData.reduce((sum, item) => {\n      // CORRECT: Type guard before numeric operation\n      if (typeof item.Revenue === 'number') {\n        return sum + item.Revenue;\n      }\n      return sum;\n    }, 0);\n  }, [reportData]);\n\n  // CORRECT: Event handlers as functions\n  const handleYearChange = useCallback((e) => {\n    const value = parseInt(e.target.value, 10);\n    // CORRECT: Validate before setting number state\n    if (!isNaN(value)) {\n      setSelectedYear(value);\n    }\n  }, []);\n\n  const handleFilterChange = useCallback((e) => {\n    // CORRECT: String value for string state\n    setFilterText(e.target.value);\n  }, []);\n\n  const handleChartClick = useCallback((dataPoint) => {\n    console.log('Chart clicked:', dataPoint);\n  }, []);\n\n  const handleRowSelect = useCallback((row) => {\n    console.log('Row selected:', row);\n  }, []);\n\n  if (loading) return <div>Loading dashboard...</div>;\n\n  return (\n    <div className=\"comprehensive-dashboard\">\n      <h1>Account Dashboard</h1>\n      \n      {errors.length > 0 && (\n        <div className=\"error-banner\">\n          {errors.map((error, index) => (\n            <p key={index}>{error}</p>\n          ))}\n        </div>\n      )}\n      \n      <div className=\"controls\">\n        <select value={selectedYear} onChange={handleYearChange}>\n          <option value={2022}>2022</option>\n          <option value={2023}>2023</option>\n          <option value={2024}>2024</option>\n        </select>\n        <input\n          type=\"text\"\n          placeholder=\"Filter accounts...\"\n          value={filterText}\n          onChange={handleFilterChange}\n        />\n      </div>\n      \n      <div className=\"summary\">\n        <p>Total Accounts: {filteredAccounts.length}</p>\n        <p>Total Revenue: ${totalRevenue.toFixed(2)}</p>\n      </div>\n      \n      {/* CORRECT: Passing all required props with correct types to child components */}\n      <SummaryChart\n        utilities={utilities}\n        savedUserSettings={savedUserSettings}\n        onSavedUserSettingsChange={onSavedUserSettingsChange}\n        data={reportData}\n        title=\"Annual Revenue Summary\"\n        chartType=\"bar\"\n        height={300}\n        showLegend={true}\n        onClick={handleChartClick}\n      />\n      \n      <DataTable\n        utilities={utilities}\n        savedUserSettings={savedUserSettings}\n        onSavedUserSettingsChange={onSavedUserSettingsChange}\n        data={filteredAccounts}\n        columns={['Name', 'Industry', 'Status', 'Revenue']}\n        pageSize={25}\n        sortable={true}\n        onRowSelect={handleRowSelect}\n      />\n      \n      {/* CORRECT: Only accessing fields declared in dataRequirements */}\n      <div className=\"account-list\">\n        <h2>Account Details</h2>\n        {filteredAccounts.map(account => (\n          <div key={account.ID} className=\"account-card\">\n            <h3>{account.Name}</h3>\n            <p>Industry: {account.Industry}</p>\n            <p>Status: {account.Status}</p>\n            <p>Revenue: ${typeof account.Revenue === 'number' ? account.Revenue.toFixed(2) : '0.00'}</p>\n          </div>\n        ))}\n      </div>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": [
+    {
+      "name": "SummaryChart",
+      "type": "child",
+      "props": {
+        "data": { "type": "array", "required": true },
+        "title": { "type": "string", "required": true },
+        "chartType": { "type": "string", "required": true },
+        "height": { "type": "number", "required": true },
+        "showLegend": { "type": "boolean", "required": false },
+        "onClick": { "type": "function", "required": false }
+      }
+    },
+    {
+      "name": "DataTable",
+      "type": "child",
+      "props": {
+        "data": { "type": "array", "required": true },
+        "columns": { "type": "array", "required": true },
+        "pageSize": { "type": "number", "required": true },
+        "sortable": { "type": "boolean", "required": false },
+        "onRowSelect": { "type": "function", "required": false }
+      }
+    }
+  ],
+  "dataRequirements": {
+    "mode": "mixed",
+    "entities": [
+      {
+        "name": "Accounts",
+        "fields": ["ID", "Name", "Industry", "Status", "Revenue"],
+        "sortFields": ["Name", "Industry", "Revenue"]
+      }
+    ],
+    "queries": [
+      {
+        "name": "AnnualAccountReport",
+        "categoryPath": "Reports/Accounts",
+        "fields": ["AccountName", "Revenue", "Quarter", "Year"],
+        "entityNames": ["Accounts", "Invoices"],
+        "parameters": [
+          { "name": "year", "type": "number", "required": true },
+          { "name": "status", "type": "string", "required": true },
+          { "name": "includeInactive", "type": "boolean", "required": false }
+        ]
+      }
+    ]
+  }
+}

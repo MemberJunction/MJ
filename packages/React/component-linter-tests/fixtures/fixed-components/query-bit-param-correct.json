@@ -1,0 +1,20 @@
+{
+  "name": "QueryBitParamCorrectComponent",
+  "description": "Component correctly passing boolean values for bit parameters (should have no query-parameter-type-validation violations)",
+  "code": "function QueryBitParamCorrectComponent({ utilities, savedUserSettings, onSaveUserSettings }) {\n  const [data, setData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'ActiveUsers',\n          CategoryPath: 'Admin/Users',\n          Parameters: {\n            // CORRECT: Boolean values for bit parameters\n            IsActive: true,\n            IncludeDeleted: false,\n            // CORRECT: String value for string parameter\n            Department: 'Engineering'\n          }\n        });\n\n        if (result.Success) {\n          setData(result.Results);\n        }\n      } catch (err) {\n        console.error(err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Active Users</h1>\n      <ul>\n        {data.map(user => (\n          <li key={user.ID}>{user.Name} - {user.Email}</li>\n        ))}\n      </ul>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "ActiveUsers",
+        "categoryPath": "Admin/Users",
+        "parameters": [
+          { "name": "IsActive", "type": "bit", "isRequired": true },
+          { "name": "IncludeDeleted", "type": "bit", "isRequired": false },
+          { "name": "Department", "type": "nvarchar", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

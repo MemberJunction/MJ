@@ -1,0 +1,37 @@
+{
+  "name": "DashboardWithChartComponent",
+  "description": "Demonstrates CORRECT dependency component prop passing - all required props provided with correct types, including standard props and event handlers",
+  "code": "function DashboardWithChartComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, DataChart }) {\n  const { useState, useEffect, useCallback } = React;\n  const [chartData, setChartData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'SalesMetrics',\n        MaxRows: 500\n      });\n      \n      if (result.Success) {\n        setChartData(result.Results || []);\n      }\n      setLoading(false);\n    }\n    loadData();\n  }, []);\n\n  // CORRECT: Event handlers are functions\n  const handleChartClick = useCallback((dataPoint) => {\n    console.log('Chart clicked:', dataPoint);\n  }, []);\n\n  const handleSelectionChange = useCallback((selected) => {\n    console.log('Selection changed:', selected);\n  }, []);\n\n  if (loading) return <div>Loading dashboard...</div>;\n\n  return (\n    <div className=\"dashboard\">\n      <h1>Sales Dashboard</h1>\n      {/* CORRECT: Passing all required props with correct types */}\n      <DataChart\n        // Standard props passed through\n        utilities={utilities}\n        savedUserSettings={savedUserSettings}\n        onSavedUserSettingsChange={onSavedUserSettingsChange}\n        // Data prop\n        data={chartData}\n        // String props get strings\n        title=\"Monthly Sales\"\n        chartType=\"bar\"\n        xAxisField=\"Month\"\n        yAxisField=\"Revenue\"\n        // Number props get numbers\n        height={400}\n        width={800}\n        animationDuration={500}\n        // Boolean props get booleans\n        showLegend={true}\n        enableZoom={false}\n        // Event handlers are functions\n        onClick={handleChartClick}\n        onSelectionChange={handleSelectionChange}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": [
+    {
+      "name": "DataChart",
+      "type": "child",
+      "props": {
+        "data": { "type": "array", "required": true },
+        "title": { "type": "string", "required": true },
+        "chartType": { "type": "string", "required": true },
+        "xAxisField": { "type": "string", "required": true },
+        "yAxisField": { "type": "string", "required": true },
+        "height": { "type": "number", "required": true },
+        "width": { "type": "number", "required": true },
+        "animationDuration": { "type": "number", "required": false },
+        "showLegend": { "type": "boolean", "required": false },
+        "enableZoom": { "type": "boolean", "required": false },
+        "onClick": { "type": "function", "required": false },
+        "onSelectionChange": { "type": "function", "required": false }
+      }
+    }
+  ],
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "SalesMetrics",
+        "fields": ["ID", "Month", "Revenue", "Quantity"],
+        "sortFields": ["Month"]
+      }
+    ]
+  }
+}
