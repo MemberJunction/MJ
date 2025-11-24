@@ -11,6 +11,7 @@ import { ComponentExecutionOptions } from './component-runner';
 import { StylesTypeAnalyzer } from './styles-type-analyzer';
 import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo, StandardTypes } from './type-context';
 import { TypeInferenceEngine } from './type-inference-engine';
+import { ControlFlowAnalyzer } from './control-flow-analyzer';
 
 export interface LintResult {
   success: boolean;
@@ -3135,6 +3136,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         // Create type inference engine
         const typeEngine = new TypeInferenceEngine(componentSpec);
 
+        // Create control flow analyzer
+        const cfa = new ControlFlowAnalyzer(ast, componentSpec);
+
         // Run analysis synchronously (the async part is not needed for basic inference)
         typeEngine.analyze(ast);
 
@@ -3163,95 +3167,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 return;
               }
 
-              // Check if this operation is inside a typeof guard
-              // Pattern: if (typeof x === 'number') { ... x - y ... }
-              const isGuardedByTypeof = (variableNode: t.Node, expectedType: string): boolean => {
-                // Get the variable name if it's an identifier
-                let varName: string | null = null;
-                if (t.isIdentifier(variableNode)) {
-                  varName = variableNode.name;
-                } else {
-                  return false;
-                }
-
-                // Walk up the AST to find an if statement
-                let currentPath: NodePath | null = path.parentPath;
-                while (currentPath) {
-                  if (t.isIfStatement(currentPath.node)) {
-                    const test = currentPath.node.test;
-
-                    // Check for typeof guard pattern: typeof x === 'number'
-                    if (t.isBinaryExpression(test) && (test.operator === '===' || test.operator === '==')) {
-                      // Pattern 1: typeof x === 'number'
-                      if (t.isUnaryExpression(test.left) &&
-                          test.left.operator === 'typeof' &&
-                          t.isIdentifier(test.left.argument) &&
-                          test.left.argument.name === varName &&
-                          t.isStringLiteral(test.right) &&
-                          test.right.value === expectedType) {
-                        return true;
-                      }
-
-                      // Pattern 2: 'number' === typeof x
-                      if (t.isStringLiteral(test.left) &&
-                          test.left.value === expectedType &&
-                          t.isUnaryExpression(test.right) &&
-                          test.right.operator === 'typeof' &&
-                          t.isIdentifier(test.right.argument) &&
-                          test.right.argument.name === varName) {
-                        return true;
-                      }
-                    }
-
-                    // Check for && conjunction: typeof x === 'number' && typeof y === 'number'
-                    if (t.isLogicalExpression(test) && test.operator === '&&') {
-                      const checkLogicalExpression = (expr: t.Expression): boolean => {
-                        if (t.isBinaryExpression(expr) && (expr.operator === '===' || expr.operator === '==')) {
-                          // Pattern 1: typeof x === 'number'
-                          if (t.isUnaryExpression(expr.left) &&
-                              expr.left.operator === 'typeof' &&
-                              t.isIdentifier(expr.left.argument) &&
-                              expr.left.argument.name === varName &&
-                              t.isStringLiteral(expr.right) &&
-                              expr.right.value === expectedType) {
-                            return true;
-                          }
-
-                          // Pattern 2: 'number' === typeof x
-                          if (t.isStringLiteral(expr.left) &&
-                              expr.left.value === expectedType &&
-                              t.isUnaryExpression(expr.right) &&
-                              expr.right.operator === 'typeof' &&
-                              t.isIdentifier(expr.right.argument) &&
-                              expr.right.argument.name === varName) {
-                            return true;
-                          }
-                        }
-
-                        // Recursively check nested && expressions
-                        if (t.isLogicalExpression(expr) && expr.operator === '&&') {
-                          return checkLogicalExpression(expr.left as t.Expression) ||
-                                 checkLogicalExpression(expr.right as t.Expression);
-                        }
-
-                        return false;
-                      };
-
-                      if (checkLogicalExpression(test)) {
-                        return true;
-                      }
-                    }
-                  }
-
-                  currentPath = currentPath.parentPath;
-                }
-
-                return false;
-              };
-
-              // Check if both sides are guarded by typeof checks
-              const leftGuarded = isGuardedByTypeof(node.left, 'number');
-              const rightGuarded = isGuardedByTypeof(node.right, 'number');
+              // Check if both sides are guarded by typeof checks using Control Flow Analyzer
+              const leftGuarded = cfa.isNarrowedToType(node.left, path, 'number');
+              const rightGuarded = cfa.isNarrowedToType(node.right, path, 'number');
 
               // Only flag if we know the type is wrong (not unknown) AND not guarded by typeof
               if (!leftGuarded && leftType.type !== 'unknown' && leftType.type !== 'number' && leftType.type !== 'Date') {
@@ -3920,6 +3838,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
 
+        // Create control flow analyzer for guard detection
+        const cfa = new ControlFlowAnalyzer(ast, componentSpec);
+
         // Track which parameters are from props (likely from queries/RunView)
         const propsParams = new Set<string>();
 
@@ -3968,13 +3889,21 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 // Check for safe patterns before flagging
                 let isSafe = false;
 
+                // Get the access index
+                const accessIndex = t.isNumericLiteral(property) ? property.value : parseInt(property.name, 10);
+
+                // Use CFA to check if array access is safe due to bounds checking
+                if (!isNaN(accessIndex) && cfa.isArrayAccessSafe(object, accessIndex, path)) {
+                  isSafe = true;
+                }
+
                 // Pattern 1: Result of split() always has at least one element
                 // e.g., str.split('T')[0] or isoString.split('T')[0]
-                if (
-                  t.isCallExpression(object) &&
-                  t.isMemberExpression(object.callee) &&
-                  t.isIdentifier(object.callee.property) &&
-                  object.callee.property.name === 'split'
+                if (!isSafe &&
+                    t.isCallExpression(object) &&
+                    t.isMemberExpression(object.callee) &&
+                    t.isIdentifier(object.callee.property) &&
+                    object.callee.property.name === 'split'
                 ) {
                   isSafe = true;
                 }
@@ -4034,255 +3963,14 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
 
-                // Pattern 1c: Ternary operator with truthiness or length check
-                // e.g., arr.length > 0 ? arr[0] : fallback
-                // or: arr ? arr[0] : fallback
-                const parentPath = path.parentPath;
-                if (parentPath && t.isConditionalExpression(parentPath.node)) {
-                  const conditional = parentPath.node;
-                  // Check if this access is in the consequent (true branch)
-                  if (conditional.consequent === path.node && t.isIdentifier(object)) {
-                    const arrayName = object.name;
-                    const test = conditional.test;
-
-                    // Check for simple truthiness check: arr ? arr[0] : fallback
-                    if (t.isIdentifier(test) && test.name === arrayName) {
-                      isSafe = true;
-                    }
-
-                    // Check for length comparisons in the test
-                    const checkLengthInTest = (node: t.Node): boolean => {
-                      if (t.isBinaryExpression(node)) {
-                        const { left, right, operator } = node;
-                        // arr.length > 0 or arr.length >= 1
-                        if (
-                          t.isMemberExpression(left) &&
-                          t.isIdentifier(left.property) &&
-                          left.property.name === 'length' &&
-                          t.isIdentifier(left.object) &&
-                          left.object.name === arrayName
-                        ) {
-                          if (t.isNumericLiteral(right)) {
-                            if (
-                              (operator === '>' && right.value >= 0) ||
-                              (operator === '>=' && right.value >= 1) ||
-                              ((operator === '!==' || operator === '!=') && right.value === 0)
-                            ) {
-                              return true;
-                            }
-                          }
-                        }
-                        // 0 < arr.length
-                        if (
-                          t.isMemberExpression(right) &&
-                          t.isIdentifier(right.property) &&
-                          right.property.name === 'length' &&
-                          t.isIdentifier(right.object) &&
-                          right.object.name === arrayName
-                        ) {
-                          if (t.isNumericLiteral(left) && operator === '<' && left.value >= 0) {
-                            return true;
-                          }
-                        }
-                      }
-                      // Also check logical expressions: arr && arr.length > 0
-                      if (t.isLogicalExpression(node)) {
-                        return checkLengthInTest(node.left) || checkLengthInTest(node.right);
-                      }
-                      return false;
-                    };
-
-                    if (checkLengthInTest(test)) {
-                      isSafe = true;
-                    }
-                  }
-                }
-
-                // Pattern 1d: Fallback pattern with array access
+                // Pattern 1c: Fallback pattern with array access (|| operator)
                 // e.g., (colors || defaultColors)[0] - array has a fallback so won't be null
-                if (t.isLogicalExpression(object) && object.operator === '||') {
-                  // The fallback pattern ensures the array is never null/undefined
-                  // Since we have a fallback, accessing [0] is safe (though may still be undefined if both arrays are empty)
-                  // But this is intentional pattern, not an oversight
+                // Note: CFA handles most guards, but this is a special safe pattern
+                if (!isSafe && t.isLogicalExpression(object) && object.operator === '||') {
                   isSafe = true;
                 }
 
-                // Pattern 2: Check for length guard in enclosing scope
-                // e.g., if (arr.length > 0) { arr[0] }
-                const functionParent = path.getFunctionParent();
-                if (functionParent && !isSafe) {
-                  // Get the variable name being accessed
-                  let arrayName: string | null = null;
-                  if (t.isIdentifier(object)) {
-                    arrayName = object.name;
-                  } else if (t.isMemberExpression(object) && t.isIdentifier(object.property)) {
-                    // For cases like obj.arr[0]
-                    arrayName = object.property.name;
-                  }
-
-                  if (arrayName) {
-                    // Look for if statements that check length before our usage
-                    functionParent.traverse({
-                      IfStatement(ifPath: NodePath<t.IfStatement>) {
-                        // Skip if this if statement comes after our usage
-                        if (ifPath.node.loc && path.node.loc) {
-                          if (ifPath.node.loc.start.line > path.node.loc.start.line) {
-                            return;
-                          }
-                        }
-
-                        // Check if this is a guard for our array access
-                        // Look for patterns like: arr.length > 0, arr.length !== 0, arr.length >= 1
-                        const test = ifPath.node.test;
-                        let isLengthCheck = false;
-                        let maxSafeIndex = -1; // Track the maximum safe index based on length check
-
-                        // Get the index being accessed (for numeric literals)
-                        let accessedIndex = -1;
-                        if (t.isNumericLiteral(property)) {
-                          accessedIndex = property.value;
-                        }
-
-                        // Helper to check if expression references our array's length
-                        // Returns the max safe index, or -1 if not a valid length check
-                        const getMaxSafeIndex = (node: t.Node): number => {
-                          if (t.isBinaryExpression(node)) {
-                            const { left, right, operator } = node;
-                            // Check for arr.length > N or arr.length >= N or arr.length !== 0
-                            if (t.isMemberExpression(left) && t.isIdentifier(left.property) && left.property.name === 'length') {
-                              // Check if it's our array
-                              if (t.isIdentifier(left.object) && left.object.name === arrayName) {
-                                if (t.isNumericLiteral(right)) {
-                                  const checkValue = right.value;
-                                  // arr.length > N means indices 0 to N are safe
-                                  if (operator === '>') {
-                                    return checkValue;
-                                  }
-                                  // arr.length >= N means indices 0 to N-1 are safe
-                                  if (operator === '>=') {
-                                    return checkValue - 1;
-                                  }
-                                  // arr.length !== 0 or arr.length != 0 means index 0 is safe
-                                  if ((operator === '!==' || operator === '!=') && checkValue === 0) {
-                                    return 0;
-                                  }
-                                  // arr.length === 0 or arr.length == 0 (with early return) means index 0 is safe after return
-                                  if ((operator === '===' || operator === '==') && checkValue === 0) {
-                                    return 0;
-                                  }
-                                }
-                              }
-                            }
-                            // Check reverse: N < arr.length
-                            if (t.isMemberExpression(right) && t.isIdentifier(right.property) && right.property.name === 'length') {
-                              if (t.isIdentifier(right.object) && right.object.name === arrayName) {
-                                if (t.isNumericLiteral(left)) {
-                                  const checkValue = left.value;
-                                  // N < arr.length means indices 0 to N are safe
-                                  if (operator === '<') {
-                                    return checkValue;
-                                  }
-                                  // N <= arr.length means indices 0 to N-1 are safe
-                                  if (operator === '<=') {
-                                    return checkValue - 1;
-                                  }
-                                  // 0 === arr.length or 0 == arr.length (with early return) means index 0 is safe after return
-                                  if ((operator === '===' || operator === '==') && checkValue === 0) {
-                                    return 0;
-                                  }
-                                }
-                              }
-                            }
-                          }
-                          return -1;
-                        };
-
-                        // For backward compatibility, also check if it's any valid length check
-                        const checksArrayLength = (node: t.Node): boolean => {
-                          return getMaxSafeIndex(node) >= 0;
-                        };
-
-                        // Check direct binary expression
-                        const directMaxSafe = getMaxSafeIndex(test);
-                        if (directMaxSafe >= 0) {
-                          isLengthCheck = true;
-                          maxSafeIndex = Math.max(maxSafeIndex, directMaxSafe);
-                        }
-
-                        // Check logical expressions like: !arr || arr.length === 0
-                        if (t.isLogicalExpression(test)) {
-                          const leftMax = getMaxSafeIndex(test.left);
-                          const rightMax = getMaxSafeIndex(test.right);
-                          if (leftMax >= 0 || rightMax >= 0) {
-                            isLengthCheck = true;
-                            maxSafeIndex = Math.max(maxSafeIndex, leftMax, rightMax);
-                          }
-                          // Also check nested logical expressions
-                          if (t.isLogicalExpression(test.left) || t.isLogicalExpression(test.right)) {
-                            ifPath.get('test').traverse({
-                              BinaryExpression(binPath: NodePath<t.BinaryExpression>) {
-                                const nestedMax = getMaxSafeIndex(binPath.node);
-                                if (nestedMax >= 0) {
-                                  isLengthCheck = true;
-                                  maxSafeIndex = Math.max(maxSafeIndex, nestedMax);
-                                }
-                              },
-                            });
-                          }
-                        }
-
-                        // If we found a length check, verify our access is within the guarded block
-                        if (isLengthCheck) {
-                          // Check if our path is inside the consequent (then block) or after an early return
-                          const consequent = ifPath.node.consequent;
-
-                          // Check for early return pattern: if (!arr || arr.length === 0) return;
-                          let hasEarlyReturn = false;
-                          if (t.isBlockStatement(consequent)) {
-                            for (const stmt of consequent.body) {
-                              if (t.isReturnStatement(stmt)) {
-                                hasEarlyReturn = true;
-                                break;
-                              }
-                            }
-                          } else if (t.isReturnStatement(consequent)) {
-                            hasEarlyReturn = true;
-                          }
-
-                          if (hasEarlyReturn) {
-                            // For early return, index 0 is always safe
-                            // For other indices, check if the length check supports it
-                            if (accessedIndex >= 0 && accessedIndex <= maxSafeIndex) {
-                              isSafe = true;
-                            } else if (accessedIndex === 0 && maxSafeIndex >= 0) {
-                              // Default case: any length check makes index 0 safe after early return
-                              isSafe = true;
-                            }
-                          }
-
-                          // Check if our access is inside the guarded block (for positive checks)
-                          if (!hasEarlyReturn && t.isBlockStatement(consequent)) {
-                            ifPath.get('consequent').traverse({
-                              MemberExpression(innerPath: NodePath<t.MemberExpression>) {
-                                if (innerPath.node === path.node) {
-                                  // Check if the accessed index is within the safe range
-                                  if (accessedIndex >= 0 && accessedIndex <= maxSafeIndex) {
-                                    isSafe = true;
-                                  } else if (accessedIndex === 0 && maxSafeIndex >= 0) {
-                                    // Default case: any length check makes index 0 safe
-                                    isSafe = true;
-                                  }
-                                }
-                              },
-                            });
-                          }
-                        }
-                      },
-                    });
-                  }
-                }
-
-                // Pattern 3: Object.keys/values/entries always returns an array
+                // Pattern 2: Object.keys/values/entries always returns an array
                 // e.g., Object.keys(obj)[0]
                 if (
                   t.isCallExpression(object) &&
@@ -6223,6 +5911,9 @@ Correct pattern:
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions) => {
         const violations: Violation[] = [];
 
+        // Create control flow analyzer for guard detection
+        const cfa = new ControlFlowAnalyzer(ast, componentSpec);
+
         // Common formatting methods that can fail on null/undefined
         const formattingMethods = new Set([
           // Number methods
@@ -6332,43 +6023,8 @@ Correct pattern:
                     hasFallback = true;
                   }
 
-                  // Check if inside a null/undefined check (e.g., {value != null && ...})
-                  // Pattern: {property != null && <JSXElement>{property.toFixed()}</JSXElement>}
-                  let hasNullCheck = false;
-                  let currentPath: NodePath | null = path.parentPath;
-                  while (currentPath && !hasNullCheck) {
-                    const node = currentPath.node;
-
-                    // Check for logical && with null check on left side
-                    if (t.isLogicalExpression(node) && node.operator === '&&') {
-                      const left = node.left;
-
-                      // Pattern: property != null OR property !== null OR property !== undefined
-                      if (t.isBinaryExpression(left) &&
-                          (left.operator === '!=' || left.operator === '!==') &&
-                          t.isIdentifier(left.left) &&
-                          left.left.name === propertyName &&
-                          (t.isNullLiteral(left.right) ||
-                           (t.isIdentifier(left.right) && left.right.name === 'undefined'))) {
-                        hasNullCheck = true;
-                        break;
-                      }
-
-                      // Pattern: property != null in object access (objectName.property != null)
-                      if (t.isBinaryExpression(left) &&
-                          (left.operator === '!=' || left.operator === '!==') &&
-                          t.isMemberExpression(left.left) &&
-                          t.isIdentifier(left.left.property) &&
-                          left.left.property.name === propertyName &&
-                          (t.isNullLiteral(left.right) ||
-                           (t.isIdentifier(left.right) && left.right.name === 'undefined'))) {
-                        hasNullCheck = true;
-                        break;
-                      }
-                    }
-
-                    currentPath = currentPath.parentPath;
-                  }
+                  // Check if inside a null/undefined check using Control Flow Analyzer
+                  const hasNullCheck = cfa.isDefinitelyNonNull(callee.object, path);
 
                   // Skip if the object is a simple identifier (likely a calculated/local object)
                   // Pattern: metrics.winRate.toFixed() where metrics is an object with calculated values
