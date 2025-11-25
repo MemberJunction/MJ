@@ -1,5 +1,4 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { Router } from '@angular/router';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
@@ -153,8 +152,7 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
   constructor(
     private sharedService: SharedService,
     private testHarnessService: AITestHarnessDialogService,
-    private navigationService: NavigationService,
-    private router: Router
+    private navigationService: NavigationService
   ) {
     super();
   }
@@ -370,22 +368,9 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
   }
 
   public createNewPrompt(): void {
-    try {
-      // Navigate to new record form using the MemberJunction pattern
-      // Empty third parameter means new record
-      this.router.navigate(
-        ['resource', 'record', ''], // Empty record ID = new record
-        { 
-          queryParams: { 
-            Entity: 'AI Prompts'
-            // Could add NewRecordValues here for pre-populated defaults if needed
-          } 
-        }
-      );
-    } catch (error) {
-      console.error('Error navigating to new prompt form:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error opening new prompt form', 'error', 3000);
-    }
+    // Use the standard MemberJunction pattern to open a new AI Prompt form
+    // Empty CompositeKey indicates a new record
+    this.navigationService.OpenEntityRecord('AI Prompts', new CompositeKey([]));
   }
 
   public getPromptIcon(prompt: PromptWithTemplate): string {
