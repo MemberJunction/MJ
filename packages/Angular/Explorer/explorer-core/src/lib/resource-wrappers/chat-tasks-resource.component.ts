@@ -28,10 +28,19 @@ export function LoadChatTasksResource() {
     </div>
   `,
   styles: [`
-    .chat-tasks-container {
+    :host {
       display: flex;
+      flex-direction: column;
       width: 100%;
       height: 100%;
+    }
+
+    .chat-tasks-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      flex: 1;
       overflow: hidden;
     }
   `],

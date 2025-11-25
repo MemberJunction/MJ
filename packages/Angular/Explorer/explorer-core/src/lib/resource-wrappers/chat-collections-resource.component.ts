@@ -27,10 +27,19 @@ export function LoadChatCollectionsResource() {
     </div>
   `,
   styles: [`
-    .chat-collections-container {
+    :host {
       display: flex;
+      flex-direction: column;
       width: 100%;
       height: 100%;
+    }
+
+    .chat-collections-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      flex: 1;
       overflow: hidden;
     }
   `],
