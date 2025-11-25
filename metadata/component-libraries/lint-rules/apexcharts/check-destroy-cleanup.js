@@ -30,7 +30,32 @@
                 // Check if the return contains destroy call
                 const returnArg = stmt.argument;
                 if (t.isArrowFunctionExpression(returnArg) || t.isFunctionExpression(returnArg)) {
-                  hasCleanup = true;
+                  // Check if cleanup function actually calls destroy()
+                  const cleanupBody = returnArg.body;
+                  const cleanupStatements = t.isBlockStatement(cleanupBody) ? cleanupBody.body : [cleanupBody];
+
+                  // Look for destroy() call in cleanup function
+                  for (const cleanupStmt of cleanupStatements) {
+                    if (t.isExpressionStatement(cleanupStmt) && t.isCallExpression(cleanupStmt.expression)) {
+                      const call = cleanupStmt.expression;
+                      if (t.isMemberExpression(call.callee) &&
+                          t.isIdentifier(call.callee.property) &&
+                          call.callee.property.name === 'destroy') {
+                        hasCleanup = true;
+                        break;
+                      }
+                    }
+                    // Also handle optional chaining: chart?.destroy()
+                    else if (t.isExpressionStatement(cleanupStmt) && t.isOptionalCallExpression(cleanupStmt.expression)) {
+                      const call = cleanupStmt.expression;
+                      if (t.isOptionalMemberExpression(call.callee) &&
+                          t.isIdentifier(call.callee.property) &&
+                          call.callee.property.name === 'destroy') {
+                        hasCleanup = true;
+                        break;
+                      }
+                    }
+                  }
                 }
               }
             }

@@ -49,6 +49,7 @@ export class TypeInferenceEngine {
   private errors: TypeInferenceError[] = [];
   private componentSpec?: ComponentSpec;
   private contextUser?: UserInfo;
+  private functionReturnTypes: Map<string, TypeInfo> = new Map();
 
   constructor(componentSpec?: ComponentSpec, contextUser?: UserInfo) {
     this.componentSpec = componentSpec;
@@ -89,6 +90,14 @@ export class TypeInferenceEngine {
       // Track variable declarations
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         self.inferDeclaratorType(path);
+
+        // Also check if it's a function expression assignment
+        // const calculateMetrics = () => { return {...} }
+        const node = path.node;
+        if (t.isIdentifier(node.id) &&
+            (t.isArrowFunctionExpression(node.init) || t.isFunctionExpression(node.init))) {
+          self.trackFunctionReturnType(node.id.name, node.init);
+        }
       },
 
       // Track assignments to existing variables
@@ -96,9 +105,14 @@ export class TypeInferenceEngine {
         self.inferAssignmentType(path);
       },
 
-      // Track function parameters
+      // Track function parameters and return types
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         self.inferFunctionParameterTypes(path);
+
+        // Track return type of named functions
+        if (path.node.id) {
+          self.trackFunctionReturnType(path.node.id.name, path.node);
+        }
       },
 
       ArrowFunctionExpression(path: NodePath<t.ArrowFunctionExpression>) {
@@ -242,6 +256,123 @@ export class TypeInferenceEngine {
         }
       }
     }
+  }
+
+  /**
+   * Track function return type by analyzing its body
+   */
+  private trackFunctionReturnType(functionName: string, func: t.FunctionDeclaration | t.FunctionExpression | t.ArrowFunctionExpression): void {
+    const body = func.body;
+
+    // Arrow function with expression body: () => ({...})
+    if (t.isExpression(body)) {
+      const returnType = this.inferExpressionType(body);
+      this.functionReturnTypes.set(functionName, returnType);
+      return;
+    }
+
+    // Function with block body - find return statements
+    if (t.isBlockStatement(body)) {
+      // Try to analyze the function body for object building patterns
+      const returnType = this.analyzeObjectBuildingPattern(body);
+      if (returnType) {
+        this.functionReturnTypes.set(functionName, returnType);
+        return;
+      }
+
+      // Fallback: Find the first return statement
+      for (const stmt of body.body) {
+        if (t.isReturnStatement(stmt) && stmt.argument) {
+          const inferredType = this.inferExpressionType(stmt.argument);
+          this.functionReturnTypes.set(functionName, inferredType);
+          return;
+        }
+      }
+    }
+
+    // No return statement found or void function
+    this.functionReturnTypes.set(functionName, StandardTypes.unknown);
+  }
+
+  /**
+   * Analyze common object-building patterns in function bodies
+   * Pattern: const obj = {}; forEach(...) { obj[key] = { prop: value } }; return obj;
+   */
+  private analyzeObjectBuildingPattern(body: t.BlockStatement): TypeInfo | null {
+    let objectVarName: string | null = null;
+    let objectElementType: TypeInfo | null = null;
+    const debugEnabled = false;
+
+    // Look for: const obj = {}; ... obj[key] = { ... }; ... return obj;
+    for (const stmt of body.body) {
+      // Find variable declaration: const obj = {};
+      if (t.isVariableDeclaration(stmt)) {
+        for (const decl of stmt.declarations) {
+          if (t.isIdentifier(decl.id) && t.isObjectExpression(decl.init) && decl.init.properties.length === 0) {
+            objectVarName = decl.id.name;
+            if (debugEnabled) console.log('[TypeInference] Found empty object declaration:', objectVarName);
+          }
+        }
+      }
+
+      // Look for forEach or for loops that populate the object
+      if (objectVarName && t.isExpressionStatement(stmt) && t.isCallExpression(stmt.expression)) {
+        const call = stmt.expression;
+        if (t.isMemberExpression(call.callee) &&
+            t.isIdentifier(call.callee.property) &&
+            call.callee.property.name === 'forEach' &&
+            call.arguments.length > 0) {
+
+          const callback = call.arguments[0];
+          if ((t.isArrowFunctionExpression(callback) || t.isFunctionExpression(callback)) &&
+              t.isBlockStatement(callback.body)) {
+
+            // Look for obj[something] = { ... } pattern inside forEach
+            for (const innerStmt of callback.body.body) {
+              if (t.isExpressionStatement(innerStmt) &&
+                  t.isAssignmentExpression(innerStmt.expression) &&
+                  innerStmt.expression.operator === '=') {
+
+                const left = innerStmt.expression.left;
+                const right = innerStmt.expression.right;
+
+                // Check if left is obj[...] and right is object literal
+                if (t.isMemberExpression(left) &&
+                    left.computed &&
+                    t.isIdentifier(left.object) &&
+                    left.object.name === objectVarName &&
+                    t.isObjectExpression(right)) {
+
+                  // Infer the type of the object literal
+                  objectElementType = this.inferObjectType(right);
+                  if (debugEnabled) console.log('[TypeInference] Found object literal assignment, inferred type:', objectElementType);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Check if this function returns the object
+      if (objectVarName && objectElementType && t.isReturnStatement(stmt)) {
+        if (t.isIdentifier(stmt.argument) && stmt.argument.name === objectVarName) {
+          // Function returns an object whose values are of the element type
+          const result = {
+            type: 'object',
+            fields: new Map(), // Dictionary, not structured object
+            objectValueType: objectElementType
+          };
+          if (debugEnabled) console.log('[TypeInference] Returning object building pattern type:', result);
+          return result;
+        }
+      }
+    }
+
+    if (debugEnabled && objectVarName && objectElementType) {
+      console.log('[TypeInference] Had object and element type but no return statement matched');
+    }
+    return null;
   }
 
   /**
@@ -424,7 +555,22 @@ export class TypeInferenceEngine {
     const fields = new Map<string, FieldTypeInfo>();
 
     for (const prop of node.properties) {
-      if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+      // Handle spread elements: { ...otherObject, newProp: value }
+      if (t.isSpreadElement(prop)) {
+        const spreadType = this.inferExpressionType(prop.argument, path);
+
+        // If spreading an object, merge its fields into our fields map
+        if (spreadType.type === 'object' && spreadType.fields) {
+          for (const [fieldName, fieldInfo] of spreadType.fields.entries()) {
+            // Only add if not already present (later properties override spread)
+            if (!fields.has(fieldName)) {
+              fields.set(fieldName, fieldInfo);
+            }
+          }
+        }
+      }
+      // Handle regular object properties
+      else if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
         const propName = prop.key.name;
         const propType = this.inferExpressionType(prop.value as t.Expression, path);
         fields.set(propName, {
@@ -442,6 +588,46 @@ export class TypeInferenceEngine {
    * Infer type for call expressions
    */
   private inferCallExpressionType(node: t.CallExpression, path?: NodePath): TypeInfo {
+    // Check for user-defined function calls
+    if (t.isIdentifier(node.callee)) {
+      const functionName = node.callee.name;
+
+      // Check if we've tracked this function's return type
+      const returnType = this.functionReturnTypes.get(functionName);
+      if (returnType) {
+        return returnType;
+      }
+
+      // Check for React hooks that return computed values
+      // useMemo(() => { return {...} }, [deps]) - returns the memoized value
+      if (functionName === 'useMemo' && node.arguments.length > 0) {
+        const callback = node.arguments[0];
+
+        // Extract the return type from the callback
+        if (t.isArrowFunctionExpression(callback) || t.isFunctionExpression(callback)) {
+          const body = callback.body;
+
+          // Arrow function with expression body: useMemo(() => ({...}))
+          if (t.isExpression(body)) {
+            return this.inferExpressionType(body, path);
+          }
+
+          // Arrow function with block body: useMemo(() => { return {...} })
+          if (t.isBlockStatement(body)) {
+            // Find return statement
+            for (const stmt of body.body) {
+              if (t.isReturnStatement(stmt) && stmt.argument) {
+                return this.inferExpressionType(stmt.argument, path);
+              }
+            }
+          }
+        }
+      }
+
+      // useCallback returns a function, but we don't track function return types
+      // Other hooks (useState, useEffect, etc.) have specific return types we could handle
+    }
+
     // Check for RunView/RunQuery calls
     if (t.isMemberExpression(node.callee)) {
       const calleeObj = node.callee.object;
@@ -463,6 +649,26 @@ export class TypeInferenceEngine {
           return this.inferRunQueryResultType(node);
         }
       }
+    }
+
+    // Object.values() - returns array of object's values
+    if (t.isMemberExpression(node.callee) &&
+        t.isIdentifier(node.callee.object) &&
+        node.callee.object.name === 'Object' &&
+        t.isIdentifier(node.callee.property) &&
+        node.callee.property.name === 'values' &&
+        node.arguments.length === 1) {
+
+      const objectType = this.inferExpressionType(node.arguments[0], path);
+      if (objectType.type === 'object' && objectType.objectValueType) {
+        // Return array of the object's value type
+        return {
+          type: 'array',
+          arrayElementType: objectType.objectValueType
+        };
+      }
+      // Fallback: unknown array
+      return { type: 'array', arrayElementType: StandardTypes.unknown };
     }
 
     // Array methods that return arrays
