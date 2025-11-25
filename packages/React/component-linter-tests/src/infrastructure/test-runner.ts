@@ -80,6 +80,15 @@ class TestSuite {
 
     for (const test of this.tests) {
       const testStart = Date.now();
+      let testPassed = false;
+      let testError: Error | null = null;
+
+      // Capture console output during test execution
+      const capturedOutput: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: any[]) => {
+        capturedOutput.push(args.map(arg => String(arg)).join(' '));
+      };
 
       try {
         // Run beforeEach if defined
@@ -89,26 +98,39 @@ class TestSuite {
 
         // Run test
         await test.fn();
+        testPassed = true;
+      } catch (error) {
+        testPassed = false;
+        testError = error as Error;
+      } finally {
+        // Restore console.log
+        console.log = originalLog;
+      }
 
-        const duration = Date.now() - testStart;
+      const duration = Date.now() - testStart;
+
+      // Print test result FIRST, then captured output
+      if (testPassed) {
         results.push({
           name: test.name,
           passed: true,
           duration
         });
-
         console.log(`  ✅ ${test.name} (${duration}ms)`);
-      } catch (error) {
-        const duration = Date.now() - testStart;
+      } else {
         results.push({
           name: test.name,
           passed: false,
-          error: error as Error,
+          error: testError!,
           duration
         });
-
         console.log(`  ❌ ${test.name} (${duration}ms)`);
-        console.log(`     ${(error as Error).message}`);
+        console.log(`     ${testError!.message}`);
+      }
+
+      // Print captured output after test status
+      if (capturedOutput.length > 0) {
+        capturedOutput.forEach(line => console.log(line));
       }
     }
 
