@@ -38,6 +38,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   loading = true;
   initialized = false;
   tabBarVisible = true; // Controlled by workspace manager
+  userMenuVisible = false; // User avatar context menu
 
   constructor(
     private appManager: ApplicationManager,
@@ -473,5 +474,103 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.activeApp.GetColor(),
       { forceNewTab: shiftKey }
     );
+  }
+
+  /**
+   * Toggle user menu visibility
+   */
+  toggleUserMenu(event: Event): void {
+    event.stopPropagation();
+    this.userMenuVisible = !this.userMenuVisible;
+
+    if (this.userMenuVisible) {
+      // Close menu when clicking outside
+      const closeHandler = () => {
+        this.userMenuVisible = false;
+        document.removeEventListener('click', closeHandler);
+      };
+      setTimeout(() => {
+        document.addEventListener('click', closeHandler);
+      }, 0);
+    }
+  }
+
+  /**
+   * Log current workspace configuration to console (debug)
+   */
+  onLogLayout(): void {
+    const config = this.workspaceManager.GetConfiguration();
+    console.log('📋 Workspace Configuration:', JSON.stringify(config, null, 2));
+    console.log('📋 Workspace Configuration (object):', config);
+    this.userMenuVisible = false;
+  }
+
+  /**
+   * Reset workspace layout - clears all tabs and switches to single-resource mode
+   */
+  async onResetLayout(): Promise<void> {
+    this.userMenuVisible = false;
+
+    // Get current active app to create a fresh default tab
+    const currentApp = this.activeApp;
+    if (!currentApp) {
+      console.warn('No active app to reset to');
+      return;
+    }
+
+    // Create a fresh configuration with just one default tab
+    const defaultTabRequest = await currentApp.CreateDefaultTab();
+    if (!defaultTabRequest) {
+      console.warn('Could not create default tab for app');
+      return;
+    }
+
+    // Generate a new tab ID
+    const newTabId = this.generateUUID();
+
+    // Create minimal configuration with single tab (will trigger single-resource mode)
+    const freshConfig = {
+      version: 1,
+      layout: {
+        root: {
+          type: 'row' as const,
+          content: []
+        }
+      },
+      activeTabId: newTabId,
+      theme: 'light' as const,
+      preferences: {
+        tabPosition: 'top' as const,
+        showTabIcons: true,
+        autoSaveInterval: 5000
+      },
+      tabs: [{
+        id: newTabId,
+        applicationId: defaultTabRequest.ApplicationId,
+        title: defaultTabRequest.Title,
+        resourceTypeId: defaultTabRequest.ResourceTypeId || '',
+        resourceRecordId: defaultTabRequest.ResourceRecordId || '',
+        isPinned: false,
+        sequence: 0,
+        lastAccessedAt: new Date().toISOString(),
+        configuration: defaultTabRequest.Configuration || {}
+      }]
+    };
+
+    console.log('🔄 Resetting layout to fresh state:', freshConfig);
+
+    // Update workspace configuration
+    this.workspaceManager.UpdateConfiguration(freshConfig);
+  }
+
+  /**
+   * Generate UUID for new tabs
+   */
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
   }
 }

@@ -224,14 +224,16 @@ export class GoldenLayoutManager {
     const rect = this.containerElement.getBoundingClientRect();
     this.layout.setSize(rect.width, rect.height);
 
-    // Retry setSize after a delay to handle timing issues with flexbox layout
-    // This matches the prototype's approach
+    // Retry setSize after delays to handle timing issues with flexbox layout
+    // Initial page load can take time for container to have final dimensions
     setTimeout(() => {
-      if (this.layout && this.containerElement) {
-        const newRect = this.containerElement.getBoundingClientRect();
-        this.layout.setSize(newRect.width, newRect.height);
-      }
+      this.updateSize();
     }, 100);
+
+    // Additional delayed resize for slower initial page loads
+    setTimeout(() => {
+      this.updateSize();
+    }, 300);
 
     // Watch for container resize and update Golden Layout size
     this.resizeObserver = new ResizeObserver(() => {
@@ -241,6 +243,19 @@ export class GoldenLayoutManager {
       }
     });
     this.resizeObserver.observe(this.containerElement);
+  }
+
+  /**
+   * Update layout size to match container
+   * Call this if the layout appears incorrectly sized
+   */
+  updateSize(): void {
+    if (this.layout && this.containerElement) {
+      const rect = this.containerElement.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        this.layout.setSize(rect.width, rect.height);
+      }
+    }
   }
 
   /**
@@ -261,6 +276,7 @@ export class GoldenLayoutManager {
 
   /**
    * Add a new tab to the layout
+   * Adds to existing stack if one exists, otherwise creates new stack
    */
   AddTab(state: TabComponentState): void {
     if (!this.layout) {
@@ -269,12 +285,26 @@ export class GoldenLayoutManager {
     }
 
     try {
-      // Use the addComponent method like the prototype does!
-      this.layout.addComponent(
-        'tab-content',  // componentType
-        state as unknown as Record<string, unknown>,  // componentState
-        state.title  // title
-      );
+      // First, check if there's an existing stack to add to
+      const existingStack = this.findFirstStack();
+
+      if (existingStack) {
+        // Add to existing stack (creates tabbed interface)
+        const componentConfig: GLComponentItemConfig = {
+          type: 'component',
+          componentType: 'tab-content',
+          componentState: state as unknown as Record<string, unknown>,
+          title: state.title
+        };
+        existingStack.addItem(componentConfig);
+      } else {
+        // No existing stack - use addComponent which will create one
+        this.layout.addComponent(
+          'tab-content',  // componentType
+          state as unknown as Record<string, unknown>,  // componentState
+          state.title  // title
+        );
+      }
     } catch (error) {
       LogError('GoldenLayoutManager: Failed to add tab - ' + (error as Error).message);
     }

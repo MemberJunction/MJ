@@ -9,7 +9,8 @@ import {
   EnvironmentInjector,
   createComponent,
   ComponentRef,
-  ViewEncapsulation
+  ViewEncapsulation,
+  ChangeDetectorRef
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -44,6 +45,7 @@ import { ComponentCacheManager } from './component-cache-manager';
 })
 export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
 
   private subscriptions: Subscription[] = [];
   private layoutInitialized = false;
@@ -53,6 +55,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // NEW: Smart component cache for preserving state across tab switches
   private cacheManager: ComponentCacheManager;
+
+  // Single-resource mode: render component directly without Golden Layout
+  // This avoids the 20px height issue when GL header is hidden
+  useSingleResourceMode = false;
+  private singleResourceComponentRef: ComponentRef<BaseResourceComponent> | null = null;
+  private previousTabBarVisible: boolean | null = null;
+  private currentSingleResourceSignature: string | null = null; // Track loaded content signature to avoid unnecessary reloads
+  private isCreatingInitialTabs = false; // Flag to prevent syncTabsWithConfiguration during initial tab creation
 
   // Context menu state
   contextMenuVisible = false;
@@ -65,7 +75,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     private workspaceManager: WorkspaceStateManager,
     private appManager: ApplicationManager,
     private appRef: ApplicationRef,
-    private environmentInjector: EnvironmentInjector
+    private environmentInjector: EnvironmentInjector,
+    private cdr: ChangeDetectorRef
   ) {
     // Initialize component cache manager
     this.cacheManager = new ComponentCacheManager(this.appRef);
@@ -101,47 +112,109 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to configuration changes to sync tabs
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(config => {
-        if (config && this.layoutInitialized) {
-          this.syncTabsWithConfiguration(config.tabs);
+        if (config) {
+          if (this.useSingleResourceMode) {
+            // In single-resource mode, reload content if the tab content changed
+            // The same tab ID can have different content (tab gets reused)
+            const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
+            if (activeTab) {
+              const signature = this.getTabContentSignature(activeTab);
+              if (signature !== this.currentSingleResourceSignature) {
+                this.loadSingleResourceContent();
+              }
+            }
+          } else if (this.layoutInitialized && !this.isCreatingInitialTabs) {
+            // In multi-tab mode, sync with Golden Layout
+            // Skip during initial tab creation to avoid race condition (tabs would be created twice)
+            this.syncTabsWithConfiguration(config.tabs);
+          }
         }
+      })
+    );
+
+    // Subscribe to tab bar visibility changes for single-resource mode
+    this.subscriptions.push(
+      this.workspaceManager.TabBarVisible.subscribe(tabBarVisible => {
+        this.handleTabBarVisibilityChange(tabBarVisible);
       })
     );
   }
 
   ngAfterViewInit(): void {
+    // Initialize Golden Layout only if we're not in single-resource mode
+    if (!this.useSingleResourceMode) {
+      this.initializeGoldenLayout();
+    } else {
+      // In single-resource mode, load content directly
+      this.loadSingleResourceContent();
+    }
+  }
+
+  /**
+   * Initialize Golden Layout and load tabs
+   * @param forceCreateTabs - If true, always creates tabs fresh from config.tabs instead of restoring saved layout
+   */
+  private initializeGoldenLayout(forceCreateTabs = false): void {
+    if (!this.glContainer?.nativeElement) {
+      console.warn('Golden Layout container not available, waiting...');
+      setTimeout(() => this.initializeGoldenLayout(forceCreateTabs), 50);
+      return;
+    }
+
+    if (this.layoutInitialized) {
+      return; // Already initialized
+    }
+
     // Initialize Golden Layout
     this.layoutManager.Initialize(this.glContainer.nativeElement);
 
     // Mark layout as initialized
     this.layoutInitialized = true;
 
-    // Load saved layout
+    // Load tabs from configuration
     const config = this.workspaceManager.GetConfiguration();
-    if (config) {
-      // Check if we have a saved layout structure
-      const hasLayout = config.layout && config.layout.root &&
-                       config.layout.root.content &&
-                       config.layout.root.content.length > 0;
+    if (config && config.tabs.length > 0) {
+      // Always create tabs from config.tabs sorted by sequence
+      // This ensures correct tab order regardless of saved layout structure
+      // The saved layout structure can get out of sync with tab sequence
+      console.log(`[TabContainer.initializeGoldenLayout] Creating ${config.tabs.length} tabs from config (sorted by sequence)`);
 
-      if (hasLayout) {
-        // LoadLayout will recreate tabs from the saved structure
-        this.layoutManager.LoadLayout(config.layout);
-      } else {
-        // No saved layout, create tabs manually
-        config.tabs.forEach(tab => {
+      // Sort tabs by sequence to ensure correct order
+      const sortedTabs = [...config.tabs].sort((a, b) => a.sequence - b.sequence);
+
+      // Set flag to prevent syncTabsWithConfiguration from running during initial creation
+      // This prevents the race condition where tabs get created twice
+      this.isCreatingInitialTabs = true;
+      try {
+        sortedTabs.forEach(tab => {
           this.createTab(tab);
         });
+      } finally {
+        this.isCreatingInitialTabs = false;
       }
 
-      // Focus active tab
-      if (config.activeTabId) {
-        this.layoutManager.FocusTab(config.activeTabId);
-      }
+      // Focus active tab and ensure proper sizing
+      // Use setTimeout to ensure Golden Layout has finished registering containers
+      setTimeout(() => {
+        if (config.activeTabId) {
+          this.layoutManager.FocusTab(config.activeTabId!);
+        }
+        // Force size update after tabs are created to ensure full container usage
+        this.layoutManager.updateSize();
+      }, 50);
+
+      // Additional delayed resize for initial page load scenarios
+      setTimeout(() => {
+        this.layoutManager.updateSize();
+      }, 200);
     }
   }
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
+
+    // Cleanup single-resource mode component if exists
+    this.cleanupSingleResourceComponent();
 
     // Clear the component cache (destroys all components)
     this.cacheManager.clearCache();
@@ -152,6 +225,194 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       ref.destroy();
     });
     this.componentRefs.clear();
+  }
+
+  /**
+   * Handle changes to tab bar visibility - switches between single-resource and multi-tab modes
+   */
+  private handleTabBarVisibilityChange(tabBarVisible: boolean): void {
+    // Skip if no change
+    if (this.previousTabBarVisible === tabBarVisible) {
+      return;
+    }
+    this.previousTabBarVisible = tabBarVisible;
+
+    // Determine if we should use single-resource mode
+    const shouldUseSingleResourceMode = !tabBarVisible;
+
+    if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
+      console.log(`🔄 Switching to ${shouldUseSingleResourceMode ? 'single-resource' : 'multi-tab'} mode`);
+      this.useSingleResourceMode = shouldUseSingleResourceMode;
+      this.cdr.detectChanges();
+
+      if (this.useSingleResourceMode) {
+        // Transitioning to single-resource mode
+        // First, destroy Golden Layout if it was initialized (prevents stale state)
+        if (this.layoutInitialized) {
+          console.log('[TabContainer] Destroying Golden Layout when transitioning to single-resource mode');
+          this.layoutManager.Destroy();
+          this.layoutInitialized = false;
+        }
+        // Load the active tab's content directly
+        this.loadSingleResourceContent();
+      } else {
+        // Transitioning to multi-tab mode
+        // Pin the previously displayed tab (it was the "current" content in single-resource mode)
+        // This ensures we only have ONE temporary tab at a time
+        const config = this.workspaceManager.GetConfiguration();
+        if (config && config.tabs.length > 0) {
+          // The new tab (just added via OpenTabForced) is now the activeTabId
+          // All OTHER unpinned tabs should be pinned since they represent content
+          // the user explicitly kept open
+          const updatedTabs = config.tabs.map(tab => {
+            // Pin all tabs except the newly active one (which is the temporary tab)
+            if (tab.id !== config.activeTabId && !tab.isPinned) {
+              return { ...tab, isPinned: true };
+            }
+            return tab;
+          });
+
+          // Only update if we actually changed something
+          const hasChanges = updatedTabs.some((tab, i) => tab.isPinned !== config.tabs[i].isPinned);
+          if (hasChanges) {
+            this.workspaceManager.UpdateConfiguration({
+              ...config,
+              tabs: updatedTabs
+            });
+          }
+        }
+
+        // Clean up direct component, Golden Layout will handle tabs
+        this.cleanupSingleResourceComponent();
+        this.currentSingleResourceSignature = null; // Reset tracking
+
+        // Reset layout initialized flag since we're switching from single-resource mode
+        // The gl-container is a new DOM element (due to @if), so we need fresh initialization
+        this.layoutInitialized = false;
+
+        // Initialize Golden Layout - use setTimeout to allow the template to update first
+        // and ensure the gl-container div exists in the DOM
+        // IMPORTANT: Use forceCreateTabs=true to create tabs fresh from config.tabs
+        // instead of restoring potentially stale saved layout structure
+        setTimeout(() => {
+          this.initializeGoldenLayout(true /* forceCreateTabs */);
+        }, 0);
+      }
+    }
+  }
+
+  /**
+   * Load content directly for single-resource mode (bypasses Golden Layout)
+   */
+  private async loadSingleResourceContent(): Promise<void> {
+    // Wait for next tick to ensure the container is rendered
+    await Promise.resolve();
+
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config || config.tabs.length === 0) {
+      return;
+    }
+
+    // Get the active tab (or first tab)
+    const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
+    if (!activeTab) {
+      return;
+    }
+
+    // Get the container element
+    const container = this.directContentContainer?.nativeElement;
+    if (!container) {
+      console.warn('Direct content container not available yet, retrying...');
+      // Retry after view is updated
+      setTimeout(() => this.loadSingleResourceContent(), 50);
+      return;
+    }
+
+    // Create ResourceData from tab
+    const resourceData = await this.getResourceDataFromTab(activeTab);
+    if (!resourceData) {
+      LogError(`Unable to create ResourceData for tab: ${activeTab.title}`);
+      return;
+    }
+
+    // Get driver class for component lookup
+    const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
+
+    // Get the component registration
+    const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+      BaseResourceComponent,
+      driverClass
+    );
+
+    if (!resourceReg) {
+      LogError(`Unable to find resource registration for driver class: ${driverClass}`);
+      return;
+    }
+
+    console.log(`📦 Loading single-resource component: ${driverClass}`);
+
+    // Track which content we're loading (signature includes resource type and record ID)
+    this.currentSingleResourceSignature = this.getTabContentSignature(activeTab);
+
+    // Clean up previous component if any
+    this.cleanupSingleResourceComponent();
+
+    // Create the component dynamically
+    const componentRef = createComponent(resourceReg.SubClass, {
+      environmentInjector: this.environmentInjector
+    });
+
+    // Attach to Angular's change detection
+    this.appRef.attachView(componentRef.hostView);
+
+    // Set the resource data on the component
+    const instance = componentRef.instance as BaseResourceComponent;
+    instance.Data = resourceData;
+
+    // Wire up events
+    instance.LoadCompleteEvent = () => {
+      console.log('✅ Single-resource component loaded');
+    };
+
+    // Get the native element and append to container
+    const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
+    container.appendChild(nativeElement);
+
+    // Store reference for cleanup
+    this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
+  }
+
+  /**
+   * Clean up single-resource mode component
+   */
+  private cleanupSingleResourceComponent(): void {
+    if (this.singleResourceComponentRef) {
+      this.appRef.detachView(this.singleResourceComponentRef.hostView);
+      this.singleResourceComponentRef.destroy();
+      this.singleResourceComponentRef = null;
+    }
+
+    // Clear the container
+    const container = this.directContentContainer?.nativeElement;
+    if (container) {
+      container.innerHTML = '';
+    }
+  }
+
+  /**
+   * Generate a signature for tab content to detect when content changes
+   * This is needed because in single-resource mode, the same tab ID can have different content
+   */
+  private getTabContentSignature(tab: WorkspaceTab): string {
+    // Include key identifying fields that determine what component/content is shown
+    const parts = [
+      tab.applicationId,
+      tab.configuration?.resourceType || '',
+      tab.configuration?.driverClass || '',
+      tab.resourceRecordId || '',
+      tab.configuration?.route || ''
+    ];
+    return parts.join('|');
   }
 
   /**

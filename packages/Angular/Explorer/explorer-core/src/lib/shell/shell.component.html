@@ -26,9 +26,21 @@
         <i class="fa-solid fa-bell"></i>
       </button>
       <div class="user-menu">
-        <button class="avatar-btn">
+        <button class="avatar-btn" (click)="toggleUserMenu($event)">
           <i class="fa-solid fa-user"></i>
         </button>
+        <!-- User Context Menu -->
+        <div class="user-context-menu" *ngIf="userMenuVisible">
+          <div class="user-menu-item" (click)="onLogLayout()">
+            <i class="fa-solid fa-code"></i>
+            <span>Log Layout (Debug)</span>
+          </div>
+          <div class="user-menu-divider"></div>
+          <div class="user-menu-item danger" (click)="onResetLayout()">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Reset Layout</span>
+          </div>
+        </div>
       </div>
     </div>
   </header>

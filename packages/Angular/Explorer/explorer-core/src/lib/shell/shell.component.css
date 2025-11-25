@@ -110,6 +110,61 @@ mj-tab-container ::ng-deep .lm_stack {
   font-size: 16px;
 }
 
+/* User Context Menu */
+.user-context-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 10000;
+  overflow: hidden;
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #424242;
+  transition: background 0.15s;
+}
+
+.user-menu-item i {
+  width: 18px;
+  text-align: center;
+  color: #757575;
+  font-size: 14px;
+}
+
+.user-menu-item:hover {
+  background: #f5f5f5;
+}
+
+.user-menu-item.danger {
+  color: #c62828;
+}
+
+.user-menu-item.danger i {
+  color: #c62828;
+}
+
+.user-menu-item.danger:hover {
+  background: #ffebee;
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 4px 0;
+}
+
 .shell-loading {
   display: flex;
   flex-direction: column;
