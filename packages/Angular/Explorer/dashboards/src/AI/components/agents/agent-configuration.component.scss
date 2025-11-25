@@ -132,7 +132,14 @@
 /* Main Content */
 .main-content {
   flex: 1;
-  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-splitter {
+  flex: 1;
+  min-height: 0;
 }
 
 .agents-content {
