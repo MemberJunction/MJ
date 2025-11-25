@@ -34,6 +34,88 @@ export class ControlFlowAnalyzer {
   }
 
   /**
+   * Check if a node is protected by a ternary/conditional guard
+   * Useful for checking expressions inside template literals within ternaries
+   *
+   * @param node - The node to check (e.g., member expression)
+   * @param path - Current path in the AST (should be close to the node's location)
+   * @returns true if protected by a ternary guard, false otherwise
+   */
+  isProtectedByTernary(node: t.Node, path: NodePath): boolean {
+    const varName = this.extractVariableName(node);
+    if (!varName) return false;
+
+    // DEBUG: Log what we're looking for
+    const debugEnabled = false; // Set to true to enable logging
+    if (debugEnabled) {
+      console.log('[CFA] isProtectedByTernary checking:', varName);
+      console.log('[CFA] Starting from path type:', path.node.type);
+    }
+
+    // Walk up from the path to find ConditionalExpression parents
+    let currentPath: NodePath | null = path;
+    let depth = 0;
+    while (currentPath) {
+      const parentPath: NodePath | null = currentPath.parentPath;
+
+      if (debugEnabled) {
+        console.log(`[CFA] Depth ${depth}: current=${currentPath.node.type}, parent=${parentPath?.node.type || 'null'}`);
+      }
+
+      if (parentPath && t.isConditionalExpression(parentPath.node)) {
+        const test = parentPath.node.test;
+
+        if (debugEnabled) {
+          console.log('[CFA] Found ConditionalExpression!');
+          console.log('[CFA] Test type:', test.type);
+          console.log('[CFA] Consequent type:', parentPath.node.consequent.type);
+        }
+
+        if (this.detectNullGuard(test, varName) || this.detectTruthinessGuard(test, varName)) {
+          if (debugEnabled) {
+            console.log('[CFA] Guard detected for', varName);
+          }
+
+          // Check if current node is the consequent or is inside it
+          // The consequent is the "true" branch of the ternary
+          if (currentPath.node === parentPath.node.consequent) {
+            if (debugEnabled) {
+              console.log('[CFA] Current node IS the consequent - PROTECTED');
+            }
+            return true;
+          }
+
+          // Check if path is inside the consequent by walking up
+          let checkPath: NodePath | null = path;
+          while (checkPath && checkPath !== parentPath) {
+            if (checkPath.node === parentPath.node.consequent) {
+              if (debugEnabled) {
+                console.log('[CFA] Path is inside consequent - PROTECTED');
+              }
+              return true;
+            }
+            checkPath = checkPath.parentPath;
+          }
+
+          if (debugEnabled) {
+            console.log('[CFA] Not in consequent - checking failed');
+          }
+        } else if (debugEnabled) {
+          console.log('[CFA] No guard detected for', varName);
+        }
+      }
+
+      currentPath = parentPath;
+      depth++;
+    }
+
+    if (debugEnabled) {
+      console.log('[CFA] No protection found after', depth, 'levels');
+    }
+    return false;
+  }
+
+  /**
    * Check if a variable/property is definitely non-null at this location
    *
    * Detects patterns like:
@@ -51,6 +133,13 @@ export class ControlFlowAnalyzer {
     const varName = this.extractVariableName(node);
     if (!varName) return false;
 
+    // For member expressions like products.length, also check if just the object (products) is guarded
+    // This handles cases like: !products || ... || products.length
+    const objectName = (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) &&
+                       t.isIdentifier(node.object)
+                       ? node.object.name
+                       : null;
+
     let currentPath: NodePath | null = path.parentPath;
 
     while (currentPath) {
@@ -60,16 +149,16 @@ export class ControlFlowAnalyzer {
       if (t.isIfStatement(node)) {
         const test = node.test;
 
-        // Check for null guard
-        if (this.detectNullGuard(test, varName)) {
+        // Check for null guard on full path or object
+        if (this.detectNullGuard(test, varName) || (objectName && this.detectNullGuard(test, objectName))) {
           // Make sure we're in the consequent (then block)
           if (this.isInConsequent(path, currentPath)) {
             return true;
           }
         }
 
-        // Check for truthiness guard
-        if (this.detectTruthinessGuard(test, varName)) {
+        // Check for truthiness guard on full path or object
+        if (this.detectTruthinessGuard(test, varName) || (objectName && this.detectTruthinessGuard(test, objectName))) {
           if (this.isInConsequent(path, currentPath)) {
             return true;
           }
@@ -78,9 +167,24 @@ export class ControlFlowAnalyzer {
 
       // Check if we're inside a logical && expression
       if (t.isLogicalExpression(node) && node.operator === '&&') {
-        // Check if left side is a guard for our variable
+        // Check if left side is a guard for our variable or its object
         if (this.detectNullGuard(node.left, varName) ||
-            this.detectTruthinessGuard(node.left, varName)) {
+            this.detectTruthinessGuard(node.left, varName) ||
+            (objectName && this.detectNullGuard(node.left, objectName)) ||
+            (objectName && this.detectTruthinessGuard(node.left, objectName))) {
+          // Make sure we're in the right side
+          if (this.isInRightSide(path, currentPath)) {
+            return true;
+          }
+        }
+      }
+
+      // Check if we're inside a logical || expression with negated guard
+      // Pattern: !x || !y || x.prop - if we evaluate x.prop, !x must be false
+      if (t.isLogicalExpression(node) && node.operator === '||') {
+        // Check if left side contains a negated guard for our variable or object
+        if (this.detectNegatedCheck(node.left, varName) ||
+            (objectName && this.detectNegatedCheck(node.left, objectName))) {
           // Make sure we're in the right side
           if (this.isInRightSide(path, currentPath)) {
             return true;
@@ -90,10 +194,22 @@ export class ControlFlowAnalyzer {
 
       // Check if we're inside a ternary with guard
       if (t.isConditionalExpression(node)) {
+        // Check if we're in the consequent (true branch) with a guard on full path or object
         if (this.detectNullGuard(node.test, varName) ||
-            this.detectTruthinessGuard(node.test, varName)) {
-          // Make sure we're in the consequent
+            this.detectTruthinessGuard(node.test, varName) ||
+            (objectName && this.detectNullGuard(node.test, objectName)) ||
+            (objectName && this.detectTruthinessGuard(node.test, objectName))) {
           if (this.isInConsequent(path, currentPath)) {
+            return true;
+          }
+        }
+
+        // Check if we're in the alternate (else branch) with a negated guard
+        // Pattern: !x || x.length === 0 ? ... : <here>
+        // In the else branch, we know !x is false, so x is truthy
+        if (this.isInAlternate(path, currentPath)) {
+          if (this.detectNegatedNullGuard(node.test, varName) ||
+              (objectName && this.detectNegatedNullGuard(node.test, objectName))) {
             return true;
           }
         }
@@ -223,8 +339,41 @@ export class ControlFlowAnalyzer {
 
   /**
    * Detect null/undefined guard pattern: x != null, x !== null, x !== undefined
+   * Also detects short-circuit OR patterns: !x || x.prop (x.prop is safe due to short-circuit)
    */
   private detectNullGuard(test: t.Expression, varName: string): boolean {
+    // Pattern 1: Short-circuit OR with truthiness check
+    // !x || x.prop - if x is null/undefined, !x is true and second operand never evaluates
+    if (t.isLogicalExpression(test) && test.operator === '||') {
+      // Check immediate left side first
+      const left = test.left;
+
+      // Check if left side is !varName (negation/falsiness check)
+      if (t.isUnaryExpression(left) && left.operator === '!' &&
+          t.isIdentifier(left.argument) && left.argument.name === varName) {
+        // The right side is protected by short-circuit evaluation
+        // If varName is null/undefined, left is true and right never evaluates
+        return true;
+      }
+
+      // Also check for: !x.prop || x.prop.method
+      // Handles cases like: !results || results.length === 0
+      if (t.isUnaryExpression(left) && left.operator === '!' &&
+          t.isMemberExpression(left.argument) &&
+          t.isIdentifier(left.argument.object) &&
+          left.argument.object.name === varName) {
+        // This proves varName itself is checked for truthiness
+        return true;
+      }
+
+      // Handle OR chains: A || B || C || products.length
+      // Recursively check the left side of the OR chain
+      if (this.detectNullGuard(left, varName)) {
+        return true;
+      }
+    }
+
+    // Pattern 2: Standard binary null checks
     if (!t.isBinaryExpression(test)) return false;
 
     // x != null OR x !== null OR x !== undefined
@@ -232,13 +381,14 @@ export class ControlFlowAnalyzer {
       const left = test.left;
       const right = test.right;
 
-      // Check if left is our variable (direct identifier or member expression property)
-      const isOurVar = (
-        (t.isIdentifier(left) && left.name === varName) ||
-        (t.isMemberExpression(left) &&
-         t.isIdentifier(left.property) &&
-         left.property.name === varName)
-      );
+      // Check if left is our variable
+      // For member expressions, serialize the full path for comparison
+      let leftVarName: string | null = null;
+      if (t.isIdentifier(left)) {
+        leftVarName = left.name;
+      } else if (t.isMemberExpression(left) || t.isOptionalMemberExpression(left)) {
+        leftVarName = this.serializeMemberExpression(left);
+      }
 
       // Check if right is null or undefined
       const isNullish = (
@@ -246,14 +396,19 @@ export class ControlFlowAnalyzer {
         (t.isIdentifier(right) && right.name === 'undefined')
       );
 
-      return isOurVar && isNullish;
+      return leftVarName === varName && isNullish;
     }
 
     return false;
   }
 
   /**
-   * Detect truthiness guard pattern: if (x), x && expr
+   * Detect truthiness guard pattern: if (x), x && expr, x ? ... : ...
+   *
+   * Handles:
+   * - Simple identifier: if (x)
+   * - Member expression: if (obj.prop)
+   * - Full path matching: if (item.TotalCost) protects item.TotalCost.toFixed()
    */
   private detectTruthinessGuard(test: t.Expression, varName: string): boolean {
     // Direct identifier: if (x)
@@ -261,26 +416,158 @@ export class ControlFlowAnalyzer {
       return true;
     }
 
-    // Member expression: if (obj.prop)
-    if (t.isMemberExpression(test) &&
-        t.isIdentifier(test.property) &&
-        test.property.name === varName) {
-      return true;
+    // Member expression or optional member expression: if (obj.prop) or if (obj?.prop)
+    // Extract the full path and compare with varName
+    if (t.isMemberExpression(test) || t.isOptionalMemberExpression(test)) {
+      const testPath = this.serializeMemberExpression(test);
+      if (testPath === varName) {
+        return true;
+      }
+    }
+
+    // Logical AND expression: if (x && y), both x and y are truthy in consequent
+    // Check if varName appears on the left side of the && chain
+    if (t.isLogicalExpression(test) && test.operator === '&&') {
+      // Check left side first
+      if (this.detectTruthinessGuard(test.left, varName)) {
+        return true;
+      }
+      // For varName on the right side, it's only guaranteed truthy if left is also truthy
+      // So we recursively check both sides
+      if (this.detectTruthinessGuard(test.right, varName)) {
+        return true;
+      }
     }
 
     return false;
   }
 
   /**
-   * Extract variable name from node
+   * Check if expression contains a negated check (!x) for the variable
+   * Used for detecting guards within OR chains
+   *
+   * @param expr - Expression to check
+   * @param varName - Variable name to look for
+   * @returns true if !varName exists in the expression
+   */
+  private detectNegatedCheck(expr: t.Expression, varName: string): boolean {
+    // Direct negation: !x
+    if (t.isUnaryExpression(expr) && expr.operator === '!') {
+      if (t.isIdentifier(expr.argument) && expr.argument.name === varName) {
+        return true;
+      }
+      // Also check !x.prop pattern (guards x)
+      if (t.isMemberExpression(expr.argument) &&
+          t.isIdentifier(expr.argument.object) &&
+          expr.argument.object.name === varName) {
+        return true;
+      }
+    }
+
+    // Recursively check OR chains: A || B || C
+    if (t.isLogicalExpression(expr) && expr.operator === '||') {
+      return this.detectNegatedCheck(expr.left, varName) ||
+             this.detectNegatedCheck(expr.right, varName);
+    }
+
+    return false;
+  }
+
+  /**
+   * Detect negated null guard pattern for alternate branches
+   *
+   * In the alternate (else) branch of these patterns, the variable is proven truthy:
+   * - !x || ... ? ... : <here>  (if !x is false, x is truthy)
+   * - !x.prop || ... ? ... : <here>  (if !x.prop is false, x is truthy)
+   *
+   * @param test - The conditional test expression
+   * @param varName - Variable name or full member path to check
+   * @returns true if the pattern proves varName is truthy in the alternate branch
+   */
+  private detectNegatedNullGuard(test: t.Expression, varName: string): boolean {
+    // Pattern: !x || x.length === 0 ? ... : <else>
+    // In else branch, both !x and x.length === 0 are false
+    if (t.isLogicalExpression(test) && test.operator === '||') {
+      const left = test.left;
+
+      // Check if left side is !varName (negation check)
+      if (t.isUnaryExpression(left) && left.operator === '!') {
+        // Check if the negated expression is our variable
+        if (t.isIdentifier(left.argument) && left.argument.name === varName) {
+          // In the alternate branch, !varName is false, so varName is truthy
+          return true;
+        }
+
+        // Also handle !x.prop pattern
+        if (t.isMemberExpression(left.argument) &&
+            t.isIdentifier(left.argument.object) &&
+            left.argument.object.name === varName) {
+          // In the alternate branch, !x.prop is false, so x is truthy
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Extract variable name or full member expression path from node
+   *
+   * Examples:
+   * - `arr` → "arr"
+   * - `obj.prop` → "obj.prop"
+   * - `result.Results` → "result.Results"
+   * - `accountsResult.Results` → "accountsResult.Results"
+   *
+   * This allows CFA to match guards on nested properties correctly.
+   * For example, guard `accountsResult.Results?.length > 0` protects `accountsResult.Results[0]`
    */
   private extractVariableName(node: t.Node): string | null {
+    // Simple identifier: arr
     if (t.isIdentifier(node)) {
       return node.name;
     }
 
-    if (t.isMemberExpression(node) && t.isIdentifier(node.property)) {
-      return node.property.name;
+    // Member expression: serialize the full path
+    if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
+      return this.serializeMemberExpression(node);
+    }
+
+    return null;
+  }
+
+  /**
+   * Serialize a member expression to its full path string
+   * Handles both regular and optional member expressions
+   *
+   * Examples:
+   * - obj.prop → "obj.prop"
+   * - obj?.prop → "obj.prop" (normalized, ignores optional chaining syntax)
+   * - obj.prop.nested → "obj.prop.nested"
+   */
+  private serializeMemberExpression(node: t.MemberExpression | t.OptionalMemberExpression): string | null {
+    const parts: string[] = [];
+    let current: t.Expression | t.Super | t.PrivateName = node;
+
+    // Walk up the member expression chain
+    while (t.isMemberExpression(current) || t.isOptionalMemberExpression(current)) {
+      // Get the property name
+      if (t.isIdentifier(current.property)) {
+        parts.unshift(current.property.name);
+      } else {
+        // Computed property or private name - can't serialize
+        return null;
+      }
+
+      // Move to the object
+      current = current.object;
+    }
+
+    // Base should be an identifier
+    if (t.isIdentifier(current)) {
+      parts.unshift(current.name);
+      return parts.join('.');
     }
 
     return null;
@@ -308,6 +595,37 @@ export class ControlFlowAnalyzer {
       let current: NodePath | null = targetPath;
       while (current && current !== ifPath) {
         if (current.node === ifNode.consequent) {
+          return true;
+        }
+        current = current.parentPath;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if path is in the alternate (else) branch of an if or ternary
+   */
+  private isInAlternate(targetPath: NodePath, ifPath: NodePath): boolean {
+    const ifNode = ifPath.node;
+
+    if (t.isIfStatement(ifNode)) {
+      // Walk up from target to see if we hit the alternate
+      let current: NodePath | null = targetPath;
+      while (current && current !== ifPath) {
+        if (current.node === ifNode.alternate) {
+          return true;
+        }
+        current = current.parentPath;
+      }
+    }
+
+    if (t.isConditionalExpression(ifNode)) {
+      // Check if we're in the alternate branch
+      let current: NodePath | null = targetPath;
+      while (current && current !== ifPath) {
+        if (current.node === ifNode.alternate) {
           return true;
         }
         current = current.parentPath;
@@ -473,6 +791,7 @@ export class ControlFlowAnalyzer {
    *
    * Examples:
    * - arr.length > 0 → returns 0 (index 0 is safe)
+   * - arr?.length > 0 → returns 0 (optional chaining proves non-null)
    * - arr.length > 2 → returns 2 (indices 0-2 are safe)
    * - arr.length >= 3 → returns 2 (indices 0-2 are safe)
    * - arr.length !== 0 → returns 0 (index 0 is safe)
@@ -485,14 +804,8 @@ export class ControlFlowAnalyzer {
     if (t.isBinaryExpression(test)) {
       const { left, right, operator } = test;
 
-      // Check for arr.length > N or arr.length >= N
-      if (t.isMemberExpression(left) &&
-          t.isIdentifier(left.object) &&
-          left.object.name === arrayName &&
-          t.isIdentifier(left.property) &&
-          left.property.name === 'length' &&
-          t.isNumericLiteral(right)) {
-
+      // Check for arr.length > N or arr.length >= N (including optional chaining)
+      if (this.isLengthAccess(left, arrayName) && t.isNumericLiteral(right)) {
         const checkValue = right.value;
 
         // arr.length > N means indices 0 to N are safe
@@ -512,13 +825,7 @@ export class ControlFlowAnalyzer {
       }
 
       // Check reverse: N < arr.length or N <= arr.length
-      if (t.isMemberExpression(right) &&
-          t.isIdentifier(right.object) &&
-          right.object.name === arrayName &&
-          t.isIdentifier(right.property) &&
-          right.property.name === 'length' &&
-          t.isNumericLiteral(left)) {
-
+      if (this.isLengthAccess(right, arrayName) && t.isNumericLiteral(left)) {
         const checkValue = left.value;
 
         // N < arr.length means indices 0 to N are safe
@@ -553,6 +860,38 @@ export class ControlFlowAnalyzer {
     }
 
     return -1;
+  }
+
+  /**
+   * Check if an expression is accessing the length property of an array
+   * Handles both regular and optional chaining: arr.length and arr?.length
+   * Also handles nested paths: obj.arr.length and obj.arr?.length
+   */
+  private isLengthAccess(expr: t.Expression | t.PrivateName, arrayName: string): boolean {
+    // Check if it's a member expression accessing 'length'
+    if (!t.isMemberExpression(expr) && !t.isOptionalMemberExpression(expr)) {
+      return false;
+    }
+
+    // Property must be 'length'
+    if (!t.isIdentifier(expr.property) || expr.property.name !== 'length') {
+      return false;
+    }
+
+    // Get the object being accessed (e.g., 'arr' in arr.length or 'obj.arr' in obj.arr.length)
+    const objectPath = this.serializeMemberExpression(expr.object as any);
+
+    // Simple case: arr.length where arrayName is 'arr'
+    if (t.isIdentifier(expr.object) && expr.object.name === arrayName) {
+      return true;
+    }
+
+    // Nested case: obj.arr.length where arrayName is 'obj.arr'
+    if (objectPath === arrayName) {
+      return true;
+    }
+
+    return false;
   }
 
   /**

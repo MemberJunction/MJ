@@ -3,15 +3,11 @@ import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
 import type { EntityFieldInfo, EntityInfo, RunQueryResult, RunViewResult } from '@memberjunction/core';
-import { Metadata } from '@memberjunction/core';
 import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
 import { ComponentExecutionOptions } from './component-runner';
 import { StylesTypeAnalyzer } from './styles-type-analyzer';
-import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo, StandardTypes } from './type-context';
-import { TypeInferenceEngine } from './type-inference-engine';
-import { ControlFlowAnalyzer } from './control-flow-analyzer';
 
 export interface LintResult {
   success: boolean;
@@ -288,18 +284,8 @@ export class ComponentLinter {
   private static containsReturn(node: t.Node): boolean {
     let hasReturn = false;
 
-    // Create a mini AST to traverse - handle both Statements and Expressions
-    let programBody: t.Statement[];
-    if (t.isStatement(node)) {
-      programBody = [node];
-    } else if (t.isExpression(node)) {
-      programBody = [t.expressionStatement(node)];
-    } else {
-      // For other node types, just return false
-      return false;
-    }
-
-    const file = t.file(t.program(programBody));
+    // Create a mini AST to traverse
+    const file = t.file(t.program([t.expressionStatement(node as any)]));
 
     traverse(file, {
       ReturnStatement(path) {
@@ -1930,47 +1916,34 @@ export class ComponentLinter {
                 // This is complex and would need to track control flow, so we'll do a simpler check
                 if (t.isBlockStatement(parent.node)) {
                   const statements = parent.node.body;
+                  const hookIndex = statements.findIndex((stmt) => stmt === path.parentPath?.node);
 
-                  // Find the statement that contains this hook by walking up the path
-                  let statementNode: NodePath | null = path.parentPath;
-                  while (statementNode && !statements.includes(statementNode.node as t.Statement)) {
-                    statementNode = statementNode.parentPath;
-                  }
+                  // Check if there's a return statement before this hook
+                  for (let i = 0; i < hookIndex; i++) {
+                    const stmt = statements[i];
+                    if (t.isReturnStatement(stmt)) {
+                      violations.push({
+                        rule: 'react-hooks-rules',
+                        severity: 'critical',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `React Hook "${hookName}" is called after a conditional early return. All hooks must be called before any conditional returns.`,
+                        code: path.toString().substring(0, 100),
+                      });
+                      break;
+                    }
 
-                  if (statementNode) {
-                    const hookIndex = statements.indexOf(statementNode.node as t.Statement);
-
-                    // Check if there's a return statement before this hook
-                    for (let i = 0; i < hookIndex; i++) {
-                      const stmt = statements[i];
-                      if (t.isReturnStatement(stmt)) {
-                        violations.push({
-                          rule: 'react-hooks-rules',
-                          severity: 'critical',
-                          line: path.node.loc?.start.line || 0,
-                          column: path.node.loc?.start.column || 0,
-                          message: `React Hook "${hookName}" is called after a conditional early return. All hooks must be called before any conditional returns.`,
-                          code: path.toString().substring(0, 100),
-                        });
-                        break;
-                      }
-
-                      // Check for conditional returns
-                      // NOTE: This check is too aggressive and produces false positives
-                      // It triggers when ANY if statement exists before hooks, even if the early return
-                      // is in the render section (after hooks) or in nested callbacks
-                      // TODO: Improve this to only catch actual violations where hooks come after conditional returns
-                      // if (t.isIfStatement(stmt) && ComponentLinter.containsReturn(stmt)) {
-                      //   violations.push({
-                      //     rule: 'react-hooks-rules',
-                      //     severity: 'critical',
-                      //     line: path.node.loc?.start.line || 0,
-                      //     column: path.node.loc?.start.column || 0,
-                      //     message: `React Hook "${hookName}" is called after a possible early return. Move this hook before any conditional logic.`,
-                      //     code: path.toString().substring(0, 100),
-                      //   });
-                      //   break;
-                      // }
+                    // Check for conditional returns
+                    if (t.isIfStatement(stmt) && ComponentLinter.containsReturn(stmt)) {
+                      violations.push({
+                        rule: 'react-hooks-rules',
+                        severity: 'critical',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `React Hook "${hookName}" is called after a possible early return. Move this hook before any conditional logic.`,
+                        code: path.toString().substring(0, 100),
+                      });
+                      break;
                     }
                   }
                 }
@@ -2986,302 +2959,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     },
 
     {
-      name: 'query-parameter-type-validation',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-
-        // Skip if no queries in spec
-        if (!componentSpec?.dataRequirements?.queries || componentSpec.dataRequirements.queries.length === 0) {
-          return violations;
-        }
-
-        // Build a map of query parameters with their types
-        const queryParamsMap = new Map<string, Map<string, { type: string; sqlType: string }>>();
-        for (const query of componentSpec.dataRequirements.queries) {
-          if (query.parameters) {
-            const paramMap = new Map<string, { type: string; sqlType: string }>();
-            for (const param of query.parameters) {
-              // Extended parameter info includes type
-              const extParam = param as { name: string; type?: string };
-              if (extParam.type) {
-                paramMap.set(param.name.toLowerCase(), {
-                  type: mapSQLTypeToJSType(extParam.type),
-                  sqlType: extParam.type
-                });
-              }
-            }
-            if (paramMap.size > 0) {
-              queryParamsMap.set(query.name, paramMap);
-            }
-          }
-        }
-
-        // If no parameter type info available, skip validation
-        if (queryParamsMap.size === 0) {
-          return violations;
-        }
-
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-
-            // Check for utilities.rq.RunQuery
-            if (
-              t.isMemberExpression(callee) &&
-              t.isMemberExpression(callee.object) &&
-              t.isIdentifier(callee.object.object) &&
-              callee.object.object.name === 'utilities' &&
-              t.isIdentifier(callee.object.property) &&
-              callee.object.property.name === 'rq' &&
-              t.isIdentifier(callee.property) &&
-              callee.property.name === 'RunQuery'
-            ) {
-              // Get the first argument (RunQuery params object)
-              const runQueryParams = path.node.arguments[0];
-              if (!t.isObjectExpression(runQueryParams)) return;
-
-              // Find QueryName and Parameters
-              let queryName: string | null = null;
-              let parametersNode: t.ObjectExpression | null = null;
-
-              for (const prop of runQueryParams.properties) {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                  if (prop.key.name === 'QueryName' && t.isStringLiteral(prop.value)) {
-                    queryName = prop.value.value;
-                  } else if (prop.key.name === 'Parameters' && t.isObjectExpression(prop.value)) {
-                    parametersNode = prop.value;
-                  }
-                }
-              }
-
-              // Skip if no query name or no parameters
-              if (!queryName || !parametersNode) return;
-
-              // Get the parameter types for this query
-              const paramTypes = queryParamsMap.get(queryName);
-              if (!paramTypes) return;
-
-              // Validate each parameter value type
-              for (const prop of parametersNode.properties) {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                  const paramName = prop.key.name;
-                  const paramTypeInfo = paramTypes.get(paramName.toLowerCase());
-
-                  if (!paramTypeInfo) continue;
-
-                  const expectedType = paramTypeInfo.type;
-                  let actualType: string | null = null;
-                  let valueDesc: string = '';
-
-                  // Determine the actual type of the value
-                  if (t.isStringLiteral(prop.value)) {
-                    actualType = 'string';
-                    valueDesc = `'${prop.value.value}'`;
-                  } else if (t.isNumericLiteral(prop.value)) {
-                    actualType = 'number';
-                    valueDesc = String(prop.value.value);
-                  } else if (t.isBooleanLiteral(prop.value)) {
-                    actualType = 'boolean';
-                    valueDesc = String(prop.value.value);
-                  } else if (t.isNullLiteral(prop.value)) {
-                    actualType = 'null';
-                    valueDesc = 'null';
-                  } else if (t.isIdentifier(prop.value)) {
-                    // Variable - skip type checking (would need type inference)
-                    continue;
-                  } else if (t.isTemplateLiteral(prop.value)) {
-                    actualType = 'string';
-                    valueDesc = 'template string';
-                  } else {
-                    // Complex expression - skip
-                    continue;
-                  }
-
-                  // Check for type mismatch
-                  if (actualType && actualType !== expectedType) {
-                    // Special cases: allow null for nullable parameters
-                    if (actualType === 'null') {
-                      continue;
-                    }
-
-                    // Generate suggestion based on expected type
-                    let suggestion = '';
-                    if (expectedType === 'number' && actualType === 'string') {
-                      // If the string looks like a number, suggest removing quotes
-                      if (t.isStringLiteral(prop.value) && !isNaN(Number(prop.value.value))) {
-                        suggestion = `Use ${paramName}: ${prop.value.value} (without quotes)`;
-                      } else {
-                        suggestion = `Use a numeric value`;
-                      }
-                    } else if (expectedType === 'boolean' && actualType === 'string') {
-                      if (t.isStringLiteral(prop.value)) {
-                        const val = prop.value.value.toLowerCase();
-                        if (val === 'true' || val === 'false') {
-                          suggestion = `Use ${paramName}: ${val} (without quotes)`;
-                        } else {
-                          suggestion = `Use ${paramName}: true or ${paramName}: false`;
-                        }
-                      }
-                    } else if (expectedType === 'string' && actualType === 'number') {
-                      suggestion = `Use ${paramName}: '${valueDesc}'`;
-                    }
-
-                    violations.push({
-                      rule: 'query-parameter-type-validation',
-                      severity: 'high',
-                      line: prop.loc?.start.line || 0,
-                      column: prop.loc?.start.column || 0,
-                      message: `Parameter "${paramName}" has wrong type. Expected ${expectedType} (${paramTypeInfo.sqlType}), got ${actualType} (${valueDesc}).${suggestion ? ' ' + suggestion : ''}`,
-                      code: suggestion || `${paramName}: <${expectedType} value>`,
-                    });
-                  }
-                }
-              }
-            }
-          },
-        });
-
-        return violations;
-      },
-    },
-
-    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-    // TYPE MISMATCH OPERATION RULE
-    // Validates that operations are type-safe (e.g., no arithmetic on strings, array methods on non-arrays)
-    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-    {
-      name: 'type-mismatch-operation',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-
-        // Create type inference engine
-        const typeEngine = new TypeInferenceEngine(componentSpec);
-
-        // Create control flow analyzer
-        const cfa = new ControlFlowAnalyzer(ast, componentSpec);
-
-        // Run analysis synchronously (the async part is not needed for basic inference)
-        typeEngine.analyze(ast);
-
-        traverse(ast, {
-          // Check binary operations for type mismatches
-          BinaryExpression(path: NodePath<t.BinaryExpression>) {
-            const node = path.node;
-            const operator = node.operator;
-
-            // Skip comparison operators - they work with any types
-            if (['==', '!=', '===', '!==', '<', '<=', '>', '>=', 'in', 'instanceof'].includes(operator)) {
-              return;
-            }
-
-            // Check arithmetic operators (should be numbers)
-            if (['-', '*', '/', '%', '**', '|', '&', '^', '<<', '>>', '>>>'].includes(operator)) {
-              // Skip if left is PrivateName
-              if (t.isPrivateName(node.left)) return;
-
-              const leftType = typeEngine.inferExpressionType(node.left, path);
-              const rightType = typeEngine.inferExpressionType(node.right, path);
-
-              // Special case: Date - Date is valid (subtraction only)
-              if (operator === '-' && leftType.type === 'Date' && rightType.type === 'Date') {
-                // Date - Date produces a number (milliseconds), this is valid
-                return;
-              }
-
-              // Check if both sides are guarded by typeof checks using Control Flow Analyzer
-              const leftGuarded = cfa.isNarrowedToType(node.left, path, 'number');
-              const rightGuarded = cfa.isNarrowedToType(node.right, path, 'number');
-
-              // Only flag if we know the type is wrong (not unknown) AND not guarded by typeof
-              if (!leftGuarded && leftType.type !== 'unknown' && leftType.type !== 'number' && leftType.type !== 'Date') {
-                violations.push({
-                  rule: 'type-mismatch-operation',
-                  severity: 'high',
-                  line: node.loc?.start.line || 0,
-                  column: node.loc?.start.column || 0,
-                  message: `Arithmetic operator "${operator}" used with ${leftType.type} on left side. Expected number.`,
-                  code: `Convert to number: Number(value) ${operator} ...`,
-                });
-              }
-
-              if (!rightGuarded && rightType.type !== 'unknown' && rightType.type !== 'number' && rightType.type !== 'Date') {
-                violations.push({
-                  rule: 'type-mismatch-operation',
-                  severity: 'high',
-                  line: node.loc?.start.line || 0,
-                  column: node.loc?.start.column || 0,
-                  message: `Arithmetic operator "${operator}" used with ${rightType.type} on right side. Expected number.`,
-                  code: `Convert to number: ... ${operator} Number(value)`,
-                });
-              }
-            }
-          },
-
-          // Check array method calls on non-arrays
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const node = path.node;
-
-            if (t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.property)) {
-              const methodName = node.callee.property.name;
-
-              // Array-specific methods
-              const arrayOnlyMethods = [
-                'push', 'pop', 'shift', 'unshift', 'splice', 'slice',
-                'map', 'filter', 'reduce', 'reduceRight', 'forEach',
-                'find', 'findIndex', 'some', 'every', 'flat', 'flatMap',
-                'sort', 'reverse', 'concat', 'join', 'fill', 'copyWithin'
-              ];
-
-              if (arrayOnlyMethods.includes(methodName)) {
-                const objectType = typeEngine.inferExpressionType(node.callee.object, path);
-
-                // Only flag if we know it's definitely not an array
-                if (objectType.type !== 'unknown' && objectType.type !== 'array') {
-                  violations.push({
-                    rule: 'type-mismatch-operation',
-                    severity: 'high',
-                    line: node.loc?.start.line || 0,
-                    column: node.loc?.start.column || 0,
-                    message: `Array method "${methodName}()" called on ${objectType.type}. This will fail at runtime.`,
-                    code: `Ensure value is an array before calling .${methodName}()`,
-                  });
-                }
-              }
-
-              // String-specific methods
-              const stringOnlyMethods = [
-                'charAt', 'charCodeAt', 'codePointAt', 'substring', 'substr',
-                'toUpperCase', 'toLowerCase', 'trim', 'trimStart', 'trimEnd',
-                'padStart', 'padEnd', 'repeat', 'split', 'match', 'replace',
-                'replaceAll', 'search', 'localeCompare', 'normalize'
-              ];
-
-              if (stringOnlyMethods.includes(methodName)) {
-                const objectType = typeEngine.inferExpressionType(node.callee.object, path);
-
-                // Only flag if we know it's definitely not a string
-                if (objectType.type !== 'unknown' && objectType.type !== 'string') {
-                  violations.push({
-                    rule: 'type-mismatch-operation',
-                    severity: 'high',
-                    line: node.loc?.start.line || 0,
-                    column: node.loc?.start.column || 0,
-                    message: `String method "${methodName}()" called on ${objectType.type}. This may fail at runtime.`,
-                    code: `Ensure value is a string or convert: String(value).${methodName}()`,
-                  });
-                }
-              }
-            }
-          },
-        });
-
-        return violations;
-      },
-    },
-
-    {
       name: 'runview-entity-validation',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -3861,9 +3538,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
 
-        // Create control flow analyzer for guard detection
-        const cfa = new ControlFlowAnalyzer(ast, componentSpec);
-
         // Track which parameters are from props (likely from queries/RunView)
         const propsParams = new Set<string>();
 
@@ -3912,21 +3586,13 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 // Check for safe patterns before flagging
                 let isSafe = false;
 
-                // Get the access index
-                const accessIndex = t.isNumericLiteral(property) ? property.value : parseInt(property.name, 10);
-
-                // Use CFA to check if array access is safe due to bounds checking
-                if (!isNaN(accessIndex) && cfa.isArrayAccessSafe(object, accessIndex, path)) {
-                  isSafe = true;
-                }
-
                 // Pattern 1: Result of split() always has at least one element
                 // e.g., str.split('T')[0] or isoString.split('T')[0]
-                if (!isSafe &&
-                    t.isCallExpression(object) &&
-                    t.isMemberExpression(object.callee) &&
-                    t.isIdentifier(object.callee.property) &&
-                    object.callee.property.name === 'split'
+                if (
+                  t.isCallExpression(object) &&
+                  t.isMemberExpression(object.callee) &&
+                  t.isIdentifier(object.callee.property) &&
+                  object.callee.property.name === 'split'
                 ) {
                   isSafe = true;
                 }
@@ -3986,14 +3652,241 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
 
-                // Pattern 1c: Fallback pattern with array access (|| operator)
+                // Pattern 1c: Ternary operator with length check
+                // e.g., arr.length > 0 ? arr[0] : fallback
+                const parentPath = path.parentPath;
+                if (parentPath && t.isConditionalExpression(parentPath.node)) {
+                  const conditional = parentPath.node;
+                  // Check if this access is in the consequent (true branch)
+                  if (conditional.consequent === path.node && t.isIdentifier(object)) {
+                    const arrayName = object.name;
+                    const test = conditional.test;
+
+                    // Check for length comparisons in the test
+                    const checkLengthInTest = (node: t.Node): boolean => {
+                      if (t.isBinaryExpression(node)) {
+                        const { left, right, operator } = node;
+                        // arr.length > 0 or arr.length >= 1
+                        if (
+                          t.isMemberExpression(left) &&
+                          t.isIdentifier(left.property) &&
+                          left.property.name === 'length' &&
+                          t.isIdentifier(left.object) &&
+                          left.object.name === arrayName
+                        ) {
+                          if (t.isNumericLiteral(right)) {
+                            if (
+                              (operator === '>' && right.value >= 0) ||
+                              (operator === '>=' && right.value >= 1) ||
+                              ((operator === '!==' || operator === '!=') && right.value === 0)
+                            ) {
+                              return true;
+                            }
+                          }
+                        }
+                        // 0 < arr.length
+                        if (
+                          t.isMemberExpression(right) &&
+                          t.isIdentifier(right.property) &&
+                          right.property.name === 'length' &&
+                          t.isIdentifier(right.object) &&
+                          right.object.name === arrayName
+                        ) {
+                          if (t.isNumericLiteral(left) && operator === '<' && left.value >= 0) {
+                            return true;
+                          }
+                        }
+                      }
+                      // Also check logical expressions: arr && arr.length > 0
+                      if (t.isLogicalExpression(node)) {
+                        return checkLengthInTest(node.left) || checkLengthInTest(node.right);
+                      }
+                      return false;
+                    };
+
+                    if (checkLengthInTest(test)) {
+                      isSafe = true;
+                    }
+                  }
+                }
+
+                // Pattern 1d: Fallback pattern with array access
                 // e.g., (colors || defaultColors)[0] - array has a fallback so won't be null
-                // Note: CFA handles most guards, but this is a special safe pattern
-                if (!isSafe && t.isLogicalExpression(object) && object.operator === '||') {
+                if (t.isLogicalExpression(object) && object.operator === '||') {
+                  // The fallback pattern ensures the array is never null/undefined
+                  // Since we have a fallback, accessing [0] is safe (though may still be undefined if both arrays are empty)
+                  // But this is intentional pattern, not an oversight
                   isSafe = true;
                 }
 
-                // Pattern 2: Object.keys/values/entries always returns an array
+                // Pattern 2: Check for length guard in enclosing scope
+                // e.g., if (arr.length > 0) { arr[0] }
+                const functionParent = path.getFunctionParent();
+                if (functionParent && !isSafe) {
+                  // Get the variable name being accessed
+                  let arrayName: string | null = null;
+                  if (t.isIdentifier(object)) {
+                    arrayName = object.name;
+                  } else if (t.isMemberExpression(object) && t.isIdentifier(object.property)) {
+                    // For cases like obj.arr[0]
+                    arrayName = object.property.name;
+                  }
+
+                  if (arrayName) {
+                    // Look for if statements that check length before our usage
+                    functionParent.traverse({
+                      IfStatement(ifPath: NodePath<t.IfStatement>) {
+                        // Skip if this if statement comes after our usage
+                        if (ifPath.node.loc && path.node.loc) {
+                          if (ifPath.node.loc.start.line > path.node.loc.start.line) {
+                            return;
+                          }
+                        }
+
+                        // Check if this is a guard for our array access
+                        // Look for patterns like: arr.length > 0, arr.length !== 0, arr.length >= 1
+                        const test = ifPath.node.test;
+                        let isLengthCheck = false;
+                        let maxSafeIndex = -1; // Track the maximum safe index based on length check
+
+                        // Get the index being accessed (for numeric literals)
+                        let accessedIndex = -1;
+                        if (t.isNumericLiteral(property)) {
+                          accessedIndex = property.value;
+                        }
+
+                        // Helper to check if expression references our array's length
+                        // Returns the max safe index, or -1 if not a valid length check
+                        const getMaxSafeIndex = (node: t.Node): number => {
+                          if (t.isBinaryExpression(node)) {
+                            const { left, right, operator } = node;
+                            // Check for arr.length > N or arr.length >= N or arr.length !== 0
+                            if (t.isMemberExpression(left) && t.isIdentifier(left.property) && left.property.name === 'length') {
+                              // Check if it's our array
+                              if (t.isIdentifier(left.object) && left.object.name === arrayName) {
+                                if (t.isNumericLiteral(right)) {
+                                  const checkValue = right.value;
+                                  // arr.length > N means indices 0 to N are safe
+                                  if (operator === '>') {
+                                    return checkValue;
+                                  }
+                                  // arr.length >= N means indices 0 to N-1 are safe
+                                  if (operator === '>=') {
+                                    return checkValue - 1;
+                                  }
+                                  // arr.length !== 0 or arr.length != 0 means index 0 is safe
+                                  if ((operator === '!==' || operator === '!=') && checkValue === 0) {
+                                    return 0;
+                                  }
+                                }
+                              }
+                            }
+                            // Check reverse: N < arr.length
+                            if (t.isMemberExpression(right) && t.isIdentifier(right.property) && right.property.name === 'length') {
+                              if (t.isIdentifier(right.object) && right.object.name === arrayName) {
+                                if (t.isNumericLiteral(left)) {
+                                  const checkValue = left.value;
+                                  // N < arr.length means indices 0 to N are safe
+                                  if (operator === '<') {
+                                    return checkValue;
+                                  }
+                                  // N <= arr.length means indices 0 to N-1 are safe
+                                  if (operator === '<=') {
+                                    return checkValue - 1;
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          return -1;
+                        };
+
+                        // For backward compatibility, also check if it's any valid length check
+                        const checksArrayLength = (node: t.Node): boolean => {
+                          return getMaxSafeIndex(node) >= 0;
+                        };
+
+                        // Check direct binary expression
+                        const directMaxSafe = getMaxSafeIndex(test);
+                        if (directMaxSafe >= 0) {
+                          isLengthCheck = true;
+                          maxSafeIndex = Math.max(maxSafeIndex, directMaxSafe);
+                        }
+
+                        // Check logical expressions like: !arr || arr.length === 0
+                        if (t.isLogicalExpression(test)) {
+                          const leftMax = getMaxSafeIndex(test.left);
+                          const rightMax = getMaxSafeIndex(test.right);
+                          if (leftMax >= 0 || rightMax >= 0) {
+                            isLengthCheck = true;
+                            maxSafeIndex = Math.max(maxSafeIndex, leftMax, rightMax);
+                          }
+                          // Also check nested logical expressions
+                          if (t.isLogicalExpression(test.left) || t.isLogicalExpression(test.right)) {
+                            ifPath.get('test').traverse({
+                              BinaryExpression(binPath: NodePath<t.BinaryExpression>) {
+                                const nestedMax = getMaxSafeIndex(binPath.node);
+                                if (nestedMax >= 0) {
+                                  isLengthCheck = true;
+                                  maxSafeIndex = Math.max(maxSafeIndex, nestedMax);
+                                }
+                              },
+                            });
+                          }
+                        }
+
+                        // If we found a length check, verify our access is within the guarded block
+                        if (isLengthCheck) {
+                          // Check if our path is inside the consequent (then block) or after an early return
+                          const consequent = ifPath.node.consequent;
+
+                          // Check for early return pattern: if (!arr || arr.length === 0) return;
+                          let hasEarlyReturn = false;
+                          if (t.isBlockStatement(consequent)) {
+                            for (const stmt of consequent.body) {
+                              if (t.isReturnStatement(stmt)) {
+                                hasEarlyReturn = true;
+                                break;
+                              }
+                            }
+                          } else if (t.isReturnStatement(consequent)) {
+                            hasEarlyReturn = true;
+                          }
+
+                          if (hasEarlyReturn) {
+                            // For early return, index 0 is always safe
+                            // For other indices, check if the length check supports it
+                            if (accessedIndex >= 0 && accessedIndex <= maxSafeIndex) {
+                              isSafe = true;
+                            } else if (accessedIndex === 0 && maxSafeIndex >= 0) {
+                              // Default case: any length check makes index 0 safe after early return
+                              isSafe = true;
+                            }
+                          }
+
+                          // Check if our access is inside the guarded block (for positive checks)
+                          if (!hasEarlyReturn && t.isBlockStatement(consequent)) {
+                            ifPath.get('consequent').traverse({
+                              MemberExpression(innerPath: NodePath<t.MemberExpression>) {
+                                if (innerPath.node === path.node) {
+                                  // Check if the accessed index is within the safe range
+                                  if (accessedIndex >= 0 && accessedIndex <= maxSafeIndex) {
+                                    isSafe = true;
+                                  } else if (accessedIndex === 0 && maxSafeIndex >= 0) {
+                                    // Default case: any length check makes index 0 safe
+                                    isSafe = true;
+                                  }
+                                }
+                              },
+                            });
+                          }
+                        }
+                      },
+                    });
+                  }
+                }
+
+                // Pattern 3: Object.keys/values/entries always returns an array
                 // e.g., Object.keys(obj)[0]
                 if (
                   t.isCallExpression(object) &&
@@ -4006,30 +3899,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   // This is safe in that it won't throw, but may return undefined
                   // We'll allow it since it's a common pattern
                   isSafe = true;
-                }
-
-                // Pattern 4: Chained array methods that preserve or filter arrays
-                // e.g., Object.entries(obj).filter(...).sort(...)[0]
-                // These methods always return arrays, so accessing [0] won't throw
-                // (though it may return undefined if the result is empty)
-                if (!isSafe && t.isCallExpression(object)) {
-                  // Length-preserving methods: sort, reverse, fill, copyWithin
-                  // Array-returning methods: filter, map, slice, concat, flat, flatMap
-                  const arrayReturningMethods = [
-                    'sort', 'reverse', 'fill', 'copyWithin',  // mutating but return same array
-                    'filter', 'map', 'slice', 'concat', 'flat', 'flatMap',  // return new array
-                    'splice'  // returns removed elements as array
-                  ];
-
-                  // Check if the call is a chained array method
-                  if (t.isMemberExpression(object.callee) && t.isIdentifier(object.callee.property)) {
-                    const methodName = object.callee.property.name;
-                    if (arrayReturningMethods.includes(methodName)) {
-                      // This is an array method that returns an array
-                      // The access won't throw, though may return undefined
-                      isSafe = true;
-                    }
-                  }
                 }
 
                 if (!isSafe) {
@@ -4085,89 +3954,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   if (t.isLogicalExpression(grandParent) && grandParent.operator === '&&') {
                     if (t.isIdentifier(grandParent.left) && grandParent.left.name === object.name) {
                       hasGuard = true;
-                    }
-                  }
-
-                  // Check for short-circuit OR guard like: !data || data.property
-                  // This is logically equivalent to the && guard but with opposite polarity
-                  // If !data is true, the right side never evaluates (short-circuit)
-                  // Therefore data.property is safe on the right side of ||
-                  if (!hasGuard && t.isLogicalExpression(grandParent) && grandParent.operator === '||') {
-                    // Check if the left side is !identifier
-                    if (t.isUnaryExpression(grandParent.left) &&
-                        grandParent.left.operator === '!' &&
-                        t.isIdentifier(grandParent.left.argument) &&
-                        grandParent.left.argument.name === object.name) {
-                      hasGuard = true;
-                    }
-                  }
-
-                  // Check with CFA for guards in conditional branches
-                  if (!hasGuard && cfa.isDefinitelyNonNull(object, path)) {
-                    hasGuard = true;
-                  }
-
-                  // Walk up the && chain to find guards in chained expressions
-                  // e.g., !isDateField && data && data.length > 0
-                  if (!hasGuard) {
-                    // Find the containing if statement or logical expression
-                    let currentPath: NodePath | null = path.parentPath;
-                    while (currentPath) {
-                      if (t.isIfStatement(currentPath.node)) {
-                        const test = currentPath.node.test;
-                        // Check if test is a logical expression with && that includes our guard
-                        if (t.isLogicalExpression(test) && test.operator === '&&') {
-                          // Collect all operands in the && chain
-                          const collectAndOperands = (node: t.Node): t.Node[] => {
-                            if (t.isLogicalExpression(node) && node.operator === '&&') {
-                              return [...collectAndOperands(node.left), ...collectAndOperands(node.right)];
-                            }
-                            return [node];
-                          };
-
-                          const operands = collectAndOperands(test);
-
-                          // Find our data.length access in the operands
-                          let foundGuard = false;
-
-                          for (let i = 0; i < operands.length; i++) {
-                            const op = operands[i];
-
-                            // Check if this operand is our data check (guard)
-                            if (t.isIdentifier(op) && op.name === object.name) {
-                              foundGuard = true;
-                            }
-
-                            // Check if this operand contains our length access
-                            // Could be: data.length > 0, data.length === 0, etc.
-                            let containsLengthAccess = false;
-                            if (t.isBinaryExpression(op)) {
-                              // Check left side for our array.length
-                              if (t.isMemberExpression(op.left) &&
-                                  t.isIdentifier(op.left.object) &&
-                                  op.left.object.name === object.name &&
-                                  t.isIdentifier(op.left.property) &&
-                                  op.left.property.name === 'length') {
-                                containsLengthAccess = true;
-                              }
-                            } else if (t.isMemberExpression(op) &&
-                                       t.isIdentifier(op.object) &&
-                                       op.object.name === object.name) {
-                              containsLengthAccess = true;
-                            }
-
-                            if (containsLengthAccess) {
-                              // If we already found the guard before this, we're safe
-                              if (foundGuard) {
-                                hasGuard = true;
-                                break;
-                              }
-                            }
-                          }
-                        }
-                        break;
-                      }
-                      currentPath = currentPath.parentPath;
                     }
                   }
 
@@ -4601,39 +4387,465 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     },
 
     {
-      name: 'runview-runquery-result-validation',
+      name: 'runview-runquery-result-direct-usage',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
 
-        // Valid properties for RunView and RunQuery results
+        // Array methods that would fail on a result object - keep for smart error detection
+        const arrayMethods = ['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'sort', 'concat'];
+
+        traverse(ast, {
+          // Check for direct array operations on RunView/RunQuery results
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isMemberExpression(path.node.callee) && t.isIdentifier(path.node.callee.object) && t.isIdentifier(path.node.callee.property)) {
+              const objName = path.node.callee.object.name;
+              const methodName = path.node.callee.property.name;
+
+              if (arrayMethods.includes(methodName)) {
+                // Use proper variable tracing instead of naive name matching
+                const isFromRunView = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+                const isFromRunQuery = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+
+                if (isFromRunView || isFromRunQuery) {
+                  const methodType = isFromRunView ? 'RunView' : 'RunQuery';
+                  const ruleName = isFromRunView ? 'runview-result-invalid-usage' : 'runquery-result-invalid-usage';
+
+                  violations.push({
+                    rule: ruleName,
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Cannot call array method "${methodName}" directly on ${methodType} result. Use "${objName}.Results.${methodName}(...)" instead. ${methodType} returns an object with { Success, Results, ... }, not an array.`,
+                    code: `${objName}.${methodName}(...)`,
+                  });
+                }
+              }
+            }
+          },
+
+          // Check for direct usage in setState or as function arguments
+          Identifier(path: NodePath<t.Identifier>) {
+            const varName = path.node.name;
+            const parent = path.parent;
+
+            // Use proper variable tracing
+            const isFromRunView = ComponentLinter.isVariableFromRunQueryOrView(path, varName, 'RunView');
+            const isFromRunQuery = ComponentLinter.isVariableFromRunQueryOrView(path, varName, 'RunQuery');
+
+            if (isFromRunView || isFromRunQuery) {
+              const methodType = isFromRunView ? 'RunView' : 'RunQuery';
+              const ruleName = isFromRunView ? 'runview-result-invalid-usage' : 'runquery-result-invalid-usage';
+
+              // Check if being passed to setState-like functions
+              if (t.isCallExpression(parent) && path.node === parent.arguments[0]) {
+                const callee = parent.callee;
+
+                // Check for setState patterns
+                if (t.isIdentifier(callee) && /^set[A-Z]/.test(callee.name)) {
+                  violations.push({
+                    rule: ruleName,
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Passing ${methodType} result directly to setState. Use "${varName}.Results" or check "${varName}.Success" first. ${methodType} returns { Success, Results, ErrorMessage }, not the data array.`,
+                    code: `${callee.name}(${varName})`,
+                  });
+                }
+
+                // Check for array-expecting functions
+                if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) {
+                  const methodName = callee.property.name;
+                  if (methodName === 'concat' || methodName === 'push' || methodName === 'unshift') {
+                    violations.push({
+                      rule: ruleName,
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Passing ${methodType} result to array method. Use "${varName}.Results" instead of "${varName}".`,
+                      code: `...${methodName}(${varName})`,
+                    });
+                  }
+                }
+              }
+
+              // Check for ternary with Array.isArray check (common pattern)
+              if (
+                t.isConditionalExpression(parent) &&
+                t.isCallExpression(parent.test) &&
+                t.isMemberExpression(parent.test.callee) &&
+                t.isIdentifier(parent.test.callee.object) &&
+                parent.test.callee.object.name === 'Array' &&
+                t.isIdentifier(parent.test.callee.property) &&
+                parent.test.callee.property.name === 'isArray'
+              ) {
+                // Pattern: Array.isArray(result) ? result : []
+                if (parent.test.arguments[0] === path.node && parent.consequent === path.node) {
+                  violations.push({
+                    rule: ruleName,
+                    severity: 'high',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `${methodType} result is never an array. Use "${varName}.Results || []" instead of "Array.isArray(${varName}) ? ${varName} : []".`,
+                    code: `Array.isArray(${varName}) ? ${varName} : []`,
+                  });
+                }
+              }
+            }
+          },
+
+          // Check for invalid property access on RunView/RunQuery results
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
+              const objName = path.node.object.name;
+              const propName = path.node.property.name;
+
+              // Use proper variable tracing
+              const isFromRunView = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+              const isFromRunQuery = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+
+              if (isFromRunView || isFromRunQuery) {
+                const isValidViewProp = runViewResultProps.includes(propName as any);
+                const isValidQueryProp = runQueryResultProps.includes(propName as any);
+
+                if (isFromRunQuery && !isValidQueryProp) {
+                  violations.push({
+                    rule: 'runquery-result-invalid-property',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid property "${propName}" on RunQuery result. Valid properties: ${runQueryResultProps.join(', ')}.`,
+                    code: `${objName}.${propName}`,
+                  });
+                } else if (isFromRunView && !isValidViewProp) {
+                  violations.push({
+                    rule: 'runview-result-invalid-property',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid property "${propName}" on RunView result. Valid properties: ${runViewResultProps.join(', ')}.`,
+                    code: `${objName}.${propName}`,
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'runquery-runview-result-structure',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Use shared property arrays from top of file - ensures consistency
         const validRunQueryResultProps = new Set(runQueryResultProps);
         const validRunViewResultProps = new Set(runViewResultProps);
 
-        // Array methods that would fail on a result object
-        const arrayMethods = new Set(['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'sort', 'concat']);
-
-        // Functions that typically expect arrays
-        const arrayExpectingFuncs = new Set([
-          'map', 'filter', 'forEach', 'reduce', 'sort', 'concat',
-          'processChartData', 'processData', 'transformData',
-          'setData', 'setItems', 'setResults', 'setRows',
-        ]);
-
         // Map of common incorrect properties to the correct property
         const incorrectToCorrectMap: Record<string, string> = {
-          data: 'Results', Data: 'Results',
-          rows: 'Results', Rows: 'Results',
-          records: 'Results', Records: 'Results',
-          items: 'Results', Items: 'Results',
-          values: 'Results', Values: 'Results',
-          result: 'Results', Result: 'Results',
-          resultSet: 'Results', ResultSet: 'Results',
-          dataset: 'Results', Dataset: 'Results',
-          response: 'Results', Response: 'Results',
+          data: 'Results',
+          Data: 'Results',
+          rows: 'Results',
+          Rows: 'Results',
+          records: 'Results',
+          Records: 'Results',
+          items: 'Results',
+          Items: 'Results',
+          values: 'Results',
+          Values: 'Results',
+          result: 'Results',
+          Result: 'Results',
+          resultSet: 'Results',
+          ResultSet: 'Results',
+          dataset: 'Results',
+          Dataset: 'Results',
+          response: 'Results',
+          Response: 'Results',
         };
 
-        // Track variables that hold RunView/RunQuery results
+        // Helper function to validate property access and create violation
+        const validatePropertyAccess = (
+          objName: string,
+          propName: string,
+          isFromRunQuery: boolean,
+          isFromRunView: boolean,
+          line: number,
+          column: number,
+          code: string,
+        ) => {
+          if (!isFromRunQuery && !isFromRunView) return;
+
+          const isValidQueryProp = validRunQueryResultProps.has(propName);
+          const isValidViewProp = validRunViewResultProps.has(propName);
+
+          if (isFromRunQuery && !isValidQueryProp) {
+            const suggestion = incorrectToCorrectMap[propName];
+            violations.push({
+              rule: 'runquery-result-invalid-property',
+              severity: 'critical',
+              line,
+              column,
+              message: suggestion
+                ? `RunQuery results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
+                : `Invalid property "${propName}" on RunQuery result. Valid properties are: ${Array.from(validRunQueryResultProps).join(', ')}`,
+              code,
+            });
+          } else if (isFromRunView && !isValidViewProp) {
+            const suggestion = incorrectToCorrectMap[propName];
+            violations.push({
+              rule: 'runview-result-invalid-property',
+              severity: 'critical',
+              line,
+              column,
+              message: suggestion
+                ? `RunView results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
+                : `Invalid property "${propName}" on RunView result. Valid properties are: ${Array.from(validRunViewResultProps).join(', ')}`,
+              code,
+            });
+          }
+        };
+
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check if this is accessing a property on a variable that looks like a query/view result
+            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
+              const objName = path.node.object.name;
+              const propName = path.node.property.name;
+
+              // Only check if we can definitively trace this to RunQuery or RunView
+              const isFromRunQuery = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+              const isFromRunView = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+
+              // Use shared validation logic
+              validatePropertyAccess(
+                objName,
+                propName,
+                isFromRunQuery,
+                isFromRunView,
+                path.node.loc?.start.line || 0,
+                path.node.loc?.start.column || 0,
+                `${objName}.${propName}`,
+              );
+
+              // Check for nested incorrect access like result.data.entities or result.Data.entities
+              if (
+                (isFromRunQuery || isFromRunView) &&
+                t.isMemberExpression(path.parent) &&
+                t.isIdentifier(path.parent.property) &&
+                (propName === 'data' || propName === 'Data')
+              ) {
+                const nestedProp = path.parent.property.name;
+                violations.push({
+                  rule: 'runquery-runview-result-structure',
+                  severity: 'critical',
+                  line: path.parent.loc?.start.line || 0,
+                  column: path.parent.loc?.start.column || 0,
+                  message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
+                  code: `${objName}.${propName}.${nestedProp}`,
+                });
+              }
+            }
+          },
+
+          // NEW: Handle optional chaining (result?.records, result?.Rows, etc.)
+          OptionalMemberExpression(path: NodePath<t.OptionalMemberExpression>) {
+            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
+              const objName = path.node.object.name;
+              const propName = path.node.property.name;
+
+              // Only check if we can definitively trace this to RunQuery or RunView
+              const isFromRunQuery = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+              const isFromRunView = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+
+              // Use shared validation logic
+              validatePropertyAccess(
+                objName,
+                propName,
+                isFromRunQuery,
+                isFromRunView,
+                path.node.loc?.start.line || 0,
+                path.node.loc?.start.column || 0,
+                `${objName}?.${propName}`,
+              );
+            }
+          },
+
+          // NEW: Detect weak fallback patterns like result?.records ?? result?.Rows ?? []
+          LogicalExpression(path: NodePath<t.LogicalExpression>) {
+            if (path.node.operator !== '??') return;
+
+            // Collect all invalid property accesses in the chain
+            const invalidAccesses: Array<{ objName: string; propName: string; line: number }> = [];
+
+            const checkNode = (node: t.Node) => {
+              if (t.isOptionalMemberExpression(node) && t.isIdentifier(node.object) && t.isIdentifier(node.property)) {
+                const objName = node.object.name;
+                const propName = node.property.name;
+
+                // Check if this is from RunQuery/RunView
+                const isFromRunQuery = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+                const isFromRunView = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+
+                if (isFromRunQuery || isFromRunView) {
+                  const isValidQueryProp = validRunQueryResultProps.has(propName);
+                  const isValidViewProp = validRunViewResultProps.has(propName);
+
+                  if ((isFromRunQuery && !isValidQueryProp) || (isFromRunView && !isValidViewProp)) {
+                    invalidAccesses.push({
+                      objName,
+                      propName,
+                      line: node.loc?.start.line || 0,
+                    });
+                  }
+                }
+              } else if (t.isLogicalExpression(node) && node.operator === '??') {
+                // Recursively check chained ?? operators
+                checkNode(node.left);
+                checkNode(node.right);
+              }
+            };
+
+            checkNode(path.node);
+
+            // If we found multiple invalid accesses in a chain, report as weak fallback
+            if (invalidAccesses.length >= 2) {
+              const objName = invalidAccesses[0].objName;
+              const props = invalidAccesses.map((a) => a.propName).join(', ');
+
+              violations.push({
+                rule: 'runquery-runview-result-structure',
+                severity: 'critical',
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0,
+                message: `Weak fallback pattern detected: "${objName}?.${invalidAccesses[0].propName} ?? ${objName}?.${invalidAccesses[1].propName} ?? ..." uses multiple INVALID properties (${props}). This masks the real issue. Use "${objName}?.Results ?? []" instead. RunQuery/RunView results have a "Results" property (capital R), not "${props}".`,
+                code: path.toString().substring(0, 100),
+              });
+            }
+          },
+
+          // Check for destructuring patterns
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check for destructuring from a result object
+            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
+              const sourceName = path.node.init.name;
+
+              // Only check if we can definitively trace this to RunQuery or RunView
+              const isFromRunQuery = path.scope.hasBinding(sourceName) && ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunQuery');
+              const isFromRunView = path.scope.hasBinding(sourceName) && ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunView');
+
+              // Only validate if we're CERTAIN it's from RunQuery or RunView
+              if (isFromRunQuery || isFromRunView) {
+                for (const prop of path.node.id.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    const propName = prop.key.name;
+
+                    // WHITELIST APPROACH: Check if property is valid
+                    const isValidQueryProp = validRunQueryResultProps.has(propName);
+                    const isValidViewProp = validRunViewResultProps.has(propName);
+
+                    if (isFromRunQuery && !isValidQueryProp) {
+                      const suggestion = incorrectToCorrectMap[propName];
+                      violations.push({
+                        rule: 'runquery-result-invalid-destructuring',
+                        severity: 'critical',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: suggestion
+                          ? `Destructuring invalid property "${propName}" from RunQuery result. Use "${suggestion}" instead. Change "const { ${propName} } = ${sourceName}" to "const { ${suggestion} } = ${sourceName}"`
+                          : `Destructuring invalid property "${propName}" from RunQuery result. Valid properties: ${Array.from(validRunQueryResultProps).join(', ')}`,
+                        code: `{ ${propName} }`,
+                      });
+                    } else if (isFromRunView && !isValidViewProp) {
+                      const suggestion = incorrectToCorrectMap[propName];
+                      violations.push({
+                        rule: 'runview-result-invalid-destructuring',
+                        severity: 'critical',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: suggestion
+                          ? `Destructuring invalid property "${propName}" from RunView result. Use "${suggestion}" instead. Change "const { ${propName} } = ${sourceName}" to "const { ${suggestion} } = ${sourceName}"`
+                          : `Destructuring invalid property "${propName}" from RunView result. Valid properties: ${Array.from(validRunViewResultProps).join(', ')}`,
+                        code: `{ ${propName} }`,
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          },
+
+          // Check for conditional access without checking Success
+          IfStatement(path: NodePath<t.IfStatement>) {
+            const test = path.node.test;
+
+            // Look for patterns like: if (result) or if (result.Results) without checking Success
+            if (
+              t.isIdentifier(test) ||
+              (t.isMemberExpression(test) && t.isIdentifier(test.object) && t.isIdentifier(test.property) && test.property.name === 'Results')
+            ) {
+              let varName = '';
+              if (t.isIdentifier(test)) {
+                varName = test.name;
+              } else if (t.isMemberExpression(test) && t.isIdentifier(test.object)) {
+                varName = test.object.name;
+              }
+
+              // Check if this variable is from RunQuery/RunView
+              if (/result|response|res/i.test(varName)) {
+                // Look for .Results access in the consequent without .Success check
+                let hasResultsAccess = false;
+                let hasSuccessCheck = false;
+
+                traverse(
+                  path.node,
+                  {
+                    MemberExpression(innerPath: NodePath<t.MemberExpression>) {
+                      if (t.isIdentifier(innerPath.node.object) && innerPath.node.object.name === varName) {
+                        if (t.isIdentifier(innerPath.node.property)) {
+                          if (innerPath.node.property.name === 'Results') {
+                            hasResultsAccess = true;
+                          }
+                          if (innerPath.node.property.name === 'Success') {
+                            hasSuccessCheck = true;
+                          }
+                        }
+                      }
+                    },
+                  },
+                  path.scope,
+                );
+
+                if (hasResultsAccess && !hasSuccessCheck) {
+                  violations.push({
+                    rule: 'runquery-runview-result-structure',
+                    severity: 'medium',
+                    line: test.loc?.start.line || 0,
+                    column: test.loc?.start.column || 0,
+                    message: `Accessing "${varName}.Results" without checking "${varName}.Success" first. Always verify Success before accessing Results.`,
+                    code: `if (${varName}) { ... ${varName}.Results ... }`,
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'validate-runview-runquery-result-access',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Track variables that hold RunView/RunQuery results with their actual names
         const resultVariables = new Map<
           string,
           {
@@ -4670,9 +4882,11 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 }
 
                 if (methodType) {
+                  // Check if this is being assigned to a variable
                   const parent = path.parent;
 
                   if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    // const result = await utilities.rv.RunView(...)
                     resultVariables.set(parent.id.name, {
                       line: parent.id.loc?.start.line || 0,
                       column: parent.id.loc?.start.column || 0,
@@ -4680,6 +4894,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       varName: parent.id.name,
                     });
                   } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    // result = await utilities.rv.RunView(...)
                     resultVariables.set(parent.left.name, {
                       line: parent.left.loc?.start.line || 0,
                       column: parent.left.loc?.start.column || 0,
@@ -4693,143 +4908,110 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
           },
         });
 
-        // Helper to validate property access
-        const validatePropertyAccess = (
-          objName: string,
-          propName: string,
-          isFromRunQuery: boolean,
-          isFromRunView: boolean,
-          line: number,
-          column: number,
-          code: string,
-        ) => {
-          if (!isFromRunQuery && !isFromRunView) return;
-
-          const isValidQueryProp = validRunQueryResultProps.has(propName);
-          const isValidViewProp = validRunViewResultProps.has(propName);
-
-          if (isFromRunQuery && !isValidQueryProp) {
-            const suggestion = incorrectToCorrectMap[propName];
-            violations.push({
-              rule: 'runview-runquery-result-validation',
-              severity: 'critical',
-              line,
-              column,
-              message: suggestion
-                ? `RunQuery results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
-                : `Invalid property "${propName}" on RunQuery result. Valid properties: ${runQueryResultProps.join(', ')}`,
-              code,
-            });
-          } else if (isFromRunView && !isValidViewProp) {
-            const suggestion = incorrectToCorrectMap[propName];
-            violations.push({
-              rule: 'runview-runquery-result-validation',
-              severity: 'critical',
-              line,
-              column,
-              message: suggestion
-                ? `RunView results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
-                : `Invalid property "${propName}" on RunView result. Valid properties: ${runViewResultProps.join(', ')}`,
-              code,
-            });
-          }
-        };
-
         // Second pass: check for incorrect usage patterns
         traverse(ast, {
-          // Check for direct array method calls and property access
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
+          // Check for .length property access on result objects
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property) && path.node.property.name === 'length') {
+              const objName = path.node.object.name;
 
-            // Check for result.map(), result.filter(), etc.
-            if (t.isMemberExpression(callee) && t.isIdentifier(callee.object) && t.isIdentifier(callee.property)) {
-              const objName = callee.object.name;
-              const methodName = callee.property.name;
-
-              if (arrayMethods.has(methodName)) {
-                const isFromRunView = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
-                const isFromRunQuery = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-
-                if (isFromRunView || isFromRunQuery) {
-                  const methodType = isFromRunView ? 'RunView' : 'RunQuery';
-                  violations.push({
-                    rule: 'runview-runquery-result-validation',
-                    severity: 'critical',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `Cannot call array method "${methodName}" directly on ${methodType} result. Use "${objName}.Results.${methodName}(...)" instead. ${methodType} returns an object with { Success, Results, ... }, not an array.`,
-                    code: `${objName}.${methodName}(...)`,
-                  });
-                }
-              }
-            }
-
-            // Check for setState patterns
-            if (t.isIdentifier(callee)) {
-              const funcName = callee.name;
-              const setStatePatterns = [/^set[A-Z]/, /^update[A-Z]/];
-              const isSetStateFunction = setStatePatterns.some((pattern) => pattern.test(funcName));
-
-              if (isSetStateFunction && path.node.arguments.length > 0) {
-                const firstArg = path.node.arguments[0];
-
-                // Check for Array.isArray ternary pattern in setState
-                if (t.isConditionalExpression(firstArg)) {
-                  const test = firstArg.test;
-                  const consequent = firstArg.consequent;
-
-                  if (
-                    t.isCallExpression(test) &&
-                    t.isMemberExpression(test.callee) &&
-                    t.isIdentifier(test.callee.object) &&
-                    test.callee.object.name === 'Array' &&
-                    t.isIdentifier(test.callee.property) &&
-                    test.callee.property.name === 'isArray' &&
-                    test.arguments.length === 1 &&
-                    t.isIdentifier(test.arguments[0])
-                  ) {
-                    const varName = test.arguments[0].name;
-
-                    if (resultVariables.has(varName) && t.isIdentifier(consequent) && consequent.name === varName) {
-                      const resultInfo = resultVariables.get(varName)!;
-                      violations.push({
-                        rule: 'runview-runquery-result-validation',
-                        severity: 'critical',
-                        line: firstArg.loc?.start.line || 0,
-                        column: firstArg.loc?.start.column || 0,
-                        message: `Passing ${resultInfo.method} result with incorrect Array.isArray check to ${funcName}. This will always pass an empty array because ${resultInfo.method} returns an object, not an array.
-
+              if (resultVariables.has(objName)) {
+                const resultInfo = resultVariables.get(objName)!;
+                violations.push({
+                  rule: 'validate-runview-runquery-result-access',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Cannot check .length on ${resultInfo.method} result directly. ${resultInfo.method} returns an object with Success and Results properties.
 Correct pattern:
-  if (${varName}.Success) {
-    ${funcName}(${varName}.Results || []);
-  } else {
-    console.error('Failed to load data:', ${varName}.ErrorMessage);
+  if (${resultInfo.varName}?.Success && ${resultInfo.varName}?.Results?.length > 0) {
+    // Process ${resultInfo.varName}.Results array
   }`,
-                        code: `${funcName}(Array.isArray(${varName}) ? ${varName} : [])`,
-                      });
-                    }
-                  }
-                }
+                  code: `${objName}.length`,
+                });
+              }
+            }
+          },
 
-                // Check for passing result directly to setState
-                if (t.isIdentifier(firstArg) && resultVariables.has(firstArg.name)) {
-                  const resultInfo = resultVariables.get(firstArg.name)!;
+          // Check for incorrect conditional checks
+          IfStatement(path: NodePath<t.IfStatement>) {
+            const test = path.node.test;
+
+            // Pattern: if (result) or if (result.length)
+            if (t.isIdentifier(test)) {
+              const varName = test.name;
+              if (resultVariables.has(varName)) {
+                const resultInfo = resultVariables.get(varName)!;
+
+                // Check if they're ONLY checking the result object without .Success
+                let checksSuccess = false;
+                let checksResults = false;
+
+                // Scan the if block to see what they're doing with the result
+                path.traverse({
+                  MemberExpression(innerPath: NodePath<t.MemberExpression>) {
+                    if (t.isIdentifier(innerPath.node.object) && innerPath.node.object.name === varName) {
+                      const prop = t.isIdentifier(innerPath.node.property) ? innerPath.node.property.name : '';
+                      if (prop === 'Success') checksSuccess = true;
+                      if (prop === 'Results') checksResults = true;
+                    }
+                  },
+                });
+
+                // If they're accessing Results without checking Success, flag it
+                if (checksResults && !checksSuccess) {
                   violations.push({
-                    rule: 'runview-runquery-result-validation',
-                    severity: 'critical',
-                    line: firstArg.loc?.start.line || 0,
-                    column: firstArg.loc?.start.column || 0,
-                    message: `Passing ${resultInfo.method} result directly to ${funcName}. Use "${firstArg.name}.Results" or check "${firstArg.name}.Success" first. ${resultInfo.method} returns { Success, Results, ErrorMessage }, not the data array.`,
-                    code: `${funcName}(${firstArg.name})`,
+                    rule: 'validate-runview-runquery-result-access',
+                    severity: 'high',
+                    line: test.loc?.start.line || 0,
+                    column: test.loc?.start.column || 0,
+                    message: `Checking ${resultInfo.method} result without verifying Success property.
+Correct pattern:
+  if (${resultInfo.varName}?.Success) {
+    const data = ${resultInfo.varName}.Results;
+    // Process data
+  } else {
+    // Handle error: ${resultInfo.varName}.ErrorMessage
+  }`,
+                    code: `if (${varName})`,
                   });
                 }
               }
             }
 
-            // Check for passing result to array-expecting functions
-            for (const arg of path.node.arguments) {
+            // Pattern: if (result?.length)
+            if (t.isOptionalMemberExpression(test) && t.isIdentifier(test.object) && t.isIdentifier(test.property) && test.property.name === 'length') {
+              const varName = test.object.name;
+              if (resultVariables.has(varName)) {
+                const resultInfo = resultVariables.get(varName)!;
+                violations.push({
+                  rule: 'validate-runview-runquery-result-access',
+                  severity: 'critical',
+                  line: test.loc?.start.line || 0,
+                  column: test.loc?.start.column || 0,
+                  message: `Incorrect check: "${varName}?.length" on ${resultInfo.method} result.
+Correct pattern:
+  if (${resultInfo.varName}?.Success && ${resultInfo.varName}?.Results?.length > 0) {
+    const processedData = processChartData(${resultInfo.varName}.Results);
+    // Use processedData
+  }`,
+                  code: `if (${varName}?.length)`,
+                });
+              }
+            }
+          },
+
+          // Check for passing result directly to functions expecting arrays
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const args = path.node.arguments;
+
+            for (let i = 0; i < args.length; i++) {
+              const arg = args[i];
+
               if (t.isIdentifier(arg) && resultVariables.has(arg.name)) {
                 const resultInfo = resultVariables.get(arg.name)!;
+
+                // Check if the function being called looks like it expects an array
                 let funcName = '';
                 if (t.isIdentifier(path.node.callee)) {
                   funcName = path.node.callee.name;
@@ -4837,10 +5019,26 @@ Correct pattern:
                   funcName = path.node.callee.property.name;
                 }
 
-                if (arrayExpectingFuncs.has(funcName.toLowerCase()) ||
-                    Array.from(arrayExpectingFuncs).some(f => funcName.toLowerCase().includes(f.toLowerCase()))) {
+                // Common functions that expect arrays
+                const arrayExpectingFuncs = [
+                  'map',
+                  'filter',
+                  'forEach',
+                  'reduce',
+                  'sort',
+                  'concat',
+                  'processChartData',
+                  'processData',
+                  'transformData',
+                  'setData',
+                  'setItems',
+                  'setResults',
+                  'setRows',
+                ];
+
+                if (arrayExpectingFuncs.some((f) => funcName.toLowerCase().includes(f.toLowerCase()))) {
                   violations.push({
-                    rule: 'runview-runquery-result-validation',
+                    rule: 'validate-runview-runquery-result-access',
                     severity: 'critical',
                     line: arg.loc?.start.line || 0,
                     column: arg.loc?.start.column || 0,
@@ -4858,631 +5056,6 @@ Correct pattern:
               }
             }
           },
-
-          // Check member expressions for invalid property access
-          MemberExpression(path: NodePath<t.MemberExpression>) {
-            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
-              const objName = path.node.object.name;
-              const propName = path.node.property.name;
-
-              const isFromRunQuery = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-              const isFromRunView = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
-
-              // Check for .length on result
-              if (propName === 'length' && resultVariables.has(objName)) {
-                const resultInfo = resultVariables.get(objName)!;
-                violations.push({
-                  rule: 'runview-runquery-result-validation',
-                  severity: 'critical',
-                  line: path.node.loc?.start.line || 0,
-                  column: path.node.loc?.start.column || 0,
-                  message: `Cannot check .length on ${resultInfo.method} result directly. ${resultInfo.method} returns an object with Success and Results properties.
-Correct pattern:
-  if (${resultInfo.varName}?.Success && ${resultInfo.varName}?.Results?.length > 0) {
-    // Process ${resultInfo.varName}.Results array
-  }`,
-                  code: `${objName}.length`,
-                });
-              }
-
-              // Validate property access
-              validatePropertyAccess(
-                objName,
-                propName,
-                isFromRunQuery,
-                isFromRunView,
-                path.node.loc?.start.line || 0,
-                path.node.loc?.start.column || 0,
-                `${objName}.${propName}`,
-              );
-
-              // Check for nested incorrect access like result.data.entities
-              if (
-                (isFromRunQuery || isFromRunView) &&
-                t.isMemberExpression(path.parent) &&
-                t.isIdentifier(path.parent.property) &&
-                (propName === 'data' || propName === 'Data')
-              ) {
-                const nestedProp = path.parent.property.name;
-                violations.push({
-                  rule: 'runview-runquery-result-validation',
-                  severity: 'critical',
-                  line: path.parent.loc?.start.line || 0,
-                  column: path.parent.loc?.start.column || 0,
-                  message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
-                  code: `${objName}.${propName}.${nestedProp}`,
-                });
-              }
-            }
-          },
-
-          // Check optional member expressions
-          OptionalMemberExpression(path: NodePath<t.OptionalMemberExpression>) {
-            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
-              const objName = path.node.object.name;
-              const propName = path.node.property.name;
-
-              const isFromRunQuery = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-              const isFromRunView = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
-
-              validatePropertyAccess(
-                objName,
-                propName,
-                isFromRunQuery,
-                isFromRunView,
-                path.node.loc?.start.line || 0,
-                path.node.loc?.start.column || 0,
-                `${objName}?.${propName}`,
-              );
-            }
-          },
-
-          // Check for weak fallback patterns
-          LogicalExpression(path: NodePath<t.LogicalExpression>) {
-            if (path.node.operator !== '??') return;
-
-            const invalidAccesses: Array<{ objName: string; propName: string; line: number }> = [];
-
-            const checkNode = (node: t.Node) => {
-              if (t.isOptionalMemberExpression(node) && t.isIdentifier(node.object) && t.isIdentifier(node.property)) {
-                const objName = node.object.name;
-                const propName = node.property.name;
-
-                const isFromRunQuery = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-                const isFromRunView = path.scope.hasBinding(objName) && ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
-
-                if (isFromRunQuery || isFromRunView) {
-                  const isValidQueryProp = validRunQueryResultProps.has(propName);
-                  const isValidViewProp = validRunViewResultProps.has(propName);
-
-                  if ((isFromRunQuery && !isValidQueryProp) || (isFromRunView && !isValidViewProp)) {
-                    invalidAccesses.push({ objName, propName, line: node.loc?.start.line || 0 });
-                  }
-                }
-              } else if (t.isLogicalExpression(node) && node.operator === '??') {
-                checkNode(node.left);
-                checkNode(node.right);
-              }
-            };
-
-            checkNode(path.node);
-
-            if (invalidAccesses.length >= 2) {
-              const objName = invalidAccesses[0].objName;
-              const props = invalidAccesses.map((a) => a.propName).join(', ');
-
-              violations.push({
-                rule: 'runview-runquery-result-validation',
-                severity: 'critical',
-                line: path.node.loc?.start.line || 0,
-                column: path.node.loc?.start.column || 0,
-                message: `Weak fallback pattern detected: "${objName}?.${invalidAccesses[0].propName} ?? ${objName}?.${invalidAccesses[1].propName} ?? ..." uses multiple INVALID properties (${props}). This masks the real issue. Use "${objName}?.Results ?? []" instead.`,
-                code: path.toString().substring(0, 100),
-              });
-            }
-          },
-
-          // Check destructuring patterns
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
-              const sourceName = path.node.init.name;
-
-              const isFromRunQuery = path.scope.hasBinding(sourceName) && ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunQuery');
-              const isFromRunView = path.scope.hasBinding(sourceName) && ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunView');
-
-              if (isFromRunQuery || isFromRunView) {
-                for (const prop of path.node.id.properties) {
-                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                    const propName = prop.key.name;
-                    const isValidQueryProp = validRunQueryResultProps.has(propName);
-                    const isValidViewProp = validRunViewResultProps.has(propName);
-
-                    if (isFromRunQuery && !isValidQueryProp) {
-                      const suggestion = incorrectToCorrectMap[propName];
-                      violations.push({
-                        rule: 'runview-runquery-result-validation',
-                        severity: 'critical',
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0,
-                        message: suggestion
-                          ? `Destructuring invalid property "${propName}" from RunQuery result. Use "${suggestion}" instead.`
-                          : `Destructuring invalid property "${propName}" from RunQuery result. Valid properties: ${runQueryResultProps.join(', ')}`,
-                        code: `{ ${propName} }`,
-                      });
-                    } else if (isFromRunView && !isValidViewProp) {
-                      const suggestion = incorrectToCorrectMap[propName];
-                      violations.push({
-                        rule: 'runview-runquery-result-validation',
-                        severity: 'critical',
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0,
-                        message: suggestion
-                          ? `Destructuring invalid property "${propName}" from RunView result. Use "${suggestion}" instead.`
-                          : `Destructuring invalid property "${propName}" from RunView result. Valid properties: ${runViewResultProps.join(', ')}`,
-                        code: `{ ${propName} }`,
-                      });
-                    }
-                  }
-                }
-              }
-            }
-          },
-
-          // Check conditional expressions for Array.isArray pattern
-          ConditionalExpression(path: NodePath<t.ConditionalExpression>) {
-            const test = path.node.test;
-            const consequent = path.node.consequent;
-            const alternate = path.node.alternate;
-
-            if (
-              t.isCallExpression(test) &&
-              t.isMemberExpression(test.callee) &&
-              t.isIdentifier(test.callee.object) &&
-              test.callee.object.name === 'Array' &&
-              t.isIdentifier(test.callee.property) &&
-              test.callee.property.name === 'isArray' &&
-              test.arguments.length === 1 &&
-              t.isIdentifier(test.arguments[0])
-            ) {
-              const varName = test.arguments[0].name;
-
-              if (
-                resultVariables.has(varName) &&
-                t.isIdentifier(consequent) &&
-                consequent.name === varName &&
-                t.isArrayExpression(alternate) &&
-                alternate.elements.length === 0
-              ) {
-                const resultInfo = resultVariables.get(varName)!;
-                violations.push({
-                  rule: 'runview-runquery-result-validation',
-                  severity: 'critical',
-                  line: test.loc?.start.line || 0,
-                  column: test.loc?.start.column || 0,
-                  message: `${resultInfo.method} never returns an array directly. The pattern "Array.isArray(${varName}) ? ${varName} : []" will always evaluate to [] because ${varName} is an object with { Success, Results, ErrorMessage }.
-
-Correct patterns:
-  // Option 1: Simple with fallback
-  ${varName}.Results || []
-
-  // Option 2: Check success first
-  if (${varName}.Success) {
-    setData(${varName}.Results || []);
-  } else {
-    console.error('Failed:', ${varName}.ErrorMessage);
-    setData([]);
-  }`,
-                  code: `Array.isArray(${varName}) ? ${varName} : []`,
-                });
-              }
-            }
-          },
-
-          // Check if statements for result access without Success check
-          IfStatement(path: NodePath<t.IfStatement>) {
-            const test = path.node.test;
-
-            // Pattern: if (result) or if (result?.length)
-            if (t.isIdentifier(test) && resultVariables.has(test.name)) {
-              const resultInfo = resultVariables.get(test.name)!;
-              let checksSuccess = false;
-              let checksResults = false;
-
-              path.traverse({
-                MemberExpression(innerPath: NodePath<t.MemberExpression>) {
-                  if (t.isIdentifier(innerPath.node.object) && innerPath.node.object.name === test.name) {
-                    const prop = t.isIdentifier(innerPath.node.property) ? innerPath.node.property.name : '';
-                    if (prop === 'Success') checksSuccess = true;
-                    if (prop === 'Results') checksResults = true;
-                  }
-                },
-              });
-
-              if (checksResults && !checksSuccess) {
-                violations.push({
-                  rule: 'runview-runquery-result-validation',
-                  severity: 'high',
-                  line: test.loc?.start.line || 0,
-                  column: test.loc?.start.column || 0,
-                  message: `Checking ${resultInfo.method} result without verifying Success property.
-Correct pattern:
-  if (${resultInfo.varName}?.Success) {
-    const data = ${resultInfo.varName}.Results;
-  } else {
-    // Handle error: ${resultInfo.varName}.ErrorMessage
-  }`,
-                  code: `if (${test.name})`,
-                });
-              }
-            }
-
-            // Pattern: if (result?.length)
-            if (
-              t.isOptionalMemberExpression(test) &&
-              t.isIdentifier(test.object) &&
-              t.isIdentifier(test.property) &&
-              test.property.name === 'length' &&
-              resultVariables.has(test.object.name)
-            ) {
-              const resultInfo = resultVariables.get(test.object.name)!;
-              violations.push({
-                rule: 'runview-runquery-result-validation',
-                severity: 'critical',
-                line: test.loc?.start.line || 0,
-                column: test.loc?.start.column || 0,
-                message: `Incorrect check: "${test.object.name}?.length" on ${resultInfo.method} result.
-Correct pattern:
-  if (${resultInfo.varName}?.Success && ${resultInfo.varName}?.Results?.length > 0) {
-    const processedData = processChartData(${resultInfo.varName}.Results);
-  }`,
-                code: `if (${test.object.name}?.length)`,
-              });
-            }
-          },
-        });
-
-        return violations;
-      },
-    },
-
-    {
-      name: 'entity-field-validation',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-
-        // Skip if no data requirements with entities
-        if (!componentSpec?.dataRequirements?.entities || componentSpec.dataRequirements.entities.length === 0) {
-          return violations;
-        }
-
-        // Build a map of entity names to their field names from metadata
-        const entityFieldsMap = new Map<string, Set<string>>();
-        const typeContext = new TypeContext(componentSpec);
-
-        for (const entityReq of componentSpec.dataRequirements.entities) {
-          const fields = typeContext.getEntityFieldTypesSync(entityReq.name);
-          if (fields.size > 0) {
-            entityFieldsMap.set(entityReq.name, new Set(fields.keys()));
-          }
-        }
-
-        // If we couldn't load any entity metadata, skip validation
-        if (entityFieldsMap.size === 0) {
-          return violations;
-        }
-
-        // Track variables that hold RunView results and their entity names
-        const runViewResultVars = new Map<string, string>(); // varName -> entityName
-        // Track variables that hold entity row arrays (from .Results)
-        const entityArrayVars = new Map<string, string>(); // varName -> entityName
-
-        // Helper function to validate field access within a callback body
-        const validateFieldAccessInCallback = (
-          callbackBody: t.Node,
-          paramName: string,
-          entityName: string
-        ) => {
-          const validFields = entityFieldsMap.get(entityName);
-          if (!validFields) return;
-
-          // Simple AST walk to find member expressions within callback body
-          const checkNode = (node: t.Node) => {
-            if (t.isMemberExpression(node)) {
-              // Skip if computed access (e.g., obj[prop])
-              if (node.computed) return;
-
-              // Check if accessing a field on the entity row variable
-              if (t.isIdentifier(node.object) &&
-                  node.object.name === paramName &&
-                  t.isIdentifier(node.property)) {
-                const fieldName = node.property.name;
-
-                if (!validFields.has(fieldName)) {
-                  // Get a sample of valid fields for the error message
-                  const availableFields = Array.from(validFields).slice(0, 10);
-                  const moreText = validFields.size > 10 ? ` and ${validFields.size - 10} more` : '';
-
-                  violations.push({
-                    rule: 'entity-field-validation',
-                    severity: 'critical',
-                    line: node.loc?.start.line || 0,
-                    column: node.loc?.start.column || 0,
-                    message: `Field "${fieldName}" does not exist on entity "${entityName}". Available fields: ${availableFields.join(', ')}${moreText}`,
-                    code: `${paramName}.${fieldName}`,
-                  });
-                }
-              }
-            }
-          };
-
-          // Walk the callback body to find all member expressions
-          traverse(callbackBody, {
-            MemberExpression(innerPath: NodePath<t.MemberExpression>) {
-              checkNode(innerPath.node);
-            },
-            noScope: true
-          });
-        };
-
-        // First pass: identify RunView result variables and their entity names
-        traverse(ast, {
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (!t.isIdentifier(path.node.id)) return;
-            const varName = path.node.id.name;
-            const init = path.node.init;
-
-            if (!init) return;
-
-            // Check for await utilities.rv.RunView(...)
-            if (t.isAwaitExpression(init) && t.isCallExpression(init.argument)) {
-              const call = init.argument;
-              if (t.isMemberExpression(call.callee) &&
-                  t.isMemberExpression(call.callee.object) &&
-                  t.isIdentifier(call.callee.property) &&
-                  call.callee.property.name === 'RunView') {
-                // Extract EntityName from arguments
-                if (call.arguments.length > 0 && t.isObjectExpression(call.arguments[0])) {
-                  for (const prop of call.arguments[0].properties) {
-                    if (t.isObjectProperty(prop) &&
-                        t.isIdentifier(prop.key) &&
-                        prop.key.name === 'EntityName' &&
-                        t.isStringLiteral(prop.value)) {
-                      runViewResultVars.set(varName, prop.value.value);
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-
-            // Check for result.Results assignment
-            if (t.isMemberExpression(init) &&
-                t.isIdentifier(init.object) &&
-                t.isIdentifier(init.property) &&
-                init.property.name === 'Results') {
-              const sourceVar = init.object.name;
-              if (runViewResultVars.has(sourceVar)) {
-                entityArrayVars.set(varName, runViewResultVars.get(sourceVar)!);
-              }
-            }
-          },
-
-          // Track array element access like results[0] or items.map(item => ...)
-          CallExpression(path: NodePath<t.CallExpression>) {
-            // Handle array methods like map, forEach, filter
-            if (t.isMemberExpression(path.node.callee) &&
-                t.isIdentifier(path.node.callee.property)) {
-              const methodName = path.node.callee.property.name;
-              const arrayMethods = ['map', 'forEach', 'filter', 'find', 'some', 'every', 'reduce'];
-
-              if (arrayMethods.includes(methodName)) {
-                // Check if the array is an entity array
-                let entityName: string | undefined;
-
-                // Check if calling on a known entity array variable
-                if (t.isIdentifier(path.node.callee.object)) {
-                  entityName = entityArrayVars.get(path.node.callee.object.name);
-                }
-
-                // Check if calling on result.Results
-                if (t.isMemberExpression(path.node.callee.object) &&
-                    t.isIdentifier(path.node.callee.object.object) &&
-                    t.isIdentifier(path.node.callee.object.property) &&
-                    path.node.callee.object.property.name === 'Results') {
-                  const resultVar = path.node.callee.object.object.name;
-                  entityName = runViewResultVars.get(resultVar);
-                }
-
-                if (entityName && path.node.arguments.length > 0) {
-                  // Get the callback function
-                  const callback = path.node.arguments[0];
-                  if ((t.isArrowFunctionExpression(callback) || t.isFunctionExpression(callback)) &&
-                      callback.params.length > 0) {
-                    const param = callback.params[0];
-                    if (t.isIdentifier(param)) {
-                      // Validate field access within this callback's scope only
-                      validateFieldAccessInCallback(callback.body, param.name, entityName);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        });
-
-        return violations;
-      },
-    },
-
-    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-    // query-field-validation
-    // Validates that accessed fields exist in the query result definition (from component spec)
-    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-    {
-      name: 'query-field-validation',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-
-        // Skip if no data requirements with queries
-        if (!componentSpec?.dataRequirements?.queries || componentSpec.dataRequirements.queries.length === 0) {
-          return violations;
-        }
-
-        // Build a map of query names to their field names from spec
-        const queryFieldsMap = new Map<string, Set<string>>();
-        const typeContext = new TypeContext(componentSpec);
-
-        for (const queryReq of componentSpec.dataRequirements.queries) {
-          const fields = typeContext.getQueryFieldTypes(queryReq.name, queryReq.categoryPath);
-          if (fields && fields.size > 0) {
-            queryFieldsMap.set(queryReq.name, new Set(fields.keys()));
-          }
-        }
-
-        // If we couldn't load any query field metadata, skip validation
-        if (queryFieldsMap.size === 0) {
-          return violations;
-        }
-
-        // Track variables that hold RunQuery results and their query names
-        const runQueryResultVars = new Map<string, string>(); // varName -> queryName
-        // Track variables that hold query row arrays (from .Results)
-        const queryArrayVars = new Map<string, string>(); // varName -> queryName
-
-        // Helper function to validate field access within a callback body
-        const validateFieldAccessInCallback = (
-          callbackBody: t.Node,
-          paramName: string,
-          queryName: string
-        ) => {
-          const validFields = queryFieldsMap.get(queryName);
-          if (!validFields) return;
-
-          // Simple AST walk to find member expressions within callback body
-          const checkNode = (node: t.Node) => {
-            if (t.isMemberExpression(node)) {
-              // Skip if computed access (e.g., obj[prop])
-              if (node.computed) return;
-
-              // Check if accessing a field on the query row variable
-              if (t.isIdentifier(node.object) &&
-                  node.object.name === paramName &&
-                  t.isIdentifier(node.property)) {
-                const fieldName = node.property.name;
-
-                if (!validFields.has(fieldName)) {
-                  // Get a sample of valid fields for the error message
-                  const availableFields = Array.from(validFields).slice(0, 10);
-                  const moreText = validFields.size > 10 ? ` and ${validFields.size - 10} more` : '';
-
-                  violations.push({
-                    rule: 'query-field-validation',
-                    severity: 'critical',
-                    line: node.loc?.start.line || 0,
-                    column: node.loc?.start.column || 0,
-                    message: `Field "${fieldName}" does not exist on query "${queryName}". Available fields: ${availableFields.join(', ')}${moreText}`,
-                    code: `${paramName}.${fieldName}`,
-                  });
-                }
-              }
-            }
-          };
-
-          // Walk the callback body to find all member expressions
-          traverse(callbackBody, {
-            MemberExpression(innerPath: NodePath<t.MemberExpression>) {
-              checkNode(innerPath.node);
-            },
-            noScope: true
-          });
-        };
-
-        // First pass: identify RunQuery result variables and their query names
-        traverse(ast, {
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (!t.isIdentifier(path.node.id)) return;
-            const varName = path.node.id.name;
-            const init = path.node.init;
-
-            if (!init) return;
-
-            // Check for await utilities.rq.RunQuery(...)
-            if (t.isAwaitExpression(init) && t.isCallExpression(init.argument)) {
-              const call = init.argument;
-              if (t.isMemberExpression(call.callee) &&
-                  t.isMemberExpression(call.callee.object) &&
-                  t.isIdentifier(call.callee.property) &&
-                  call.callee.property.name === 'RunQuery') {
-                // Extract QueryName from arguments
-                if (call.arguments.length > 0 && t.isObjectExpression(call.arguments[0])) {
-                  for (const prop of call.arguments[0].properties) {
-                    if (t.isObjectProperty(prop) &&
-                        t.isIdentifier(prop.key) &&
-                        prop.key.name === 'QueryName' &&
-                        t.isStringLiteral(prop.value)) {
-                      runQueryResultVars.set(varName, prop.value.value);
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-
-            // Check for result.Results assignment
-            if (t.isMemberExpression(init) &&
-                t.isIdentifier(init.object) &&
-                t.isIdentifier(init.property) &&
-                init.property.name === 'Results') {
-              const sourceVar = init.object.name;
-              if (runQueryResultVars.has(sourceVar)) {
-                queryArrayVars.set(varName, runQueryResultVars.get(sourceVar)!);
-              }
-            }
-          },
-
-          // Track array element access like results[0] or items.map(item => ...)
-          CallExpression(path: NodePath<t.CallExpression>) {
-            // Handle array methods like map, forEach, filter
-            if (t.isMemberExpression(path.node.callee) &&
-                t.isIdentifier(path.node.callee.property)) {
-              const methodName = path.node.callee.property.name;
-              const arrayMethods = ['map', 'forEach', 'filter', 'find', 'some', 'every', 'reduce'];
-
-              if (arrayMethods.includes(methodName)) {
-                // Check if the array is a query array
-                let queryName: string | undefined;
-
-                // Check if calling on a known query array variable
-                if (t.isIdentifier(path.node.callee.object)) {
-                  queryName = queryArrayVars.get(path.node.callee.object.name);
-                }
-
-                // Check if calling on result.Results
-                if (t.isMemberExpression(path.node.callee.object) &&
-                    t.isIdentifier(path.node.callee.object.object) &&
-                    t.isIdentifier(path.node.callee.object.property) &&
-                    path.node.callee.object.property.name === 'Results') {
-                  const resultVar = path.node.callee.object.object.name;
-                  queryName = runQueryResultVars.get(resultVar);
-                }
-
-                if (queryName && path.node.arguments.length > 0) {
-                  // Get the callback function
-                  const callback = path.node.arguments[0];
-                  if ((t.isArrowFunctionExpression(callback) || t.isFunctionExpression(callback)) &&
-                      callback.params.length > 0) {
-                    const param = callback.params[0];
-                    if (t.isIdentifier(param)) {
-                      // Validate field access within this callback's scope only
-                      validateFieldAccessInCallback(callback.body, param.name, queryName);
-                    }
-                  }
-                }
-              }
-            }
-          }
         });
 
         return violations;
@@ -5575,19 +5148,6 @@ Correct pattern:
         const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
 
         const reactSpecialProps = new Set(['children', 'key', 'ref']);
-
-        // Create type inference engine for variable type checking
-        const typeEngine = new TypeInferenceEngine(componentSpec);
-        typeEngine.analyze(ast);
-
-        // Helper to get the actual type of an expression (including variables)
-        function getExpressionType(expr: t.Expression | t.JSXEmptyExpression): string {
-          if (t.isJSXEmptyExpression(expr)) return 'unknown';
-
-          // Use type inference for identifiers and complex expressions
-          const inferredType = typeEngine.inferExpressionType(expr);
-          return inferredType.type;
-        }
 
         // Traverse JSX to find component usage
         traverse(ast, {
@@ -5691,7 +5251,7 @@ Correct pattern:
             }
 
             // ═══════════════════════════════════════════════════════════════
-            // 2. VALIDATE PROP TYPES (Enhanced with Type Inference)
+            // 2. VALIDATE PROP TYPES
             // ═══════════════════════════════════════════════════════════════
             if (depSpec.properties && Array.isArray(depSpec.properties)) {
               for (const [propName, attrNode] of passedPropNodes) {
@@ -5699,56 +5259,92 @@ Correct pattern:
                 if (propSpec && propSpec.type) {
                   const value = attrNode.value;
 
-                  if (value && t.isJSXExpressionContainer(value)) {
-                    const expr = value.expression;
-                    if (t.isJSXEmptyExpression(expr)) continue;
-
-                    // Use type inference to get the actual type (works for literals AND variables)
-                    const actualType = getExpressionType(expr);
-
-                    // Skip if type is unknown (we can't prove it's wrong)
-                    if (actualType === 'unknown') continue;
-
-                    // Get the expected type (normalize it)
-                    const expectedType = propSpec.type.toLowerCase();
-
-                    // Check type compatibility
-                    let isCompatible = true;
-                    let normalizedExpected = expectedType;
-
-                    if (expectedType === 'string') {
-                      isCompatible = actualType === 'string';
-                    } else if (expectedType === 'number' || expectedType === 'int' || expectedType === 'integer' || expectedType === 'float') {
-                      isCompatible = actualType === 'number';
-                      normalizedExpected = 'number';
-                    } else if (expectedType === 'boolean' || expectedType === 'bool') {
-                      isCompatible = actualType === 'boolean';
-                      normalizedExpected = 'boolean';
-                    } else if (expectedType === 'array' || expectedType.startsWith('array<')) {
-                      isCompatible = actualType === 'array';
-                      normalizedExpected = 'array';
-                    } else if (expectedType === 'object') {
-                      // Objects, entity-rows, query-rows are all compatible with 'object'
-                      isCompatible = ['object', 'entity-row', 'query-row'].includes(actualType);
-                    } else if (expectedType === 'function') {
-                      isCompatible = actualType === 'function';
-                    }
-
-                    if (!isCompatible) {
-                      // Generate helpful message with variable name if it's an identifier
-                      let valueDesc = actualType;
-                      if (t.isIdentifier(expr)) {
-                        valueDesc = `variable "${expr.name}" (${actualType})`;
+                  // Type validation based on prop spec type
+                  if (propSpec.type === 'string') {
+                    // Check if value could be a string
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      // Check for obvious non-string types
+                      if (
+                        t.isNumericLiteral(expr) ||
+                        t.isBooleanLiteral(expr) ||
+                        t.isArrayExpression(expr) ||
+                        (t.isObjectExpression(expr) && !t.isTemplateLiteral(expr))
+                      ) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "string" but received a different type.`,
+                          code: `${propName}={...}`,
+                        });
                       }
-
-                      violations.push({
-                        rule: 'dependency-prop-validation',
-                        severity: 'high',
-                        line: attrNode.loc?.start.line || 0,
-                        column: attrNode.loc?.start.column || 0,
-                        message: `Prop "${propName}" on component "${elementName}" expects type "${normalizedExpected}" but received ${valueDesc}.`,
-                        code: `${propName}={<${normalizedExpected} value>}`,
-                      });
+                    }
+                  } else if (propSpec.type === 'number') {
+                    // Check if value could be a number
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (t.isStringLiteral(expr) || t.isBooleanLiteral(expr) || t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "number" but received a different type.`,
+                          code: `${propName}={...}`,
+                        });
+                      }
+                    }
+                  } else if (propSpec.type === 'boolean') {
+                    // Check if value could be a boolean
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "boolean" but received a different type.`,
+                          code: `${propName}={...}`,
+                        });
+                      }
+                    }
+                  } else if (propSpec.type === 'array' || propSpec.type.startsWith('Array<')) {
+                    // Check if value could be an array
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (
+                        t.isStringLiteral(expr) ||
+                        t.isNumericLiteral(expr) ||
+                        t.isBooleanLiteral(expr) ||
+                        (t.isObjectExpression(expr) && !t.isArrayExpression(expr))
+                      ) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "array" but received a different type.`,
+                          code: `${propName}={...}`,
+                        });
+                      }
+                    }
+                  } else if (propSpec.type === 'object') {
+                    // Check if value could be an object
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || t.isBooleanLiteral(expr) || t.isArrayExpression(expr)) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "object" but received a different type.`,
+                          code: `${propName}={...}`,
+                        });
+                      }
                     }
                   }
                 }
@@ -5803,33 +5399,24 @@ Correct pattern:
       },
     },
 
-        {
-      name: 'utilities-api-validation',
+    {
+      name: 'utilities-valid-properties',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
-
-        // Define the complete utilities API surface
-        const utilitiesAPI: Record<string, { methods: Set<string>; properties: Set<string> }> = {
-          rv: { methods: new Set(['RunView', 'RunViews']), properties: new Set() },
-          rq: { methods: new Set(['RunQuery']), properties: new Set() },
-          md: { methods: new Set(['GetEntityObject']), properties: new Set(['Entities']) },
-          ai: { methods: new Set(['ExecutePrompt', 'EmbedText']), properties: new Set(['VectorService']) },
-        };
-
-        const validUtilityProps = new Set(Object.keys(utilitiesAPI));
+        const validProperties = new Set(['rv', 'rq', 'md', 'ai']);
 
         traverse(ast, {
-          // Check for utilities.* property access
           MemberExpression(path: NodePath<t.MemberExpression>) {
-            // Check for direct utilities.* access
+            // Check for utilities.* access
             if (t.isIdentifier(path.node.object) && path.node.object.name === 'utilities') {
               if (t.isIdentifier(path.node.property)) {
                 const propName = path.node.property.name;
 
-                if (!validUtilityProps.has(propName)) {
+                // Check if it's a valid property
+                if (!validProperties.has(propName)) {
                   violations.push({
-                    rule: 'utilities-api-validation',
+                    rule: 'utilities-valid-properties',
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
@@ -5838,69 +5425,245 @@ Correct pattern:
                   });
                 }
               }
-              return; // Don't check deeper for this node
-            }
-
-            // Check for utilities.{rv|rq|md|ai}.property access (non-call)
-            if (t.isCallExpression(path.parent) && path.parent.callee === path.node) {
-              return; // Skip - this is a method call, handled below
-            }
-
-            if (
-              t.isMemberExpression(path.node.object) &&
-              t.isIdentifier(path.node.object.object) &&
-              path.node.object.object.name === 'utilities' &&
-              t.isIdentifier(path.node.object.property) &&
-              t.isIdentifier(path.node.property)
-            ) {
-              const utilityName = path.node.object.property.name;
-              const propName = path.node.property.name;
-              const api = utilitiesAPI[utilityName];
-
-              if (api && !api.properties.has(propName) && !api.methods.has(propName)) {
-                const validItems = [
-                  ...Array.from(api.methods).map((m) => `${m}()`),
-                  ...Array.from(api.properties),
-                ];
-                violations.push({
-                  rule: 'utilities-api-validation',
-                  severity: 'critical',
-                  line: path.node.loc?.start.line || 0,
-                  column: path.node.loc?.start.column || 0,
-                  message: `Invalid access '${propName}' on utilities.${utilityName}. Valid: ${validItems.join(', ')}`,
-                  code: `utilities.${utilityName}.${propName}`,
-                });
-              }
             }
           },
+        });
 
-          // Check for utilities.{rv|rq|md|ai}.method() calls
+        return violations;
+      },
+    },
+
+    {
+      name: 'utilities-runview-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['RunView', 'RunViews']);
+
+        traverse(ast, {
           CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rv.* method calls
             if (t.isMemberExpression(path.node.callee)) {
               const callee = path.node.callee;
 
+              // Check if it's utilities.rv.methodName()
               if (
                 t.isMemberExpression(callee.object) &&
                 t.isIdentifier(callee.object.object) &&
                 callee.object.object.name === 'utilities' &&
                 t.isIdentifier(callee.object.property) &&
+                callee.object.property.name === 'rv' &&
                 t.isIdentifier(callee.property)
               ) {
-                const utilityName = callee.object.property.name;
                 const methodName = callee.property.name;
-                const api = utilitiesAPI[utilityName];
 
-                if (api && !api.methods.has(methodName)) {
-                  const validMethods = Array.from(api.methods).join(', ');
+                if (!validMethods.has(methodName)) {
                   violations.push({
-                    rule: 'utilities-api-validation',
+                    rule: 'utilities-runview-methods',
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Invalid method '${methodName}' on utilities.${utilityName}. Valid methods: ${validMethods}`,
-                    code: `utilities.${utilityName}.${methodName}()`,
+                    message: `Invalid method '${methodName}' on utilities.rv. Valid methods are: RunView, RunViews`,
+                    code: `utilities.rv.${methodName}()`,
                   });
                 }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'utilities-runquery-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['RunQuery']);
+
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rq.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+
+              // Check if it's utilities.rq.methodName()
+              if (
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) &&
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) &&
+                callee.object.property.name === 'rq' &&
+                t.isIdentifier(callee.property)
+              ) {
+                const methodName = callee.property.name;
+
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-runquery-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.rq. Valid method is: RunQuery`,
+                    code: `utilities.rq.${methodName}()`,
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'utilities-metadata-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['GetEntityObject']);
+        const validProperties = new Set(['Entities']);
+
+        traverse(ast, {
+          // Check for method calls
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.md.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+
+              // Check if it's utilities.md.methodName()
+              if (
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) &&
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) &&
+                callee.object.property.name === 'md' &&
+                t.isIdentifier(callee.property)
+              ) {
+                const methodName = callee.property.name;
+
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-metadata-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.md. Valid methods are: GetEntityObject. Valid properties are: Entities`,
+                    code: `utilities.md.${methodName}()`,
+                  });
+                }
+              }
+            }
+          },
+
+          // Check for property access (non-call expressions)
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Skip if this is part of a call expression (handled above)
+            if (t.isCallExpression(path.parent) && path.parent.callee === path.node) {
+              return;
+            }
+
+            // Check if it's utilities.md.propertyName
+            if (
+              t.isMemberExpression(path.node.object) &&
+              t.isIdentifier(path.node.object.object) &&
+              path.node.object.object.name === 'utilities' &&
+              t.isIdentifier(path.node.object.property) &&
+              path.node.object.property.name === 'md' &&
+              t.isIdentifier(path.node.property)
+            ) {
+              const propName = path.node.property.name;
+
+              // Check if it's accessing a valid property or trying to access an invalid one
+              if (!validProperties.has(propName) && !validMethods.has(propName)) {
+                violations.push({
+                  rule: 'utilities-metadata-methods',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Invalid property '${propName}' on utilities.md. Valid methods are: GetEntityObject. Valid properties are: Entities`,
+                  code: `utilities.md.${propName}`,
+                });
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'utilities-ai-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['ExecutePrompt', 'EmbedText']);
+        const validProperties = new Set(['VectorService']);
+
+        traverse(ast, {
+          // Check for method calls
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.ai.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+
+              // Check if it's utilities.ai.methodName()
+              if (
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) &&
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) &&
+                callee.object.property.name === 'ai' &&
+                t.isIdentifier(callee.property)
+              ) {
+                const methodName = callee.property.name;
+
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-ai-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.ai. Valid methods are: ExecutePrompt, EmbedText. Valid property: VectorService`,
+                    code: `utilities.ai.${methodName}()`,
+                  });
+                }
+              }
+            }
+          },
+
+          // Check for property access (VectorService)
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Skip if this is part of a call expression (handled above)
+            if (t.isCallExpression(path.parent)) {
+              return;
+            }
+
+            // Check if it's utilities.ai.propertyName
+            if (
+              t.isMemberExpression(path.node.object) &&
+              t.isIdentifier(path.node.object.object) &&
+              path.node.object.object.name === 'utilities' &&
+              t.isIdentifier(path.node.object.property) &&
+              path.node.object.property.name === 'ai' &&
+              t.isIdentifier(path.node.property)
+            ) {
+              const propName = path.node.property.name;
+
+              // Check if it's a valid property or method (methods might be referenced without calling)
+              if (!validProperties.has(propName) && !validMethods.has(propName)) {
+                violations.push({
+                  rule: 'utilities-ai-properties',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Invalid property '${propName}' on utilities.ai. Valid methods are: ExecutePrompt, EmbedText. Valid property: VectorService`,
+                  code: `utilities.ai.${propName}`,
+                });
               }
             }
           },
@@ -5952,40 +5715,6 @@ Correct pattern:
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions) => {
         const violations: Violation[] = [];
-
-        // Standard props that are always defined (passed by runtime to all components)
-        const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
-
-        // Create control flow analyzer for guard detection
-        const cfa = new ControlFlowAnalyzer(ast, componentSpec);
-
-        // Create type inference engine for property safety checking
-        const typeInferenceEngine = new TypeInferenceEngine(componentSpec);
-        // Run analysis synchronously (the async part is not needed for basic inference)
-        typeInferenceEngine.analyze(ast);
-        const typeContext = typeInferenceEngine.getTypeContext();
-
-        /**
-         * Check if an object property is safe to access based on type inference.
-         * Returns true if the object is locally defined with known structure and the property exists.
-         *
-         * Example: const metrics = { winRate: 75.5 }; metrics.winRate.toFixed() is safe
-         */
-        const isKnownObjectProperty = (objectName: string, propertyName: string): boolean => {
-          const varType = typeContext.getVariableType(objectName);
-          if (!varType) {
-            return false;
-          }
-
-          // Check if it's an object type with known fields
-          if (varType.type === 'object' && varType.fields) {
-            const fieldInfo = varType.fields.get(propertyName);
-            // Property exists in the object definition and is non-null
-            return fieldInfo !== undefined && !fieldInfo.nullable;
-          }
-
-          return false;
-        };
 
         // Common formatting methods that can fail on null/undefined
         const formattingMethods = new Set([
@@ -6096,29 +5825,7 @@ Correct pattern:
                     hasFallback = true;
                   }
 
-                  // Check if inside a null/undefined check using Control Flow Analyzer
-                  const hasNullCheck = cfa.isDefinitelyNonNull(callee.object, path);
-
-                  // Skip if accessing properties on standard props (guaranteed to be defined)
-                  // Pattern: styles.borders.radius is ALWAYS safe (styles is always provided)
-                  let isStandardProp = false;
-                  if (t.isIdentifier(callee.object.object)) {
-                    const objectName = callee.object.object.name;
-                    if (standardProps.has(objectName)) {
-                      isStandardProp = true;
-                    }
-                  }
-
-                  // Skip if the object property is known to be safe via type inference
-                  // Pattern: const metrics = { winRate: 75.5 }; metrics.winRate.toFixed() is safe
-                  // This uses TypeInferenceEngine to track object literal assignments
-                  let isKnownObjectProperty_flag = false;
-                  if (t.isIdentifier(callee.object.object)) {
-                    const objectName = callee.object.object.name;
-                    isKnownObjectProperty_flag = isKnownObjectProperty(objectName, propertyName);
-                  }
-
-                  if (!hasOptionalChaining && !hasFallback && !hasNullCheck && !isStandardProp && !isKnownObjectProperty_flag) {
+                  if (!hasOptionalChaining && !hasFallback) {
                     // Check entity metadata for this field
                     const fieldInfo = checkFieldNullability(propertyName);
 
@@ -6174,31 +5881,7 @@ Correct pattern:
                     // Check if optional chaining is already used
                     const hasOptionalChaining = callee.object.optional || callee.optional;
 
-                    // Check if inside a null/undefined check using Control Flow Analyzer
-                    // Note: For template literals, we need to check the template itself since
-                    // the expression doesn't have its own NodePath
-                    let hasNullCheck = cfa.isDefinitelyNonNull(callee.object, path) ||
-                                      cfa.isProtectedByTernary(callee.object, path);
-
-                    // Skip if accessing properties on standard props (guaranteed to be defined)
-                    let isStandardProp = false;
-                    if (t.isIdentifier(callee.object.object)) {
-                      const objectName = callee.object.object.name;
-                      if (standardProps.has(objectName)) {
-                        isStandardProp = true;
-                      }
-                    }
-
-                    // Skip if the object property is known to be safe via type inference
-                    // Pattern: const metrics = { winRate: 75.5 }; metrics.winRate.toFixed() is safe
-                    // This uses TypeInferenceEngine to track object literal assignments
-                    let isKnownObjectProperty_flag = false;
-                    if (t.isIdentifier(callee.object.object)) {
-                      const objectName = callee.object.object.name;
-                      isKnownObjectProperty_flag = isKnownObjectProperty(objectName, propertyName);
-                    }
-
-                    if (!hasOptionalChaining && !hasNullCheck && !isStandardProp && !isKnownObjectProperty_flag) {
+                    if (!hasOptionalChaining) {
                       // Check entity metadata for this field
                       const fieldInfo = checkFieldNullability(propertyName);
 
@@ -6961,6 +6644,294 @@ Correct pattern:
       },
     },
 
+    // New rules for catching RunQuery/RunView result access patterns
+    {
+      name: 'runquery-runview-ternary-array-check',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<
+          string,
+          {
+            line: number;
+            column: number;
+            method: 'RunView' | 'RunViews' | 'RunQuery';
+            varName: string;
+          }
+        >();
+
+        // First pass: identify all RunView/RunQuery calls and their assigned variables
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+
+              // Check for utilities.rv.RunView/RunViews or utilities.rq.RunQuery pattern
+              if (
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) &&
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property)
+              ) {
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+
+                if (methodType) {
+                  // Check if this is being assigned to a variable
+                  const parent = path.parent;
+
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    // const result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name,
+                    });
+                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    // result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.left.name, {
+                      line: parent.left.loc?.start.line || 0,
+                      column: parent.left.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.left.name,
+                    });
+                  }
+                }
+              }
+            }
+          },
+        });
+
+        // Second pass: check for Array.isArray(result) ? result : [] pattern
+        traverse(ast, {
+          ConditionalExpression(path: NodePath<t.ConditionalExpression>) {
+            const test = path.node.test;
+            const consequent = path.node.consequent;
+            const alternate = path.node.alternate;
+
+            // Check for Array.isArray(variable) pattern
+            if (
+              t.isCallExpression(test) &&
+              t.isMemberExpression(test.callee) &&
+              t.isIdentifier(test.callee.object) &&
+              test.callee.object.name === 'Array' &&
+              t.isIdentifier(test.callee.property) &&
+              test.callee.property.name === 'isArray' &&
+              test.arguments.length === 1 &&
+              t.isIdentifier(test.arguments[0])
+            ) {
+              const varName = test.arguments[0].name;
+
+              // Check if this variable is a RunQuery/RunView result
+              if (resultVariables.has(varName)) {
+                const resultInfo = resultVariables.get(varName)!;
+
+                // Check if the consequent is the same variable and alternate is []
+                if (t.isIdentifier(consequent) && consequent.name === varName && t.isArrayExpression(alternate) && alternate.elements.length === 0) {
+                  violations.push({
+                    rule: 'runquery-runview-ternary-array-check',
+                    severity: 'critical',
+                    line: test.loc?.start.line || 0,
+                    column: test.loc?.start.column || 0,
+                    message: `${resultInfo.method} never returns an array directly. The pattern "Array.isArray(${varName}) ? ${varName} : []" will always evaluate to [] because ${varName} is an object with { Success, Results, ErrorMessage }.
+
+Correct patterns:
+  // Option 1: Simple with fallback
+  ${varName}.Results || []
+  
+  // Option 2: Check success first
+  if (${varName}.Success) {
+    setData(${varName}.Results || []);
+  } else {
+    console.error('Failed:', ${varName}.ErrorMessage);
+    setData([]);
+  }`,
+                    code: `Array.isArray(${varName}) ? ${varName} : []`,
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'runquery-runview-direct-setstate',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<
+          string,
+          {
+            line: number;
+            column: number;
+            method: 'RunView' | 'RunViews' | 'RunQuery';
+            varName: string;
+          }
+        >();
+
+        // First pass: identify all RunView/RunQuery calls and their assigned variables
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+
+              // Check for utilities.rv.RunView/RunViews or utilities.rq.RunQuery pattern
+              if (
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) &&
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property)
+              ) {
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+
+                if (methodType) {
+                  // Check if this is being assigned to a variable
+                  const parent = path.parent;
+
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name,
+                    });
+                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    resultVariables.set(parent.left.name, {
+                      line: parent.left.loc?.start.line || 0,
+                      column: parent.left.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.left.name,
+                    });
+                  }
+                }
+              }
+            }
+          },
+        });
+
+        // Second pass: check for passing result directly to setState functions
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+
+            // Check if this is a setState function call
+            if (t.isIdentifier(callee)) {
+              const funcName = callee.name;
+
+              // Common setState patterns
+              const setStatePatterns = [
+                /^set[A-Z]/, // setData, setChartData, setItems, etc.
+                /^update[A-Z]/, // updateData, updateItems, etc.
+              ];
+
+              const isSetStateFunction = setStatePatterns.some((pattern) => pattern.test(funcName));
+
+              if (isSetStateFunction && path.node.arguments.length > 0) {
+                const firstArg = path.node.arguments[0];
+
+                // Check if the argument is a ternary with Array.isArray check
+                if (t.isConditionalExpression(firstArg)) {
+                  const test = firstArg.test;
+                  const consequent = firstArg.consequent;
+                  const alternate = firstArg.alternate;
+
+                  // Check for Array.isArray(variable) ? variable : []
+                  if (
+                    t.isCallExpression(test) &&
+                    t.isMemberExpression(test.callee) &&
+                    t.isIdentifier(test.callee.object) &&
+                    test.callee.object.name === 'Array' &&
+                    t.isIdentifier(test.callee.property) &&
+                    test.callee.property.name === 'isArray' &&
+                    test.arguments.length === 1 &&
+                    t.isIdentifier(test.arguments[0])
+                  ) {
+                    const varName = test.arguments[0].name;
+
+                    if (resultVariables.has(varName) && t.isIdentifier(consequent) && consequent.name === varName) {
+                      const resultInfo = resultVariables.get(varName)!;
+
+                      violations.push({
+                        rule: 'runquery-runview-direct-setstate',
+                        severity: 'critical',
+                        line: firstArg.loc?.start.line || 0,
+                        column: firstArg.loc?.start.column || 0,
+                        message: `Passing ${resultInfo.method} result with incorrect Array.isArray check to ${funcName}. This will always pass an empty array because ${resultInfo.method} returns an object, not an array.
+
+Correct pattern:
+  if (${varName}.Success) {
+    ${funcName}(${varName}.Results || []);
+  } else {
+    console.error('Failed to load data:', ${varName}.ErrorMessage);
+    ${funcName}([]);
+  }
+  
+  // Or simpler:
+  ${funcName}(${varName}.Results || []);`,
+                        code: `${funcName}(Array.isArray(${varName}) ? ${varName} : [])`,
+                      });
+                    }
+                  }
+                }
+
+                // Check if passing result directly (not accessing .Results)
+                if (t.isIdentifier(firstArg) && resultVariables.has(firstArg.name)) {
+                  const resultInfo = resultVariables.get(firstArg.name)!;
+
+                  violations.push({
+                    rule: 'runquery-runview-direct-setstate',
+                    severity: 'critical',
+                    line: firstArg.loc?.start.line || 0,
+                    column: firstArg.loc?.start.column || 0,
+                    message: `Passing ${resultInfo.method} result object directly to ${funcName}. The result is an object { Success, Results, ErrorMessage }, not the data array.
+
+Correct pattern:
+  if (${firstArg.name}.Success) {
+    ${funcName}(${firstArg.name}.Results || []);
+  } else {
+    console.error('Failed to load data:', ${firstArg.name}.ErrorMessage);
+    ${funcName}([]);
+  }`,
+                    code: `${funcName}(${firstArg.name})`,
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
     {
       name: 'styles-invalid-path',
       appliesTo: 'all',
@@ -7045,11 +7016,6 @@ Correct pattern:
         const violations: Violation[] = [];
         const analyzer = ComponentLinter.getStylesAnalyzer();
 
-        // Standard props that are always defined with guaranteed structure
-        // The ComponentStyles interface guarantees all required properties exist
-        // So we don't need to check for optional chaining on the styles object itself
-        const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
-
         traverse(ast, {
           MemberExpression(path: NodePath<t.MemberExpression>) {
             // Build the complete property chain first
@@ -7076,12 +7042,43 @@ Correct pattern:
 
             // Only process if this is a styles access
             if (propertyChain[0] === 'styles') {
-              // Skip styles access entirely - ComponentStyles interface guarantees structure
-              // styles is a standard prop with a fixed interface, all required properties exist
-              // This prevents false positives for patterns like: styles.borders.radius
-              // The ComponentStyles interface (runtime-types.ts) defines all required properties
-              // including colors, spacing, typography, borders, etc. as non-optional
-              return;
+              // Only check valid paths for safe access
+              if (analyzer.isValidPath(propertyChain)) {
+                // Check if this is a nested access without optional chaining or fallback
+                if (propertyChain.length > 2 && !hasOptionalChaining) {
+                  // Check if there's a fallback (|| operator)
+                  const parent = path.parent;
+                  const hasFallback = t.isLogicalExpression(parent) && parent.operator === '||';
+
+                  if (!hasFallback) {
+                    const accessPath = propertyChain.join('.');
+                    const defaultValue = analyzer.getDefaultValueForPath(propertyChain);
+
+                    // Skip violations for standard leaf properties that are guaranteed to exist
+                    // These are properties that resolve to actual string values in the default styles
+                    // (not intermediate objects like '{}')
+                    // Examples: styles.colors.primary, styles.spacing.md, styles.typography.fontSize.md
+                    // The default styles from SetupStyles() guarantee these properties exist
+                    const isLeafProperty = defaultValue !== '{}' && defaultValue !== 'undefined';
+
+                    if (!isLeafProperty) {
+                      violations.push({
+                        rule: 'styles-unsafe-access',
+                        severity: 'high',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `Unsafe styles property access: "${accessPath}". While this path is valid, you should use optional chaining for safety.
+
+Example with optional chaining:
+  ${accessPath.replace(/\./g, '?.')} || ${defaultValue}
+
+This prevents runtime errors if the styles object structure changes.`,
+                        code: accessPath,
+                      });
+                    }
+                  }
+                }
+              }
             }
           },
         });
@@ -7246,14 +7243,6 @@ const [state, setState] = useState(initialValue);`,
               if (t.isIdentifier(path.node.property)) {
                 const methodName = path.node.property.name;
 
-                // IMPORTANT: Check if it's a known runtime callback FIRST
-                // This prevents false positives when components mistakenly declare
-                // runtime callbacks as events in their spec
-                if (allowedCallbackMethods.has(methodName)) {
-                  // This is a valid runtime callback - allow it
-                  return;
-                }
-
                 // Check if it's trying to access an event
                 if (componentEvents.has(methodName)) {
                   violations.push({
@@ -7278,8 +7267,8 @@ function MyComponent({ ..., ${methodName} }) {
 }`,
                     },
                   });
-                } else {
-                  // It's not a runtime callback or an event - it's invalid
+                } else if (!allowedCallbackMethods.has(methodName)) {
+                  // It's not an allowed callback method
                   violations.push({
                     rule: 'callbacks-usage-validation',
                     severity: 'critical',
@@ -7313,12 +7302,6 @@ function MyComponent({ onCustomEvent }) {
               for (const prop of path.node.id.properties) {
                 if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                   const methodName = prop.key.name;
-
-                  // IMPORTANT: Check if it's a known runtime callback FIRST
-                  if (allowedCallbackMethods.has(methodName)) {
-                    // This is a valid runtime callback - allow it
-                    continue;
-                  }
 
                   if (componentEvents.has(methodName)) {
                     violations.push({
@@ -8023,31 +8006,16 @@ const result = await utilities.rq.RunQuery({
 
       const violations: Violation[] = [];
 
-      // Run each rule with error handling to prevent crashes
+      // Run each rule
       for (const rule of rules) {
-        try {
-          const ruleViolations = rule.test(ast, componentName, componentSpec, options);
-          violations.push(...ruleViolations);
-        } catch (error) {
-          // Log rule execution errors but don't crash the entire linting process
-          console.warn(`Rule "${rule.name}" failed during execution:`, error instanceof Error ? error.message : error);
-          if (debugMode) {
-            console.error('Full error:', error);
-          }
-        }
+        const ruleViolations = rule.test(ast, componentName, componentSpec, options);
+        violations.push(...ruleViolations);
       }
 
       // Add data requirements validation if componentSpec is provided
       if (componentSpec?.dataRequirements?.entities) {
-        try {
-          const dataViolations = this.validateDataRequirements(ast, componentSpec);
-          violations.push(...dataViolations);
-        } catch (error) {
-          console.warn('Data requirements validation failed:', error instanceof Error ? error.message : error);
-          if (debugMode) {
-            console.error('Full error:', error);
-          }
-        }
+        const dataViolations = this.validateDataRequirements(ast, componentSpec);
+        violations.push(...dataViolations);
       }
 
       // Apply library-specific lint rules if available
@@ -9889,45 +9857,11 @@ const {
     if (rules.cleanupMethods && rules.cleanupMethods.length > 0) {
       let hasCleanup = false;
 
-      // Track local variables that are instances of the library
-      const libraryInstances = new Set<string>();
-
       traverse(ast, {
         CallExpression(path: NodePath<t.CallExpression>) {
-          // Check for both useEffect and React.useEffect
-          const isUseEffect =
-            (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') ||
-            (t.isMemberExpression(path.node.callee) &&
-              t.isIdentifier(path.node.callee.object) &&
-              path.node.callee.object.name === 'React' &&
-              t.isIdentifier(path.node.callee.property) &&
-              path.node.callee.property.name === 'useEffect');
-
-          if (isUseEffect) {
+          if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') {
             const firstArg = path.node.arguments[0];
             if (t.isArrowFunctionExpression(firstArg) || t.isFunctionExpression(firstArg)) {
-              // First, identify local variables that are library instances
-              // e.g., const chart = new ApexCharts(...)
-              libraryInstances.clear();
-              traverse(
-                firstArg,
-                {
-                  VariableDeclarator(varPath: NodePath<t.VariableDeclarator>) {
-                    if (
-                      t.isIdentifier(varPath.node.id) &&
-                      t.isNewExpression(varPath.node.init) &&
-                      t.isIdentifier(varPath.node.init.callee) &&
-                      varPath.node.init.callee.name === rules.constructorName
-                    ) {
-                      libraryInstances.add(varPath.node.id.name);
-                    }
-                  },
-                },
-                path.scope,
-                path.state,
-                path,
-              );
-
               // Check if it returns a cleanup function
               traverse(
                 firstArg,
@@ -9942,29 +9876,20 @@ const {
                             if (t.isMemberExpression(cleanupPath.node.callee)) {
                               const callee = cleanupPath.node.callee as t.MemberExpression;
 
-                              // Check if the method name is a cleanup method
                               if (t.isIdentifier(callee.property) && rules.cleanupMethods.includes(callee.property.name)) {
-                                // Pattern 1: instance.destroy() where instance is a tracked library instance
-                                // e.g., chart.destroy() where chart is from const chart = new ApexCharts(...)
-                                if (t.isIdentifier(callee.object) && libraryInstances.has(callee.object.name)) {
-                                  hasCleanup = true;
-                                }
-                                // Pattern 2: ref.current.destroy() or ref.current._chart.destroy()
-                                // Any member expression chain ending in cleanup method
-                                // e.g., chartRef.current._chart.destroy()
-                                else if (t.isMemberExpression(callee.object)) {
-                                  hasCleanup = true;
-                                }
-                                // Pattern 3: d3.select(...).selectAll('*').remove()
-                                // Chained method calls ending in cleanup
-                                else if (t.isCallExpression(callee.object)) {
-                                  hasCleanup = true;
-                                }
-                                // Pattern 4: Any identifier calling cleanup method
-                                // e.g., selection.remove() where selection = d3.select(...)
-                                else if (t.isIdentifier(callee.object)) {
-                                  hasCleanup = true;
-                                }
+                                hasCleanup = true;
+                              }
+
+                              // Also check for ref.current.destroy() pattern
+                              // e.g., chartInstanceRef.current.destroy()
+                              if (
+                                t.isMemberExpression(callee.object) &&
+                                t.isIdentifier(callee.object.property) &&
+                                callee.object.property.name === 'current' &&
+                                t.isIdentifier(callee.property) &&
+                                rules.cleanupMethods.includes(callee.property.name)
+                              ) {
+                                hasCleanup = true;
                               }
                             }
                           },

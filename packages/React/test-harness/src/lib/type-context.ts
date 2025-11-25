@@ -23,6 +23,8 @@ export interface TypeInfo {
   fields?: Map<string, FieldTypeInfo>;
   /** For array types, the element type */
   arrayElementType?: TypeInfo;
+  /** For object/dictionary types, the value type (e.g., Object.values() returns array of this) */
+  objectValueType?: TypeInfo;
   /** Whether the value can be null/undefined */
   nullable?: boolean;
   /** Whether this type came from metadata (vs inferred) */
