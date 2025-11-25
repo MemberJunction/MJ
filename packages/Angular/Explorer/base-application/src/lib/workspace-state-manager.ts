@@ -422,12 +422,26 @@ export class WorkspaceStateManager {
     const config = this.configuration$.value;
     if (!config) return;
 
-    const updatedTabs = config.tabs.filter(tab => tab.id !== tabId);
+    // Check if this is the last tab
+    const wouldBeLastTab = config.tabs.length === 1 && config.tabs[0].id === tabId;
+
+    // CRITICAL: If closing the last tab, keep it in the array but mark as unpinned
+    // This allows single-resource mode to work while preserving tab data for nav highlighting
+    let updatedTabs: typeof config.tabs;
+    if (wouldBeLastTab) {
+      // Keep the tab but ensure it's unpinned (triggers single-resource mode)
+      updatedTabs = config.tabs.map(tab =>
+        tab.id === tabId ? { ...tab, isPinned: false } : tab
+      );
+    } else {
+      // Normal case: remove the tab from array
+      updatedTabs = config.tabs.filter(tab => tab.id !== tabId);
+    }
 
     // Update active tab if needed
     let activeTabId = config.activeTabId;
-    if (activeTabId === tabId) {
-      // Find next tab to activate
+    if (activeTabId === tabId && !wouldBeLastTab) {
+      // Find next tab to activate (only when not keeping the last tab)
       const closedIndex = config.tabs.findIndex(tab => tab.id === tabId);
       const nextTab = updatedTabs[closedIndex] || updatedTabs[closedIndex - 1];
       activeTabId = nextTab?.id || null;
