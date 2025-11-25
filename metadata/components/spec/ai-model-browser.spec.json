@@ -165,24 +165,25 @@
           "ID",
           "PromptID",
           "ModelID",
-          "StartTime",
-          "EndTime",
-          "TotalExecutionTime",
-          "InputTokens",
-          "OutputTokens",
-          "TotalTokens",
-          "Status",
-          "Error"
+          "RunAt",
+          "CompletedAt",
+          "ExecutionTimeMS",
+          "TokensPrompt",
+          "TokensCompletion",
+          "TokensUsed",
+          "Success",
+          "ErrorMessage"
         ],
         "filterFields": [
           "ModelID",
           "PromptID",
-          "Status"
+          "Success"
         ],
         "sortFields": [
-          "StartTime",
-          "TotalExecutionTime"
-        ], 
+          "RunAt",
+          "CompletedAt",
+          "ExecutionTimeMS"
+        ],
         "usageContext": "Analytics and usage history"
       },
       {
@@ -207,10 +208,30 @@
   "events": [],
   "exampleUsage": "<AIModelBrowser\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>",
   "dependencies": [
-    "@include:ai-model-list.spec.json",
-    "@include:ai-model-details.spec.json",
-    "@include:ai-model-filter.spec.json",
-    "@include:ai-model-analytics.spec.json",
+    {
+      "name": "AIModelList",
+      "location": "registry",
+      "namespace": "AI",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AIModelDetails",
+      "location": "registry",
+      "namespace": "AI",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AIModelFilter",
+      "location": "registry",
+      "namespace": "AI",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AIModelAnalytics",
+      "location": "registry",
+      "namespace": "AI",
+      "version": "^1.0.0"
+    },
     {
       "name": "OpenRecordButton",
       "location": "registry",

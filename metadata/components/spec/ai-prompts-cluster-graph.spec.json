@@ -49,6 +49,12 @@
       "type": "number",
       "required": false,
       "description": "Cluster index to highlight"
+    },
+    {
+      "name": "clusterNames",
+      "type": "array",
+      "required": false,
+      "description": "Optional names for clusters"
     }
   ],
   "events": [

@@ -1,7 +1,11 @@
 function SalesFunnelVisualization({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Extract AIInsightsPanel from components
-  const AIInsightsPanel = components?.AIInsightsPanel;
-  
+  // Extract sub-components from components
+  const {
+    AIInsightsPanel,
+    SalesFunnelChart,
+    SalesFunnelStagePanel
+  } = components;
+
   if (!AIInsightsPanel) {
     console.warn('AIInsightsPanel component not available');
   }
@@ -15,15 +19,14 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
   const [startDate, setStartDate] = useState(savedUserSettings?.startDate || null);
   const [endDate, setEndDate] = useState(savedUserSettings?.endDate || null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  
+
   // AI Insights state
   const [aiInsights, setAiInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
 
-  // Load sub-components from registry
-  const FunnelChart = components['SalesFunnelChart'];
-  const StagePanel = components['SalesFunnelStagePanel'];
+  // Debounce settings saves
+  const saveSettingsTimeoutRef = useRef(null);
 
   // Define pipeline stages in order
   const pipelineStages = [
@@ -99,28 +102,42 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
     setStartDate(start);
     setEndDate(end);
     setTimeFilter('custom');
-    if (onSaveUserSettings) {
-      onSaveUserSettings({ 
-        ...savedUserSettings, 
-        startDate: start, 
-        endDate: end,
-        timeFilter: 'custom'
-      });
+
+    // Debounce settings save to avoid excessive writes
+    if (saveSettingsTimeoutRef.current) {
+      clearTimeout(saveSettingsTimeoutRef.current);
     }
+    saveSettingsTimeoutRef.current = setTimeout(() => {
+      if (onSaveUserSettings) {
+        onSaveUserSettings({
+          ...savedUserSettings,
+          startDate: start,
+          endDate: end,
+          timeFilter: 'custom'
+        });
+      }
+    }, 500);
   };
-  
+
   const handlePresetChange = (preset) => {
     setTimeFilter(preset);
     setStartDate(null);
     setEndDate(null);
-    if (onSaveUserSettings) {
-      onSaveUserSettings({ 
-        ...savedUserSettings, 
-        timeFilter: preset,
-        startDate: null,
-        endDate: null
-      });
+
+    // Debounce settings save to avoid excessive writes
+    if (saveSettingsTimeoutRef.current) {
+      clearTimeout(saveSettingsTimeoutRef.current);
     }
+    saveSettingsTimeoutRef.current = setTimeout(() => {
+      if (onSaveUserSettings) {
+        onSaveUserSettings({
+          ...savedUserSettings,
+          timeFilter: preset,
+          startDate: null,
+          endDate: null
+        });
+      }
+    }, 500);
   };
 
   const calculateFunnelData = () => {
@@ -212,7 +229,7 @@ Win Rate: ${winRate.toFixed(1)}%
 Average Deal Size: ${formatCurrency(avgDealSize)}
 
 Funnel Stage Breakdown:
-${funnelData.map(stage => `${stage.stage}: ${stage.count} deals (${formatCurrency(stage.value)}) - ${stage.conversionRate.toFixed(1)}% conversion`).join('\n')}
+${funnelData.map(stage => `${stage.stage}: ${stage.count} deals (${formatCurrency(stage.value)}) - ${stage.conversionRate?.toFixed(1) || '0'}% conversion`).join('\n')}
 
 Closed Lost: ${closedLost.count} deals (${formatCurrency(closedLost.value)})
 
@@ -478,18 +495,21 @@ Focus on actionable recommendations to improve sales performance and funnel effi
         }}
       />
       
-      {FunnelChart && (
-        <FunnelChart 
+      {SalesFunnelChart && (
+        <SalesFunnelChart
           funnelData={funnelData}
           viewMode={viewMode}
           onStageClick={handleStageClick}
           closedLost={closedLost}
           formatCurrency={formatCurrency}
+          styles={styles}
+          utilities={utilities}
+          components={components}
         />
       )}
-      
-      {StagePanel && (
-        <StagePanel
+
+      {SalesFunnelStagePanel && (
+        <SalesFunnelStagePanel
           isOpen={isPanelOpen}
           stageData={selectedStage}
           onClose={() => {
@@ -499,6 +519,8 @@ Focus on actionable recommendations to improve sales performance and funnel effi
           components={components}
           callbacks={callbacks}
           formatCurrency={formatCurrency}
+          styles={styles}
+          utilities={utilities}
         />
       )}
       

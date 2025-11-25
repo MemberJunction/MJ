@@ -1,67 +1,60 @@
 // CompetitiveAnalysis Sub-component
-function CompetitiveAnalysis ({ data, columns, onRowClick, sortConfig, onSort, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  const handleSort = (column) => {
-    if (onSort) {
-      const newOrder = sortConfig?.column === column && sortConfig?.order === 'asc' ? 'desc' : 'asc';
-      onSort({ column, order: newOrder });
-    }
-  };
-
-  const handleRowClick = (row) => {
-    if (onRowClick) {
-      onRowClick(row);
-    }
-  };
+function CompetitiveAnalysis ({ competitorData, selectedCompetitor, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Define columns for competitive analysis table
+  const columns = [
+    { header: 'Competitor', field: 'name', align: 'left' },
+    { header: 'Win Rate', field: 'winRate', align: 'center', render: (val) => `${(val * 100).toFixed(1)}%` },
+    { header: 'Deals', field: 'deals', align: 'center' },
+    { header: 'Revenue', field: 'revenue', align: 'right', render: (val) => `$${val.toLocaleString()}` },
+    { header: 'Strengths', field: 'strengths', align: 'left', render: (val) => Array.isArray(val) ? val.join(', ') : val },
+    { header: 'Weaknesses', field: 'weaknesses', align: 'left', render: (val) => Array.isArray(val) ? val.join(', ') : val }
+  ];
 
   return (
     <div style={{ width: '100%', overflowX: 'auto' }}>
-      <table style={{ 
-        width: '100%', 
+      <table style={{
+        width: '100%',
         borderCollapse: 'collapse',
         backgroundColor: '#fff'
       }}>
         <thead>
           <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-            {columns && columns.map((col, index) => (
-              <th 
+            {columns.map((col, index) => (
+              <th
                 key={col.field || index}
-                onClick={() => handleSort(col.field)}
                 style={{
                   padding: '12px',
                   textAlign: col.align || 'left',
-                  cursor: col.sortable !== false ? 'pointer' : 'default',
                   userSelect: 'none'
                 }}
               >
                 {col.header}
-                {sortConfig?.column === col.field && (
-                  <span style={{ marginLeft: '5px' }}>
-                    {sortConfig.order === 'asc' ? '↑' : '↓'}
-                  </span>
-                )}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {data && data.map((row, rowIndex) => (
-            <tr 
+          {competitorData && competitorData.map((row, rowIndex) => (
+            <tr
               key={row.id || rowIndex}
-              onClick={() => handleRowClick(row)}
-              style={{ 
+              style={{
                 borderBottom: '1px solid #dee2e6',
-                cursor: onRowClick ? 'pointer' : 'default',
+                backgroundColor: selectedCompetitor === row.id ? '#e7f3ff' : 'transparent',
                 transition: 'background-color 0.1s'
               }}
               onMouseEnter={(e) => {
-                if (onRowClick) e.currentTarget.style.backgroundColor = '#f8f9fa';
+                if (selectedCompetitor !== row.id) {
+                  e.currentTarget.style.backgroundColor = '#f8f9fa';
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
+                if (selectedCompetitor !== row.id) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
               }}
             >
-              {columns && columns.map((col, colIndex) => (
-                <td 
+              {columns.map((col, colIndex) => (
+                <td
                   key={col.field || colIndex}
                   style={{
                     padding: '12px',
@@ -75,7 +68,7 @@ function CompetitiveAnalysis ({ data, columns, onRowClick, sortConfig, onSort, u
           ))}
         </tbody>
       </table>
-      {(!data || data.length === 0) && (
+      {(!competitorData || competitorData.length === 0) && (
         <div style={{ padding: '40px', textAlign: 'center', color: '#6c757d' }}>
           No data available
         </div>

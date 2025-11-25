@@ -51,8 +51,18 @@
   ],
   "events": [],
   "dependencies": [
-    "@include:sales-funnel-deal-card.spec.json",
-    "@include:sales-funnel-deal-list.spec.json"
+    {
+      "name": "SalesFunnelDealCard",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "SalesFunnelDealList",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": []
 }
