@@ -14,6 +14,13 @@ import {
   LoadActionsEntitiesResource,
   LoadActionsSecurityResource
 } from './Actions';
+import {
+  LoadTestingOverviewResource,
+  LoadTestingExecutionResource,
+  LoadTestingAnalyticsResource,
+  LoadTestingVersionResource,
+  LoadTestingFeedbackResource
+} from './Testing/components';
 
 // Base Dashboard
 export * from './generic/base-dashboard';
@@ -60,6 +67,20 @@ export {
 // Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
 export { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 
+// Export Testing components as resources (BaseResourceComponent-based)
+export {
+  TestingOverviewResourceComponent,
+  LoadTestingOverviewResource,
+  TestingExecutionResourceComponent,
+  LoadTestingExecutionResource,
+  TestingAnalyticsResourceComponent,
+  LoadTestingAnalyticsResource,
+  TestingVersionResourceComponent,
+  LoadTestingVersionResource,
+  TestingFeedbackResourceComponent,
+  LoadTestingFeedbackResource
+} from './Testing/components';
+
 // Module
 export * from './module';
 
@@ -76,3 +97,10 @@ LoadActionsScheduleResource();
 LoadActionsCodeResource();
 LoadActionsEntitiesResource();
 LoadActionsSecurityResource();
+
+// Testing resource loaders
+LoadTestingOverviewResource();
+LoadTestingExecutionResource();
+LoadTestingAnalyticsResource();
+LoadTestingVersionResource();
+LoadTestingFeedbackResource();

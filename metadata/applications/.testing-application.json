@@ -2,7 +2,46 @@
   "fields": {
     "Name": "Testing",
     "Description": "Testing framework for evaluating AI agents, workflows, and system components through automated test suites with multi-oracle evaluation",
-    "Icon": "fa-solid fa-vial-circle-check"
+    "Icon": "fa-solid fa-vial-circle-check",
+    "DefaultForNewUser": true,
+    "Color": "#00897b",
+    "DefaultNavItems": [
+      {
+        "Label": "Overview",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "TestingOverviewResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Execution",
+        "Icon": "fa-solid fa-play-circle",
+        "ResourceType": "Custom",
+        "DriverClass": "TestingExecutionResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Analytics",
+        "Icon": "fa-solid fa-chart-bar",
+        "ResourceType": "Custom",
+        "DriverClass": "TestingAnalyticsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Version",
+        "Icon": "fa-solid fa-code-compare",
+        "ResourceType": "Custom",
+        "DriverClass": "TestingVersionResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Feedback",
+        "Icon": "fa-solid fa-clipboard-check",
+        "ResourceType": "Custom",
+        "DriverClass": "TestingFeedbackResource",
+        "isDefault": false
+      }
+    ]
   },
   "relatedEntities": {
     "Application Entities": [
@@ -132,7 +171,7 @@
     "ID": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
   },
   "sync": {
-    "lastModified": "2025-11-10T02:03:43.070Z",
-    "checksum": "ab59862937c88201e56ebf7ad37ebe01565fe3937792bf72bebe7878bad25c88"
+    "lastModified": "2025-11-25T22:07:11.233Z",
+    "checksum": "73f5fd89f67f59119bf702c325254c021d4feed51df69722fe6a474ffa741f80"
   }
 }

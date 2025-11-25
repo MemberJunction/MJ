@@ -70,6 +70,11 @@ import { TestingExecutionComponent } from './Testing/components/testing-executio
 import { TestingAnalyticsComponent } from './Testing/components/testing-analytics.component';
 import { TestingVersionComparisonComponent } from './Testing/components/testing-version-comparison.component';
 import { TestingFeedbackComponent } from './Testing/components/testing-feedback.component';
+import { TestingOverviewResourceComponent } from './Testing/components/testing-overview-resource.component';
+import { TestingExecutionResourceComponent } from './Testing/components/testing-execution-resource.component';
+import { TestingAnalyticsResourceComponent } from './Testing/components/testing-analytics-resource.component';
+import { TestingVersionResourceComponent } from './Testing/components/testing-version-resource.component';
+import { TestingFeedbackResourceComponent } from './Testing/components/testing-feedback-resource.component';
 import { SuiteTreeComponent, SuiteTreeNodeComponent } from './Testing/components/widgets/suite-tree.component';
 import { OracleBreakdownTableComponent } from './Testing/components/widgets/oracle-breakdown-table.component';
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
@@ -126,6 +131,11 @@ import { TestingModule } from '@memberjunction/ng-testing';
     TestingAnalyticsComponent,
     TestingVersionComparisonComponent,
     TestingFeedbackComponent,
+    TestingOverviewResourceComponent,
+    TestingExecutionResourceComponent,
+    TestingAnalyticsResourceComponent,
+    TestingVersionResourceComponent,
+    TestingFeedbackResourceComponent,
     SuiteTreeComponent,
     SuiteTreeNodeComponent,
     OracleBreakdownTableComponent,

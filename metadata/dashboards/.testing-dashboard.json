@@ -8,7 +8,7 @@
     "Scope": "App",
     "ApplicationID": "@lookup:Applications.Name=Testing",
     "DriverClass": "TestingDashboard",
-    "UIConfigDetails": "",
+    "UIConfigDetails": "{}",
     "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
   },
   "relatedEntities": {
@@ -19,14 +19,14 @@
           "UserID": null,
           "Scope": "App",
           "ApplicationID": "@lookup:Applications.Name=Testing",
-          "DisplayOrder": 0
+          "DisplayOrder": 1
         },
         "primaryKey": {
           "ID": "6CE58F99-2EB5-4B5C-AE07-C66286B568F5"
         },
         "sync": {
-          "lastModified": "2025-11-10T01:58:10.646Z",
-          "checksum": "e20dee02f87f4c716b5109719dbf70e4b4ad8d2d621e65d031e6ad92da9d73ac"
+          "lastModified": "2025-11-25T22:08:02.211Z",
+          "checksum": "fefaae3a4bbd1a142369738cbd0593337ba4efeac1102c6c52cbb92a4b8c8036"
         }
       }
     ]
@@ -35,7 +35,7 @@
     "ID": "362A0BE3-2745-4C91-B648-98232B3DD049"
   },
   "sync": {
-    "lastModified": "2025-11-10T01:58:10.619Z",
-    "checksum": "a9c8c11ab94d15abb0bbdd4e371785d280be176e69e57bc439def3f593c2a62e"
+    "lastModified": "2025-11-25T22:08:02.180Z",
+    "checksum": "9939b94e85071587a5981adc6d4bb5f2cb5fd31ae879454280bbe08301cf2926"
   }
 }
