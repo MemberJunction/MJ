@@ -450,6 +450,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     };
 
     this.layoutManager.AddTab(state);
+
+    // Load display name in background without loading full component
+    this.updateTabDisplayName(tab);
   }
 
   /**
@@ -592,6 +595,57 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     } catch (e) {
       LogError(e);
+    }
+  }
+
+  /**
+   * Update tab display name in background without loading full component
+   * This ensures all tabs show proper names immediately, not just when clicked
+   */
+  private async updateTabDisplayName(tab: WorkspaceTab): Promise<void> {
+    try {
+      // Only update display names for resource-based tabs
+      const resourceType = tab.configuration['resourceType'] as string;
+      if (!resourceType) {
+        return;
+      }
+
+      // Get ResourceData from tab
+      const resourceData = await this.getResourceDataFromTab(tab);
+      if (!resourceData) {
+        return;
+      }
+
+      // Get the resource registration to access GetResourceDisplayName without loading full component
+      const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
+      const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+        BaseResourceComponent,
+        driverClass
+      );
+
+      if (!resourceReg) {
+        return;
+      }
+
+      // Create a lightweight instance just to call GetResourceDisplayName
+      const tempInstance = new resourceReg.SubClass() as BaseResourceComponent;
+      const displayName = await tempInstance.GetResourceDisplayName(resourceData);
+
+      if (displayName && displayName !== tab.title) {
+        console.log('[TabContainer.updateTabDisplayName] Updating tab title:', {
+          tabId: tab.id,
+          from: tab.title,
+          to: displayName
+        });
+
+        // Update the tab title in Golden Layout
+        this.layoutManager.UpdateTabStyle(tab.id, { title: displayName });
+
+        // Update the tab title in workspace configuration for persistence
+        this.workspaceManager.UpdateTabTitle(tab.id, displayName);
+      }
+    } catch (error) {
+      console.error('[TabContainer.updateTabDisplayName] Error updating tab display name:', error);
     }
   }
 
@@ -853,6 +907,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
             // Mark tab as not loaded so it will reload when shown
             this.layoutManager.MarkTabNotLoaded(tab.id);
+
+            // Update display name in background
+            this.updateTabDisplayName(tab);
 
             // If this tab is currently active, reload it immediately
             const config = this.workspaceManager.GetConfiguration();
