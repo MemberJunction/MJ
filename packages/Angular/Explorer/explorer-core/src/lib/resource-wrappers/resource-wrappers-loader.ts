@@ -8,12 +8,15 @@ import { LoadViewResource } from "./view-resource.component";
 import { LoadChatConversationsResource } from "./chat-conversations-resource.component";
 import { LoadChatCollectionsResource } from "./chat-collections-resource.component";
 import { LoadChatTasksResource } from "./chat-tasks-resource.component";
-import { LoadAIMonitorResource } from "./ai-monitor-resource.component";
-import { LoadAIPromptsResource } from "./ai-prompts-resource.component";
-import { LoadAIAgentsResource } from "./ai-agents-resource.component";
-import { LoadAIModelsResource } from "./ai-models-resource.component";
-import { LoadAIConfigResource } from "./ai-config-resource.component";
 import { LoadArtifactResource } from "./artifact-resource.component";
+// AI resources are now loaded from @memberjunction/ng-dashboards directly
+import {
+    LoadAIMonitorResource,
+    LoadAIPromptsResource,
+    LoadAIAgentsResource,
+    LoadAIModelsResource,
+    LoadAIConfigResource
+} from '@memberjunction/ng-dashboards';
 
 export function LoadResourceWrappers()
 {

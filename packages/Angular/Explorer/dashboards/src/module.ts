@@ -12,7 +12,6 @@ import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.co
 import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
 import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
 import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
-import { AIDashboardComponent } from './AI/ai-dashboard.component';
 import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
 import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
@@ -22,7 +21,6 @@ import { AgentEditorComponent } from './AI/components/agents/agent-editor.compon
 import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
 import { SystemConfigurationComponent } from './AI/components/system/system-configuration.component';
 import { SystemConfigFilterPanelComponent } from './AI/components/system/system-config-filter-panel.component';
-import { ActionsManagementDashboardComponent } from './Actions/actions-management-dashboard.component';
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
 import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
@@ -84,7 +82,6 @@ import { TestingModule } from '@memberjunction/ng-testing';
     EntityFilterPanelComponent,
     EntityDetailsComponent,
     ERDDiagramComponent,
-    AIDashboardComponent,
     ModelManagementV2Component,
     PromptManagementV2Component,
     PromptFilterPanelComponent,
@@ -94,7 +91,6 @@ import { TestingModule } from '@memberjunction/ng-testing';
     ExecutionMonitoringComponent,
     SystemConfigurationComponent,
     SystemConfigFilterPanelComponent,
-    ActionsManagementDashboardComponent,
     ActionsOverviewComponent,
     ActionsExecutionMonitoringComponent,
     ScheduledActionsComponent,
@@ -168,17 +164,22 @@ import { TestingModule } from '@memberjunction/ng-testing';
   ],
   exports: [
     EntityAdminDashboardComponent,
-    AIDashboardComponent,
-    ActionsManagementDashboardComponent,
     ComponentStudioDashboardComponent,
     SchedulingDashboardComponent,
     TestingDashboardComponent,
-    // Export AI components for use in resource wrappers
+    // Export AI components (now BaseResourceComponent-based)
     ExecutionMonitoringComponent,
     PromptManagementV2Component,
     AgentConfigurationComponent,
     ModelManagementV2Component,
-    SystemConfigurationComponent
+    SystemConfigurationComponent,
+    // Export Actions components (now BaseResourceComponent-based)
+    ActionsOverviewComponent,
+    ActionsExecutionMonitoringComponent,
+    ScheduledActionsComponent,
+    CodeManagementComponent,
+    EntityIntegrationComponent,
+    SecurityPermissionsComponent
   ]
 })
 export class DashboardsModule { }

@@ -5,8 +5,50 @@
     "Icon": "fa-solid fa-bolt",
     "DefaultForNewUser": true,
     "Color": "#ff9800",
-    "ClassName": "BaseApplication",
-    "DefaultNavItems": null
+    "DefaultNavItems": [
+      {
+        "Label": "Overview",
+        "Icon": "fa-solid fa-bolt",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsOverviewResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Monitor",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsMonitorResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Scheduled",
+        "Icon": "fa-solid fa-clock",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsScheduleResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Code",
+        "Icon": "fa-solid fa-code",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsCodeResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Entities",
+        "Icon": "fa-solid fa-sitemap",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsEntitiesResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Security",
+        "Icon": "fa-solid fa-lock",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsSecurityResource",
+        "isDefault": false
+      }
+    ]
   },
   "relatedEntities": {
     "Application Entities": []
@@ -15,7 +57,7 @@
     "ID": "02D5423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-11-21T21:09:21.311Z",
-    "checksum": "ab49f282e46415dc67175df16170838dd5f905222d7361bd00fd5f961e03998c"
+    "lastModified": "2025-11-25T12:51:49.555Z",
+    "checksum": "e191d724c942fd24f39ee717a5f07134cc7c3465bf78f4b5fbcbc5e51982c61f"
   }
 }

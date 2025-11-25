@@ -1,19 +1,21 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, Input, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { Observable, Subject, combineLatest } from 'rxjs';
-import { map, takeUntil, startWith, debounceTime, take } from 'rxjs/operators';
-import { 
-  AIInstrumentationService, 
-  DashboardKPIs, 
-  TrendData, 
-  LiveExecution, 
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
+import { map, takeUntil, debounceTime } from 'rxjs/operators';
+import {
+  AIInstrumentationService,
+  DashboardKPIs,
+  TrendData,
+  LiveExecution,
   ChartData,
-  ExecutionDetails 
+  ExecutionDetails
 } from '../services/ai-instrumentation.service';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
-import { RunView } from '@memberjunction/core';
-import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { RunView, CompositeKey } from '@memberjunction/core';
+import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 export interface DrillDownTab {
   id: string;
@@ -58,6 +60,18 @@ export interface ExecutionMonitoringState {
   splitterSizes?: number[];
 }
 
+/**
+ * Tree-shaking prevention function - ensures component is included in builds
+ */
+export function LoadAIMonitorResource() {
+  // Force inclusion in production builds
+}
+
+/**
+ * AI Monitor Resource - displays AI execution monitoring and analytics
+ * Extends BaseResourceComponent to work with the resource type system
+ */
+@RegisterClass(BaseResourceComponent, 'AIMonitorResource')
 @Component({
   selector: 'app-execution-monitoring',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -1771,11 +1785,7 @@ export interface ExecutionMonitoringState {
     }
   `]
 })
-export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
-  @Input() initialState?: Partial<ExecutionMonitoringState>;
-  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
-  @Output() stateChange = new EventEmitter<ExecutionMonitoringState>();
-  
+export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
@@ -1832,8 +1842,10 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   constructor(
     private instrumentationService: AIInstrumentationService,
+    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
+    super();
     // Initialize data streams
     this.kpis$ = this.instrumentationService.kpis$;
     this.trends$ = this.instrumentationService.trends$;
@@ -1872,10 +1884,9 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    
-    // Load initial state if provided
-    if (this.initialState) {
-      this.loadUserState(this.initialState);
+    // Load initial state if provided from resource configuration
+    if (this.Data?.Configuration) {
+      this.loadUserState(this.Data.Configuration);
     } else {
       // Default initialization
       this.setTimeRange(this.selectedTimeRange);
@@ -1894,13 +1905,16 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       this.instrumentationService.refresh();
     }
     
-    // Set up debounced state change emission
+    // Set up debounced state change - could be used for persistence in the future
     this.stateChangeSubject$.pipe(
       debounceTime(2000), // 2 second debounce
       takeUntil(this.destroy$)
-    ).subscribe(state => {
-      this.stateChange.emit(state);
+    ).subscribe(_state => {
+      // State change handling placeholder
     });
+
+    // Notify that the resource has finished loading
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
@@ -2149,16 +2163,14 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   openFullRecord(): void {
     if (this.selectedExecution) {
       // Determine the entity name based on the execution type
-      const entityName = this.selectedExecution.type === 'prompt' 
-        ? 'MJ: AI Prompt Runs' 
+      const entityName = this.selectedExecution.type === 'prompt'
+        ? 'MJ: AI Prompt Runs'
         : 'MJ: AI Agent Runs';
-      
-      // Emit the event to open the full record
-      this.openEntityRecord.emit({
-        entityName: entityName,
-        recordId: this.selectedExecution.id
-      });
-      
+
+      // Open the record using NavigationService
+      const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: this.selectedExecution.id }]);
+      this.navigationService.OpenEntityRecord(entityName, compositeKey);
+
       // Close the modal
       this.closeExecutionModal();
     }
@@ -2523,8 +2535,24 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
     }, 100);
-    
+
     // Emit state change when splitter changes
     this.emitStateChange();
+  }
+
+  // === BaseResourceComponent Required Methods ===
+
+  /**
+   * Get the display name for this resource
+   */
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return 'AI Monitor';
+  }
+
+  /**
+   * Get the icon class for this resource
+   */
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return 'fa-solid fa-chart-line';
   }
 }

@@ -1,9 +1,10 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIModelEntityExtended, AIVendorEntity, AIModelTypeEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared';
+import { AIModelEntityExtended, AIVendorEntity, AIModelTypeEntity, ResourceData } from '@memberjunction/core-entities';
+import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { RegisterClass } from '@memberjunction/global';
 
 interface ModelDisplayData extends AIModelEntityExtended {
   VendorName?: string;
@@ -14,15 +15,24 @@ interface ModelDisplayData extends AIModelEntityExtended {
   CostRankDisplay?: string;
 }
 
+/**
+ * Tree-shaking prevention function - ensures component is included in builds
+ */
+export function LoadAIModelsResource() {
+  // Force inclusion in production builds
+}
+
+/**
+ * AI Models Resource - displays AI model management
+ * Extends BaseResourceComponent to work with the resource type system
+ */
+@RegisterClass(BaseResourceComponent, 'AIModelsResource')
 @Component({
   selector: 'app-model-management-v2',
   templateUrl: './model-management-v2.component.html',
   styleUrls: ['./model-management-v2.component.scss']
 })
-export class ModelManagementV2Component implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
-  @Output() stateChange = new EventEmitter<any>();
-  @Input() initialState: any = null;
+export class ModelManagementV2Component extends BaseResourceComponent implements OnInit, OnDestroy {
 
   // View state
   public viewMode: 'grid' | 'list' = 'grid';
@@ -78,16 +88,19 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   constructor(
-    private sharedService: SharedService
-  ) {}
+    private sharedService: SharedService,
+    private navigationService: NavigationService
+  ) {
+    super();
+  }
 
   ngOnInit(): void {
     this.setupSearchListener();
     this.startLoadingMessages();
     this.loadInitialData();
-    
-    if (this.initialState) {
-      this.applyInitialState(this.initialState);
+
+    if (this.Data?.Configuration) {
+      this.applyInitialState(this.Data.Configuration);
     }
   }
 
@@ -185,7 +198,6 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       this.filteredModels = [...this.models];
       this.sortModels();
       this.applyFilters();
-      this.emitStateChange();
     } catch (error) {
       console.error('Error loading model data:', error);
       this.sharedService.CreateSimpleNotification('Error loading models', 'error', 3000);
@@ -194,6 +206,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       if (this.loadingMessageInterval) {
         clearInterval(this.loadingMessageInterval);
       }
+      this.NotifyLoadComplete();
     }
   }
 
@@ -232,18 +245,15 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
 
   public toggleFilters(): void {
     this.showFilters = !this.showFilters;
-    this.emitStateChange();
   }
 
   public toggleFilterPanel(): void {
     this.showFilters = !this.showFilters;
-    this.emitStateChange();
   }
 
   public setViewMode(mode: 'grid' | 'list'): void {
     this.viewMode = mode;
     this.expandedModelId = null;
-    this.emitStateChange();
   }
 
   public toggleModelExpansion(modelId: string): void {
@@ -297,7 +307,6 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     });
 
     this.sortModels();
-    this.emitStateChange();
   }
 
   private sortModels(): void {
@@ -345,7 +354,6 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   public onSortChange(sortBy: string): void {
     this.sortBy = sortBy;
     this.sortModels();
-    this.emitStateChange();
   }
 
   public async toggleModelStatus(model: ModelDisplayData, event: Event): Promise<void> {
@@ -371,10 +379,8 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   }
 
   public openModel(modelId: string): void {
-    this.openEntityRecord.emit({
-      entityName: 'AI Models',
-      recordId: modelId
-    });
+    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
+    this.navigationService.OpenEntityRecord('AI Models', compositeKey);
   }
 
   public async createNewModel(): Promise<void> {
@@ -387,11 +393,9 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
         newModel.IsActive = true;
         
         if (await newModel.Save()) {
-          this.openEntityRecord.emit({
-            entityName: 'AI Models',
-            recordId: newModel.ID
-          });
-          
+          const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: newModel.ID }]);
+          this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+
           // Reload the data
           await this.loadInitialData();
         }
@@ -437,22 +441,6 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     return 'rank-low';
   }
 
-  private emitStateChange(): void {
-    this.stateChange.emit({
-      viewMode: this.viewMode,
-      showFilters: this.showFilters,
-      searchTerm: this.searchTerm,
-      selectedVendor: this.selectedVendor,
-      selectedType: this.selectedType,
-      selectedStatus: this.selectedStatus,
-      sortBy: this.sortBy,
-      powerRankRange: this.powerRankRange,
-      speedRankRange: this.speedRankRange,
-      costRankRange: this.costRankRange,
-      modelCount: this.filteredModels.length
-    });
-  }
-
   public get hasActiveFilters(): boolean {
     return this.searchTerm !== '' || 
            this.selectedVendor !== 'all' || 
@@ -489,14 +477,14 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
 
   public validateAndApplyRankFilters(rankType: 'power' | 'speed' | 'cost'): void {
     // Get the appropriate range and max value based on type
-    let range = rankType === 'power' ? this.powerRankRange : 
-                 rankType === 'speed' ? this.speedRankRange : 
+    let range = rankType === 'power' ? this.powerRankRange :
+                 rankType === 'speed' ? this.speedRankRange :
                  this.costRankRange;
-    
+
     let maxValue = rankType === 'power' ? this.maxPowerRank :
                    rankType === 'speed' ? this.maxSpeedRank :
                    this.maxCostRank;
-    
+
     // Ensure min is not greater than max
     if (range.min > range.max) {
       // Swap the values
@@ -504,12 +492,21 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       range.min = range.max;
       range.max = temp;
     }
-    
+
     // Ensure values are within bounds
     range.min = Math.max(0, Math.min(maxValue, range.min));
     range.max = Math.max(0, Math.min(maxValue, range.max));
-    
+
     // Apply the filters
     this.applyFilters();
+  }
+
+  // BaseResourceComponent abstract method implementations
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return 'AI Models';
+  }
+
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return 'fa-solid fa-microchip';
   }
 }

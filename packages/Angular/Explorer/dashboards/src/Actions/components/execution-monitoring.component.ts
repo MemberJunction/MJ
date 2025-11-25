@@ -1,8 +1,17 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
-import { RunView, LogError } from '@memberjunction/core';
-import { ActionExecutionLogEntity, ActionEntity } from '@memberjunction/core-entities';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CompositeKey, RunView, LogError } from '@memberjunction/core';
+import { ActionExecutionLogEntity, ActionEntity, ResourceData } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+
+/**
+ * Tree-shaking prevention function
+ */
+export function LoadActionsMonitorResource() {
+  // Force inclusion in production builds
+}
 
 interface ExecutionMetrics {
   totalExecutions: number;
@@ -21,15 +30,16 @@ interface ExecutionTrend {
   total: number;
 }
 
+/**
+ * Execution Monitoring Resource - displays action execution logs and metrics
+ */
+@RegisterClass(BaseResourceComponent, 'ActionsMonitorResource')
 @Component({
   selector: 'mj-execution-monitoring',
   templateUrl: './execution-monitoring.component.html',
   styleUrls: ['./execution-monitoring.component.scss']
 })
-export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
-  @Output() showExecutionsListView = new EventEmitter<void>();
-
+export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;
   public executions: ActionExecutionLogEntity[] = [];
   public filteredExecutions: ActionExecutionLogEntity[] = [];
@@ -73,7 +83,9 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor() {}
+  constructor(private navigationService: NavigationService) {
+    super();
+  }
 
   ngOnInit(): void {
     this.setupFilters();
@@ -132,6 +144,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       LogError('Failed to load execution monitoring data', undefined, error);
     } finally {
       this.isLoading = false;
+      this.NotifyLoadComplete();
     }
   }
 
@@ -308,17 +321,13 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   public openExecution(execution: ActionExecutionLogEntity): void {
-    this.openEntityRecord.emit({
-      entityName: 'Action Execution Logs',
-      recordId: execution.ID
-    });
+    const key = new CompositeKey([{ FieldName: 'ID', Value: execution.ID }]);
+    this.navigationService.OpenEntityRecord('Action Execution Logs', key);
   }
 
   public openAction(actionId: string): void {
-    this.openEntityRecord.emit({
-      entityName: 'Actions',
-      recordId: actionId
-    });
+    const key = new CompositeKey([{ FieldName: 'ID', Value: actionId }]);
+    this.navigationService.OpenEntityRecord('Actions', key);
   }
 
   public getActionName(actionId: string): string {
@@ -372,7 +381,10 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   // Metric card click handlers
   public onTotalExecutionsClick(): void {
-    this.showExecutionsListView.emit();
+    // Reset filters to show all executions
+    this.selectedResult$.next('all');
+    this.selectedTimeRange$.next('7days');
+    this.selectedAction$.next('all');
   }
 
   public onSuccessRateClick(): void {
@@ -385,5 +397,13 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   public onRunningExecutionsClick(): void {
     this.selectedResult$.next('Running');
+  }
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return 'Execution Monitoring';
+  }
+
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return 'fa-solid fa-chart-line';
   }
 }

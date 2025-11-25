@@ -5,7 +5,6 @@
     "Icon": "fa-solid fa-robot",
     "DefaultForNewUser": true,
     "Color": "#d32f2f",
-    "ClassName": "BaseApplication",
     "DefaultNavItems": [
       {
         "Label": "Monitor",
@@ -51,7 +50,7 @@
     "ID": "7ACD423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-11-23T14:03:35.116Z",
-    "checksum": "9a3e8f406350f33278195d7a1dcfaf16198b4e3276ae3621881e39674fd9f381"
+    "lastModified": "2025-11-25T12:51:49.570Z",
+    "checksum": "a69a7ca8849d4f3522142a8a85796e10f18c69e3515a859b22162ce795007706"
   }
 }

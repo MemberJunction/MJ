@@ -1,12 +1,13 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared';
+import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
+import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { RegisterClass } from '@memberjunction/global';
 
 interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
   Template: string; // From AIPromptEntityExtended (view field)
@@ -16,15 +17,24 @@ interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
   TypeName?: string;
 }
 
+/**
+ * Tree-shaking prevention function - ensures component is included in builds
+ */
+export function LoadAIPromptsResource() {
+  // Force inclusion in production builds
+}
+
+/**
+ * AI Prompts Resource - displays AI prompt management
+ * Extends BaseResourceComponent to work with the resource type system
+ */
+@RegisterClass(BaseResourceComponent, 'AIPromptsResource')
 @Component({
   selector: 'app-prompt-management-v2',
   templateUrl: './prompt-management-v2.component.html',
   styleUrls: ['./prompt-management-v2.component.scss']
 })
-export class PromptManagementV2Component implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
-  @Output() stateChange = new EventEmitter<any>();
-  @Input() initialState: any = null;
+export class PromptManagementV2Component extends BaseResourceComponent implements OnInit, OnDestroy {
 
   // View state
   public viewMode: 'grid' | 'list' | 'priority-matrix' = 'grid';
@@ -143,16 +153,19 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   constructor(
     private sharedService: SharedService,
     private testHarnessService: AITestHarnessDialogService,
+    private navigationService: NavigationService,
     private router: Router
-  ) {}
+  ) {
+    super();
+  }
 
   ngOnInit(): void {
     this.setupSearchListener();
     this.startLoadingMessages();
     this.loadInitialData();
-    
-    if (this.initialState) {
-      this.applyInitialState(this.initialState);
+
+    if (this.Data?.Configuration) {
+      this.applyInitialState(this.Data.Configuration);
     }
   }
 
@@ -245,7 +258,6 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
 
       this.filteredPrompts = [...this.prompts];
       this.applyFilters();
-      this.emitStateChange();
     } catch (error) {
       console.error('Error loading prompt data:', error);
       MJNotificationService.Instance.CreateSimpleNotification('Error loading prompts', 'error', 3000);
@@ -254,6 +266,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       if (this.loadingMessageInterval) {
         clearInterval(this.loadingMessageInterval);
       }
+      this.NotifyLoadComplete();
     }
   }
 
@@ -272,18 +285,15 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
 
   public toggleFilters(): void {
     this.showFilters = !this.showFilters;
-    this.emitStateChange();
   }
 
   public toggleFilterPanel(): void {
     this.showFilters = !this.showFilters;
-    this.emitStateChange();
   }
 
   public setViewMode(mode: 'grid' | 'list' | 'priority-matrix'): void {
     this.viewMode = mode;
     this.expandedPromptId = null;
-    this.emitStateChange();
   }
 
   public togglePromptExpansion(promptId: string): void {
@@ -323,8 +333,6 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
 
       return true;
     });
-
-    this.emitStateChange();
   }
 
   public onCategoryChange(categoryId: string): void {
@@ -343,10 +351,8 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   }
 
   public openPrompt(promptId: string): void {
-    this.openEntityRecord.emit({
-      entityName: 'AI Prompts',
-      recordId: promptId
-    });
+    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
+    this.navigationService.OpenEntityRecord('AI Prompts', compositeKey);
   }
 
   public testPrompt(promptId: string, event?: Event): void {
@@ -397,18 +403,6 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     return status === 'Active' ? 'active' : 'inactive';
   }
 
-  private emitStateChange(): void {
-    this.stateChange.emit({
-      viewMode: this.viewMode,
-      showFilters: this.showFilters,
-      searchTerm: this.searchTerm,
-      selectedCategory: this.selectedCategory,
-      selectedType: this.selectedType,
-      selectedStatus: this.selectedStatus,
-      promptCount: this.filteredPrompts.length
-    });
-  }
-
   public get hasActiveFilters(): boolean {
     return this.searchTerm !== '' || 
            this.selectedCategory !== 'all' || 
@@ -428,5 +422,14 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     this.selectedStatus = 'all';
     this.searchSubject.next('');
     this.applyFilters();
+  }
+
+  // BaseResourceComponent abstract method implementations
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return 'AI Prompts';
+  }
+
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return 'fa-solid fa-comment-dots';
   }
 }
