@@ -1,12 +1,44 @@
 {
   "fields": {
-    "Name": "Scheduling Management",
+    "Name": "Scheduling",
     "Description": "Manage and monitor scheduled jobs and tasks",
     "Icon": "fa-solid fa-calendar-alt",
-    "DefaultForNewUser": false,
+    "DefaultForNewUser": true,
     "Color": "#00bcd4",
     "ClassName": "BaseApplication",
-    "DefaultNavItems": null
+    "DefaultNavItems": [
+      {
+        "Label": "Monitor",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "SchedulingMonitorResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Jobs",
+        "Icon": "fa-solid fa-calendar-alt",
+        "ResourceType": "Custom",
+        "DriverClass": "SchedulingJobsResource"
+      },
+      {
+        "Label": "History",
+        "Icon": "fa-solid fa-history",
+        "ResourceType": "Custom",
+        "DriverClass": "SchedulingHistoryResource"
+      },
+      {
+        "Label": "Types",
+        "Icon": "fa-solid fa-cogs",
+        "ResourceType": "Custom",
+        "DriverClass": "SchedulingTypesResource"
+      },
+      {
+        "Label": "Health",
+        "Icon": "fa-solid fa-heartbeat",
+        "ResourceType": "Custom",
+        "DriverClass": "SchedulingHealthResource"
+      }
+    ]
   },
   "relatedEntities": {
     "Application Entities": []
@@ -15,7 +47,7 @@
     "ID": "09CBDAE2-4F2A-4F01-BA8C-C7EB4AFAC36A"
   },
   "sync": {
-    "lastModified": "2025-11-21T21:09:21.431Z",
-    "checksum": "c4786c7c444d0818cc180f5ac533e10c5076d4e7cd73e8f303dbea1af3612522"
+    "lastModified": "2025-11-25T22:25:36.879Z",
+    "checksum": "64f88e1480566f8211ce22321828e338244fedc15c8f476a0166f2e287112e24"
   }
 }

@@ -62,6 +62,11 @@ import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs
 import { SchedulingHistoryComponent } from './Scheduling/components/scheduling-history.component';
 import { SchedulingTypesComponent } from './Scheduling/components/scheduling-types.component';
 import { SchedulingHealthComponent } from './Scheduling/components/scheduling-health.component';
+import { SchedulingMonitorResourceComponent } from './Scheduling/components/scheduling-monitor-resource.component';
+import { SchedulingJobsResourceComponent } from './Scheduling/components/scheduling-jobs-resource.component';
+import { SchedulingHistoryResourceComponent } from './Scheduling/components/scheduling-history-resource.component';
+import { SchedulingTypesResourceComponent } from './Scheduling/components/scheduling-types-resource.component';
+import { SchedulingHealthResourceComponent } from './Scheduling/components/scheduling-health-resource.component';
 import { SchedulingInstrumentationService } from './Scheduling/services/scheduling-instrumentation.service';
 // Testing Dashboard Components
 import { TestingDashboardComponent } from './Testing/testing-dashboard.component';
@@ -124,6 +129,11 @@ import { TestingModule } from '@memberjunction/ng-testing';
     SchedulingHistoryComponent,
     SchedulingTypesComponent,
     SchedulingHealthComponent,
+    SchedulingMonitorResourceComponent,
+    SchedulingJobsResourceComponent,
+    SchedulingHistoryResourceComponent,
+    SchedulingTypesResourceComponent,
+    SchedulingHealthResourceComponent,
     // Testing Dashboard Components
     TestingDashboardComponent,
     TestingOverviewComponent,
@@ -189,7 +199,19 @@ import { TestingModule } from '@memberjunction/ng-testing';
     ScheduledActionsComponent,
     CodeManagementComponent,
     EntityIntegrationComponent,
-    SecurityPermissionsComponent
+    SecurityPermissionsComponent,
+    // Export Scheduling resource components
+    SchedulingMonitorResourceComponent,
+    SchedulingJobsResourceComponent,
+    SchedulingHistoryResourceComponent,
+    SchedulingTypesResourceComponent,
+    SchedulingHealthResourceComponent,
+    // Export Testing resource components
+    TestingOverviewResourceComponent,
+    TestingExecutionResourceComponent,
+    TestingAnalyticsResourceComponent,
+    TestingVersionResourceComponent,
+    TestingFeedbackResourceComponent
   ]
 })
 export class DashboardsModule { }
