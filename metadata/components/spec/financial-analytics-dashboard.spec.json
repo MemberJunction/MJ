@@ -21,7 +21,8 @@
       },
       {
         "name": "Products",
-        "displayFields": ["ProductName", "Price", "Cost"] 
+        "displayFields": ["Name", "Price", "Cost"],
+        "sortFields": ["Name"]
       }
     ]
   },
@@ -29,6 +30,12 @@
   "properties": [],
   "events": [],
   "dependencies": [
+    {
+      "name": "DrillDownTable",
+      "location": "registry",
+      "namespace": "Financial/Analytics",
+      "version": "^1.0.0"
+    },
     {
       "name": "AIInsightsPanel",
       "location": "registry",

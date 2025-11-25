@@ -1,0 +1,122 @@
+{
+  "name": "DrillDownTable",
+  "location": "embedded",
+  "code": "@file:../code/financial-analytics-dashboard-drill-down-table.js",
+  "description": "Displays mixed financial data (invoices, deals, products) in a sortable table with type-specific styling",
+  "category": "Financial",
+  "type": "table",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Invoices",
+        "displayFields": ["ID", "InvoiceNumber", "InvoiceDate", "TotalAmount", "Status"],
+        "filterFields": ["Status", "InvoiceDate"],
+        "sortFields": ["InvoiceNumber", "InvoiceDate", "TotalAmount"]
+      },
+      {
+        "name": "Deals",
+        "displayFields": ["ID", "Dealname", "CloseDate", "Amount", "Stage"],
+        "filterFields": ["Stage", "CloseDate"],
+        "sortFields": ["Dealname", "CloseDate", "Amount"]
+      },
+      {
+        "name": "Products",
+        "displayFields": ["ID", "ProductName", "Price", "CreatedAt"],
+        "sortFields": ["ProductName", "Price"]
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "data",
+      "type": "array",
+      "description": "Array of mixed financial records (invoices, deals, products) to display",
+      "required": true
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Title to display above the table",
+      "required": true
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "description": "Callback when close button is clicked",
+      "required": true
+    },
+    {
+      "name": "sortConfig",
+      "type": "object",
+      "description": "Current sort configuration with key and direction",
+      "required": true
+    },
+    {
+      "name": "setSortConfig",
+      "type": "function",
+      "description": "Function to update sort configuration",
+      "required": true
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Callback functions including OpenEntityRecord",
+      "required": true
+    },
+    {
+      "name": "styles",
+      "type": "object",
+      "description": "Style utilities and theme configuration",
+      "required": true
+    },
+    {
+      "name": "utilities",
+      "type": "object",
+      "description": "MemberJunction utilities for data access",
+      "required": true
+    },
+    {
+      "name": "components",
+      "type": "object",
+      "description": "Registry of available components",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "name": "onClose",
+      "description": "Fired when the close button is clicked"
+    },
+    {
+      "name": "onSort",
+      "description": "Fired when a column header is clicked for sorting",
+      "parameters": [
+        {
+          "name": "key",
+          "type": "string",
+          "description": "The field name to sort by"
+        }
+      ]
+    },
+    {
+      "name": "onOpenRecord",
+      "description": "Fired when the open icon is clicked",
+      "parameters": [
+        {
+          "name": "entityType",
+          "type": "string",
+          "description": "Entity type from the record's EntityType field"
+        },
+        {
+          "name": "primaryKey",
+          "type": "array",
+          "description": "Array of key-value pairs for the record ID"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<DrillDownTable\n  data={drillDownData}\n  title=\"Q1 Revenue Breakdown\"\n  onClose={() => setDrillDownData(null)}\n  sortConfig={{ key: 'DisplayAmount', direction: 'desc' }}\n  setSortConfig={setSortConfig}\n  callbacks={callbacks}\n/>\n```",
+  "functionalRequirements": "- Display mixed financial records in sortable table format\n- Show type badge (Paid Invoice, Unpaid Invoice, Projected Deal, etc.)\n- Display reference number (invoice number, deal name, product name)\n- Show date (invoice date, close date, created date)\n- Format currency amounts appropriately\n- Display status/stage with color coding\n- Support sorting by type, reference, date, amount, or status\n- Include close button in header\n- Include open icon for external navigation\n- Show hover effects on rows\n- Handle null/undefined values gracefully",
+  "technicalDesign": "Renders mixed financial data in HTML table with sortable columns. Uses formatCurrency for amounts and formatDate for dates. Applies type-specific background colors to type badges (green for paid, red for unpaid, yellow for projected). Status badges use color coding based on payment status or deal stage. Integrates with OpenEntityRecord callback for opening records externally using EntityType field."
+}

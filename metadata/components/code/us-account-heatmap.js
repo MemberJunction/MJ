@@ -8,6 +8,7 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
   const [viewMode, setViewMode] = useState(savedUserSettings?.viewMode || 'count');
   const svgRef = useRef(null);
   const tooltipRef = useRef(null);
+  const saveSettingsTimeoutRef = useRef(null);
 
   // State name to abbreviation mapping
   const stateAbbreviations = {
@@ -37,6 +38,13 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
     if (Object.keys(accountsByState).length > 0 && svgRef.current) {
       renderMap();
     }
+
+    // Cleanup d3 selections on unmount
+    return () => {
+      if (svgRef.current) {
+        d3.select(svgRef.current).selectAll('*').remove();
+      }
+    };
   }, [accountsByState, viewMode]);
 
   const loadAccounts = async () => {
@@ -46,7 +54,7 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
     try {
       const result = await utilities.rv.RunView({
         EntityName: 'Accounts',
-        OrderBy: 'AccountName ASC'
+        OrderBy: 'Name ASC'
       });
 
       if (result.Success) {
@@ -105,40 +113,40 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
     setAccountsByState(stateData);
   };
 
-  const renderMap = () => {
+  const renderMap = async () => {
     const container = svgRef.current;
     if (!container) return;
-    
+
     // Clear previous map
     d3.select(container).selectAll('*').remove();
-    
+
     const width = container.clientWidth;
     const height = 500;
-    
+
     const svg = d3.select(container)
       .append('svg')
       .attr('width', width)
       .attr('height', height);
-    
+
     // Create projection for US map - adjust scale for better fit
     const projection = d3.geoAlbersUsa()
       .scale(width * 1.2)
       .translate([width / 2, height / 2]);
-    
+
     const path = d3.geoPath().projection(projection);
-    
+
     // Get max values for color scale
     const maxCount = Math.max(...Object.values(accountsByState).map(d => d.count));
     const maxRevenue = Math.max(...Object.values(accountsByState).map(d => d.totalRevenue));
-    
+
     // Color scale based on view mode
     const colorScale = d3.scaleSequential()
       .domain([0, viewMode === 'count' ? maxCount : maxRevenue])
       .interpolator(d3.interpolateBlues);
-    
+
     // Load US TopoJSON data
-    d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json')
-      .then(us => {
+    try {
+      const us = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
         // Convert TopoJSON to GeoJSON using topojson-client
         const statesFeatures = topojson.feature(us, us.objects.states).features;
         
@@ -243,21 +251,20 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
             }
             return '';
           });
-      })
-      .catch(err => {
-        console.error('Error loading map data:', err);
-        // Try an alternative approach - create a simple placeholder
-        svg.append('text')
-          .attr('x', width / 2)
-          .attr('y', height / 2)
-          .attr('text-anchor', 'middle')
-          .attr('font-size', '16px')
-          .attr('fill', '#666')
-          .text('Map data failed to load. Showing statistics only.');
-        
-        // Show error but don't block the component
-        console.warn('Failed to load US map data. This might be due to CORS or network issues.');
-      });
+    } catch (err) {
+      console.error('Error loading map data:', err);
+      // Try an alternative approach - create a simple placeholder
+      svg.append('text')
+        .attr('x', width / 2)
+        .attr('y', height / 2)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '16px')
+        .attr('fill', '#666')
+        .text('Map data failed to load. Showing statistics only.');
+
+      // Show error but don't block the component
+      console.warn('Failed to load US map data. This might be due to CORS or network issues.');
+    }
     
     // Add legend
     const legendWidth = 200;
@@ -328,7 +335,14 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
 
   const handleViewModeChange = (mode) => {
     setViewMode(mode);
-    onSaveUserSettings({ ...savedUserSettings, viewMode: mode });
+
+    // Debounce settings save to avoid excessive writes
+    if (saveSettingsTimeoutRef.current) {
+      clearTimeout(saveSettingsTimeoutRef.current);
+    }
+    saveSettingsTimeoutRef.current = setTimeout(() => {
+      onSaveUserSettings({ ...savedUserSettings, viewMode: mode });
+    }, 500);
   };
 
   if (loading) {
@@ -430,7 +444,7 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
           }}>
             <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Total Accounts</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827' }}>
-              {accounts.length.toLocaleString()}
+              {accounts.length?.toLocaleString() || '0'}
             </div>
           </div>
           <div style={{ 
@@ -571,7 +585,7 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
                           backgroundColor: index % 2 === 0 ? 'white' : '#F9FAFB'
                         }}
                       >
-                        <td style={{ padding: '12px', fontWeight: '500' }}>{account.AccountName}</td>
+                        <td style={{ padding: '12px', fontWeight: '500' }}>{account.Name}</td>
                         <td style={{ padding: '12px' }}>{account.City || '-'}</td>
                         <td style={{ padding: '12px' }}>{account.Industry || '-'}</td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: '#059669' }}>

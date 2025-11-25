@@ -15,12 +15,14 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
   const [insightsCollapsed, setInsightsCollapsed] = useState(false);
-  
+
   // Load sub-components from registry
-  const Treemap = components['ProductRevenueTreemap'];
-  const MatrixTable = components['ProductRevenueMatrixTable'];
-  const DetailPanel = components['ProductRevenueDetailPanel'];
-  const AIInsightsPanel = components['AIInsightsPanel'];
+  const {
+    ProductRevenueTreemap,
+    ProductRevenueMatrixTable,
+    ProductRevenueDetailPanel,
+    AIInsightsPanel
+  } = components;
 
   useEffect(() => {
     loadData();
@@ -37,7 +39,7 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       const batchResults = await utilities.rv.RunViews([
         {
           EntityName: 'Products',
-          OrderBy: 'ProductName ASC'
+          OrderBy: 'Name ASC'
         },
         {
           EntityName: 'Invoice Line Items',
@@ -132,7 +134,7 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
     products.forEach(product => {
       productMetrics[product.ID] = {
         id: product.ID,
-        name: product.ProductName,
+        name: product.Name,
         category: product.Category || 'Uncategorized',
         price: product.UnitPrice || 0,
         cost: product.Cost || 0,
@@ -233,16 +235,16 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
 ## Product Performance Summary
 - **Total Products:** ${products.length}
 - **Active Products (with revenue):** ${topProductsList.length}
-- **Total Revenue:** $${totalRevenue.toLocaleString()}
-- **Average Margin:** ${avgMargin.toFixed(1)}%
+- **Total Revenue:** $${totalRevenue?.toLocaleString() || '0'}
+- **Average Margin:** ${avgMargin?.toFixed(1) || '0'}%
 - **Unique Customers:** ${uniqueCustomers.size}
 - **Time Period:** ${timePeriod === 'custom' ? `${startDate} to ${endDate}` : `Last ${timePeriod}`}
 
 ## Top 5 Products by Revenue
-${topProductsList.slice(0, 5).map((p, i) => 
+${topProductsList.slice(0, 5).map((p, i) =>
   `${i + 1}. **${p.name}**
-   - Revenue: $${p.revenue.toLocaleString()}
-   - Margin: ${p.margin.toFixed(1)}%
+   - Revenue: $${p.revenue?.toLocaleString() || '0'}
+   - Margin: ${p.margin?.toFixed(1) || '0'}%
    - Customers: ${p.customers.size}
    - Units Sold: ${p.quantity}`
 ).join('\n')}
@@ -251,20 +253,20 @@ ${topProductsList.slice(0, 5).map((p, i) =>
 ${Object.entries(categoryPerformance)
   .sort((a, b) => b[1].revenue - a[1].revenue)
   .slice(0, 5)
-  .map(([cat, data]) => 
-    `- **${cat}:** $${data.revenue.toLocaleString()} revenue, ${data.products} products, ${data.avgMargin.toFixed(1)}% avg margin`
+  .map(([cat, data]) =>
+    `- **${cat}:** $${data.revenue?.toLocaleString() || '0'} revenue, ${data.products} products, ${data.avgMargin?.toFixed(1) || '0'}% avg margin`
   ).join('\n')}
 
 ## Underperforming Products (margin < 20%)
-${underperformers.length > 0 
-  ? underperformers.slice(0, 5).map(p => 
-      `- **${p.name}:** ${p.margin.toFixed(1)}% margin, $${p.revenue.toLocaleString()} revenue`
+${underperformers.length > 0
+  ? underperformers.slice(0, 5).map(p =>
+      `- **${p.name}:** ${p.margin?.toFixed(1) || '0'}% margin, $${p.revenue?.toLocaleString() || '0'} revenue`
     ).join('\n')
   : 'No underperforming products identified'}
 
 ## Revenue Distribution
 - **Top 20% of products generate:** ${((topProductsList.slice(0, Math.ceil(topProductsList.length * 0.2))
-    .reduce((sum, p) => sum + p.revenue, 0) / totalRevenue) * 100).toFixed(1)}% of revenue
+    .reduce((sum, p) => sum + p.revenue, 0) / totalRevenue) * 100)?.toFixed(1) || '0'}% of revenue
 - **Products with zero revenue:** ${products.length - topProductsList.length}
 
 Based on this specific data, please provide:
@@ -496,18 +498,17 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
           insights={aiInsights}
           loading={loadingInsights}
           error={insightsError}
-          onRefresh={generateAIInsights}
+          onGenerate={generateAIInsights}
           onClose={() => {
             setAiInsights(null);
             setInsightsError(null);
             setInsightsCollapsed(false);
           }}
           title="AI-Powered Product Portfolio Insights"
-          titleIcon="fa-wand-magic-sparkles"
-          titleIconColor="#10B981"
-          isCollapsed={insightsCollapsed}
+          icon="fa-wand-magic-sparkles"
+          iconColor="#10B981"
+          defaultCollapsed={insightsCollapsed}
           onToggleCollapse={() => setInsightsCollapsed(!insightsCollapsed)}
-          exportFilename={`product-revenue-insights-${new Date().toISOString().split('T')[0]}.md`}
         />
       )}
       
@@ -546,10 +547,10 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#8B5CF6' }}>
-                    ${(product.revenue / 1000).toFixed(1)}K
+                    ${(product.revenue / 1000)?.toFixed(1) || '0'}K
                   </div>
                   <div style={{ fontSize: '11px', color: product.margin > 30 ? '#10B981' : '#F59E0B' }}>
-                    {product.margin.toFixed(0)}% margin
+                    {product.margin?.toFixed(0) || '0'}% margin
                   </div>
                 </div>
               </div>
@@ -570,8 +571,8 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
       >
         {/* Main Visualization Area */}
         <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', minWidth: 0 }}>
-          {viewMode === 'treemap' && Treemap && (
-            <Treemap
+          {viewMode === 'treemap' && ProductRevenueTreemap && (
+            <ProductRevenueTreemap
               products={products}
               lineItems={lineItems}
               invoices={invoices}
@@ -585,8 +586,8 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
             />
           )}
 
-          {viewMode === 'matrix' && MatrixTable && (
-            <MatrixTable
+          {viewMode === 'matrix' && ProductRevenueMatrixTable && (
+            <ProductRevenueMatrixTable
               products={products}
               lineItems={lineItems}
               invoices={invoices}
@@ -602,11 +603,11 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
             />
           )}
         </div>
-        
+
         {/* Product Detail Panel - inline responsive */}
-        {isPanelOpen && DetailPanel && (
+        {isPanelOpen && ProductRevenueDetailPanel && (
           <div style={{ minWidth: 0 }}>
-            <DetailPanel
+            <ProductRevenueDetailPanel
               product={selectedProduct}
               isOpen={isPanelOpen}
               onClose={() => {

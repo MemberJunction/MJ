@@ -1,7 +1,12 @@
 function SalesPipelineDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Extract AIInsightsPanel from components
-  const AIInsightsPanel = components?.AIInsightsPanel;
-  
+  // Extract child components from registry
+  const {
+    AIInsightsPanel,
+    PipelineMetricsCards,
+    PipelineKanban,
+    DrillDownPanel
+  } = components;
+
   if (!AIInsightsPanel) {
     console.warn('AIInsightsPanel component not available');
   }
@@ -42,13 +47,6 @@ function SalesPipelineDashboard({ utilities, styles, components, callbacks, save
     'Closed Won': '#10B981',
     'Closed Lost': '#EF4444'
   };
-
-  // Load sub-components from registry
-  const PipelineMetricsCards = components['PipelineMetricsCards'];
-  const PipelineKanban = components['PipelineKanban'];
-  const DealCards = components['DealCards'];
-  const DealList = components['DealList'];
-  const DrillDownPanel = components['DrillDownPanel'];
 
   useEffect(() => {
     loadData();
@@ -260,8 +258,8 @@ function SalesPipelineDashboard({ utilities, styles, components, callbacks, save
 
 ## Pipeline Summary
 - **Total Deals:** ${dataSnapshot.summary.totalDeals}
-- **Pipeline Value:** $${dataSnapshot.summary.totalPipelineValue.toLocaleString()}
-- **Average Deal Size:** $${dataSnapshot.summary.averageDealSize.toLocaleString()}
+- **Pipeline Value:** $${dataSnapshot.summary.totalPipelineValue?.toLocaleString() || '0'}
+- **Average Deal Size:** $${dataSnapshot.summary.averageDealSize?.toLocaleString() || '0'}
 - **Win Rate:** ${dataSnapshot.summary.winRate}%
 - **Average Cycle Time:** ${dataSnapshot.summary.averageCycleTime} days
 - **Active Deals:** ${dataSnapshot.summary.activeDeals}
@@ -276,7 +274,7 @@ ${Object.entries(conversionRates).map(([transition, rate]) => `- ${transition}: 
 
 ## Bottlenecks
 - **Stuck Deals:** ${dataSnapshot.bottlenecks.stuckDealsCount} deals
-- **Value at Risk:** $${dataSnapshot.bottlenecks.stuckDealsValue.toLocaleString()}
+- **Value at Risk:** $${dataSnapshot.bottlenecks.stuckDealsValue?.toLocaleString() || '0'}
 - **Average Days Stuck:** ${dataSnapshot.bottlenecks.averageStuckDays} days
 
 ## Recent Activity
@@ -369,6 +367,13 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
     if (!loading && deals.length > 0) {
       renderPipelineChart();
     }
+
+    // Cleanup function to destroy chart on unmount
+    return () => {
+      if (chartRef.current?._chart) {
+        chartRef.current._chart.destroy();
+      }
+    };
   }, [deals, loading]);
 
   const renderPipelineChart = () => {
@@ -582,13 +587,19 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
           metrics={metrics}
           deals={deals}
           onCardClick={handleDrillDown}
+          styles={styles}
+          utilities={utilities}
+          components={components}
         />
-        
+
         <PipelineKanban
           deals={deals}
           stages={stages}
           stageColors={stageColors}
           onStageClick={handleDrillDown}
+          styles={styles}
+          utilities={utilities}
+          components={components}
         />
         
         <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px', marginBottom: '20px', border: '1px solid #E5E7EB' }}>
@@ -605,6 +616,8 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
             setDrillDownData(null);
           }}
           onOpenDeal={(entityName, primaryKey) => callbacks?.OpenEntityRecord && callbacks.OpenEntityRecord(entityName, primaryKey)}
+          styles={styles}
+          utilities={utilities}
           components={components}
         />
       </div>

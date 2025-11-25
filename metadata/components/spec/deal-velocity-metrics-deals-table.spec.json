@@ -1,0 +1,111 @@
+{
+  "name": "DealsTable",
+  "location": "embedded",
+  "code": "@file:../code/deal-velocity-metrics-deals-table.js",
+  "description": "Displays deals in a sortable table with stage colors and open actions",
+  "category": "Deals",
+  "type": "table",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Owner"],
+        "filterFields": ["Stage"],
+        "sortFields": ["Dealname", "Accountname", "Stage", "Amount", "CloseDate"]
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "deals",
+      "type": "array",
+      "description": "Array of deal objects to display in the table",
+      "required": true
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Title to display above the table",
+      "required": true
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "description": "Callback when close button is clicked",
+      "required": true
+    },
+    {
+      "name": "sortConfig",
+      "type": "object",
+      "description": "Current sort configuration with key and direction",
+      "required": true
+    },
+    {
+      "name": "setSortConfig",
+      "type": "function",
+      "description": "Function to update sort configuration",
+      "required": true
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Callback functions including OpenEntityRecord",
+      "required": true
+    },
+    {
+      "name": "styles",
+      "type": "object",
+      "description": "Style utilities and theme configuration",
+      "required": true
+    },
+    {
+      "name": "utilities",
+      "type": "object",
+      "description": "MemberJunction utilities for data access",
+      "required": true
+    },
+    {
+      "name": "components",
+      "type": "object",
+      "description": "Registry of available components",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "name": "onClose",
+      "description": "Fired when the close button is clicked"
+    },
+    {
+      "name": "onSort",
+      "description": "Fired when a column header is clicked for sorting",
+      "parameters": [
+        {
+          "name": "key",
+          "type": "string",
+          "description": "The field name to sort by"
+        }
+      ]
+    },
+    {
+      "name": "onOpenDeal",
+      "description": "Fired when the open icon is clicked",
+      "parameters": [
+        {
+          "name": "entityName",
+          "type": "string",
+          "description": "Name of the entity (Deals)"
+        },
+        {
+          "name": "primaryKey",
+          "type": "array",
+          "description": "Array of key-value pairs for the deal ID"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<DealsTable\n  deals={drillDownDeals}\n  title=\"Prospecting Stage Deals\"\n  onClose={() => setDrillDownDeals(null)}\n  sortConfig={{ key: 'Amount', direction: 'desc' }}\n  setSortConfig={setSortConfig}\n  callbacks={callbacks}\n/>\n```",
+  "functionalRequirements": "- Display deals in sortable table format\n- Show deal name, account, stage, amount, close date, and owner\n- Format currency values appropriately\n- Apply stage-specific colors to stage badges\n- Support sorting by any column (toggle asc/desc)\n- Include close button in header\n- Include open icon for external navigation\n- Show hover effects on rows",
+  "technicalDesign": "Renders deals in HTML table with sortable columns. Uses formatCurrency for amounts, formatDate for dates, and getStageColor for stage badges. Sorting toggles between ascending and descending on header clicks. Integrates with OpenEntityRecord callback for opening deals externally."
+}

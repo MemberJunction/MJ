@@ -11,9 +11,9 @@
       {
         "name": "Products",
         "description": "Product catalog with pricing and cost information",
-        "displayFields": ["ID", "ProductName", "Category", "UnitPrice", "Cost"],
+        "displayFields": ["ID", "Name", "Category", "UnitPrice", "Cost"],
         "filterFields": [],
-        "sortFields": ["ProductName"],
+        "sortFields": ["Name"],
         "fieldMetadata": [],
         "permissionLevelNeeded": ["read"]
       },
@@ -47,26 +47,30 @@
     }
   ],
   "dependencies": [
-    "@include:product-revenue-treemap.spec.json",
-    "@include:product-revenue-matrix-table.spec.json",
-    "@include:product-revenue-detail-panel.spec.json",
+    {
+      "name": "RevenueTreemap",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "ProductMatrix",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "ProductDetailsPanel",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
     {
       "name": "AIInsightsPanel",
       "namespace": "Generic/UI/AI",
       "location": "registry",
-      "version": "1.0.0"
+      "version": "^1.0.0"
     }
   ],
-  "libraries": [
-    {
-      "name": "d3",
-      "version": "^7.8.5",
-      "globalVariable": "d3"
-    },
-    {
-      "name": "Chart.js",
-      "version": "^4.4.1",
-      "globalVariable": "Chart"
-    }
-  ]
+  "libraries": []
 }

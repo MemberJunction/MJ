@@ -3,6 +3,7 @@ function AITimeSeriesChart({ data, groupBy, activeTab, selectedPoint, onPointCli
   
   // Format large numbers
   const formatNumber = (value) => {
+    if (!Number.isFinite(value) || value === 0) return '0';
     if (value >= 1000000) {
       return `${(value / 1000000).toFixed(1)}M`;
     } else if (value >= 1000) {
@@ -10,9 +11,10 @@ function AITimeSeriesChart({ data, groupBy, activeTab, selectedPoint, onPointCli
     }
     return value.toFixed(0);
   };
-  
+
   // Format currency
   const formatCurrency = (value) => {
+    if (!Number.isFinite(value) || value === 0) return '$0.00';
     if (value >= 1000) {
       return `$${(value / 1000).toFixed(1)}K`;
     }
@@ -57,17 +59,29 @@ function AITimeSeriesChart({ data, groupBy, activeTab, selectedPoint, onPointCli
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
   
-  // Create scales
-  const xScale = (index) => (index / (chartData.length - 1)) * innerWidth;
-  const yScaleTokens = (value) => innerHeight - (value / maxTokens) * innerHeight;
-  const yScaleRight = (value, max) => innerHeight - (value / max) * innerHeight;
+  // Create scales - handle single data point case
+  const xScale = (index) => {
+    if (chartData.length <= 1) return innerWidth / 2; // Center single point
+    return (index / (chartData.length - 1)) * innerWidth;
+  };
+  const yScaleTokens = (value) => {
+    if (!maxTokens || maxTokens === 0) return innerHeight / 2;
+    return innerHeight - (value / maxTokens) * innerHeight;
+  };
+  const yScaleRight = (value, max) => {
+    if (!max || max === 0) return innerHeight / 2;
+    return innerHeight - (value / max) * innerHeight;
+  };
   
   // Create path data for lines
   const createPath = (data, valueKey, scale, max) => {
     return data.map((d, i) => {
       const x = xScale(i);
       const y = scale(d[valueKey] || 0, max);
-      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+      // Safety check: ensure both x and y are finite numbers
+      const safeX = Number.isFinite(x) ? x : 0;
+      const safeY = Number.isFinite(y) ? y : innerHeight / 2;
+      return `${i === 0 ? 'M' : 'L'} ${safeX} ${safeY}`;
     }).join(' ');
   };
   
@@ -195,43 +209,54 @@ function AITimeSeriesChart({ data, groupBy, activeTab, selectedPoint, onPointCli
               />
               
               {/* Data points */}
-              {chartData.map((point, i) => (
-                <g key={i}>
-                  {/* Tokens */}
-                  <circle
-                    cx={xScale(i)}
-                    cy={yScaleTokens(point.tokens || 0)}
-                    r={point.isSelected ? 6 : 4}
-                    fill={styles.colors.success || '#10b981'}
-                    stroke="white"
-                    strokeWidth="2"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handlePointClick(point)}
-                  />
-                  {/* Runs */}
-                  <circle
-                    cx={xScale(i)}
-                    cy={yScaleRight(point.runs || 0, maxRuns)}
-                    r={point.isSelected ? 6 : 4}
-                    fill={styles.colors.primary || '#3b82f6'}
-                    stroke="white"
-                    strokeWidth="2"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handlePointClick(point)}
-                  />
-                  {/* Cost */}
-                  <circle
-                    cx={xScale(i)}
-                    cy={yScaleRight(point.cost || 0, maxCost)}
-                    r={point.isSelected ? 6 : 4}
-                    fill={styles.colors.warning || '#f59e0b'}
-                    stroke="white"
-                    strokeWidth="2"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handlePointClick(point)}
-                  />
-                </g>
-              ))}
+              {chartData.map((point, i) => {
+                const x = xScale(i);
+                const safeX = Number.isFinite(x) ? x : innerWidth / 2;
+                const yTokens = yScaleTokens(point.tokens || 0);
+                const yRuns = yScaleRight(point.runs || 0, maxRuns);
+                const yCost = yScaleRight(point.cost || 0, maxCost);
+                const safeYTokens = Number.isFinite(yTokens) ? yTokens : innerHeight / 2;
+                const safeYRuns = Number.isFinite(yRuns) ? yRuns : innerHeight / 2;
+                const safeYCost = Number.isFinite(yCost) ? yCost : innerHeight / 2;
+
+                return (
+                  <g key={i}>
+                    {/* Tokens */}
+                    <circle
+                      cx={safeX}
+                      cy={safeYTokens}
+                      r={point.isSelected ? 6 : 4}
+                      fill={styles.colors.success || '#10b981'}
+                      stroke="white"
+                      strokeWidth="2"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handlePointClick(point)}
+                    />
+                    {/* Runs */}
+                    <circle
+                      cx={safeX}
+                      cy={safeYRuns}
+                      r={point.isSelected ? 6 : 4}
+                      fill={styles.colors.primary || '#3b82f6'}
+                      stroke="white"
+                      strokeWidth="2"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handlePointClick(point)}
+                    />
+                    {/* Cost */}
+                    <circle
+                      cx={safeX}
+                      cy={safeYCost}
+                      r={point.isSelected ? 6 : 4}
+                      fill={styles.colors.warning || '#f59e0b'}
+                      stroke="white"
+                      strokeWidth="2"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handlePointClick(point)}
+                    />
+                  </g>
+                );
+              })}
             </g>
             
             {/* Axis labels */}

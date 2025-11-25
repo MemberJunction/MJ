@@ -16,7 +16,7 @@ function AccountsByIndustryList({
 
   // Define columns to display in the DataGrid with custom formatting
   const columns = [
-    { field: 'AccountName', header: 'Account Name' },
+    { field: 'Name', header: 'Account Name' },
     {
       field: 'AnnualRevenue',
       header: 'Revenue',

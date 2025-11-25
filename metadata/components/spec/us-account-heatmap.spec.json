@@ -10,9 +10,9 @@
     "entities": [
       {
         "name": "Accounts",
-        "displayFields": ["AccountName", "City", "BillingState", "Industry", "AnnualRevenue"],
+        "displayFields": ["Name", "City", "BillingState", "Industry", "AnnualRevenue"],
         "filterFields": ["BillingState"],
-        "sortFields": ["AccountName", "AnnualRevenue"],
+        "sortFields": ["Name", "AnnualRevenue"],
         "fields": [
           {
             "name": "ID",
@@ -20,7 +20,7 @@
             "description": "Unique identifier for the account"
           },
           {
-            "name": "AccountName",
+            "name": "Name",
             "type": "string",
             "description": "Name of the account/company"
           },

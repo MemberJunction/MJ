@@ -1,17 +1,17 @@
 // TeamLeaderboard Sub-component
-function TeamLeaderboard ({ teamData, onRepClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+function TeamLeaderboard ({ repData, onRepClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [sortBy, setSortBy] = useState('revenue');
 
   const sortedTeamData = useMemo(() => {
-    if (!teamData) return [];
-    return [...teamData].sort((a, b) => {
+    if (!repData) return [];
+    return [...repData].sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       if (sortBy === 'deals') return b.dealCount - a.dealCount;
       return b.revenue - a.revenue;
     });
-  }, [teamData, sortBy]);
+  }, [repData, sortBy]);
 
-  const maxRevenue = Math.max(...(teamData || []).map(rep => rep.revenue || 0), 1);
+  const maxRevenue = Math.max(...(repData || []).map(rep => rep.revenue || 0), 1);
 
   return (
     <div style={{

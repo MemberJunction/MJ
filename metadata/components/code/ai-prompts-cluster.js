@@ -1,33 +1,32 @@
-function AIPromptsCluster({ 
-  utilities, 
-  styles, 
-  components, 
-  callbacks, 
-  savedUserSettings, 
-  onSaveUserSettings,
-  data 
+function AIPromptsCluster({
+  utilities,
+  styles,
+  components,
+  callbacks,
+  savedUserSettings,
+  onSaveUserSettings
 }) {
-  // Extract AIInsightsPanel from components
-  const AIInsightsPanel = components?.AIInsightsPanel;
-  
+  // Extract sub-components from components
+  const {
+    AIInsightsPanel,
+    AIPromptsClusterGraph,
+    AIPromptsClusterControls,
+    AIPromptsClusterDetails,
+    DataExportPanel
+  } = components;
+
   if (!AIInsightsPanel) {
     console.warn('AIInsightsPanel component not available');
   }
 
-  // Load sub-components
-  const ClusterGraph = components['AIPromptsClusterGraph'];
-  const ClusterControls = components['AIPromptsClusterControls'];
-  const ClusterDetails = components['AIPromptsClusterDetails'];
-  const DataExportPanel = components['DataExportPanel'];
-  
   console.log('🔍 [AIPromptsCluster] Component loading check:');
-  console.log('  - ClusterGraph:', !!ClusterGraph);
-  console.log('  - ClusterControls:', !!ClusterControls);
-  console.log('  - ClusterDetails:', !!ClusterDetails);
+  console.log('  - AIPromptsClusterGraph:', !!AIPromptsClusterGraph);
+  console.log('  - AIPromptsClusterControls:', !!AIPromptsClusterControls);
+  console.log('  - AIPromptsClusterDetails:', !!AIPromptsClusterDetails);
   console.log('  - DataExportPanel:', !!DataExportPanel);
   console.log('  - All components object:', Object.keys(components || {}));
   console.log('  - DataExportPanel type:', typeof DataExportPanel);
-  
+
   // Debug when DataExportPanel changes
   useEffect(() => {
     console.log('📌 [AIPromptsCluster] DataExportPanel updated:', !!DataExportPanel);
@@ -537,7 +536,7 @@ Format your response in clear markdown with headers and bullet points.`;
     
     console.log('🔍 [AIPromptsCluster] exportData prepared:', exportData);
     console.log('🔍 [AIPromptsCluster] exportData length:', exportData?.length);
-    console.log('🔍 [AIPromptsCluster] Sample export row:', exportData[0]);
+    console.log('🔍 [AIPromptsCluster] Sample export row:', exportData?.[0]);
     
     return exportData;
   };
@@ -594,7 +593,7 @@ Format your response in clear markdown with headers and bullet points.`;
       height: '100%',
       padding: styles.spacing?.md || '16px',
       backgroundColor: styles.colors?.background || '#f5f5f5',
-      fontFamily: styles.fonts?.body || 'system-ui, -apple-system, sans-serif'
+      fontFamily: styles.typography?.fontFamily || 'system-ui, -apple-system, sans-serif'
     }}>
       {/* Header */}
       <div style={{
@@ -607,7 +606,7 @@ Format your response in clear markdown with headers and bullet points.`;
         }}>
           <div>
             <h2 style={{
-              fontSize: styles.fonts?.sizes?.xl || '24px',
+              fontSize: styles.typography?.fontSize?.xl || '24px',
               fontWeight: 'bold',
               color: styles.colors?.text?.primary || '#333',
               margin: 0
@@ -615,7 +614,7 @@ Format your response in clear markdown with headers and bullet points.`;
               AI Prompts Cluster Analysis
             </h2>
             <p style={{
-              fontSize: styles.fonts?.sizes?.sm || '14px',
+              fontSize: styles.typography?.fontSize?.sm || '14px',
               color: styles.colors?.text?.secondary || '#666',
               marginTop: styles.spacing?.xs || '4px'
             }}>
@@ -733,7 +732,7 @@ Format your response in clear markdown with headers and bullet points.`;
           flexDirection: 'column',
           gap: styles.spacing?.sm || '8px'
         }}>
-          <ClusterControls
+          <AIPromptsClusterControls
             categories={categories}
             types={types}
             currentFilters={filters}
@@ -769,7 +768,7 @@ Format your response in clear markdown with headers and bullet points.`;
             overflow: 'visible'
           }}>
           {clusters.length > 0 ? (
-            <ClusterGraph
+            <AIPromptsClusterGraph
               prompts={clusters}
               clusters={clusters}
               clusterNames={clusterNames}
@@ -806,7 +805,7 @@ Format your response in clear markdown with headers and bullet points.`;
                     No clusters generated yet
                   </div>
                   <div style={{
-                    fontSize: styles.fonts?.sizes?.sm || '14px'
+                    fontSize: styles.typography?.fontSize?.sm || '14px'
                   }}>
                     Use the "Generate Clusters" button in the controls panel to begin
                   </div>
@@ -824,7 +823,7 @@ Format your response in clear markdown with headers and bullet points.`;
           padding: styles.spacing?.md || '16px',
           overflowY: 'auto'
         }}>
-          <ClusterDetails
+          <AIPromptsClusterDetails
             selectedPrompt={selectedPrompt}
             allPrompts={filteredPrompts}
             clusterInfo={clusterInfo}

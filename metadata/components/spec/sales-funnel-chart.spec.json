@@ -47,6 +47,12 @@
       "type": "{count: number, value: number}",
       "description": "Closed lost deals data",
       "required": true
+    },
+    {
+      "name": "formatCurrency",
+      "type": "(value: number) => string",
+      "description": "Function to format currency values",
+      "required": true
     }
   ],
   "events": [],

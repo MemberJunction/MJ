@@ -11,23 +11,27 @@
     "entities": [
       {
         "name": "Accounts",
-        "displayFields": ["AccountName", "Industry", "AnnualRevenue", "CreatedAt"],
-        "filterFields": ["ID"] 
+        "displayFields": ["Name", "Industry", "AnnualRevenue", "__mj_CreatedAt"],
+        "filterFields": ["ID"],
+        "sortFields": ["Name", "AnnualRevenue"]
       },
       {
         "name": "Contacts",
         "displayFields": ["FirstName", "LastName", "Email", "Phone", "AccountID"],
-        "filterFields": ["AccountID"] 
+        "filterFields": ["AccountID"],
+        "sortFields": ["LastName"]
       },
       {
         "name": "Deals",
         "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "AccountID"],
-        "filterFields": ["AccountID"] 
+        "filterFields": ["AccountID"],
+        "sortFields": ["CloseDate"]
       },
       {
         "name": "Activities",
-        "displayFields": ["Subject", "Type", "CreatedAt", "AccountID"],
-        "filterFields": ["AccountID"] 
+        "displayFields": ["Subject", "ActivityType", "__mj_CreatedAt", "AccountID"],
+        "filterFields": ["AccountID"],
+        "sortFields": ["__mj_CreatedAt"]
       }
     ]
   },
@@ -66,9 +70,24 @@
   ],
   "events": [],
   "dependencies": [
-    "@include:customer-360-view-tab-navigation.spec.json",
-    "@include:customer-360-view-overview.spec.json",
-    "@include:customer-360-view-timeline.spec.json"
+    {
+      "name": "Customer360TabNavigation",
+      "location": "registry",
+      "namespace": "CRM/Customer",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "Customer360Overview",
+      "location": "registry",
+      "namespace": "CRM/Customer",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "Customer360Timeline",
+      "location": "registry",
+      "namespace": "CRM/Customer",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": [],
   "usageExample": "```javascript\n<Customer360View\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n```"

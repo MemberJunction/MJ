@@ -59,6 +59,13 @@
       "defaultValue": 10
     },
     {
+      "name": "showPageSizeChanger",
+      "type": "boolean",
+      "description": "Show the page size selector when paging is enabled",
+      "required": false,
+      "defaultValue": true
+    },
+    {
       "name": "filtering",
       "type": "boolean",
       "description": "Enable/disable text filtering",

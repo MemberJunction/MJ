@@ -95,7 +95,7 @@ function AccountsByIndustryDetails ({ account, isOpen, onClose, onOpenRecord, ut
                 color: '#111827',
                 margin: '0'
               }}>
-                {account.AccountName}
+                {account.Name}
               </h4>
               {OpenRecordButton ? (
                 <OpenRecordButton

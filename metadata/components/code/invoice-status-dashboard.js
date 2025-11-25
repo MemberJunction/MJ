@@ -1,7 +1,6 @@
 function InvoiceStatusDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Extract AIInsightsPanel from components
-  const AIInsightsPanel = components?.AIInsightsPanel;
-  const DataExportPanel = components?.DataExportPanel;
+  // Extract sub-components from components
+  const { AIInsightsPanel, DataExportPanel } = components;
 
   if (!AIInsightsPanel) {
     console.warn('AIInsightsPanel component not available');

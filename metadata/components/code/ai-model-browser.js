@@ -290,7 +290,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
   
   // Helper function to get border radius value
   const getBorderRadius = (size) => {
-    return typeof styles.borders?.radius === 'object' ? styles.borders.radius[size] : styles.borders?.radius || '4px';
+    return typeof styles?.borders?.radius === 'object' ? styles?.borders?.radius?.[size] : styles?.borders?.radius || '4px';
   };
   
   // Loading state

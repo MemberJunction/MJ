@@ -295,7 +295,7 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
           }} />
           <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Win Rate</div>
           <div style={{ fontSize: '32px', fontWeight: 'bold', color: metrics.winRate > 50 ? '#10B981' : '#EF4444' }}>
-            {metrics.winRate.toFixed(1)}%
+            {(metrics.winRate || 0).toFixed(1)}%
           </div>
           <div style={{ fontSize: '11px', color: '#6B7280' }}>
             {metrics.wonCount} won / {metrics.totalDeals} total

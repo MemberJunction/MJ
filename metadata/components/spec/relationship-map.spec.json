@@ -29,5 +29,11 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [
+    {
+      "name": "ApexCharts",
+      "version": "^3.45.1",
+      "globalVariable": "ApexCharts"
+    }
+  ]
 }

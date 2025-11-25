@@ -20,9 +20,10 @@ function SingleRecordView({
   onSaveUserSettings
 }) {
   const [entityInfo, setEntityInfo] = React.useState(null);
-  
+
   // Get OpenRecordButton component from registry if needed
-  const OpenRecordButton = allowOpenRecord ? components?.['OpenRecordButton'] : null;
+  const { OpenRecordButton } = components;
+  const shouldShowOpenButton = allowOpenRecord && OpenRecordButton;
   
   // Handle open record button click with cancelable event - moved outside useMemo
   const handleOpenRecordClick = React.useCallback((recordToOpen, entityNameToOpen) => {
@@ -498,7 +499,7 @@ function SingleRecordView({
   return (
     <div style={{ padding: '8px' }}>
       {displayFields.map(renderField)}
-      {allowOpenRecord && OpenRecordButton && (
+      {shouldShowOpenButton && (
         <div style={{ marginTop: '12px' }}>
           <OpenRecordButton
             record={record}

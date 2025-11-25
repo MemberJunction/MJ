@@ -149,10 +149,30 @@
   "exampleUsage": "<AIPerformanceDashboard />",
   "code": "@file:../code/ai-performance-dashboard.js",
   "dependencies": [
-    "@include:ai-time-series-chart.spec.json",
-    "@include:ai-distribution-chart.spec.json",
-    "@include:ai-detail-table.spec.json",
-    "@include:ai-metrics-summary.spec.json",
+    {
+      "name": "AITimeSeriesChart",
+      "location": "registry",
+      "namespace": "AI/Analytics/Performance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AIDistributionChart",
+      "location": "registry",
+      "namespace": "AI/Analytics/Performance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AIDetailTable",
+      "location": "registry",
+      "namespace": "AI/Analytics/Performance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AIMetricsSummary",
+      "location": "registry",
+      "namespace": "AI/Analytics/Performance",
+      "version": "^1.0.0"
+    },
     {
       "name": "AIInsightsPanel",
       "location": "registry",

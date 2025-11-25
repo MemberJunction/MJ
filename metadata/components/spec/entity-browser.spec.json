@@ -300,9 +300,24 @@
   "events": [],
   "exampleUsage": "<EntityBrowser\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>",
   "dependencies": [
-    "@include:entity-list.spec.json",
-    "@include:entity-details.spec.json",
-    "@include:entity-filter.spec.json",
+    {
+      "name": "EntityList",
+      "location": "registry",
+      "namespace": "Admin/Entities",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "EntityDetails",
+      "location": "registry",
+      "namespace": "Admin/Entities",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "EntityFilter",
+      "location": "registry",
+      "namespace": "Admin/Entities",
+      "version": "^1.0.0"
+    },
     {
       "name": "OpenRecordButton",
       "location": "registry",

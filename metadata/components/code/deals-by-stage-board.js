@@ -7,6 +7,7 @@ function DealsByStageBoard({ utilities, styles, components, callbacks, savedUser
   const [dateFrom, setDateFrom] = useState(savedUserSettings?.dateFrom || '');
   const [dateTo, setDateTo] = useState(savedUserSettings?.dateTo || '');
   const [selectedDeal, setSelectedDeal] = useState(null);
+  const saveSettingsTimeoutRef = useRef(null);
 
   // Define stage order and colors
   const stages = [
@@ -105,11 +106,20 @@ function DealsByStageBoard({ utilities, styles, components, callbacks, savedUser
   const handleDateChange = (field, value) => {
     if (field === 'from') {
       setDateFrom(value);
-      onSaveUserSettings({ ...savedUserSettings, dateFrom: value });
     } else {
       setDateTo(value);
-      onSaveUserSettings({ ...savedUserSettings, dateTo: value });
     }
+
+    // Debounce settings save to avoid excessive writes
+    if (saveSettingsTimeoutRef.current) {
+      clearTimeout(saveSettingsTimeoutRef.current);
+    }
+    saveSettingsTimeoutRef.current = setTimeout(() => {
+      const updates = field === 'from'
+        ? { dateFrom: value }
+        : { dateTo: value };
+      onSaveUserSettings({ ...savedUserSettings, ...updates });
+    }, 500);
   };
 
   const clearFilters = () => {

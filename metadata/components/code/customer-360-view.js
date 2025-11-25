@@ -6,17 +6,27 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState(savedUserSettings?.activeTab || 'overview');
-  
+  const saveSettingsTimeoutRef = React.useRef(null);
+
   // Load sub-components from registry
-  const TabNavigation = components['Customer360TabNavigation'];
-  const Overview = components['Customer360Overview'];
-  const Timeline = components['Customer360Timeline'];
+  const {
+    Customer360TabNavigation,
+    Customer360Overview,
+    Customer360Timeline
+  } = components;
   
   // For demo, we'll use the first account
   const accountId = savedUserSettings?.accountId || null;
 
   useEffect(() => {
     loadCustomerData();
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (saveSettingsTimeoutRef.current) {
+        clearTimeout(saveSettingsTimeoutRef.current);
+      }
+    };
   }, [accountId]);
 
   const loadCustomerData = async () => {
@@ -60,7 +70,7 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
         utilities.rv.RunView({
           EntityName: 'Activities',
           ExtraFilter: `AccountID='${targetAccountId}'`,
-          OrderBy: 'CreatedAt DESC',
+          OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 100
         })
       ]);
@@ -86,7 +96,7 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
     
     // Recent activities boost
     const recentActivities = activities.filter(a => {
-      const activityDate = new Date(a.CreatedAt);
+      const activityDate = new Date(a.__mj_CreatedAt);
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       return activityDate > thirtyDaysAgo;
     });
@@ -107,7 +117,14 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
-    onSaveUserSettings({ ...savedUserSettings, activeTab: tabId });
+
+    // Debounce settings save to avoid noisy updates
+    if (saveSettingsTimeoutRef.current) {
+      clearTimeout(saveSettingsTimeoutRef.current);
+    }
+    saveSettingsTimeoutRef.current = setTimeout(() => {
+      onSaveUserSettings({ ...savedUserSettings, activeTab: tabId });
+    }, 500);
   };
 
   const handleActivityClick = (activity) => {
@@ -294,37 +311,46 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}>
         <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: 'bold' }}>
-          {account.AccountName}
+          {account.Name}
         </h1>
         <div style={{ display: 'flex', gap: '24px', color: '#6B7280', fontSize: '14px' }}>
           <span>Industry: {account.Industry || 'Not specified'}</span>
           <span>Annual Revenue: {formatCurrency(account.AnnualRevenue)}</span>
-          <span>Created: {new Date(account.CreatedAt).toLocaleDateString()}</span>
+          <span>Created: {new Date(account.__mj_CreatedAt).toLocaleDateString()}</span>
         </div>
       </div>
 
       {/* Tab Navigation */}
-      {TabNavigation && (
-        <TabNavigation 
+      {Customer360TabNavigation && (
+        <Customer360TabNavigation
           activeTab={activeTab}
           onTabChange={handleTabChange}
+          styles={styles}
+          utilities={utilities}
+          components={components}
         />
       )}
 
       {/* Tab Content */}
       <div>
-        {activeTab === 'overview' && Overview && (
-          <Overview 
+        {activeTab === 'overview' && Customer360Overview && (
+          <Customer360Overview
             account={account}
             contacts={contacts}
             deals={deals}
             engagementScore={engagementScore}
+            styles={styles}
+            utilities={utilities}
+            components={components}
           />
         )}
-        {activeTab === 'timeline' && Timeline && (
-          <Timeline 
+        {activeTab === 'timeline' && Customer360Timeline && (
+          <Customer360Timeline
             activities={activities}
             onActivityClick={handleActivityClick}
+            styles={styles}
+            utilities={utilities}
+            components={components}
           />
         )}
         {activeTab === 'contacts' && <ContactsTab />}

@@ -41,6 +41,7 @@ function AccountsByIndustryChart ({ accounts, onSliceClick, colorScheme = 'defau
     return (
       <SimpleChart
         key="industry-pie-chart"  // Add stable key
+        entityName="Accounts"
         data={accounts}
         groupBy="Industry"
         aggregateMethod="count"
