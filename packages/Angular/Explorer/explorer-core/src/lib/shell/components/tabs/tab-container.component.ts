@@ -519,6 +519,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
 
+        // If resource is already loaded, update tab title immediately
+        const instance = cached.componentRef.instance as BaseResourceComponent;
+        if (instance.LoadComplete) {
+          this.updateTabTitleFromResource(tabId, instance, resourceData);
+        }
+
         return;
       }
 
@@ -550,7 +556,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Wire up events
       instance.LoadCompleteEvent = () => {
-        // Tab content loaded
+        // Tab content loaded - update tab title with resource display name
+        this.updateTabTitleFromResource(tabId, instance, resourceData);
       };
 
       instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
@@ -585,6 +592,40 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     } catch (e) {
       LogError(e);
+    }
+  }
+
+  /**
+   * Update tab title with resource display name after resource loads
+   */
+  private async updateTabTitleFromResource(
+    tabId: string,
+    resourceComponent: BaseResourceComponent,
+    resourceData: ResourceData
+  ): Promise<void> {
+    try {
+      console.log('[TabContainer.updateTabTitleFromResource] Getting display name for tab:', tabId);
+
+      // Get the display name from the resource component
+      const displayName = await resourceComponent.GetResourceDisplayName(resourceData);
+
+      console.log('[TabContainer.updateTabTitleFromResource] Got display name:', displayName);
+
+      if (!displayName) {
+        console.log('[TabContainer.updateTabTitleFromResource] No display name returned, keeping current title');
+        return;
+      }
+
+      // Update the tab title in Golden Layout
+      this.layoutManager.UpdateTabStyle(tabId, { title: displayName });
+      console.log('[TabContainer.updateTabTitleFromResource] Updated Golden Layout tab title to:', displayName);
+
+      // Update the tab title in workspace configuration for persistence
+      this.workspaceManager.UpdateTabTitle(tabId, displayName);
+      console.log('[TabContainer.updateTabTitleFromResource] Updated workspace configuration tab title');
+
+    } catch (error) {
+      console.error('[TabContainer.updateTabTitleFromResource] Error updating tab title:', error);
     }
   }
 

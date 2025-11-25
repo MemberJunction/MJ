@@ -524,6 +524,30 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Update the title of a specific tab
+   */
+  UpdateTabTitle(tabId: string, newTitle: string): void {
+    const config = this.configuration$.value;
+    if (!config) {
+      console.warn('[WorkspaceStateManager.UpdateTabTitle] No configuration available');
+      return;
+    }
+
+    console.log('[WorkspaceStateManager.UpdateTabTitle] Updating tab title:', { tabId, newTitle });
+
+    const updatedTabs = config.tabs.map(tab =>
+      tab.id === tabId ? { ...tab, title: newTitle } : tab
+    );
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: updatedTabs
+    });
+
+    console.log('[WorkspaceStateManager.UpdateTabTitle] Tab title updated and configuration saved');
+  }
+
+  /**
    * Generate UUID for new tabs
    */
   private generateUUID(): string {
