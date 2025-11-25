@@ -173,17 +173,38 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Load tabs from configuration
     const config = this.workspaceManager.GetConfiguration();
-    if (config && config.tabs.length > 0) {
-      // Always create tabs from config.tabs sorted by sequence
-      // This ensures correct tab order regardless of saved layout structure
-      // The saved layout structure can get out of sync with tab sequence
+    if (!config || config.tabs.length === 0) {
+      return;
+    }
+
+    // Check if we have a saved layout structure with actual content
+    const hasSavedLayout = config.layout?.root?.content && config.layout.root.content.length > 0;
+
+    if (hasSavedLayout && !forceCreateTabs) {
+      // RESTORE SAVED LAYOUT - preserves drag/drop arrangements (stacks, columns, rows)
+      // This is the single source of truth for visual arrangement
+      console.log('[TabContainer.initializeGoldenLayout] Restoring saved layout structure');
+      this.layoutManager.LoadLayout(config.layout);
+
+      // Focus active tab and ensure proper sizing
+      setTimeout(() => {
+        if (config.activeTabId) {
+          this.layoutManager.FocusTab(config.activeTabId);
+        }
+        this.layoutManager.updateSize();
+      }, 50);
+
+      // Additional delayed resize
+      setTimeout(() => {
+        this.layoutManager.updateSize();
+      }, 200);
+    } else {
+      // CREATE FRESH - no saved layout or forceCreateTabs=true
+      // Use config.tabs sorted by sequence to build a simple single-stack layout
       console.log(`[TabContainer.initializeGoldenLayout] Creating ${config.tabs.length} tabs from config (sorted by sequence)`);
 
-      // Sort tabs by sequence to ensure correct order
       const sortedTabs = [...config.tabs].sort((a, b) => a.sequence - b.sequence);
 
-      // Set flag to prevent syncTabsWithConfiguration from running during initial creation
-      // This prevents the race condition where tabs get created twice
       this.isCreatingInitialTabs = true;
       try {
         sortedTabs.forEach(tab => {
@@ -193,17 +214,13 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         this.isCreatingInitialTabs = false;
       }
 
-      // Focus active tab and ensure proper sizing
-      // Use setTimeout to ensure Golden Layout has finished registering containers
       setTimeout(() => {
         if (config.activeTabId) {
-          this.layoutManager.FocusTab(config.activeTabId!);
+          this.layoutManager.FocusTab(config.activeTabId);
         }
-        // Force size update after tabs are created to ensure full container usage
         this.layoutManager.updateSize();
       }, 50);
 
-      // Additional delayed resize for initial page load scenarios
       setTimeout(() => {
         this.layoutManager.updateSize();
       }, 200);
