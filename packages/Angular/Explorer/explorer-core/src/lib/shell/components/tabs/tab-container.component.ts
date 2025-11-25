@@ -831,11 +831,23 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
           const existingDriverClass = existingResourceData?.Configuration?.driverClass || existingResourceData?.Configuration?.resourceTypeDriverClass;
           const newDriverClass = tab.configuration['driverClass'] || tab.configuration['resourceTypeDriverClass'];
 
+          // Normalize record IDs for comparison (treat null/undefined as empty string)
+          const existingRecordId = existingResourceData?.ResourceRecordID || '';
+          const newRecordId = tab.resourceRecordId || '';
+
           const needsReload = existingResourceData?.ResourceType !== tab.configuration['resourceType'] ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
+                             existingRecordId !== newRecordId ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
           if (needsReload) {
+            console.log('[TabContainer.syncTabsWithConfiguration] Tab content changed, reloading:', {
+              tabId: tab.id,
+              title: tab.title,
+              existingRecordId,
+              newRecordId,
+              recordIdChanged: existingRecordId !== newRecordId
+            });
             // Clean up old component
             this.cleanupTabComponent(tab.id);
 

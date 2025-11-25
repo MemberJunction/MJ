@@ -411,7 +411,7 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
 
   // BaseResourceComponent abstract method implementations
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'AI Prompts';
+    return 'Prompts';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {

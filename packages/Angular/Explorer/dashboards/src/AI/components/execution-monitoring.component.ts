@@ -2546,7 +2546,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
    * Get the display name for this resource
    */
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'AI Monitor';
+    return 'Monitor';
   }
 
   /**

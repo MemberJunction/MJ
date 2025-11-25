@@ -150,7 +150,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
 
   // BaseResourceComponent abstract method implementations
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'AI Configuration';
+    return 'Configuration';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {

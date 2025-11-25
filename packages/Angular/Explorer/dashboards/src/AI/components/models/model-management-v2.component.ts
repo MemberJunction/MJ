@@ -503,7 +503,7 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
 
   // BaseResourceComponent abstract method implementations
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'AI Models';
+    return 'Models';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {

@@ -360,7 +360,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
    * Get the display name for this resource
    */
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'AI Agents';
+    return 'Agents';
   }
 
   /**
