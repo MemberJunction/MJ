@@ -516,59 +516,12 @@ interface DetachedRouteHandleExt extends DetachedRouteHandle {
 }
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes, { initialNavigation: 'disabled', onSameUrlNavigation: 'reload' })],
+  imports: [RouterModule.forRoot(routes, { onSameUrlNavigation: 'reload' })],
   exports: [RouterModule],
 })
 export class AppRoutingModule {
-  constructor(private router: Router) {
-    this.loadDynamicRoutes();
-  }
-
-  loadDynamicRoutes() {
-    MJGlobal.Instance.GetEventListener(true) // true gets us replay of past events so we can "catch up" as needed
-      .subscribe((event: MJEvent) => {
-          // event handler
-          switch (event.event) {
-            case MJEventType.LoggedIn:
-              this.innerLoadDynamicRoutes();
-          }
-      });
-  }
-
-  protected async innerLoadDynamicRoutes() {
-    // gets called after we're logged in
-    const md = new Metadata();
-    const dynamicRoutes: Routes = md.VisibleExplorerNavigationItems.map(item => {
-      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseNavigationComponent, item.Name)
-      if (registration) {
-        // remove the leading slash from the route if it exists
-        const route = item.Route.startsWith('/') ? item.Route.substring(1) : item.Route;
-        return {
-          path: route,
-          component: registration.SubClass,
-          canActivate: [AuthGuard],  
-        }
-      }
-      else {
-        throw new Error(`No registration found for Explorer Navigation Item: ${item.Name}`);
-      }
-    });
-
-    // Find and remove the wildcard route
-    const wildcardRouteIndex = routes.findIndex(route => route.path?.trim() === '**');
-    const wildcardRoute = routes[wildcardRouteIndex];
-    if (wildcardRouteIndex > -1) {
-      routes.splice(wildcardRouteIndex, 1);
-    }
-
-    // create a combined routes array and make sure that we filter out any dynamic routes that are ALREADY in the router config
-    const newCombinedRoutes = [...routes, ...dynamicRoutes.filter(route => !routes.some(r => r.path?.trim().toLowerCase() === route.path?.trim().toLowerCase()))];
-
-    // Re-add the wildcard route at the end
-    if (wildcardRoute) {
-      newCombinedRoutes.push(wildcardRoute);
-    }
-
-    this.router.resetConfig(newCombinedRoutes);
-  }
+  // NOTE - in MJ Explorer 3.0 and beyond we do NOT use Explorer Navigation Items anymore and
+  // this allows us to remove the dyanmic route stuff entirely here. The NEW paradigm is 
+  // everything beyond resource navigation is an app and apps have the ability to define 
+  // nav items which is a superset of functionality compared to the old Explorer Nav Items.
 }
