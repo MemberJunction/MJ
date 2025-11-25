@@ -234,9 +234,15 @@ export class WorkspaceStateManager {
 
     console.log('[WorkspaceStateManager.OpenTabForced] Created new tab:', newTab.id);
 
+    // CRITICAL: If creating a temporary tab, pin all existing temporary tabs first
+    // This ensures only ONE temporary tab exists at any time
+    const updatedTabs = !newTab.isPinned
+      ? config.tabs.map(tab => !tab.isPinned ? { ...tab, isPinned: true } : tab)
+      : config.tabs;
+
     this.UpdateConfiguration({
       ...config,
-      tabs: [...config.tabs, newTab],
+      tabs: [...updatedTabs, newTab],
       activeTabId: newTab.id
     });
 
