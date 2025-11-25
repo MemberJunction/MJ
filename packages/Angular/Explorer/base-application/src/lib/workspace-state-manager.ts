@@ -204,10 +204,10 @@ export class WorkspaceStateManager {
 
   /**
    * Force creation of a new tab, never replacing temporary tabs
-   * Used for Shift+Click behavior and power user workflows
+   * Used for Shift+Click behavior - checks for existing tab first, only creates new if none exists
    */
   OpenTabForced(request: TabRequest, appColor: string): string {
-    console.log('[WorkspaceStateManager.OpenTabForced] ALWAYS creating new tab:', {
+    console.log('[WorkspaceStateManager.OpenTabForced] Opening tab with forced mode:', {
       appId: request.ApplicationId,
       title: request.Title,
       config: request.Configuration
@@ -218,8 +218,55 @@ export class WorkspaceStateManager {
       throw new Error('Configuration not initialized');
     }
 
-    // OpenTabForced ALWAYS creates a new tab, even if one exists for this resource
-    // This is the whole point of "Forced" - for shift+click to open multiple tabs of same resource
+    // Check for existing tab first - don't allow duplicate tabs
+    const existingTab = config.tabs.find(tab => {
+      if (tab.applicationId !== request.ApplicationId) return false;
+
+      // For resource-based tabs, match by resourceType in configuration
+      if (request.Configuration?.resourceType) {
+        // Normalize empty/null/undefined to empty string for comparison
+        const requestRecordId = request.ResourceRecordId || '';
+        const tabRecordId = tab.resourceRecordId || '';
+
+        // For Custom resource types, also compare navItemName or driverClass
+        if (request.Configuration.resourceType === 'Custom') {
+          const requestNavItem = request.Configuration.navItemName || '';
+          const tabNavItem = tab.configuration?.navItemName || '';
+          const requestDriverClass = request.Configuration.driverClass || '';
+          const tabDriverClass = tab.configuration?.driverClass || '';
+
+          return tab.configuration.resourceType === request.Configuration.resourceType &&
+                 tabRecordId === requestRecordId &&
+                 (requestNavItem === tabNavItem || requestDriverClass === tabDriverClass);
+        }
+
+        // For standard resource types, match by resourceType and recordId
+        return tab.configuration.resourceType === request.Configuration.resourceType &&
+               tabRecordId === requestRecordId;
+      }
+
+      // Legacy: match by entity and viewId
+      const requestRecordId = request.ResourceRecordId || '';
+      const tabRecordId = tab.resourceRecordId || '';
+      return tab.configuration.entity === request.Configuration?.entity &&
+             tab.configuration.viewId === request.Configuration?.viewId &&
+             tabRecordId === requestRecordId;
+    });
+
+    if (existingTab) {
+      console.log('[WorkspaceStateManager.OpenTabForced] Found existing tab, activating:', existingTab.title);
+      // Focus existing tab
+      const updatedConfig = {
+        ...config,
+        activeTabId: existingTab.id
+      };
+      this.UpdateConfiguration(updatedConfig);
+      return existingTab.id;
+    }
+
+    // No existing tab found - create new pinned tab
+    console.log('[WorkspaceStateManager.OpenTabForced] No existing tab found, creating new pinned tab');
+
     const newTab: WorkspaceTab = {
       id: this.generateUUID(),
       applicationId: request.ApplicationId,
