@@ -13,6 +13,7 @@ import { Metadata } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { NavItemClickEvent } from './components/header/app-nav.component';
+import { MJAuthBase } from '@memberjunction/ng-auth-services';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -45,7 +46,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private tabService: TabService,
     private navigationService: NavigationService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private authBase: MJAuthBase
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -53,25 +55,33 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       // Wait for Angular router to complete initial navigation before initializing
       // This ensures we get the correct URL from router.url instead of "/"
       console.log('[Shell.ngOnInit] Waiting for initial navigation to complete...');
+      console.log(window.location);
+      console.log(this.authBase.initialPath, this.authBase.initialSearch);
+     
+      MJGlobal.Instance.GetEventListener(true).subscribe(async (loginEvent) => {
+        if (loginEvent.event === MJEventType.LoggedIn) {
+          console.log('[Shell.ngOnInit] LoggedIn event received, initializing shell...');
 
-      this.router.events.pipe(
-        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-        filter(() => !this.initialNavigationComplete) // Only handle initial navigation
-      ).subscribe(event => {
-        console.log('[Shell.ngOnInit] NavigationEnd received, URL:', event.urlAfterRedirects);
-        this.initialNavigationComplete = true;
+          if (this.authBase.initialPath === "/") {
+            // base route, no need to wait further
+            await this.initializeShell();
+          }
+          else {
+            // not the base route, so let's make sure to wait for nav end
+            this.router.events.pipe(
+              filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+              filter(() => !this.initialNavigationComplete) // Only handle initial navigation
+            ).subscribe(async event => {
+              console.log('[Shell.ngOnInit] NavigationEnd received, URL:', event.urlAfterRedirects);
+              this.initialNavigationComplete = true;
 
-        // Now that routing is complete, wait for login and initialize
-        MJGlobal.Instance.GetEventListener(true).subscribe(loginEvent => {
-          if (loginEvent.event === MJEventType.LoggedIn) {
-            console.log('[Shell.ngOnInit] LoggedIn event received, initializing shell...');
-            this.initializeShell().catch(err => {
-              console.error('Error during shell initialization:', err);
-              this.loading = false;
+              // Now that routing is complete, wait for login and initialize
+              await this.initializeShell();
             });
           }
-        });
+        }
       });
+      
     } catch (error) {
       console.error('Failed to initialize shell:', error);
       this.loading = false;
