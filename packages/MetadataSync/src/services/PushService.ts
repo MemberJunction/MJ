@@ -444,21 +444,24 @@ export class PushService {
         
         // Read the raw file data first
         const rawFileData = await fs.readJson(filePath);
-        
+
+        // Keep unprocessed data to write back (preserves @file: references)
+        const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
+        const isArray = Array.isArray(rawFileData);
+
         // Only preprocess if there are @include directives
         let fileData = rawFileData;
         const jsonString = JSON.stringify(rawFileData);
         const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-        
+
         if (hasIncludes) {
           // Preprocess the JSON file to handle @include directives
           // Create a new preprocessor instance for each file to ensure clean state
           const jsonPreprocessor = new JsonPreprocessor();
           fileData = await jsonPreprocessor.processFile(filePath);
         }
-        
+
         const records = Array.isArray(fileData) ? fileData : [fileData];
-        const isArray = Array.isArray(fileData);
         
         // Analyze dependencies and get sorted records
         const analyzer = new RecordDependencyAnalyzer();
@@ -588,21 +591,22 @@ export class PushService {
         const hasDeletions = this.hasAnyDeletions(records);
 
         // Write back to file (handles both single records and arrays)
+        // Use unprocessedRecords to preserve @file: references
         // Defer writing if file contains deletions - they'll be written after Phase 2
         if (!options.dryRun) {
           if (hasDeletions) {
             // Store for later writing after deletions complete
             this.deferredFileWrites.set(filePath, {
               filePath,
-              records,
+              records: unprocessedRecords,
               isArray
             });
           } else {
             // Write immediately for files without deletions
             if (isArray) {
-              await JsonWriteHelper.writeOrderedRecordData(filePath, records);
+              await JsonWriteHelper.writeOrderedRecordData(filePath, unprocessedRecords);
             } else {
-              await JsonWriteHelper.writeOrderedRecordData(filePath, records[0]);
+              await JsonWriteHelper.writeOrderedRecordData(filePath, unprocessedRecords[0]);
             }
           }
         }
