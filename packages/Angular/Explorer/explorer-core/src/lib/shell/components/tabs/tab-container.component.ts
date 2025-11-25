@@ -264,14 +264,18 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (this.useSingleResourceMode) {
         // Transitioning to single-resource mode
-        // First, destroy Golden Layout if it was initialized (prevents stale state)
-        if (this.layoutInitialized) {
-          console.log('[TabContainer] Destroying Golden Layout when transitioning to single-resource mode');
-          this.layoutManager.Destroy();
-          this.layoutInitialized = false;
-        }
-        // Load the active tab's content directly
-        this.loadSingleResourceContent();
+        // **CRITICAL FIX**: Wait for the template to render directContentContainer
+        // before trying to load content. detectChanges() only marks dirty, doesn't render immediately.
+        setTimeout(() => {
+          // First, destroy Golden Layout if it was initialized (prevents stale state)
+          if (this.layoutInitialized) {
+            console.log('[TabContainer] Destroying Golden Layout when transitioning to single-resource mode');
+            this.layoutManager.Destroy();
+            this.layoutInitialized = false;
+          }
+          // Load the active tab's content directly (now container will exist)
+          this.loadSingleResourceContent();
+        }, 0);
       } else {
         // Transitioning to multi-tab mode
         // Pin the previously displayed tab (it was the "current" content in single-resource mode)
@@ -355,6 +359,38 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get driver class for component lookup
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
 
+    // Track which content we're loading (signature includes resource type and record ID)
+    this.currentSingleResourceSignature = this.getTabContentSignature(activeTab);
+
+    // **OPTIMIZATION: Check cache first to reuse existing loaded component**
+    const cached = this.cacheManager.getCachedComponent(
+      driverClass,
+      resourceData.ResourceRecordID || '',
+      activeTab.applicationId
+    );
+
+    if (cached) {
+      console.log(`♻️ Reusing cached component for single-resource mode: ${driverClass}`);
+
+      // Clean up previous single-resource component (if different)
+      this.cleanupSingleResourceComponent();
+
+      // Detach from tab tracking (it was attached to a tab in Golden Layout)
+      this.cacheManager.markAsDetached(activeTab.id);
+
+      // Reattach the cached wrapper element to single-resource container
+      container.appendChild(cached.wrapperElement);
+
+      // Store reference for cleanup
+      this.singleResourceComponentRef = cached.componentRef;
+
+      console.log('✅ Single-resource component transferred from cache (instant!)');
+      return;
+    }
+
+    // **Fallback: Create new component if not in cache**
+    console.log(`📦 Creating new component for single-resource mode: ${driverClass}`);
+
     // Get the component registration
     const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
       BaseResourceComponent,
@@ -365,11 +401,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       LogError(`Unable to find resource registration for driver class: ${driverClass}`);
       return;
     }
-
-    console.log(`📦 Loading single-resource component: ${driverClass}`);
-
-    // Track which content we're loading (signature includes resource type and record ID)
-    this.currentSingleResourceSignature = this.getTabContentSignature(activeTab);
 
     // Clean up previous component if any
     this.cleanupSingleResourceComponent();
