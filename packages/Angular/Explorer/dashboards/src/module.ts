@@ -93,6 +93,9 @@ import { CardsViewComponent as ExplorerCardsViewComponent } from './DataExplorer
 import { GridViewComponent as ExplorerGridViewComponent } from './DataExplorer/components/content-area/grid-view.component';
 import { DetailPanelComponent as ExplorerDetailPanelComponent } from './DataExplorer/components/detail-panel/detail-panel.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
+// Home Dashboard Components
+import { HomeDashboardComponent } from './Home/home-dashboard.component';
+import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -163,7 +166,9 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
     ExplorerNavigationPanelComponent,
     ExplorerCardsViewComponent,
     ExplorerGridViewComponent,
-    ExplorerDetailPanelComponent
+    ExplorerDetailPanelComponent,
+    // Home Dashboard Components
+    HomeDashboardComponent
   ],
   imports: [
     CommonModule,
@@ -190,7 +195,8 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
     PanelBarModule,
     MJNotificationsModule,
     TestingModule,
-    UserViewGridModule
+    UserViewGridModule,
+    ExplorerSettingsModule
   ],
   providers: [
     AIInstrumentationService,
@@ -229,7 +235,9 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
     TestingVersionResourceComponent,
     TestingFeedbackResourceComponent,
     // Export Data Explorer Dashboard
-    DataExplorerDashboardComponent
+    DataExplorerDashboardComponent,
+    // Export Home Dashboard
+    HomeDashboardComponent
   ]
 })
 export class DashboardsModule { }

@@ -6,6 +6,19 @@
       <i class="fa-solid fa-bars"></i>
     </button>
 
+    <!-- Nav Bar Apps: Left of App Switcher -->
+    <div class="nav-bar-apps left-of-switcher">
+      <button *ngFor="let app of leftOfSwitcherApps"
+              class="nav-bar-app-btn"
+              [class.active]="app.ID === activeApp?.ID"
+              [title]="app.Name"
+              [style.--app-color]="app.GetColor()"
+              (click)="onNavBarAppClick(app, $event)"
+              (dblclick)="onNavBarAppDblClick(app, $event)">
+        <i [class]="app.Icon"></i>
+      </button>
+    </div>
+
     <!-- App Switcher -->
     <mj-app-switcher
       [activeApp]="activeApp"
@@ -31,6 +44,20 @@
       <button class="icon-btn desktop-only" title="Notifications">
         <i class="fa-solid fa-bell"></i>
       </button>
+
+      <!-- Nav Bar Apps: Left of User Menu -->
+      <div class="nav-bar-apps left-of-user-menu">
+        <button *ngFor="let app of leftOfUserMenuApps"
+                class="nav-bar-app-btn"
+                [class.active]="app.ID === activeApp?.ID"
+                [title]="app.Name"
+                [style.--app-color]="app.GetColor()"
+                (click)="onNavBarAppClick(app, $event)"
+                (dblclick)="onNavBarAppDblClick(app, $event)">
+          <i [class]="app.Icon"></i>
+        </button>
+      </div>
+
       <div class="user-menu">
         <button class="avatar-btn" (click)="toggleUserMenu($event)">
           <i class="fa-solid fa-user"></i>

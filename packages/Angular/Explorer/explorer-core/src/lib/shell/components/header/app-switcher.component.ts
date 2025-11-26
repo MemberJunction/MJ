@@ -23,17 +23,11 @@ export class AppSwitcherComponent {
   constructor(private appManager: ApplicationManager) {}
 
   /**
-   * Get all available applications
+   * Get applications that should appear in the app switcher dropdown
+   * (NavigationStyle = 'App Switcher' or 'Both')
    */
   get apps(): BaseApplication[] {
-    const apps = this.appManager.GetAllApps();
-    // console.log('[AppSwitcher] Apps loaded:', apps.map(a => ({
-    //   Name: a.Name,
-    //   Color: a.Color,
-    //   GetColor: a.GetColor(),
-    //   Icon: a.Icon
-    // })));
-    return apps;
+    return this.appManager.GetAppSwitcherApps();
   }
 
   /**

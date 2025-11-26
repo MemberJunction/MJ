@@ -7,7 +7,7 @@
     "Color": "#9c27b0",
     "DefaultSequence": 1,
     "Status": "Active",
-    "NavigationStyle": "Nav Bar",
+    "NavigationStyle": "Both",
     "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
       {
@@ -40,7 +40,7 @@
     "ID": "7A873E1A-692E-43FA-97F8-57D8161A985C"
   },
   "sync": {
-    "lastModified": "2025-11-26T20:01:05.518Z",
-    "checksum": "c3ab39506d7e3e2ab135c30d912e19a2c05f5a10abce529003b2c26da4e5e87a"
+    "lastModified": "2025-11-26T20:11:50.675Z",
+    "checksum": "d1cf3053eb9951e3e6c1730b9c9e67d2c6593522ea4839623ca7719bc1cd2d8b"
   }
 }

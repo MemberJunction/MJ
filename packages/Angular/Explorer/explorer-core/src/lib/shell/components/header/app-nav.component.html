@@ -3,7 +3,8 @@
     *ngFor="let item of navItems"
     class="nav-item"
     [class.active]="isActive(item)"
-    (click)="onNavClick(item, $event)">
+    (click)="onNavClick(item, $event)"
+    (dblclick)="onNavDblClick(item, $event)">
     <i *ngIf="item.Icon" [class]="item.Icon"></i>
     <span>{{ item.Label }}</span>
     <span *ngIf="item.Badge" class="badge">{{ item.Badge }}</span>

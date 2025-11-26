@@ -185,7 +185,33 @@ export class ApplicationInfo extends BaseInfo {
     */
     ClassName: string = null;
 
-        
+    /**
+    * Default sequence position when adding this application to a new user's User Applications.
+    * Lower values appear first. Used when DefaultForNewUser is true.
+    */
+    DefaultSequence: number = 100;
+
+    /**
+    * Application lifecycle status. Pending = not yet ready, Active = available for use,
+    * Disabled = temporarily unavailable, Deprecated = being phased out.
+    * Only Active applications are shown to users.
+    */
+    Status: 'Pending' | 'Active' | 'Disabled' | 'Deprecated' = 'Active';
+
+    /**
+    * How the application appears in navigation.
+    * App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.
+    */
+    NavigationStyle: 'App Switcher' | 'Nav Bar' | 'Both' = 'App Switcher';
+
+    /**
+    * Position of the permanent nav icon when NavigationStyle is Nav Bar or Both.
+    * Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar.
+    * Ignored when NavigationStyle is App Switcher.
+    */
+    TopNavLocation: 'Left of App Switcher' | 'Left of User Menu' | null = null;
+
+
     private _ApplicationEntities: ApplicationEntityInfo[] = []
     /**
      * Gets the list of entities that belong to this application with their display sequence.

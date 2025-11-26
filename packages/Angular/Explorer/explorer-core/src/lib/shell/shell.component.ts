@@ -41,6 +41,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
 
+  /**
+   * Get Nav Bar apps positioned to the left of the app switcher
+   */
+  get leftOfSwitcherApps(): BaseApplication[] {
+    return this.appManager.GetNavBarApps('Left of App Switcher');
+  }
+
+  /**
+   * Get Nav Bar apps positioned to the left of the user menu
+   */
+  get leftOfUserMenuApps(): BaseApplication[] {
+    return this.appManager.GetNavBarApps('Left of User Menu');
+  }
+
   constructor(
     private appManager: ApplicationManager,
     private workspaceManager: WorkspaceStateManager,
@@ -459,24 +473,61 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle navigation item click with shift-key detection
+   * Handle Nav Bar app icon click (single click switches to app)
+   */
+  onNavBarAppClick(app: BaseApplication, event: MouseEvent): void {
+    // If shift key is held, force new tab
+    if (event.shiftKey) {
+      this.openNavBarAppInNewTab(app);
+    } else {
+      this.onAppSwitch(app.ID);
+    }
+  }
+
+  /**
+   * Handle Nav Bar app icon double-click (opens in new tab)
+   */
+  onNavBarAppDblClick(app: BaseApplication, event: MouseEvent): void {
+    event.preventDefault();
+    this.openNavBarAppInNewTab(app);
+  }
+
+  /**
+   * Open a nav bar app's default content in a new tab
+   */
+  private async openNavBarAppInNewTab(app: BaseApplication): Promise<void> {
+    // Create the default tab for this app with forceNewTab
+    const tabRequest = await app.CreateDefaultTab();
+    if (tabRequest) {
+      // Set the app as active first if it isn't already
+      if (this.activeApp?.ID !== app.ID) {
+        await this.appManager.SetActiveApp(app.ID);
+      }
+
+      // Open in new tab by adding to workspace
+      this.workspaceManager.OpenTab(tabRequest, app.GetColor());
+    }
+  }
+
+  /**
+   * Handle navigation item click with shift-key and double-click detection
    */
   onNavItemClick(event: NavItemClickEvent): void {
     if (!this.activeApp) {
       return;
     }
 
-    const { item, shiftKey } = event;
+    const { item, shiftKey, dblClick } = event;
 
     // Close mobile nav if open
     this.mobileNavOpen = false;
 
-    // Use NavigationService with forceNewTab option if shift was pressed
+    // Use NavigationService with forceNewTab option if shift was pressed or double-clicked
     this.navigationService.OpenNavItem(
       this.activeApp.ID,
       item,
       this.activeApp.GetColor(),
-      { forceNewTab: shiftKey }
+      { forceNewTab: shiftKey || dblClick }
     );
   }
 

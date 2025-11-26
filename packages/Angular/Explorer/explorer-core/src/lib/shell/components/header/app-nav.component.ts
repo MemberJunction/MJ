@@ -7,6 +7,7 @@ import { BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction
 export interface NavItemClickEvent {
   item: NavItem;
   shiftKey: boolean;
+  dblClick: boolean;
 }
 
 /**
@@ -52,7 +53,20 @@ export class AppNavComponent implements OnInit, OnChanges {
   onNavClick(item: NavItem, event?: MouseEvent): void {
     this.navItemClick.emit({
       item,
-      shiftKey: event?.shiftKey || false
+      shiftKey: event?.shiftKey || false,
+      dblClick: false
+    });
+  }
+
+  /**
+   * Handle nav item double-click (opens in new tab)
+   */
+  onNavDblClick(item: NavItem, event?: MouseEvent): void {
+    event?.preventDefault();
+    this.navItemClick.emit({
+      item,
+      shiftKey: event?.shiftKey || false,
+      dblClick: true
     });
   }
 

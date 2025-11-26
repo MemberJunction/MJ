@@ -1,0 +1,95 @@
+<div class="home-dashboard" kendoDialogContainer>
+  <!-- Header Section -->
+  <div class="home-header">
+    <div class="greeting-section">
+      <h1>{{ greeting }}, {{ currentUser?.Name }}</h1>
+      <p class="date">{{ formattedDate }}</p>
+    </div>
+    <div class="header-actions">
+      <button class="config-btn" (click)="openConfigDialog()" title="Configure Applications">
+        <i class="fa-solid fa-gear"></i>
+        <span>Configure</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="isLoading">
+    <div class="loading-spinner">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+    </div>
+    <p>Loading your applications...</p>
+  </div>
+
+  <!-- Apps Grid -->
+  <div class="apps-section" *ngIf="!isLoading">
+    <h2 class="section-title">
+      <i class="fa-solid fa-grid-2"></i>
+      Your Applications
+    </h2>
+
+    <div class="apps-grid">
+      <div *ngFor="let app of apps"
+           class="app-card"
+           [style.--app-color]="app.GetColor()"
+           (click)="onAppClick(app)">
+        <!-- App Icon -->
+        <div class="app-icon-wrapper">
+          <div class="app-icon">
+            <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
+          </div>
+        </div>
+
+        <!-- App Info -->
+        <div class="app-info">
+          <h3 class="app-name">{{ app.Name }}</h3>
+          <p class="app-description" *ngIf="app.Description">{{ app.Description }}</p>
+
+          <!-- Nav Items Preview -->
+          <div class="nav-preview" *ngIf="getNavItemsCount(app) > 0">
+            <div class="nav-item-chip" *ngFor="let item of getNavItemsPreview(app)">
+              <i [class]="item.Icon"></i>
+              <span>{{ item.Label }}</span>
+            </div>
+            <span class="more-items" *ngIf="getNavItemsCount(app) > 3">
+              +{{ getNavItemsCount(app) - 3 }} more
+            </span>
+          </div>
+        </div>
+
+        <!-- Hover Arrow -->
+        <div class="app-arrow">
+          <i class="fa-solid fa-arrow-right"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="apps.length === 0">
+      <div class="empty-icon">
+        <i class="fa-solid fa-folder-open"></i>
+      </div>
+      <h3>No Applications Available</h3>
+      <p>You don't have any applications configured yet.</p>
+      <button class="configure-btn" (click)="openConfigDialog()">
+        <i class="fa-solid fa-plus"></i>
+        Add Applications
+      </button>
+    </div>
+
+    <!-- Mobile Configure Button (shown at bottom on mobile) -->
+    <div class="mobile-config-section">
+      <button class="config-btn mobile-config-btn" (click)="openConfigDialog()" title="Configure Applications">
+        <i class="fa-solid fa-gear"></i>
+        <span>Configure Applications</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- App Config Dialog -->
+  <mj-user-app-config
+    *ngIf="showConfigDialog"
+    #appConfigDialog
+    (configSaved)="onConfigSaved()">
+  </mj-user-app-config>
+</div>

@@ -146,6 +146,11 @@ export class ApplicationManager {
       const allApps: BaseApplication[] = [];
 
       for (const appInfo of appInfoList) {
+        // Only create instances for Active applications
+        if (appInfo.Status !== 'Active') {
+          continue;
+        }
+
         const app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
           BaseApplication,
           appInfo.ClassName,
@@ -156,7 +161,11 @@ export class ApplicationManager {
             Icon: appInfo.Icon || '',
             Color: appInfo.Color,
             DefaultNavItems: appInfo.DefaultNavItems,
-            ClassName: appInfo.ClassName
+            ClassName: appInfo.ClassName,
+            DefaultSequence: appInfo.DefaultSequence,
+            Status: appInfo.Status,
+            NavigationStyle: appInfo.NavigationStyle,
+            TopNavLocation: appInfo.TopNavLocation
           }
         );
 
@@ -239,14 +248,19 @@ export class ApplicationManager {
   }
 
   /**
-   * Creates UserApplication records for apps with DefaultForNewUser=true.
+   * Creates UserApplication records for apps with DefaultForNewUser=true and Status='Active'.
    * Called when a user has no existing UserApplication records (self-healing).
+   * Orders apps by their DefaultSequence field.
    */
   private async createDefaultUserApplications(md: Metadata, appInfoList: ApplicationInfo[]): Promise<UserApplicationEntity[]> {
-    const defaultApps = appInfoList.filter(a => a.DefaultForNewUser);
+    // Filter to Active apps with DefaultForNewUser=true, sorted by DefaultSequence
+    const defaultApps = appInfoList
+      .filter(a => a.DefaultForNewUser && a.Status === 'Active')
+      .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
+
     const createdUserApps: UserApplicationEntity[] = [];
 
-    LogStatus(`Found ${defaultApps.length} applications with DefaultForNewUser=true`);
+    LogStatus(`Found ${defaultApps.length} Active applications with DefaultForNewUser=true`);
 
     for (const [index, appInfo] of defaultApps.entries()) {
       try {
@@ -254,12 +268,13 @@ export class ApplicationManager {
         userApp.NewRecord();
         userApp.UserID = md.CurrentUser.ID;
         userApp.ApplicationID = appInfo.ID;
+        // Use the index based on sorted DefaultSequence order
         userApp.Sequence = index;
         userApp.IsActive = true;
 
         const saved = await userApp.Save();
         if (saved) {
-          LogStatus(`Created UserApplication for ${appInfo.Name} with sequence ${index}`);
+          LogStatus(`Created UserApplication for ${appInfo.Name} with sequence ${index} (DefaultSequence: ${appInfo.DefaultSequence})`);
           createdUserApps.push(userApp);
         } else {
           LogError(`Failed to create UserApplication for ${appInfo.Name}:`, undefined, userApp.LatestResult);
@@ -309,5 +324,25 @@ export class ApplicationManager {
    */
   GetAppByName(name: string): BaseApplication | undefined {
     return this.applications$.value.find(a => a.Name === name);
+  }
+
+  /**
+   * Get applications that should appear in the Nav Bar (NavigationStyle = 'Nav Bar' or 'Both')
+   * filtered by TopNavLocation.
+   */
+  GetNavBarApps(location: 'Left of App Switcher' | 'Left of User Menu'): BaseApplication[] {
+    return this.applications$.value.filter(app =>
+      (app.NavigationStyle === 'Nav Bar' || app.NavigationStyle === 'Both') &&
+      app.TopNavLocation === location
+    );
+  }
+
+  /**
+   * Get applications that should appear in the App Switcher (NavigationStyle = 'App Switcher' or 'Both')
+   */
+  GetAppSwitcherApps(): BaseApplication[] {
+    return this.applications$.value.filter(app =>
+      app.NavigationStyle === 'App Switcher' || app.NavigationStyle === 'Both'
+    );
   }
 }

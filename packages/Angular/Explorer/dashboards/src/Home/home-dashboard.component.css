@@ -1,0 +1,390 @@
+.home-dashboard {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 32px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  overflow-y: auto;
+}
+
+/* Header */
+.home-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 40px;
+}
+
+.greeting-section h1 {
+  margin: 0 0 8px 0;
+  font-size: 32px;
+  font-weight: 600;
+  color: #212529;
+}
+
+.greeting-section .date {
+  margin: 0;
+  font-size: 16px;
+  color: #6c757d;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.config-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  background: white;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.config-btn:hover {
+  background: #f8f9fa;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.config-btn i {
+  font-size: 16px;
+  color: #6c757d;
+}
+
+/* Loading State */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  color: #6c757d;
+}
+
+.loading-spinner {
+  font-size: 32px;
+  color: #1976d2;
+}
+
+/* Apps Section */
+.apps-section {
+  flex: 1;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.section-title i {
+  color: #6c757d;
+}
+
+/* Apps Grid */
+.apps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+/* App Card */
+.app-card {
+  --app-color: #757575;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px;
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.app-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--app-color);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.app-card:hover {
+  border-color: var(--app-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+}
+
+.app-card:hover::before {
+  opacity: 1;
+}
+
+/* App Icon */
+.app-icon-wrapper {
+  flex-shrink: 0;
+}
+
+.app-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-color) 12%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+}
+
+.app-icon i {
+  font-size: 24px;
+  color: var(--app-color);
+  transition: transform 0.25s ease;
+}
+
+.app-card:hover .app-icon {
+  background: var(--app-color);
+}
+
+.app-card:hover .app-icon i {
+  color: white;
+  transform: scale(1.1);
+}
+
+/* App Info */
+.app-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-name {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #212529;
+}
+
+.app-description {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #6c757d;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Nav Items Preview */
+.nav-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.nav-item-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #495057;
+}
+
+.nav-item-chip i {
+  font-size: 10px;
+  color: #6c757d;
+}
+
+.more-items {
+  font-size: 12px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* App Arrow */
+.app-arrow {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%) translateX(10px);
+  opacity: 0;
+  transition: all 0.25s ease;
+  color: var(--app-color);
+  font-size: 18px;
+}
+
+.app-card:hover .app-arrow {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  background: white;
+  border-radius: 16px;
+  border: 2px dashed #dee2e6;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.empty-icon i {
+  font-size: 32px;
+  color: #adb5bd;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.empty-state p {
+  margin: 0 0 24px 0;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.configure-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 10px;
+  background: #1976d2;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.configure-btn:hover {
+  background: #1565c0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+}
+
+/* Mobile Configure Section - hidden by default, shown on mobile */
+.mobile-config-section {
+  display: none;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #dee2e6;
+}
+
+.mobile-config-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .home-dashboard {
+    padding: 20px;
+  }
+
+  .home-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .greeting-section h1 {
+    font-size: 24px;
+  }
+
+  /* Hide header config button on mobile */
+  .header-actions {
+    display: none;
+  }
+
+  /* Show mobile config section at bottom */
+  .mobile-config-section {
+    display: block;
+  }
+
+  .apps-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .app-card {
+    padding: 16px;
+  }
+
+  .app-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .app-icon i {
+    font-size: 20px;
+  }
+
+  .app-name {
+    font-size: 16px;
+  }
+
+  .nav-preview {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-dashboard {
+    padding: 16px;
+  }
+
+  .greeting-section h1 {
+    font-size: 20px;
+  }
+
+  .greeting-section .date {
+    font-size: 14px;
+  }
+
+  .section-title {
+    font-size: 16px;
+  }
+}

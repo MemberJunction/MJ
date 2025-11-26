@@ -46,6 +46,18 @@ export class BaseApplication {
   /** TypeScript class name for ClassFactory */
   public ClassName: string = '';
 
+  /** Default sequence position when adding to new user's User Applications */
+  public DefaultSequence: number = 100;
+
+  /** Application lifecycle status - only Active apps are shown to users */
+  public Status: 'Pending' | 'Active' | 'Disabled' | 'Deprecated' = 'Active';
+
+  /** How the application appears in navigation */
+  public NavigationStyle: 'App Switcher' | 'Nav Bar' | 'Both' = 'App Switcher';
+
+  /** Position of permanent nav icon when NavigationStyle is Nav Bar or Both */
+  public TopNavLocation: 'Left of App Switcher' | 'Left of User Menu' | null = null;
+
   constructor(data?: Partial<BaseApplication>) {
     if (data) {
       Object.assign(this, data);

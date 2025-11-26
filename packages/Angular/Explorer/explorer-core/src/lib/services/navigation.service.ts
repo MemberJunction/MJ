@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { WorkspaceStateManager, NavItem, TabRequest } from '@memberjunction/ng-base-application';
+import { WorkspaceStateManager, NavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { fromEvent, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -21,7 +21,10 @@ export class NavigationService implements OnDestroy {
   private shiftKeyPressed = false;
   private subscriptions: Subscription[] = [];
 
-  constructor(private workspaceManager: WorkspaceStateManager) {
+  constructor(
+    private workspaceManager: WorkspaceStateManager,
+    private appManager: ApplicationManager
+  ) {
     this.setupGlobalShiftKeyDetection();
   }
 
@@ -217,6 +220,64 @@ export class NavigationService implements OnDestroy {
       return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
     } else {
       return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+    }
+  }
+
+  /**
+   * Switch to an application by ID.
+   * This sets the app as active and either opens a specific nav item or creates a default tab.
+   * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.
+   * @param appId The application ID to switch to
+   * @param navItemName Optional name of a nav item to open within the app. If provided, opens that nav item.
+   */
+  async switchToApp(appId: string, navItemName?: string): Promise<void> {
+    await this.appManager.SetActiveApp(appId);
+
+    const app = this.appManager.GetAllApps().find(a => a.ID === appId);
+    if (!app) {
+      return;
+    }
+
+    const appTabs = this.workspaceManager.GetAppTabs(appId);
+
+    // If a specific nav item is requested
+    if (navItemName) {
+      const navItems = app.GetNavItems();
+      const navItem = navItems.find(item => item.Label === navItemName);
+      if (navItem) {
+        // Check if there's already a tab for this nav item
+        const existingTab = appTabs.find(tab =>
+          tab.title === navItem.Label ||
+          (tab.configuration?.['route'] === navItem.Route && navItem.Route)
+        );
+
+        if (existingTab) {
+          // Switch to existing tab
+          this.workspaceManager.SetActiveTab(existingTab.id);
+        } else {
+          // Open new tab for this nav item
+          this.openNavItem(appId, navItem, app.GetColor());
+        }
+        return;
+      }
+      // Nav item not found, fall through to default behavior
+    }
+
+    // No specific nav item requested - check if app has any tabs
+    if (appTabs.length === 0) {
+      // Create default tab
+      const tabRequest = await app.CreateDefaultTab();
+      if (tabRequest) {
+        this.workspaceManager.OpenTab(tabRequest, app.GetColor());
+      }
+    } else {
+      // App has tabs - switch to the first one (or active one if exists)
+      const config = this.workspaceManager.GetConfiguration();
+      const activeAppTab = appTabs.find(t => t.id === config?.activeTabId);
+      if (!activeAppTab) {
+        // No active tab for this app, switch to first tab
+        this.workspaceManager.SetActiveTab(appTabs[0].id);
+      }
     }
   }
 }

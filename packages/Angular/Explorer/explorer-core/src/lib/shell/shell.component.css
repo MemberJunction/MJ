@@ -56,6 +56,68 @@ mj-tab-container ::ng-deep .lm_stack {
   flex-shrink: 0;
 }
 
+/* Nav Bar Apps - permanent app icons in the header */
+.nav-bar-apps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-bar-apps.left-of-switcher {
+  margin-right: 8px;
+}
+
+.nav-bar-apps.left-of-user-menu {
+  margin-right: 8px;
+}
+
+.nav-bar-app-btn {
+  --app-color: #757575;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #616161;
+  font-size: 18px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.nav-bar-app-btn:hover {
+  background: color-mix(in srgb, var(--app-color) 15%, transparent);
+  color: var(--app-color);
+}
+
+.nav-bar-app-btn.active {
+  background: color-mix(in srgb, var(--app-color) 20%, transparent);
+  color: var(--app-color);
+}
+
+.nav-bar-app-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 3px;
+  background: var(--app-color);
+  border-radius: 2px;
+}
+
+.nav-bar-app-btn i {
+  transition: transform 0.15s ease;
+}
+
+.nav-bar-app-btn:hover i {
+  transform: scale(1.1);
+}
+
 .spacer {
   flex: 1;
 }
