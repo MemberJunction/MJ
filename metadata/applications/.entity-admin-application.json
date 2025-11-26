@@ -11,42 +11,42 @@
         "Label": "ERD",
         "Icon": "fa-solid fa-database",
         "ResourceType": "Dashboards",
-        "RecordId": "@lookup:Dashboards.Name=ERD",
+        "RecordID": "@lookup:Dashboards.Name=ERD?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Entity Permissions",
         "Icon": "fa-solid fa-lock",
         "ResourceType": "Dashboards",
-        "RecordId": "@lookup:Dashboards.Name=Entity Permissions",
+        "RecordID": "@lookup:Dashboards.Name=Entity Permissions?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Roles",
         "Icon": "fa-solid fa-shield-halved",
         "ResourceType": "Dashboards",
-        "RecordId": "@lookup:Dashboards.Name=Role Management",
+        "RecordID": "@lookup:Dashboards.Name=Role Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Users",
         "Icon": "fa-solid fa-users",
         "ResourceType": "Dashboards",
-        "RecordId": "@lookup:Dashboards.Name=User Management",
+        "RecordID": "@lookup:Dashboards.Name=User Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Applications",
         "Icon": "fa-solid fa-th-large",
         "ResourceType": "Dashboards",
-        "RecordId": "@lookup:Dashboards.Name=Application Management",
+        "RecordID": "@lookup:Dashboards.Name=Application Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "SQL Logging",
         "Icon": "fa-solid fa-file-code",
         "ResourceType": "Dashboards",
-        "RecordId": "@lookup:Dashboards.Name=SQL Logging",
+        "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
         "isDefault": true
       }
     ]
@@ -58,7 +58,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-11-26T09:56:04.567Z",
-    "checksum": "2a3e1680f5b76fe21cbc43137356bafd0f7d81b58df33c03297dc730bfb447cf"
+    "lastModified": "2025-11-26T12:28:46.031Z",
+    "checksum": "860def7915fca33270609421fff854554296ebc87b3f4ebb971fffcf84b883a4"
   }
 }

@@ -19,8 +19,8 @@
     "component-registries",
     "component-libraries",
     "components",
-    "dashboards",
     "applications",
+    "dashboards",
     "test-types",
     "tests",
     "test-suites"
