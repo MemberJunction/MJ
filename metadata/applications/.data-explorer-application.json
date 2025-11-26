@@ -9,7 +9,7 @@
       {
         "Label": "Explorer",
         "Icon": "fa-solid fa-compass",
-        "ResourceType": "Dashboard",
+        "ResourceType": "Dashboards",
         "RecordID": "@lookup:Dashboards.Name=Data Explorer?allowDefer",
         "isDefault": true
       }
@@ -22,7 +22,7 @@
     "ID": "867CB743-50F2-4239-AEE1-97F147C77B8F"
   },
   "sync": {
-    "lastModified": "2025-11-26T12:28:46.007Z",
-    "checksum": "620cda6019c6dc241dba0ebeeb46bf50487ef547f381b9253b0d3f3edf5c247b"
+    "lastModified": "2025-11-26T13:34:05.887Z",
+    "checksum": "112118c5333c3db7c592a703b77ac8fd172270439b91f0328edbc3984d5f0d0a"
   }
 }

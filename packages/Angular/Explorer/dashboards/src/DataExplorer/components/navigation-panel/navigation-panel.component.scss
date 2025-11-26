@@ -1,0 +1,280 @@
+.navigation-panel-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  background: white;
+
+  &.collapsed {
+    align-items: center;
+    padding-top: 48px;
+  }
+}
+
+.collapse-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #757575;
+  transition: all 0.15s ease;
+  z-index: 10;
+
+  &:hover {
+    background: #f5f5f5;
+    color: #424242;
+  }
+
+  .collapsed & {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+.panel-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding-top: 48px;
+}
+
+// Sections
+.section {
+  flex-shrink: 0;
+  border-bottom: 1px solid #f0f0f0;
+
+  &.entities-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-bottom: none;
+  }
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #f8f9fa;
+  }
+}
+
+.section-icon {
+  width: 20px;
+  font-size: 14px;
+  color: #757575;
+  margin-right: 10px;
+}
+
+.section-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #616161;
+}
+
+.section-count {
+  font-size: 11px;
+  color: #9e9e9e;
+  margin-right: 8px;
+}
+
+.expand-icon {
+  font-size: 10px;
+  color: #9e9e9e;
+  transition: transform 0.15s ease;
+}
+
+.section-content {
+  padding: 0 8px 8px 8px;
+}
+
+.entities-section .section-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// Empty Section
+.empty-section {
+  padding: 16px;
+  text-align: center;
+  color: #9e9e9e;
+  font-size: 12px;
+  font-style: italic;
+}
+
+// Navigation Items
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  gap: 10px;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+
+  &.selected {
+    background: #e3f2fd;
+    color: #1976d2;
+
+    i {
+      color: #1976d2;
+    }
+  }
+
+  i {
+    width: 16px;
+    font-size: 13px;
+    color: #757575;
+    flex-shrink: 0;
+  }
+}
+
+.nav-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-item-label {
+  font-size: 13px;
+  color: #424242;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-item-meta {
+  font-size: 11px;
+  color: #9e9e9e;
+}
+
+// Entity Search
+.entity-search {
+  position: relative;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #9e9e9e;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 32px 8px 32px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #f8f9fa;
+  transition: all 0.15s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #1976d2;
+    background: white;
+  }
+
+  &::placeholder {
+    color: #9e9e9e;
+  }
+}
+
+.clear-search {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9e9e9e;
+
+  &:hover {
+    background: #e0e0e0;
+    color: #616161;
+  }
+}
+
+// Entity List
+.entity-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.entity-item {
+  .nav-item-label {
+    flex: 1;
+  }
+}
+
+// Collapsed State Icons
+.collapsed-icons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 16px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #757575;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #f5f5f5;
+    color: #424242;
+  }
+
+  i {
+    font-size: 16px;
+  }
+}

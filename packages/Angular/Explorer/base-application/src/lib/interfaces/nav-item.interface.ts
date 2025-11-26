@@ -19,7 +19,7 @@ export interface NavItem {
   DriverClass?: string;
 
   /** Resource record ID (if opening a specific resource) */
-  RecordId?: string;
+  RecordID?: string;
 
   /** Additional configuration for the resource */
   Configuration?: Record<string, any>;

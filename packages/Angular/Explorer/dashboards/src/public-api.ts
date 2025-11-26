@@ -6,6 +6,7 @@ import { LoadEntityAdminDashboard } from './EntityAdmin/entity-admin-dashboard.c
 import { LoadComponentStudioDashboard } from './ComponentStudio/component-studio-dashboard.component';
 import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.component';
 import { LoadTestingDashboard } from './Testing/testing-dashboard.component';
+import { LoadDataExplorerDashboard } from './DataExplorer/data-explorer-dashboard.component';
 import {
   LoadActionsOverviewResource,
   LoadActionsMonitorResource,
@@ -34,6 +35,7 @@ export * from './EntityAdmin/entity-admin-dashboard.component';
 export * from './ComponentStudio';
 export * from './Scheduling/scheduling-dashboard.component';
 export * from './Testing/testing-dashboard.component';
+export * from './DataExplorer';
 
 // Export AI components as resources (BaseResourceComponent-based)
 export {
@@ -129,3 +131,6 @@ LoadTestingExecutionResource();
 LoadTestingAnalyticsResource();
 LoadTestingVersionResource();
 LoadTestingFeedbackResource();
+
+// Data Explorer Dashboard loader
+LoadDataExplorerDashboard();

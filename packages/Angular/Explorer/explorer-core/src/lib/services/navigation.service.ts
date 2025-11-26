@@ -93,7 +93,7 @@ export class NavigationService implements OnDestroy {
       Configuration: {
         route: navItem.Route,
         resourceType: navItem.ResourceType,
-        recordId: navItem.RecordId,
+        recordId: navItem.RecordID,
         ...(navItem.Configuration || {})
       },
       IsPinned: options?.pinTab || false

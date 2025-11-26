@@ -1,0 +1,85 @@
+<div class="detail-panel-container">
+  <!-- Header -->
+  <div class="panel-header">
+    <h3 class="panel-title">{{ recordTitle }}</h3>
+    <button class="close-btn" (click)="onClose()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="panel-content">
+    <!-- Details Section -->
+    <div class="section">
+      <div class="section-header" (click)="toggleSection('details')">
+        <i class="fa-solid fa-info-circle section-icon"></i>
+        <span class="section-title">Details</span>
+        <i class="fa-solid expand-icon" [class.fa-chevron-down]="detailsSectionExpanded" [class.fa-chevron-right]="!detailsSectionExpanded"></i>
+      </div>
+
+      @if (detailsSectionExpanded) {
+        <div class="section-content">
+          @for (field of displayFields; track field.name) {
+            <div class="field-row">
+              <span class="field-label">{{ field.label }}</span>
+              <span class="field-value">{{ field.value }}</span>
+            </div>
+          }
+
+          @if (displayFields.length === 0) {
+            <div class="empty-section">No details available</div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Relationships Section -->
+    <div class="section">
+      <div class="section-header" (click)="toggleSection('relationships')">
+        <i class="fa-solid fa-project-diagram section-icon"></i>
+        <span class="section-title">Related Records</span>
+        @if (isLoadingRelationships) {
+          <i class="fa-solid fa-spinner fa-spin loading-icon"></i>
+        }
+        <i class="fa-solid expand-icon" [class.fa-chevron-down]="relationshipsSectionExpanded" [class.fa-chevron-right]="!relationshipsSectionExpanded"></i>
+      </div>
+
+      @if (relationshipsSectionExpanded) {
+        <div class="section-content">
+          @if (relatedEntities.length === 0 && !isLoadingRelationships) {
+            <div class="empty-section">No related records</div>
+          } @else {
+            @for (relEntity of relatedEntities; track relEntity.relatedEntityName) {
+              <div
+                class="related-entity-item"
+                [class.clickable]="relEntity.count > 0"
+                [class.loading]="relEntity.isLoading"
+                (click)="onRelatedEntityClick(relEntity)">
+                <i [class]="getRelatedEntityIcon(relEntity)"></i>
+                <span class="related-entity-name">{{ relEntity.relatedEntityName }}</span>
+                <span class="related-entity-count">
+                  @if (relEntity.isLoading) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                  } @else {
+                    {{ relEntity.count }}
+                  }
+                </span>
+                @if (relEntity.count > 0) {
+                  <i class="fa-solid fa-chevron-right nav-arrow"></i>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="panel-footer">
+    <button class="open-record-btn" (click)="onOpenRecord()">
+      <i class="fa-solid fa-external-link-alt"></i>
+      Open Full Record
+    </button>
+  </div>
+</div>

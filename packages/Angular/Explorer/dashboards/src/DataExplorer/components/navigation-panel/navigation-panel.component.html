@@ -1,0 +1,128 @@
+<div class="navigation-panel-container" [class.collapsed]="collapsed">
+  <!-- Collapse Toggle -->
+  <button class="collapse-toggle" (click)="onToggleCollapse()" [title]="collapsed ? 'Expand' : 'Collapse'">
+    <i class="fa-solid" [class.fa-chevron-right]="collapsed" [class.fa-chevron-left]="!collapsed"></i>
+  </button>
+
+  @if (!collapsed) {
+    <div class="panel-content">
+      <!-- Favorites Section -->
+      <div class="section">
+        <div class="section-header" (click)="onSectionToggle('favorites')">
+          <i class="fa-solid fa-star section-icon"></i>
+          <span class="section-title">Favorites</span>
+          <i class="fa-solid expand-icon" [class.fa-chevron-down]="favoritesSectionExpanded" [class.fa-chevron-right]="!favoritesSectionExpanded"></i>
+        </div>
+
+        @if (favoritesSectionExpanded) {
+          <div class="section-content">
+            @if (favorites.length === 0) {
+              <div class="empty-section">
+                <span>No favorites yet</span>
+              </div>
+            } @else {
+              @for (favorite of favorites; track favorite.displayName) {
+                <div class="nav-item" (click)="onFavoriteClick(favorite)">
+                  <i class="fa-solid" [class.fa-table]="favorite.type === 'entity'" [class.fa-file-alt]="favorite.type === 'record'" [class.fa-filter]="favorite.type === 'view'"></i>
+                  <span class="nav-item-label">{{ favorite.displayName }}</span>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Recent Items Section -->
+      <div class="section">
+        <div class="section-header" (click)="onSectionToggle('recent')">
+          <i class="fa-solid fa-clock section-icon"></i>
+          <span class="section-title">Recent</span>
+          <i class="fa-solid expand-icon" [class.fa-chevron-down]="recentSectionExpanded" [class.fa-chevron-right]="!recentSectionExpanded"></i>
+        </div>
+
+        @if (recentSectionExpanded) {
+          <div class="section-content">
+            @if (recentItems.length === 0) {
+              <div class="empty-section">
+                <span>No recent items</span>
+              </div>
+            } @else {
+              @for (item of recentItems; track item.recordId) {
+                <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
+                  <i class="fa-solid fa-file-alt"></i>
+                  <div class="nav-item-content">
+                    <span class="nav-item-label">{{ item.displayName }}</span>
+                    <span class="nav-item-meta">{{ formatTimestamp(item.timestamp) }}</span>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Entities Section -->
+      <div class="section entities-section">
+        <div class="section-header" (click)="onSectionToggle('entities')">
+          <i class="fa-solid fa-database section-icon"></i>
+          <span class="section-title">Entities</span>
+          <span class="section-count">({{ entities.length }})</span>
+          <i class="fa-solid expand-icon" [class.fa-chevron-down]="entitiesSectionExpanded" [class.fa-chevron-right]="!entitiesSectionExpanded"></i>
+        </div>
+
+        @if (entitiesSectionExpanded) {
+          <div class="section-content">
+            <!-- Entity Search -->
+            <div class="entity-search">
+              <i class="fa-solid fa-search search-icon"></i>
+              <input
+                type="text"
+                class="search-input"
+                placeholder="Search entities..."
+                [(ngModel)]="entitySearchTerm"
+              />
+              @if (entitySearchTerm) {
+                <button class="clear-search" (click)="entitySearchTerm = ''">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              }
+            </div>
+
+            <!-- Entity List -->
+            <div class="entity-list">
+              @for (entity of filteredEntities; track entity.ID) {
+                <div
+                  class="nav-item entity-item"
+                  [class.selected]="isEntitySelected(entity)"
+                  (click)="onEntityClick(entity)"
+                  [title]="entity.Description || entity.Name">
+                  <i [class]="getEntityIcon(entity)"></i>
+                  <span class="nav-item-label">{{ entity.Name }}</span>
+                </div>
+              }
+
+              @if (filteredEntities.length === 0 && entitySearchTerm) {
+                <div class="empty-section">
+                  <span>No entities match "{{ entitySearchTerm }}"</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  } @else {
+    <!-- Collapsed State - Show Icons Only -->
+    <div class="collapsed-icons">
+      <button class="icon-btn" title="Favorites">
+        <i class="fa-solid fa-star"></i>
+      </button>
+      <button class="icon-btn" title="Recent">
+        <i class="fa-solid fa-clock"></i>
+      </button>
+      <button class="icon-btn" title="Entities">
+        <i class="fa-solid fa-database"></i>
+      </button>
+    </div>
+  }
+</div>

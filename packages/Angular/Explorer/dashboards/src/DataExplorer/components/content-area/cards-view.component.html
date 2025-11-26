@@ -1,0 +1,72 @@
+<div class="cards-container">
+  @for (record of records; track record.PrimaryKey.ToString()) {
+    <div
+      class="data-card"
+      [class.selected]="isSelected(record)"
+      (click)="onCardClick(record)">
+
+      <!-- Card Header with Avatar/Icon -->
+      <div class="card-header">
+        @if (cardTemplate?.thumbnailField; as thumbField) {
+          @if (getFieldValue(record, thumbField)) {
+            <div class="card-thumbnail">
+              <img [src]="getFieldValue(record, thumbField)" alt="" />
+            </div>
+          } @else {
+            <div class="card-avatar" [style.background-color]="getRecordColor(record)">
+              {{ getInitials(record) }}
+            </div>
+          }
+        } @else {
+          <div class="card-avatar" [style.background-color]="getRecordColor(record)">
+            {{ getInitials(record) }}
+          </div>
+        }
+
+        <div class="card-header-content">
+          <h3 class="card-title">{{ getFieldValue(record, cardTemplate?.titleField ?? null) }}</h3>
+          @if (cardTemplate?.subtitleField; as subField) {
+            <span class="card-subtitle">{{ getFieldValue(record, subField) }}</span>
+          }
+        </div>
+
+        <button class="card-open-btn" (click)="onOpenClick($event, record)" title="Open Record">
+          <i class="fa-solid fa-external-link-alt"></i>
+        </button>
+      </div>
+
+      <!-- Card Body -->
+      <div class="card-body">
+        @if (cardTemplate?.descriptionField; as descField) {
+          <p class="card-description">
+            {{ getFieldValue(record, descField) | slice:0:100 }}
+            @if (getFieldValue(record, descField).length > 100) {
+              ...
+            }
+          </p>
+        }
+
+        <!-- Metrics -->
+        @if (cardTemplate && cardTemplate.metricFields.length > 0) {
+          <div class="card-metrics">
+            @for (metricField of cardTemplate.metricFields; track metricField) {
+              <div class="metric">
+                <span class="metric-value">{{ getMetricValue(record, metricField) }}</span>
+                <span class="metric-label">{{ getFieldLabel(metricField) }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Card Footer with Badge -->
+      @if (cardTemplate?.badgeField; as badgeField) {
+        <div class="card-footer">
+          <span class="card-badge">
+            {{ getFieldValue(record, badgeField) }}
+          </span>
+        </div>
+      }
+    </div>
+  }
+</div>

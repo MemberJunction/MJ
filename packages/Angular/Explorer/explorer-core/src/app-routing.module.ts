@@ -266,7 +266,7 @@ export class ResourceResolver implements Resolve<void> {
       const config: any = {
         route: navItem.Route,
         resourceType: navItem.ResourceType,
-        recordId: navItem.RecordId,
+        recordId: navItem.RecordID,
         appName: appName,
         appId: app.ID,
         navItemName: navItem.Label,

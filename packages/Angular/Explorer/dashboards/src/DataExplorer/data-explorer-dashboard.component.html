@@ -1,0 +1,135 @@
+<div class="data-explorer-container">
+  <!-- Navigation Panel (Left) -->
+  <div
+    class="navigation-panel"
+    [class.collapsed]="state.navigationPanelCollapsed"
+    [style.width.px]="state.navigationPanelCollapsed ? 48 : state.navigationPanelWidth">
+
+    <mj-explorer-navigation-panel
+      [entities]="entities"
+      [selectedEntityName]="state.selectedEntityName"
+      [favorites]="state.favorites"
+      [recentItems]="state.recentItems"
+      [collapsed]="state.navigationPanelCollapsed"
+      [favoritesSectionExpanded]="state.favoritesSectionExpanded"
+      [recentSectionExpanded]="state.recentSectionExpanded"
+      [entitiesSectionExpanded]="state.entitiesSectionExpanded"
+      [viewsSectionExpanded]="state.viewsSectionExpanded"
+      (entitySelected)="onEntitySelected($event)"
+      (toggleCollapse)="toggleNavigationPanel()"
+      (sectionToggled)="stateService.toggleSection($event)">
+    </mj-explorer-navigation-panel>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="content-area">
+    <!-- Header -->
+    <div class="content-header">
+      <div class="header-left">
+        @if (selectedEntity) {
+          <h2 class="entity-title">{{ selectedEntity.Name }}</h2>
+          <span class="record-count">{{ totalRecordCount | number }} records</span>
+        } @else {
+          <h2 class="entity-title">Select an Entity</h2>
+          <span class="record-count">Choose from the navigation panel</span>
+        }
+      </div>
+
+      <div class="header-center">
+        @if (selectedEntity) {
+          <div class="smart-filter-container">
+            <input
+              type="text"
+              class="smart-filter-input"
+              placeholder="Filter with natural language... (e.g., 'active customers in California')"
+              [ngModel]="state.smartFilterPrompt"
+              (ngModelChange)="onSmartFilterChanged($event)"
+            />
+            @if (state.smartFilterPrompt) {
+              <button class="clear-filter-btn" (click)="onSmartFilterChanged('')">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="header-right">
+        @if (selectedEntity) {
+          <!-- View Mode Toggle -->
+          <div class="view-mode-toggle">
+            <button
+              class="toggle-btn"
+              [class.active]="state.viewMode === 'grid'"
+              (click)="onViewModeChanged('grid')"
+              title="Grid View">
+              <i class="fa-solid fa-table"></i>
+            </button>
+            <button
+              class="toggle-btn"
+              [class.active]="state.viewMode === 'cards'"
+              (click)="onViewModeChanged('cards')"
+              title="Cards View">
+              <i class="fa-solid fa-th-large"></i>
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Content Body -->
+    <div class="content-body">
+      @if (isLoading) {
+        <div class="loading-container">
+          <div class="loading-spinner">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          </div>
+          <p class="loading-message">{{ loadingMessage }}</p>
+        </div>
+      } @else if (!selectedEntity) {
+        <div class="empty-state">
+          <i class="fa-solid fa-database empty-icon"></i>
+          <h3>Welcome to Data Explorer</h3>
+          <p>Select an entity from the navigation panel to start exploring your data.</p>
+        </div>
+      } @else if (records.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-inbox empty-icon"></i>
+          <h3>No Records Found</h3>
+          <p>No records match your current filter criteria.</p>
+        </div>
+      } @else {
+        @if (state.viewMode === 'cards') {
+          <mj-explorer-cards-view
+            [entity]="selectedEntity"
+            [records]="records"
+            [selectedRecordId]="state.selectedRecordId"
+            (recordSelected)="onRecordSelected($event)"
+            (recordOpened)="onOpenRecord($event)">
+          </mj-explorer-cards-view>
+        } @else {
+          <mj-explorer-grid-view
+            [entity]="selectedEntity"
+            [viewId]="state.selectedViewId"
+            [extraFilter]="state.smartFilterPrompt"
+            (recordSelected)="onRecordSelected($event)"
+            (recordOpened)="onOpenRecord($event)">
+          </mj-explorer-grid-view>
+        }
+      }
+    </div>
+  </div>
+
+  <!-- Detail Panel (Right - Slide In) -->
+  @if (state.detailPanelOpen && selectedRecord) {
+    <div class="detail-panel" [style.width.px]="state.detailPanelWidth">
+      <mj-explorer-detail-panel
+        [entity]="selectedEntity"
+        [record]="selectedRecord"
+        (close)="onDetailPanelClosed()"
+        (openRecord)="onOpenRecord($event)"
+        (navigateToRelated)="onEntitySelected($event.entity)">
+      </mj-explorer-detail-panel>
+    </div>
+  }
+</div>

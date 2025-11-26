@@ -101,11 +101,11 @@ export class BaseApplication {
       // Handle resource-based nav items
       if (firstItem.ResourceType) {
         tabRequest.ResourceType = firstItem.ResourceType;
-        tabRequest.ResourceRecordId = firstItem.RecordId;
+        tabRequest.ResourceRecordId = firstItem.RecordID;
         // Put resourceType in Configuration so it gets stored properly
         tabRequest.Configuration = {
           resourceType: firstItem.ResourceType,
-          recordId: firstItem.RecordId,
+          recordId: firstItem.RecordID,
           ...(firstItem.Configuration || {})
         };
 

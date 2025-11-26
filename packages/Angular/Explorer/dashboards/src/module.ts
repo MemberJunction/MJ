@@ -85,6 +85,13 @@ import { OracleBreakdownTableComponent } from './Testing/components/widgets/orac
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 import { TestingModule } from '@memberjunction/ng-testing';
+// Data Explorer Dashboard Components
+import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
+import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
+import { CardsViewComponent as ExplorerCardsViewComponent } from './DataExplorer/components/content-area/cards-view.component';
+import { GridViewComponent as ExplorerGridViewComponent } from './DataExplorer/components/content-area/grid-view.component';
+import { DetailPanelComponent as ExplorerDetailPanelComponent } from './DataExplorer/components/detail-panel/detail-panel.component';
+import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -149,7 +156,13 @@ import { TestingModule } from '@memberjunction/ng-testing';
     SuiteTreeComponent,
     SuiteTreeNodeComponent,
     OracleBreakdownTableComponent,
-    TestRunDetailPanelComponent
+    TestRunDetailPanelComponent,
+    // Data Explorer Dashboard Components
+    DataExplorerDashboardComponent,
+    ExplorerNavigationPanelComponent,
+    ExplorerCardsViewComponent,
+    ExplorerGridViewComponent,
+    ExplorerDetailPanelComponent
   ],
   imports: [
     CommonModule,
@@ -180,7 +193,8 @@ import { TestingModule } from '@memberjunction/ng-testing';
   providers: [
     AIInstrumentationService,
     SchedulingInstrumentationService,
-    TestingInstrumentationService
+    TestingInstrumentationService,
+    ExplorerStateService
   ],
   exports: [
     EntityAdminDashboardComponent,
@@ -211,7 +225,9 @@ import { TestingModule } from '@memberjunction/ng-testing';
     TestingExecutionResourceComponent,
     TestingAnalyticsResourceComponent,
     TestingVersionResourceComponent,
-    TestingFeedbackResourceComponent
+    TestingFeedbackResourceComponent,
+    // Export Data Explorer Dashboard
+    DataExplorerDashboardComponent
   ]
 })
 export class DashboardsModule { }

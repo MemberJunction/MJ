@@ -1,30 +1,57 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
-import { Metadata, RunView, ApplicationInfo } from '@memberjunction/core';
-import { ApplicationEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView, ApplicationInfo, LogError, LogStatus } from '@memberjunction/core';
+import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
+
+/**
+ * Represents a user's application configuration including visibility and order
+ */
+export interface UserAppConfig {
+  app: BaseApplication;
+  userAppId: string;
+  sequence: number;
+  isActive: boolean;
+}
 
 /**
  * Manages application instances and active application state.
  *
- * Loads all applications on startup and creates BaseApplication instances
- * via ClassFactory (getting subclasses if registered).
+ * Loads applications filtered by the user's UserApplication records.
+ * If user has no UserApplication records, auto-creates them from DefaultForNewUser apps.
+ * Orders applications by UserApplication.Sequence.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class ApplicationManager {
   private applications$ = new BehaviorSubject<BaseApplication[]>([]);
+  private allApplications$ = new BehaviorSubject<BaseApplication[]>([]);
+  private userAppConfigs$ = new BehaviorSubject<UserAppConfig[]>([]);
   private activeApp$ = new BehaviorSubject<BaseApplication | null>(null);
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
 
   /**
-   * Observable of all loaded applications
+   * Observable of user's active applications (filtered and ordered by UserApplication)
    */
   get Applications(): Observable<BaseApplication[]> {
     return this.applications$.asObservable();
+  }
+
+  /**
+   * Observable of ALL applications in the system (unfiltered)
+   */
+  get AllApplications(): Observable<BaseApplication[]> {
+    return this.allApplications$.asObservable();
+  }
+
+  /**
+   * Observable of user's application configurations (includes sequence, isActive)
+   */
+  get UserAppConfigs(): Observable<UserAppConfig[]> {
+    return this.userAppConfigs$.asObservable();
   }
 
   /**
@@ -42,10 +69,24 @@ export class ApplicationManager {
   }
 
   /**
-   * Get all applications synchronously
+   * Get user's active applications synchronously (filtered and ordered)
    */
   GetAllApps(): BaseApplication[] {
     return this.applications$.value;
+  }
+
+  /**
+   * Get ALL applications synchronously (unfiltered)
+   */
+  GetAllSystemApps(): BaseApplication[] {
+    return this.allApplications$.value;
+  }
+
+  /**
+   * Get user's application configurations synchronously
+   */
+  GetUserAppConfigs(): UserAppConfig[] {
+    return this.userAppConfigs$.value;
   }
 
   /**
@@ -73,7 +114,22 @@ export class ApplicationManager {
   }
 
   /**
-   * Load applications from metadata and extended data
+   * Reload the user's application configuration.
+   * Call this after changes to UserApplication records to refresh the app list.
+   */
+  async ReloadUserApplications(): Promise<void> {
+    this.loading$.next(true);
+
+    try {
+      await this.loadUserApplicationConfig();
+    } finally {
+      this.loading$.next(false);
+    }
+  }
+
+  /**
+   * Load applications from metadata, filtered and ordered by user's UserApplication records.
+   * If user has no UserApplication records, auto-creates them from DefaultForNewUser apps.
    */
   private async loadApplications(): Promise<void> {
     if (this.initialized) {
@@ -86,9 +142,10 @@ export class ApplicationManager {
       const md = new Metadata();
       const appInfoList: ApplicationInfo[] = md.Applications;
 
-      const apps: BaseApplication[] = [];
+      // First, create BaseApplication instances for ALL apps
+      const allApps: BaseApplication[] = [];
+
       for (const appInfo of appInfoList) {
-        // Create instance using ClassFactory (gets subclass if registered)
         const app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
           BaseApplication,
           appInfo.ClassName,
@@ -104,18 +161,115 @@ export class ApplicationManager {
         );
 
         if (app) {
-          apps.push(app);
+          allApps.push(app);
         }
       }
 
-      this.applications$.next(apps);
+      this.allApplications$.next(allApps);
+
+      // Load and apply user's app configuration
+      await this.loadUserApplicationConfig();
+
       this.initialized = true;
 
     } catch (error) {
+      LogError('Failed to load applications:', undefined, error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
       this.loading$.next(false);
     }
+  }
+
+  /**
+   * Load user's UserApplication records and update the filtered/ordered app list.
+   * This can be called to refresh after configuration changes.
+   */
+  private async loadUserApplicationConfig(): Promise<void> {
+    const md = new Metadata();
+    const appInfoList: ApplicationInfo[] = md.Applications;
+    const allApps = this.allApplications$.value;
+
+    // Build a map for quick lookup
+    const appMap = new Map<string, BaseApplication>();
+    for (const app of allApps) {
+      appMap.set(app.ID, app);
+    }
+
+    // Load user's UserApplication records
+    const rv = new RunView();
+    const userAppsResult = await rv.RunView<UserApplicationEntity>({
+      EntityName: 'User Applications',
+      ExtraFilter: `UserID = '${md.CurrentUser.ID}'`,
+      OrderBy: 'Sequence, Application',
+      ResultType: 'entity_object'
+    });
+
+    let userApps: UserApplicationEntity[] = [];
+    if (userAppsResult.Success) {
+      userApps = userAppsResult.Results;
+    } else {
+      LogError('Failed to load UserApplication records:', undefined, userAppsResult.ErrorMessage);
+    }
+
+    // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
+    if (userApps.length === 0) {
+      LogStatus(`User ${md.CurrentUser.Name} has no UserApplication records, creating from DefaultForNewUser apps`);
+      userApps = await this.createDefaultUserApplications(md, appInfoList);
+    }
+
+    // Build user's filtered and ordered app list
+    const userAppConfigs: UserAppConfig[] = [];
+    const activeApps: BaseApplication[] = [];
+
+    for (const userApp of userApps) {
+      const app = appMap.get(userApp.ApplicationID);
+      if (app && userApp.IsActive) {
+        userAppConfigs.push({
+          app,
+          userAppId: userApp.ID,
+          sequence: userApp.Sequence,
+          isActive: userApp.IsActive
+        });
+        activeApps.push(app);
+      }
+    }
+
+    this.userAppConfigs$.next(userAppConfigs);
+    this.applications$.next(activeApps);
+  }
+
+  /**
+   * Creates UserApplication records for apps with DefaultForNewUser=true.
+   * Called when a user has no existing UserApplication records (self-healing).
+   */
+  private async createDefaultUserApplications(md: Metadata, appInfoList: ApplicationInfo[]): Promise<UserApplicationEntity[]> {
+    const defaultApps = appInfoList.filter(a => a.DefaultForNewUser);
+    const createdUserApps: UserApplicationEntity[] = [];
+
+    LogStatus(`Found ${defaultApps.length} applications with DefaultForNewUser=true`);
+
+    for (const [index, appInfo] of defaultApps.entries()) {
+      try {
+        const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
+        userApp.NewRecord();
+        userApp.UserID = md.CurrentUser.ID;
+        userApp.ApplicationID = appInfo.ID;
+        userApp.Sequence = index;
+        userApp.IsActive = true;
+
+        const saved = await userApp.Save();
+        if (saved) {
+          LogStatus(`Created UserApplication for ${appInfo.Name} with sequence ${index}`);
+          createdUserApps.push(userApp);
+        } else {
+          LogError(`Failed to create UserApplication for ${appInfo.Name}:`, undefined, userApp.LatestResult);
+        }
+      } catch (error) {
+        LogError(`Error creating UserApplication for ${appInfo.Name}:`, undefined, error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    return createdUserApps;
   }
 
   /**
