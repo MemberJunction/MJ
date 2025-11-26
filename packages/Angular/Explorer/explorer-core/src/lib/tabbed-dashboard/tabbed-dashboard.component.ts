@@ -1,7 +1,7 @@
 import { Component, Input, OnInit, ViewChild, ElementRef, AfterViewInit, ViewContainerRef, ComponentRef, OnDestroy } from '@angular/core';
 import { CompositeKey, LogError, Metadata, RunView, RunViewParams } from '@memberjunction/core';
 import { DashboardEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, ResourceData } from '@memberjunction/core-entities';
-import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-dashboards';
+import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
 import { InvokeManualResize, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { MJTabStripComponent } from '@memberjunction/ng-tabstrip';
 import { Router } from '@angular/router';

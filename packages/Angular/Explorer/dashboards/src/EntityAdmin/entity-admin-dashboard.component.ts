@@ -1,5 +1,5 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
-import { BaseDashboard } from '../generic/base-dashboard';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';

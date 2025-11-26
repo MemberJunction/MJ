@@ -3,7 +3,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-dashboards';
+import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
 import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
 
 export function LoadDashboardResource() {

@@ -29,9 +29,6 @@ import {
   LoadSchedulingHealthResource
 } from './Scheduling/components';
 
-// Base Dashboard
-export * from './generic/base-dashboard';
-
 // Dashboards
 export * from './EntityAdmin/entity-admin-dashboard.component';
 export * from './ComponentStudio';

@@ -7,7 +7,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BaseDashboard } from '@memberjunction/ng-dashboards';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'mj-single-dashboard',
