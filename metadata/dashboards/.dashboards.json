@@ -1,0 +1,64 @@
+[
+  {
+    "fields": {
+      "Name": "ERD",
+      "Description": "ERD Dashboard for visualizing and managing entity relationships within the MemberJunction framework",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "EntityAdmin",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "relatedEntities": {
+      "MJ: Dashboard User Preferences": [
+        {
+          "fields": {
+            "DashboardID": "@parent:ID",
+            "UserID": null,
+            "Scope": "App",
+            "ApplicationID": "@lookup:Applications.Name=Admin",
+            "DisplayOrder": 1
+          },
+          "primaryKey": {
+            "ID": "02CC423E-F36B-1410-8DAC-00021F8B792E"
+          },
+          "sync": {
+            "lastModified": "2025-11-26T09:30:21.942Z",
+            "checksum": "bf0278d6ce3d214a1cd3399b295fa1a2577e81c46b4c50c7231adf203a67f2ec"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F4C9433E-F36B-1410-8DAB-00021F8B792E"
+    },
+    "sync": {
+      "lastModified": "2025-11-26T09:30:21.926Z",
+      "checksum": "9d05f99394100e6665fa158ab39a6d34ea79e007d163c03d1d78bad7ee77328b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Security",
+      "Description": "Security Dashboard for managing security settings within the MemberJunction framework",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "EntityAdmin",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "primaryKey": {
+      "ID": "C8DD0C2E-C778-4867-B6CA-8229473FAEE9"
+    },
+    "sync": {
+      "lastModified": "2025-11-26T09:30:21.914Z",
+      "checksum": "1dff0c44b99d7dfd9faf4bd3e6bc52002b10c897029dc0243768eeb2919f8a88"
+    }
+  }
+]

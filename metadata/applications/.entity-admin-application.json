@@ -1,12 +1,27 @@
 {
   "fields": {
-    "Name": "Entity Admin",
-    "Description": "Manage and monitor all entities, fields, and relationships",
-    "Icon": "fa-solid fa-database",
+    "Name": "Admin",
+    "Description": "MemberJunction Administration",
+    "Icon": "fa-solid fa-screwdriver-wrench",
     "DefaultForNewUser": true,
     "Color": "#4caf50",
     "ClassName": "BaseApplication",
-    "DefaultNavItems": null
+    "DefaultNavItems": [
+      {
+        "Label": "ERD",
+        "Icon": "fa-solid fa-database",
+        "ResourceType": "Dashboards",
+        "RecordId": "@lookup:Dashboards.Name=ERD",
+        "isDefault": true
+      },
+      {
+        "Label": "Security",
+        "Icon": "fa-solid fa-user-shield",
+        "ResourceType": "Dashboards",
+        "RecordId": "@lookup:Dashboards.Name=Security",
+        "isDefault": true
+      }
+    ]
   },
   "relatedEntities": {
     "Application Entities": []
@@ -15,7 +30,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-11-21T21:09:21.411Z",
-    "checksum": "f684983075330a839d47b84070c5957fe9b8a20b8b7969efce53efeacc370558"
+    "lastModified": "2025-11-26T09:30:21.999Z",
+    "checksum": "6c1f1f2035fbc1cf12239c8fb92e46be7413b9b138cf0aa3f56a018ed09df847"
   }
 }
