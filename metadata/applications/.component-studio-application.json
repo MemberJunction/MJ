@@ -5,7 +5,7 @@
     "Icon": "fa-solid fa-puzzle-piece",
     "DefaultForNewUser": false,
     "Color": "#2196f3",
-    "ClassName": "BaseApplication",
+    "DefaultSequence": 1002,
     "DefaultNavItems": null
   },
   "relatedEntities": {
@@ -15,7 +15,7 @@
     "ID": "ADDAD2F1-BA9A-442C-A08A-6E461F60985B"
   },
   "sync": {
-    "lastModified": "2025-11-26T12:25:24.574Z",
-    "checksum": "e9ca9a55da81e56a9362aca5547c3479b0887f7215669f08a49492fddda422dc"
+    "lastModified": "2025-11-26T20:01:05.521Z",
+    "checksum": "b960ec41d985ec5da90529865f45adef0746a0302f4702864b3fb2e4ae19fff7"
   }
 }

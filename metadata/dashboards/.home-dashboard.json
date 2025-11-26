@@ -1,0 +1,41 @@
+{
+  "fields": {
+    "Name": "Home",
+    "Description": "Personalized home dashboard showing all available applications with quick access navigation",
+    "UserID": "@lookup:Users.Name=System",
+    "CategoryID": null,
+    "Type": "Code",
+    "Scope": "App",
+    "ApplicationID": "@lookup:Applications.Name=Home",
+    "DriverClass": "HomeDashboard",
+    "UIConfigDetails": "{}",
+    "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+  },
+  "relatedEntities": {
+    "MJ: Dashboard User Preferences": [
+      {
+        "fields": {
+          "DashboardID": "@parent:ID",
+          "UserID": null,
+          "Scope": "App",
+          "ApplicationID": "@lookup:Applications.Name=Home",
+          "DisplayOrder": 1
+        },
+        "primaryKey": {
+          "ID": "CFF1015F-4381-4B30-8670-C7A2FEF9B43B"
+        },
+        "sync": {
+          "lastModified": "2025-11-26T19:57:59.474Z",
+          "checksum": "d0c2c2b70a099d30a2eb680c258fab20ea35635ff6f9e3ad6ce936f02c0c10f5"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "5E425BD5-A7AE-486D-8A4B-B06D15B05B88"
+  },
+  "sync": {
+    "lastModified": "2025-11-26T19:57:59.449Z",
+    "checksum": "f28c4f48f147bd225d2ab40a9a067437c1d76dbb09286e0152a068faf43ff386"
+  }
+}

@@ -4,6 +4,7 @@
     "Description": "Testing framework for evaluating AI agents, workflows, and system components through automated test suites with multi-oracle evaluation",
     "Icon": "fa-solid fa-vial-circle-check",
     "DefaultForNewUser": true,
+    "DefaultSequence": 1004,
     "Color": "#00897b",
     "DefaultNavItems": [
       {
@@ -171,7 +172,7 @@
     "ID": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
   },
   "sync": {
-    "lastModified": "2025-11-26T12:25:24.780Z",
-    "checksum": "1a4da03dceafe2d4056d1e20ab90af9917685fccd7367bafabf9f984d0308500"
+    "lastModified": "2025-11-26T19:57:59.039Z",
+    "checksum": "7f940c9ffb5c4c548ec24263406bb1c4c62b05f0ce1860c09766d106bdf96d37"
   }
 }

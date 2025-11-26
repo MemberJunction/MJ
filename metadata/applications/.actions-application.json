@@ -4,6 +4,7 @@
     "Description": "Manage and monitor all system actions and workflows",
     "Icon": "fa-solid fa-bolt",
     "DefaultForNewUser": true,
+    "DefaultSequence": 1000,
     "Color": "#ff9800",
     "DefaultNavItems": [
       {
@@ -57,7 +58,7 @@
     "ID": "02D5423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-11-26T12:25:24.429Z",
-    "checksum": "e191d724c942fd24f39ee717a5f07134cc7c3465bf78f4b5fbcbc5e51982c61f"
+    "lastModified": "2025-11-26T19:57:58.716Z",
+    "checksum": "9980efb6f3699adb647c70e5449830ba87d44d0ce920fd77de4334c0eef79b41"
   }
 }

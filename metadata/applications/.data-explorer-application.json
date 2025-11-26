@@ -4,6 +4,7 @@
     "Description": "Power user interface for exploring data across entities with card-based browsing, grid views, and relationship visualization",
     "Icon": "fa-solid fa-compass",
     "DefaultForNewUser": true,
+    "DefaultSequence": 2,
     "Color": "#5c6bc0",
     "DefaultNavItems": [
       {
@@ -22,7 +23,7 @@
     "ID": "867CB743-50F2-4239-AEE1-97F147C77B8F"
   },
   "sync": {
-    "lastModified": "2025-11-26T13:34:05.887Z",
-    "checksum": "112118c5333c3db7c592a703b77ac8fd172270439b91f0328edbc3984d5f0d0a"
+    "lastModified": "2025-11-26T19:57:58.855Z",
+    "checksum": "2304ba210226f8f2db2c09f58219035c75ed1db25c048a65ccc093629b2df685"
   }
 }

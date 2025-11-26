@@ -1,0 +1,20 @@
+{
+  "fields": {
+    "Name": "Home",
+    "Description": "Your personalized home screen with quick access to all applications",
+    "Icon": "fa-solid fa-home",
+    "DefaultForNewUser": true,
+    "Color": "#2196f3",
+    "DefaultSequence": 0,
+    "Status": "Active",
+    "NavigationStyle": "Nav Bar",
+    "TopNavLocation": "Left of App Switcher"
+  },
+  "primaryKey": {
+    "ID": "5D0419BD-21AE-44DD-BC87-DCE0819860F5"
+  },
+  "sync": {
+    "lastModified": "2025-11-26T20:01:05.544Z",
+    "checksum": "86ebf6a359931cfd3f8e3a02cdc5a8a4a22328c8b461afb4e2d870b5c9ebea43"
+  }
+}

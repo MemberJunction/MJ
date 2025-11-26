@@ -5,7 +5,7 @@
     "Icon": "fa-solid fa-calendar-alt",
     "DefaultForNewUser": true,
     "Color": "#00bcd4",
-    "ClassName": "BaseApplication",
+    "DefaultSequence": 1003,
     "DefaultNavItems": [
       {
         "Label": "Monitor",
@@ -47,7 +47,7 @@
     "ID": "09CBDAE2-4F2A-4F01-BA8C-C7EB4AFAC36A"
   },
   "sync": {
-    "lastModified": "2025-11-26T12:25:24.753Z",
-    "checksum": "64f88e1480566f8211ce22321828e338244fedc15c8f476a0166f2e287112e24"
+    "lastModified": "2025-11-26T20:01:05.548Z",
+    "checksum": "90dae2c9fc70bbbb2812d940ba2b38f57b7514961685c0be483a6d052f5f30ea"
   }
 }

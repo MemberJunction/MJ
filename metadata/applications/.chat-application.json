@@ -5,7 +5,10 @@
     "Icon": "fa-solid fa-robot",
     "DefaultForNewUser": true,
     "Color": "#9c27b0",
-    "ClassName": "BaseApplication",
+    "DefaultSequence": 1,
+    "Status": "Active",
+    "NavigationStyle": "Nav Bar",
+    "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
       {
         "Label": "Conversations",
@@ -37,7 +40,7 @@
     "ID": "7A873E1A-692E-43FA-97F8-57D8161A985C"
   },
   "sync": {
-    "lastModified": "2025-11-26T12:25:24.550Z",
-    "checksum": "6b06a4bbf1445f3cad54ef131bb6d77f83b68fb75bab076f86aee09187c2c785"
+    "lastModified": "2025-11-26T20:01:05.518Z",
+    "checksum": "c3ab39506d7e3e2ab135c30d912e19a2c05f5a10abce529003b2c26da4e5e87a"
   }
 }
