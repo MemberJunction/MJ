@@ -191,13 +191,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         if (config.activeTabId) {
           this.layoutManager.FocusTab(config.activeTabId);
         }
-        this.layoutManager.updateSize();
       }, 50);
 
-      // Additional delayed resize
-      setTimeout(() => {
-        this.layoutManager.updateSize();
-      }, 200);
     } else {
       // CREATE FRESH - no saved layout or forceCreateTabs=true
       // Use config.tabs sorted by sequence to build a simple single-stack layout
@@ -218,12 +213,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         if (config.activeTabId) {
           this.layoutManager.FocusTab(config.activeTabId);
         }
-        this.layoutManager.updateSize();
       }, 50);
-
-      setTimeout(() => {
-        this.layoutManager.updateSize();
-      }, 200);
     }
   }
 

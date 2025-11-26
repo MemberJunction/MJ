@@ -16,5 +16,21 @@
       <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
       <span>{{ app.Name }}</span>
     </div>
+
+    <!-- Divider -->
+    <div class="app-switcher-divider"></div>
+
+    <!-- Configure Apps option -->
+    <div class="app-switcher-item configure-item" (click)="openConfigDialog()">
+      <i class="fa-solid fa-gear"></i>
+      <span>Configure Apps...</span>
+    </div>
   </div>
 </div>
+
+<!-- App Configuration Dialog -->
+<mj-user-app-config
+  #appConfigDialog
+  [(showDialog)]="showConfigDialog"
+  (configSaved)="onConfigSaved()">
+</mj-user-app-config>

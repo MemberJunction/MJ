@@ -1,0 +1,182 @@
+<div class="k-overlay" *ngIf="showDialog"></div>
+<kendo-window
+  *ngIf="showDialog"
+  [top]="0"
+  [left]="0"
+  [resizable]="false"
+  [draggable]="false"
+  title="Configure Your Applications"
+  (close)="close()"
+  class="full-screen-dialog"
+>
+  <div class="app-config-container">
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading-container">
+      <kendo-loader type="converging-spinner"></kendo-loader>
+      <p>Loading your app configuration...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div *ngIf="errorMessage" class="error-message">
+      <span class="fa-solid fa-circle-exclamation"></span>
+      {{ errorMessage }}
+    </div>
+
+    <!-- Main Content -->
+    <div *ngIf="!isLoading" class="config-content">
+      <p class="config-description">
+        Select which applications appear in your app switcher and arrange them in your preferred order.
+        Drag and drop to reorder, or use the arrow buttons.
+      </p>
+
+      <div class="panels-container">
+        <!-- Selected Apps Panel -->
+        <div class="panel selected-apps-panel">
+          <div class="panel-header">
+            <span class="fa-solid fa-check-circle"></span>
+            <h3>Your Applications</h3>
+            <span class="badge">{{ activeApps.length }}</span>
+          </div>
+
+          <div class="panel-content">
+            <div *ngIf="activeApps.length === 0" class="empty-state">
+              <span class="fa-solid fa-inbox"></span>
+              <p>No applications selected</p>
+              <p class="hint">Add apps from the available list</p>
+            </div>
+
+            <kendo-sortable
+              *ngIf="activeApps.length > 0"
+              [kendoSortableBinding]="activeApps"
+              [animation]="true"
+              itemClass="app-item"
+              activeItemClass="app-item dragging"
+              (dragEnd)="onDragEnd($event)"
+            >
+              <ng-template let-item="item" let-index="index">
+                <div class="app-item-content" [style.border-left-color]="item.app.GetColor()">
+                  <div class="drag-handle">
+                    <span class="fa-solid fa-grip-vertical"></span>
+                  </div>
+
+                  <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                    <span [class]="item.app.Icon || 'fa-solid fa-cube'"></span>
+                  </div>
+
+                  <div class="app-info">
+                    <span class="app-name">{{ item.app.Name }}</span>
+                    <span class="app-description" *ngIf="item.app.Description">{{ item.app.Description }}</span>
+                  </div>
+
+                  <div class="app-actions">
+                    <button
+                      kendoButton
+                      fillMode="flat"
+                      [disabled]="index === 0"
+                      (click)="moveUp(item)"
+                      title="Move up"
+                    >
+                      <span class="fa-solid fa-chevron-up"></span>
+                    </button>
+                    <button
+                      kendoButton
+                      fillMode="flat"
+                      [disabled]="index === activeApps.length - 1"
+                      (click)="moveDown(item)"
+                      title="Move down"
+                    >
+                      <span class="fa-solid fa-chevron-down"></span>
+                    </button>
+                    <button
+                      kendoButton
+                      fillMode="flat"
+                      themeColor="error"
+                      (click)="removeApp(item)"
+                      title="Remove from your apps"
+                    >
+                      <span class="fa-solid fa-xmark"></span>
+                    </button>
+                  </div>
+                </div>
+              </ng-template>
+            </kendo-sortable>
+          </div>
+        </div>
+
+        <!-- Available Apps Panel -->
+        <div class="panel available-apps-panel">
+          <div class="panel-header">
+            <span class="fa-solid fa-layer-group"></span>
+            <h3>Available Applications</h3>
+            <span class="badge">{{ availableApps.length }}</span>
+          </div>
+
+          <div class="panel-content">
+            <div *ngIf="availableApps.length === 0" class="empty-state">
+              <span class="fa-solid fa-check-double"></span>
+              <p>All applications added!</p>
+            </div>
+
+            <div *ngFor="let item of availableApps" class="available-app-item">
+              <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                <span [class]="item.app.Icon || 'fa-solid fa-cube'"></span>
+              </div>
+
+              <div class="app-info">
+                <span class="app-name">{{ item.app.Name }}</span>
+                <span class="app-description" *ngIf="item.app.Description">{{ item.app.Description }}</span>
+              </div>
+
+              <button
+                kendoButton
+                themeColor="primary"
+                fillMode="outline"
+                (click)="addApp(item)"
+                title="Add to your apps"
+              >
+                <span class="fa-solid fa-plus"></span>
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="dialog-footer">
+      <div class="footer-left">
+        <button
+          kendoButton
+          fillMode="outline"
+          (click)="reset()"
+          [disabled]="isLoading || isSaving"
+          *ngIf="hasChanges()"
+        >
+          <span class="fa-solid fa-rotate-left"></span>
+          Reset Changes
+        </button>
+      </div>
+      <div class="footer-right">
+        <button
+          kendoButton
+          fillMode="outline"
+          (click)="close()"
+          [disabled]="isSaving"
+        >
+          Cancel
+        </button>
+        <button
+          kendoButton
+          themeColor="primary"
+          (click)="save()"
+          [disabled]="isLoading || isSaving || !hasChanges()"
+        >
+          <kendo-loader *ngIf="isSaving" type="pulsing" size="small"></kendo-loader>
+          <span *ngIf="!isSaving" class="fa-solid fa-check"></span>
+          {{ isSaving ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</kendo-window>

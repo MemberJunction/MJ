@@ -4,6 +4,7 @@ import { ShellComponent } from './shell.component';
 import { AppSwitcherComponent } from './components/header/app-switcher.component';
 import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
+import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 
 @NgModule({
   declarations: [
@@ -13,7 +14,8 @@ import { TabContainerComponent } from './components/tabs/tab-container.component
     TabContainerComponent
   ],
   imports: [
-    CommonModule
+    CommonModule,
+    ExplorerSettingsModule
   ],
   exports: [
     ShellComponent

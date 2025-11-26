@@ -103,5 +103,38 @@
         opacity: 1;
       }
     }
+
+    // Configure item styling
+    &.configure-item {
+      color: #666;
+
+      &::before {
+        background-color: #999;
+        opacity: 0.5;
+      }
+
+      i {
+        color: #666;
+      }
+
+      &:hover {
+        color: #333;
+
+        &::before {
+          opacity: 0.8;
+        }
+
+        i {
+          color: #333;
+        }
+      }
+    }
+  }
+
+  // Divider between app list and configure option
+  .app-switcher-divider {
+    height: 1px;
+    background: #e0e0e0;
+    margin: 4px 12px;
   }
 }

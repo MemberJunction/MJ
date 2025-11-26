@@ -19,6 +19,7 @@ export * from './lib/role-management/role-dialog/role-dialog.component';
 export * from './lib/user-management/user-dialog/user-dialog.component';
 export * from './lib/entity-permissions/permission-dialog/permission-dialog.component';
 export * from './lib/application-management/application-dialog/application-dialog.component';
+export * from './lib/user-app-config/user-app-config.component';
 
 // Tree-shaking prevention - import and call these functions to ensure components are registered
 import { RoleManagementComponent } from './lib/role-management/role-management.component';

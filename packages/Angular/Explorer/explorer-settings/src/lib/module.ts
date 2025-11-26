@@ -9,6 +9,7 @@ import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { SortableModule } from '@progress/kendo-angular-sortable';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -37,6 +38,7 @@ import { RoleDialogComponent } from './role-management/role-dialog/role-dialog.c
 import { UserDialogComponent } from './user-management/user-dialog/user-dialog.component';
 import { PermissionDialogComponent } from './entity-permissions/permission-dialog/permission-dialog.component';
 import { ApplicationDialogComponent } from './application-management/application-dialog/application-dialog.component';
+import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
 
 @NgModule({
   declarations: [
@@ -52,7 +54,8 @@ import { ApplicationDialogComponent } from './application-management/application
     RoleDialogComponent,
     UserDialogComponent,
     PermissionDialogComponent,
-    ApplicationDialogComponent
+    ApplicationDialogComponent,
+    UserAppConfigComponent
   ],
   imports: [
     CommonModule,
@@ -74,7 +77,8 @@ import { ApplicationDialogComponent } from './application-management/application
     SimpleRecordListModule,
     JoinGridModule,
     CodeEditorModule,
-    SharedSettingsModule
+    SharedSettingsModule,
+    SortableModule
   ],
   exports: [
     // Main dashboard components
@@ -89,7 +93,8 @@ import { ApplicationDialogComponent } from './application-management/application
     RoleDialogComponent,
     UserDialogComponent,
     PermissionDialogComponent,
-    ApplicationDialogComponent
+    ApplicationDialogComponent,
+    UserAppConfigComponent
   ]
 })
 export class ExplorerSettingsModule { }
