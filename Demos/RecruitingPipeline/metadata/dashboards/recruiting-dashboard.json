@@ -1,0 +1,10 @@
+{
+  "Name": "Recruiting Pipeline Dashboard",
+  "Description": "Overview of all recruiting activities, open positions, and candidate pipeline metrics",
+  "CategoryID": "@lookup:Dashboard Categories.Name=HR & Recruiting Analytics",
+  "UserID": null,
+  "UIConfigDetails": {
+    "Type": "Custom",
+    "ComponentName": "recruiting-dashboard"
+  }
+}
