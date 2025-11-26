@@ -7,7 +7,9 @@ import {
   WorkspaceStateManager,
   GoldenLayoutManager,
   BaseApplication,
-  TabService
+  TabService,
+  WorkspaceConfiguration,
+  WorkspaceTab
 } from '@memberjunction/ng-base-application';
 import { Metadata } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
@@ -217,10 +219,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.urlBasedNavigation = false;
     }
 
-    // Subscribe to workspace configuration changes to sync URL
+    // Subscribe to workspace configuration changes to sync URL and active app
     this.subscriptions.push(
-      this.workspaceManager.Configuration.subscribe(config => {
+      this.workspaceManager.Configuration.subscribe(async config => {
         if (config && this.initialized) {
+          // Sync active app with active tab's application
+          await this.syncActiveAppWithTab(config);
           this.syncUrlWithWorkspace(config);
         }
       })
@@ -287,9 +291,38 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
+   * Sync active app with the active tab's application
+   * Called when workspace configuration changes (e.g., user clicks on a tab in Golden Layout)
+   */
+  private async syncActiveAppWithTab(config: WorkspaceConfiguration): Promise<void> {
+    if (!config.activeTabId) {
+      return;
+    }
+
+    // Find the active tab
+    const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
+    if (!activeTab) {
+      return;
+    }
+
+    // Get the tab's application ID
+    const tabAppId = activeTab.applicationId;
+    if (!tabAppId) {
+      return;
+    }
+
+    // Check if active app needs to be updated
+    const currentActiveApp = this.appManager.GetActiveApp();
+    if (currentActiveApp?.ID !== tabAppId) {
+      // Update the active app to match the tab's application
+      await this.appManager.SetActiveApp(tabAppId);
+    }
+  }
+
+  /**
    * Sync URL with active tab's resource
    */
-  private syncUrlWithWorkspace(config: any): void {
+  private syncUrlWithWorkspace(config: WorkspaceConfiguration): void {
     // Don't sync URL during URL-based navigation initialization
     if (this.urlBasedNavigation) {
       return;
@@ -300,7 +333,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Find the active tab
-    const activeTab = config.tabs?.find((tab: any) => tab.id === config.activeTabId);
+    const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
     if (!activeTab) {
       return;
     }
@@ -324,18 +357,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Build a shareable resource URL from tab data
    */
-  private buildResourceUrl(tab: any): string | null {
+  private buildResourceUrl(tab: WorkspaceTab): string | null {
     const config = tab.configuration || {};
-    const resourceType = config.resourceType?.toLowerCase();
+    const resourceType = (config['resourceType'] as string | undefined)?.toLowerCase();
     const recordId = tab.resourceRecordId;
+    const appName = config['appName'] as string | undefined;
+    const navItemName = config['navItemName'] as string | undefined;
+    const queryParams = config['queryParams'] as Record<string, string> | undefined;
+    const isAppDefault = config['isAppDefault'] as boolean | undefined;
+    const tabAppId = tab.applicationId;
+    const tabTitle = tab.title;
 
     // If this is an app nav item, build app-based URL
-    if (config.appName && config.navItemName) {
-      let url = `/app/${encodeURIComponent(config.appName)}/${encodeURIComponent(config.navItemName)}`;
+    if (appName && navItemName) {
+      let url = `/app/${encodeURIComponent(appName)}/${encodeURIComponent(navItemName)}`;
 
       // Add query params if present
-      if (config.queryParams && Object.keys(config.queryParams).length > 0) {
-        const params = new URLSearchParams(config.queryParams);
+      if (queryParams && Object.keys(queryParams).length > 0) {
+        const params = new URLSearchParams(queryParams);
         url += `?${params.toString()}`;
       }
 
@@ -343,29 +382,29 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // If this is an app's default dashboard (no nav items), use app-level URL
-    if (config.isAppDefault && config.appName) {
-      return `/app/${encodeURIComponent(config.appName)}`;
+    if (isAppDefault && appName) {
+      return `/app/${encodeURIComponent(appName)}`;
     }
 
     // Fallback: If tab belongs to a non-system app but doesn't have appName/navItemName,
     // try to reconstruct the URL from the ApplicationId and tab title
-    if (tab.applicationId && tab.applicationId !== '__explorer') {
-      const app = this.appManager.GetAppById(tab.applicationId);
+    if (tabAppId && tabAppId !== '__explorer') {
+      const app = this.appManager.GetAppById(tabAppId);
       if (app) {
         const navItems = app.GetNavItems();
 
         // If app has nav items, try to find the matching one by title
         if (navItems.length > 0) {
           const navItem = navItems.find(item =>
-            item.Label?.trim().toLowerCase() === tab.title?.trim().toLowerCase()
+            item.Label?.trim().toLowerCase() === tabTitle?.trim().toLowerCase()
           );
 
           if (navItem) {
             let url = `/app/${encodeURIComponent(app.Name)}/${encodeURIComponent(navItem.Label)}`;
 
             // Add query params if present
-            if (config.queryParams && Object.keys(config.queryParams).length > 0) {
-              const params = new URLSearchParams(config.queryParams);
+            if (queryParams && Object.keys(queryParams).length > 0) {
+              const params = new URLSearchParams(queryParams);
               url += `?${params.toString()}`;
             }
 
@@ -379,10 +418,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
+    const entityName = (config['Entity'] || config['entity']) as string | undefined;
+    const isDynamic = config['isDynamic'] as boolean | undefined;
+    const extraFilter = (config['ExtraFilter'] || config['extraFilter']) as string | undefined;
+
     switch (resourceType) {
       case 'records':
         // /resource/record/:entityName/:recordId
-        const entityName = config.Entity || config.entity;
         if (entityName && recordId) {
           return `/resource/record/${encodeURIComponent(entityName)}/${recordId}`;
         }
@@ -390,14 +432,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
       case 'user views':
         // Check if it's a dynamic view
-        if (config.isDynamic || recordId === 'dynamic') {
+        if (isDynamic || recordId === 'dynamic') {
           // /resource/view/dynamic/:entityName?ExtraFilter=...
-          const entityName = config.Entity || config.entity;
           if (entityName) {
             let url = `/resource/view/dynamic/${encodeURIComponent(entityName)}`;
-            if (config.ExtraFilter || config.extraFilter) {
-              const filter = config.ExtraFilter || config.extraFilter;
-              url += `?ExtraFilter=${encodeURIComponent(filter)}`;
+            if (extraFilter) {
+              url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
             }
             return url;
           }
