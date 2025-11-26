@@ -109,7 +109,6 @@ export interface LayoutChangedEvent {
 export class GoldenLayoutManager {
   private layout: GLVirtualLayout | null = null;
   private containerElement: HTMLElement | null = null;
-  private resizeObserver: ResizeObserver | null = null;
 
   // Event subjects
   private tabShown$ = new Subject<TabShownEvent>();
@@ -197,6 +196,10 @@ export class GoldenLayoutManager {
       this.unbindComponentEventListener.bind(this)
     ) as GLVirtualLayout;
 
+    // Enable automatic resize when container size changes
+    // This uses Golden Layout's built-in ResizeObserver (default is false for non-body containers)
+    (this.layout as unknown as { resizeWithContainerAutomatically: boolean }).resizeWithContainerAutomatically = true;
+
     // Subscribe to state changes
     this.layout.on('stateChanged', () => {
       if (this.layout) {
@@ -224,48 +227,35 @@ export class GoldenLayoutManager {
     const rect = this.containerElement.getBoundingClientRect();
     this.layout.setSize(rect.width, rect.height);
 
-    // Retry setSize after delays to handle timing issues with flexbox layout
-    // Initial page load can take time for container to have final dimensions
-    setTimeout(() => {
-      this.updateSize();
-    }, 100);
+    // // Retry setSize after delays to handle timing issues with flexbox layout
+    // // Initial page load can take time for container to have final dimensions
+    // setTimeout(() => {
+    //   this.updateSize();
+    // }, 100);
 
-    // Additional delayed resize for slower initial page loads
-    setTimeout(() => {
-      this.updateSize();
-    }, 300);
-
-    // Watch for container resize and update Golden Layout size
-    this.resizeObserver = new ResizeObserver(() => {
-      if (this.layout && this.containerElement) {
-        const newRect = this.containerElement.getBoundingClientRect();
-        this.layout.setSize(newRect.width, newRect.height);
-      }
-    });
-    this.resizeObserver.observe(this.containerElement);
+    // // Additional delayed resize for slower initial page loads
+    // setTimeout(() => {
+    //   this.updateSize();
+    // }, 300);
   }
 
-  /**
-   * Update layout size to match container
-   * Call this if the layout appears incorrectly sized
-   */
-  updateSize(): void {
-    if (this.layout && this.containerElement) {
-      const rect = this.containerElement.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        this.layout.setSize(rect.width, rect.height);
-      }
-    }
-  }
+  // /**
+  //  * Update layout size to match container
+  //  * Call this if the layout appears incorrectly sized
+  //  */
+  // updateSize(): void {
+  //   if (this.layout && this.containerElement) {
+  //     const rect = this.containerElement.getBoundingClientRect();
+  //     if (rect.width > 0 && rect.height > 0) {
+  //       this.layout.setSize(rect.width, rect.height);
+  //     }
+  //   }
+  // }
 
   /**
    * Destroy the Golden Layout instance
    */
   Destroy(): void {
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = null;
-    }
     if (this.layout) {
       this.layout.destroy();
       this.layout = null;
