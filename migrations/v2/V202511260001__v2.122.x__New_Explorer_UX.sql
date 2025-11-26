@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration: v2.120.x - New Explorer UX
+-- Migration: v2.122.x - New Explorer UX
 -- Description: Adds app-centric navigation with colored tabs, workspace
 --              configuration, and BaseApplication class system.
 -- ============================================================================
@@ -9,7 +9,7 @@
 -- ============================================================================
 
 -- Add new columns to Application table
-ALTER TABLE [__mj].[Application] ADD
+ALTER TABLE [${flyway:defaultSchema}].[Application] ADD
     Color nvarchar(20) NULL,
     DefaultNavItems nvarchar(MAX) NULL,
     ClassName nvarchar(255) NULL;
@@ -19,7 +19,7 @@ GO
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Hex color code for visual theming (e.g., #4caf50)',
-    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'Application',
     @level2type = N'COLUMN', @level2name = N'Color';
 GO
@@ -27,7 +27,7 @@ GO
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()',
-    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'Application',
     @level2type = N'COLUMN', @level2name = N'DefaultNavItems';
 GO
@@ -35,7 +35,7 @@ GO
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'TypeScript class name for ClassFactory registration (e.g., CRMApplication)',
-    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'Application',
     @level2type = N'COLUMN', @level2name = N'ClassName';
 GO
@@ -45,7 +45,7 @@ GO
 -- ============================================================================
 
 -- Add Configuration column to Workspace table
-ALTER TABLE [__mj].[Workspace] ADD
+ALTER TABLE [${flyway:defaultSchema}].[Workspace] ADD
     Configuration nvarchar(MAX) NULL;
 GO
 
@@ -53,7 +53,7 @@ GO
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.',
-    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'Workspace',
     @level2type = N'COLUMN', @level2name = N'Configuration';
 GO
@@ -76,8 +76,8 @@ SET Configuration = (
                 LOWER(CONVERT(nvarchar(36), wi.ID)) as id,
                 LOWER(CONVERT(nvarchar(36), COALESCE(
                     (SELECT TOP 1 ae.ApplicationID
-                     FROM [__mj].[ApplicationEntity] ae
-                     JOIN [__mj].[ResourceType] rt ON rt.EntityID = ae.EntityID
+                     FROM [${flyway:defaultSchema}].[ApplicationEntity] ae
+                     JOIN [${flyway:defaultSchema}].[ResourceType] rt ON rt.EntityID = ae.EntityID
                      WHERE rt.ID = wi.ResourceTypeID),
                     '00000000-0000-0000-0000-000000000000'
                 ))) as applicationId,
@@ -88,19 +88,19 @@ SET Configuration = (
                 wi.Sequence as sequence,
                 FORMAT(GETUTCDATE(), 'yyyy-MM-ddTHH:mm:ss.fffZ') as lastAccessedAt,
                 JSON_QUERY(COALESCE(wi.Configuration, '{}')) as configuration
-            FROM [__mj].[WorkspaceItem] wi
+            FROM [${flyway:defaultSchema}].[WorkspaceItem] wi
             WHERE wi.WorkspaceID = w.ID
             ORDER BY wi.Sequence
             FOR JSON PATH
         ) as tabs
     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
 )
-FROM [__mj].[Workspace] w
-WHERE EXISTS (SELECT 1 FROM [__mj].[WorkspaceItem] wi WHERE wi.WorkspaceID = w.ID);
+FROM [${flyway:defaultSchema}].[Workspace] w
+WHERE EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[WorkspaceItem] wi WHERE wi.WorkspaceID = w.ID);
 GO
 
 -- Set default configuration for workspaces with no items
-UPDATE [__mj].[Workspace]
+UPDATE [${flyway:defaultSchema}].[Workspace]
 SET Configuration = '{"version":1,"layout":{"root":{"type":"row","content":[]}},"activeTabId":null,"theme":"light","preferences":{"tabPosition":"top","showTabIcons":true,"autoSaveInterval":5000},"tabs":[]}'
 WHERE Configuration IS NULL;
 GO
@@ -139,12 +139,12 @@ NumberedApps AS (
     SELECT
         ID,
         ROW_NUMBER() OVER (ORDER BY Name) as RowNum
-    FROM [__mj].[Application]
+    FROM [${flyway:defaultSchema}].[Application]
     WHERE Color IS NULL
 )
 UPDATE a
 SET Color = cp.ColorValue
-FROM [__mj].[Application] a
+FROM [${flyway:defaultSchema}].[Application] a
 INNER JOIN NumberedApps na ON a.ID = na.ID
 INNER JOIN ColorPalette cp ON cp.ColorIndex = ((na.RowNum - 1) % 20) + 1;
 GO
@@ -156,14 +156,14 @@ GO
 -- Mark WorkspaceItem entity timestamp for tracking purposes
 -- Note: Entity deprecation is handled by setting appropriate metadata flags
 -- The actual Status field update depends on your deprecation strategy
-UPDATE [__mj].[Entity]
-SET Status='Deprecated', __mj_UpdatedAt = GETUTCDATE() 
+UPDATE [${flyway:defaultSchema}].[Entity]
+SET Status='Deprecated', ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE() 
 WHERE Name = 'Workspace Items';
 GO
 
 -- Mark Explorer Navigation Items entity timestamp for tracking purposes
-UPDATE [__mj].[Entity]
-SET Status='Deprecated', __mj_UpdatedAt = GETUTCDATE()
+UPDATE [${flyway:defaultSchema}].[Entity]
+SET Status='Deprecated', ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
 WHERE Name = 'Explorer Navigation Items';
 GO
 
@@ -665,7 +665,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateApplication] TO [cdp_Develop
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the Application table
+----- TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the Application table
 ------------------------------------------------------------
 IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateApplication]', 'TR') IS NOT NULL
     DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateApplication];
@@ -679,7 +679,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[Application]
     SET
-        __mj_UpdatedAt = GETUTCDATE()
+        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[Application] AS _organicTable
     INNER JOIN
@@ -942,7 +942,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateWorkspace] TO [cdp_UI], [cdp
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the Workspace table
+----- TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the Workspace table
 ------------------------------------------------------------
 IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateWorkspace]', 'TR') IS NOT NULL
     DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateWorkspace];
@@ -956,7 +956,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[Workspace]
     SET
-        __mj_UpdatedAt = GETUTCDATE()
+        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[Workspace] AS _organicTable
     INNER JOIN
@@ -1143,7 +1143,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
 
                UPDATE [${flyway:defaultSchema}].EntitySetting
                SET Value = '{"Workspace Identification":"fa fa-key","Workspace Details":"fa fa-folder-open","Administrative Info":"fa fa-user","System Metadata":"fa fa-cog"}',
-                   __mj_UpdatedAt = GETUTCDATE()
+                   ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
                WHERE EntityID = '0E248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryIcons'
             
 
@@ -1230,7 +1230,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
 
             UPDATE [${flyway:defaultSchema}].ApplicationEntity
             SET DefaultForNewUser = 1,
-                __mj_UpdatedAt = GETUTCDATE()
+                ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
             WHERE EntityID = '0E248F34-2837-EF11-86D4-6045BDEE16E6'
          
 
@@ -1238,7 +1238,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
 
                UPDATE [${flyway:defaultSchema}].EntitySetting
                SET Value = '{"Application Configuration":"fa fa-sliders-h","General Information":"fa fa-info-circle","System Metadata":"fa fa-cog"}',
-                   __mj_UpdatedAt = GETUTCDATE()
+                   ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
                WHERE EntityID = 'E8238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryIcons'
             
 
@@ -1246,7 +1246,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
 
             UPDATE [${flyway:defaultSchema}].ApplicationEntity
             SET DefaultForNewUser = 1,
-                __mj_UpdatedAt = GETUTCDATE()
+                ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
             WHERE EntityID = 'E8238F34-2837-EF11-86D4-6045BDEE16E6'
          
 

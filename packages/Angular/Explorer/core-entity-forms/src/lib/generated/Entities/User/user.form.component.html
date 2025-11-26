@@ -1174,6 +1174,27 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: User Settings Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJUserSettings"
+        sectionName="MJ: User Settings"
+        icon="fa fa-sliders-h"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJUserSettings')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Settings','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Settings')"
+                [AllowLoad]="IsSectionExpanded('mJUserSettings')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJUserSettings', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- Resource Links Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="resourceLinks"

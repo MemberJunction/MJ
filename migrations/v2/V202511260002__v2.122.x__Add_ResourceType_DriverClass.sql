@@ -36,15 +36,6 @@ EXEC sys.sp_addextendedproperty
 
 
 
-
-
-
-
-
-
-
-
-
 -- CODE GEN RUN 
 /* SQL text to insert new entity field */
 

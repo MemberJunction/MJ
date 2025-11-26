@@ -13933,6 +13933,49 @@ export const TestSchema = z.object({
 export type TestEntityType = z.infer<typeof TestSchema>;
 
 /**
+ * zod schema definition for the entity MJ: User Settings
+ */
+export const UserSettingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user this setting belongs to.`),
+    Setting: z.string().describe(`
+        * * Field Name: Setting
+        * * Display Name: Setting
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The setting key/name. Use namespaced keys like "DataExplorer.ViewMode" or "Dashboard.AI.CollapsedSections" to avoid collisions.`),
+    Value: z.string().nullable().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The setting value. Can be simple text, numbers, booleans, or JSON for complex configuration objects.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type UserSettingEntityType = z.infer<typeof UserSettingSchema>;
+
+/**
  * zod schema definition for the entity Output Delivery Types
  */
 export const OutputDeliveryTypeSchema = z.object({
@@ -53812,6 +53855,120 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     */
     get Type(): string {
         return this.Get('Type');
+    }
+}
+
+
+/**
+ * MJ: User Settings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UserSetting
+ * * Base View: vwUserSettings
+ * * @description Generic key-value store for per-user settings. Allows any application or feature to persist user preferences.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: User Settings')
+export class UserSettingEntity extends BaseEntity<UserSettingEntityType> {
+    /**
+    * Loads the MJ: User Settings record from the database
+    * @param ID: string - primary key value to load the MJ: User Settings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof UserSettingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user this setting belongs to.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Setting
+    * * Display Name: Setting
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The setting key/name. Use namespaced keys like "DataExplorer.ViewMode" or "Dashboard.AI.CollapsedSections" to avoid collisions.
+    */
+    get Setting(): string {
+        return this.Get('Setting');
+    }
+    set Setting(value: string) {
+        this.Set('Setting', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The setting value. Can be simple text, numbers, booleans, or JSON for complex configuration objects.
+    */
+    get Value(): string | null {
+        return this.Get('Value');
+    }
+    set Value(value: string | null) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 
