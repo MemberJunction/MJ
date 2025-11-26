@@ -16675,6 +16675,21 @@ export class MJApplication_ {
     @MaxLength(510)
     ClassName?: string;
         
+    @Field(() => Int, {description: `Default sequence position when adding this application to a new user's User Applications. Lower values appear first. Used when DefaultForNewUser is true.`}) 
+    DefaultSequence: number;
+        
+    @Field({description: `Application lifecycle status. Pending = not yet ready, Active = available for use, Disabled = temporarily unavailable, Deprecated = being phased out. Only Active applications are shown to users.`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({description: `How the application appears in navigation. App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.`}) 
+    @MaxLength(40)
+    NavigationStyle: string;
+        
+    @Field({nullable: true, description: `Position of the permanent nav icon when NavigationStyle is Nav Bar or Both. Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar. Ignored when NavigationStyle is App Switcher.`}) 
+    @MaxLength(60)
+    TopNavLocation?: string;
+        
     @Field(() => [MJApplicationEntity_])
     ApplicationEntities_ApplicationIDArray: MJApplicationEntity_[]; // Link to ApplicationEntities
     
@@ -16723,6 +16738,18 @@ export class CreateMJApplicationInput {
 
     @Field({ nullable: true })
     ClassName: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultSequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    NavigationStyle?: string;
+
+    @Field({ nullable: true })
+    TopNavLocation: string | null;
 }
     
 
@@ -16757,6 +16784,18 @@ export class UpdateMJApplicationInput {
 
     @Field({ nullable: true })
     ClassName?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultSequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    NavigationStyle?: string;
+
+    @Field({ nullable: true })
+    TopNavLocation?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

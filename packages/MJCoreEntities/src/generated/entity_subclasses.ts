@@ -2513,6 +2513,44 @@ export const ApplicationSchema = z.object({
         * * Display Name: Class Name
         * * SQL Data Type: nvarchar(255)
         * * Description: TypeScript class name for ClassFactory registration (e.g., CRMApplication)`),
+    DefaultSequence: z.number().describe(`
+        * * Field Name: DefaultSequence
+        * * Display Name: Default Sequence
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Default sequence position when adding this application to a new user's User Applications. Lower values appear first. Used when DefaultForNewUser is true.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    *   * Pending
+        * * Description: Application lifecycle status. Pending = not yet ready, Active = available for use, Disabled = temporarily unavailable, Deprecated = being phased out. Only Active applications are shown to users.`),
+    NavigationStyle: z.union([z.literal('App Switcher'), z.literal('Both'), z.literal('Nav Bar')]).describe(`
+        * * Field Name: NavigationStyle
+        * * Display Name: Navigation Style
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: App Switcher
+    * * Value List Type: List
+    * * Possible Values 
+    *   * App Switcher
+    *   * Both
+    *   * Nav Bar
+        * * Description: How the application appears in navigation. App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.`),
+    TopNavLocation: z.union([z.literal('Left of App Switcher'), z.literal('Left of User Menu')]).nullable().describe(`
+        * * Field Name: TopNavLocation
+        * * Display Name: Top Nav Location
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Left of App Switcher
+    *   * Left of User Menu
+        * * Description: Position of the permanent nav icon when NavigationStyle is Nav Bar or Both. Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar. Ignored when NavigationStyle is App Switcher.`),
 });
 
 export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
@@ -24151,6 +24189,76 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     }
     set ClassName(value: string | null) {
         this.Set('ClassName', value);
+    }
+
+    /**
+    * * Field Name: DefaultSequence
+    * * Display Name: Default Sequence
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Default sequence position when adding this application to a new user's User Applications. Lower values appear first. Used when DefaultForNewUser is true.
+    */
+    get DefaultSequence(): number {
+        return this.Get('DefaultSequence');
+    }
+    set DefaultSequence(value: number) {
+        this.Set('DefaultSequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    *   * Pending
+    * * Description: Application lifecycle status. Pending = not yet ready, Active = available for use, Disabled = temporarily unavailable, Deprecated = being phased out. Only Active applications are shown to users.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: NavigationStyle
+    * * Display Name: Navigation Style
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: App Switcher
+    * * Value List Type: List
+    * * Possible Values 
+    *   * App Switcher
+    *   * Both
+    *   * Nav Bar
+    * * Description: How the application appears in navigation. App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.
+    */
+    get NavigationStyle(): 'App Switcher' | 'Both' | 'Nav Bar' {
+        return this.Get('NavigationStyle');
+    }
+    set NavigationStyle(value: 'App Switcher' | 'Both' | 'Nav Bar') {
+        this.Set('NavigationStyle', value);
+    }
+
+    /**
+    * * Field Name: TopNavLocation
+    * * Display Name: Top Nav Location
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Left of App Switcher
+    *   * Left of User Menu
+    * * Description: Position of the permanent nav icon when NavigationStyle is Nav Bar or Both. Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar. Ignored when NavigationStyle is App Switcher.
+    */
+    get TopNavLocation(): 'Left of App Switcher' | 'Left of User Menu' | null {
+        return this.Get('TopNavLocation');
+    }
+    set TopNavLocation(value: 'Left of App Switcher' | 'Left of User Menu' | null) {
+        this.Set('TopNavLocation', value);
     }
 }
 
