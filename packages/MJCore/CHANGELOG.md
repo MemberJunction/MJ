@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 2.121.0
+
+### Minor Changes
+
+- a2bef0a: Refactor component-linter with fixture-based testing infrastructure, fix agent execution error handling and payload propagation, add Gemini API parameter fixes, and improve vendor failover with VendorValidationError type
+- 7d5a046: Migration to add missing core entity fields.
+
+### Patch Changes
+
+- @memberjunction/global@2.121.0
+
 ## 2.120.0
 
 ### Minor Changes

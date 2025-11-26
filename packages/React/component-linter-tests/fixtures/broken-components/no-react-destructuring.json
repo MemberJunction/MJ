@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component destructuring React object (violates no-react-destructuring rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState: state, useEffect: effect } = React;\n  const [data, setData] = state([]);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>Data count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

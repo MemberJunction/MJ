@@ -142,7 +142,7 @@ export class GeminiLLM extends BaseLLM {
             const latestMessage = params.messages[params.messages.length - 1].content;
             const result = await chat.sendMessage({
                 message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
-                ...modelOptions
+                config: modelOptions
             });
             
             const rawContent = result.candidates?.[0]?.content?.parts?.find(part => part.text && !part.thought)?.text || '';
@@ -276,11 +276,11 @@ export class GeminiLLM extends BaseLLM {
         });
         
         const latestMessage = params.messages[params.messages.length - 1].content;
-        
+
         // Send message with streaming
         const streamResult = await chat.sendMessageStream({
             message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
-            ...modelOptions
+            config: modelOptions
         });
         
         // Return the stream for the for-await loop to work

@@ -173,7 +173,6 @@ export class TestEngine extends TestEngineBase {
             for (const test of tests) {
                 try {
                     const result = await this.RunTest(test.ID, options, contextUser, suiteRun.ID, testSequence);
-                    testSequence++; // Increment for next test in suite
 
                     // Handle both single result and array of results (if RepeatCount > 1)
                     if (Array.isArray(result)) {
@@ -184,6 +183,10 @@ export class TestEngine extends TestEngineBase {
                 } catch (error) {
                     this.logError(`Test failed in suite: ${test.Name}`, error as Error);
                     // Continue with remaining tests
+                } finally {
+                    // Always increment sequence, even if test throws exception
+                    // This ensures each test gets a unique sequence number in conversation names
+                    testSequence++;
                 }
             }
 

@@ -1,0 +1,13 @@
+{
+  "name": "TestComponent",
+  "description": "Component not passing standard props to child (violates pass-standard-props rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, components }) {\n  const { UserCard } = components;\n  const [data, setData] = useState([]);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <UserCard name='John' />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": [
+    {
+      "name": "UserCard",
+      "code": "function UserCard({ name, utilities, savedUserSettings }) { return <div>User: {name}</div>; }"
+    }
+  ]
+}

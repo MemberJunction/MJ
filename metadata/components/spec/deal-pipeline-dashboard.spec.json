@@ -1,0 +1,59 @@
+{
+  "name": "DealPipelineDashboard",
+  "title": "Deal Pipeline Dashboard",
+  "description": "Comprehensive sales pipeline dashboard showcasing multiple chart with drill-down instances working together. Features three coordinated drill-down charts: deals by stage, deals by source, and expected revenue by close month. Demonstrates expert-level composition, multiple chart types, shared state management, and cross-component coordination for executive sales analytics.",
+  "type": "dashboard",
+  "location": "standalone",
+  "functionalRequirements": "Provides 360-degree view of sales pipeline with three interactive visualizations. Top chart shows deal count and total value by stage (Prospecting through Closed Won/Lost). Middle chart displays deal source analysis. Bottom chart shows expected revenue by projected close month. All charts support independent drill-down to deal details. Includes summary metrics panel showing total pipeline value, weighted expected revenue, average deal size, and win rate. Users can interact with any chart to inspect underlying deals. Demonstrates how multiple SimpleDrilldownChart components can coexist in a dashboard layout.",
+  "technicalDesign": "Loads all active Deal records once via RunView, filters to open deals (excluding Closed Won/Lost). Passes same dataset to three SimpleDrilldownChart instances with different groupBy configurations. First chart: bar chart by Stage using count aggregation. Second chart: pie chart by DealSource using count aggregation. Third chart: line chart by computed CloseMonth field using sum of ExpectedRevenue. Calculates summary metrics from raw deal data. Implements responsive grid layout with CSS flexbox. Each chart operates independently with its own drill-down state. Demonstrates proper data sharing pattern: load once, visualize many ways.",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Loads Deal entity with Account relationships, filters to active pipeline"
+  },
+  "properties": [
+    {
+      "name": "includeClosedDeals",
+      "type": "boolean",
+      "description": "Whether to include closed deals in analysis",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "onDealSelected",
+      "type": "function",
+      "description": "Callback when a deal is selected from any chart",
+      "required": false,
+      "parameters": [
+        {
+          "name": "dealData",
+          "type": "{ deal: object, sourceChart: string }",
+          "description": "Selected deal and source chart identifier"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "dealSelected",
+      "description": "Fired when user selects a deal from any chart",
+      "parameters": [
+        {
+          "name": "dealData",
+          "type": "{ deal: object, sourceChart: string }",
+          "description": "Deal details and originating chart"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleDrilldownChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry",
+      "version": "1.0.0",
+      "description": "Chart with drill-down capability (used 3 times)"
+    }
+  ],
+  "code": "@file:../code/deal-pipeline-dashboard.js",
+  "exampleUsage": "<DealPipelineDashboard \n  includeClosedDeals={false}\n  onDealSelected={(data) => console.log('Deal selected from', data.sourceChart, ':', data.deal.Name)}\n/>"
+}

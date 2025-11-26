@@ -1,0 +1,8 @@
+{
+  "name": "TestComponent",
+  "description": "Component using undefined JSX element (violates undefined-jsx-component rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <UndefinedElement data={data} />\n      <AnotherUndefinedComponent />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": []
+}

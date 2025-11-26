@@ -1,0 +1,17 @@
+{
+  "name": "TestComponent",
+  "description": "Component with unused component dependencies (violates unused-component-dependencies rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, components }) {\n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>This component does not use any of its declared dependencies</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": [
+    {
+      "name": "UserCard",
+      "code": "function UserCard({ name }) { return <div>{name}</div>; }"
+    },
+    {
+      "name": "DataTable",
+      "code": "function DataTable({ data }) { return <table></table>; }"
+    }
+  ]
+}

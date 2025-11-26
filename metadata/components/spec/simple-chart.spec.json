@@ -20,7 +20,7 @@
     {
       "name": "data",
       "type": "Array<object>",
-      "description": "Array of entity objects to visualize",
+      "description": "Array of entity records to visualize. Typically detail-level records (invoices, transactions, events) that component will aggregate by groupBy field. Can also accept pre-aggregated data if you're building custom charts without drill-down needs. For drill-down charts, use SimpleDrilldownChart which requires detail records.",
       "required": true
     },
     {
@@ -32,13 +32,13 @@
     {
       "name": "valueField",
       "type": "string",
-      "description": "Field to aggregate for values. If not specified, counts records",
+      "description": "Field name to aggregate for chart values. REQUIRED when using aggregateMethod 'sum', 'average', 'min', or 'max'. OMIT when using 'count' (counts records regardless of field values). Examples: 'Total' for revenue, 'Amount' for sales, 'Quantity' for inventory. Component groups records by groupBy field and aggregates this valueField according to aggregateMethod.",
       "required": false
     },
     {
       "name": "aggregateMethod",
       "type": "'count' | 'sum' | 'average' | 'min' | 'max'",
-      "description": "How to aggregate values",
+      "description": "How to aggregate records within each group. CRITICAL: Choose based on what you're measuring. Use 'count' ONLY when counting records (omit valueField). Use 'sum' for totals (revenue, sales, costs - REQUIRES valueField). Use 'average' for means (average deal size, average rating). Use 'min'/'max' for extremes. COMMON MISTAKE: Using default 'count' when valueField is specified - this counts records instead of summing values! Example: For 'revenue by month', use aggregateMethod='sum' with valueField='Total', NOT count.",
       "required": false,
       "defaultValue": "count",
       "possibleValues": ["count", "sum", "average", "min", "max"]
@@ -67,7 +67,7 @@
     {
       "name": "sortBy",
       "type": "'label' | 'value' | 'none'",
-      "description": "How to sort the chart data",
+      "description": "How to sort chart data. 'value' (default) sorts by aggregated values - useful for ranking (top products, highest revenue). 'label' sorts by category labels - REQUIRED for time-series data (by date, month, year) to maintain chronological order. 'none' preserves data order. CRITICAL FOR TIME-SERIES: When groupBy is a date/time field or sequential field (Month, Quarter, Year), MUST use sortBy='label' with sortOrder='asc' for proper chronological display. Default 'value' sorting will order by magnitude, breaking time sequence!",
       "required": false,
       "defaultValue": "value",
       "possibleValues": ["label", "value", "none"]
@@ -75,7 +75,7 @@
     {
       "name": "sortOrder",
       "type": "'asc' | 'desc'",
-      "description": "Sort direction",
+      "description": "Sort direction. 'asc' = ascending (low to high, A to Z, old to new). 'desc' = descending (high to low, Z to A, new to old). For time-series with sortBy='label', use 'asc' for chronological order (Jan→Dec, 2023→2024). For ranking with sortBy='value', use 'desc' for highest-first (top 10 products).",
       "required": false,
       "defaultValue": "desc",
       "possibleValues": ["asc", "desc"]
@@ -162,5 +162,5 @@
   ],
   "dependencies": [],
   "code": "@file:../code/simple-chart.js",
-  "exampleUsage": "<SimpleChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Revenue by Product Category\"\n  limit={10}\n  onDataPointClick={handleDrillDown}\n/>"
+  "exampleUsage": "<!-- Ranking Example: Top products by revenue (sort by value) -->\n<SimpleChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Top 10 Products by Revenue\"\n  limit={10}\n  sortBy=\"value\"  // Sort by aggregated revenue (default)\n  sortOrder=\"desc\"  // Highest first (default)\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Time-Series Example: Revenue by month (sort by label for chronological) -->\n<SimpleChart\n  entityName=\"Invoices\"\n  data={invoicesWithMonthField}  // Detail records with computed Month field (1-12)\n  groupBy=\"Month\"\n  valueField=\"Total\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Monthly Revenue\"\n  sortBy=\"label\"  // ⚠️ CRITICAL: Sort by Month number for chronological order\n  sortOrder=\"asc\"  // ⚠️ CRITICAL: Ascending for Jan→Dec sequence\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Counting Example: Tickets by status (no valueField) -->\n<SimpleChart\n  entityName=\"Support Tickets\"\n  data={tickets}\n  groupBy=\"Status\"\n  // No valueField - counting records\n  aggregateMethod=\"count\"\n  chartType=\"doughnut\"\n  title=\"Tickets by Status\"\n  sortBy=\"value\"\n  sortOrder=\"desc\"\n/>"
 }

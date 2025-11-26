@@ -3745,244 +3745,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     },
 
     {
-      name: 'validate-dependency-props',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        // Build a map of dependency components to their specs
-        const dependencySpecs = new Map<string, ComponentSpec>();
-        
-        // Process embedded dependencies
-        if (componentSpec?.dependencies && Array.isArray(componentSpec.dependencies)) {
-          for (const dep of componentSpec.dependencies) {
-            if (dep && dep.name) {
-              if (dep.location === 'registry') {
-                const match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
-                if (!match) {
-                  // the specified registry component was not found, we can't lint for it, but we should put a warning
-                  console.warn('Dependency component not found in registry', dep);
-                }
-                else {
-                  dependencySpecs.set(dep.name, match.spec);
-                }
-              }
-              else {
-                // Embedded dependencies have their spec inline
-                dependencySpecs.set(dep.name, dep);
-              }
-            }
-            else {
-              // we have an invalid dep in the spec, not a fatal error but we should log this
-              console.warn(`Invalid dependency in component spec`, dep);
-            }
-          }
-        }
-        
-        // For registry dependencies, we'd need ComponentMetadataEngine
-        // But since this is a static lint check, we'll focus on embedded deps
-        // Registry components would need async loading which doesn't fit the current sync pattern
-        
-        // Now traverse JSX to find component usage
-        traverse(ast, {
-          JSXElement(path: NodePath<t.JSXElement>) {
-            const openingElement = path.node.openingElement;
-            
-            // Check if this is one of our dependency components
-            if (t.isJSXIdentifier(openingElement.name)) {
-              const componentName = openingElement.name.name;
-              const depSpec = dependencySpecs.get(componentName);
-              
-              if (depSpec) {
-                // Collect props being passed
-                const passedProps = new Set<string>();
-                const passedPropNodes = new Map<string, t.JSXAttribute>();
-                
-                for (const attr of openingElement.attributes) {
-                  if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
-                    const propName = attr.name.name;
-                    passedProps.add(propName);
-                    passedPropNodes.set(propName, attr);
-                  }
-                }
-                
-                // Check required custom props
-                if (depSpec.properties && Array.isArray(depSpec.properties)) {
-                  const requiredProps: string[] = [];
-                  const optionalProps: string[] = [];
-                  
-                  for (const prop of depSpec.properties) {
-                    if (prop && prop.name && typeof prop.name === 'string') {
-                      if (prop.required === true) {
-                        requiredProps.push(prop.name);
-                      } else {
-                        optionalProps.push(prop.name);
-                      }
-                    }
-                  }
-                  
-                  // Check for missing required props
-                  const missingRequired = requiredProps.filter(prop => {
-                    // Special handling for 'children' prop
-                    if (prop === 'children') {
-                      // Check if JSX element has children nodes
-                      const hasChildren = path.node.children && path.node.children.length > 0 && 
-                        path.node.children.some(child => 
-                          !t.isJSXText(child) || (t.isJSXText(child) && child.value.trim() !== '')
-                        );
-                      return !passedProps.has(prop) && !hasChildren;
-                    }
-                    return !passedProps.has(prop);
-                  });
-                  
-                  // Separate children warnings from other critical props
-                  const missingChildren = missingRequired.filter(prop => prop === 'children');
-                  const missingOtherProps = missingRequired.filter(prop => prop !== 'children');
-                  
-                  // Critical violation for non-children required props
-                  if (missingOtherProps.length > 0) {
-                    violations.push({
-                      rule: 'validate-dependency-props',
-                      severity: 'critical',
-                      line: openingElement.loc?.start.line || 0,
-                      column: openingElement.loc?.start.column || 0,
-                      message: `Dependency component "${componentName}" is missing required props: ${missingOtherProps.join(', ')}. These props are marked as required in the component's specification.`,
-                      code: `<${componentName} ... />`
-                    });
-                  }
-                  
-                  // Medium severity warning for missing children when required
-                  if (missingChildren.length > 0) {
-                    violations.push({
-                      rule: 'validate-dependency-props',
-                      severity: 'medium',
-                      line: openingElement.loc?.start.line || 0,
-                      column: openingElement.loc?.start.column || 0,
-                      message: `Component "${componentName}" expects children but none were provided. The 'children' prop is marked as required in the component's specification.`,
-                      code: `<${componentName} ... />`
-                    });
-                  }
-                  
-                  // Validate prop types for passed props
-                  for (const [propName, attrNode] of passedPropNodes) {
-                    const propSpec = depSpec.properties.find(p => p.name === propName);
-                    if (propSpec && propSpec.type) {
-                      const value = attrNode.value;
-                      
-                      // Type validation based on prop spec type
-                      if (propSpec.type === 'string') {
-                        // Check if value could be a string
-                        if (value && t.isJSXExpressionContainer(value)) {
-                          const expr = value.expression;
-                          // Check for obvious non-string types
-                          if (t.isNumericLiteral(expr) || t.isBooleanLiteral(expr) || 
-                              t.isArrayExpression(expr) || (t.isObjectExpression(expr) && !t.isTemplateLiteral(expr))) {
-                            violations.push({
-                              rule: 'validate-dependency-props',
-                              severity: 'high',
-                              line: attrNode.loc?.start.line || 0,
-                              column: attrNode.loc?.start.column || 0,
-                              message: `Prop "${propName}" on component "${componentName}" expects type "string" but received a different type.`,
-                              code: `${propName}={...}`
-                            });
-                          }
-                        }
-                      } else if (propSpec.type === 'number') {
-                        // Check if value could be a number
-                        if (value && t.isJSXExpressionContainer(value)) {
-                          const expr = value.expression;
-                          if (t.isStringLiteral(expr) || t.isBooleanLiteral(expr) || 
-                              t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
-                            violations.push({
-                              rule: 'validate-dependency-props',
-                              severity: 'high',
-                              line: attrNode.loc?.start.line || 0,
-                              column: attrNode.loc?.start.column || 0,
-                              message: `Prop "${propName}" on component "${componentName}" expects type "number" but received a different type.`,
-                              code: `${propName}={...}`
-                            });
-                          }
-                        }
-                      } else if (propSpec.type === 'boolean') {
-                        // Check if value could be a boolean
-                        if (value && t.isJSXExpressionContainer(value)) {
-                          const expr = value.expression;
-                          if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || 
-                              t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
-                            violations.push({
-                              rule: 'validate-dependency-props',
-                              severity: 'high',
-                              line: attrNode.loc?.start.line || 0,
-                              column: attrNode.loc?.start.column || 0,
-                              message: `Prop "${propName}" on component "${componentName}" expects type "boolean" but received a different type.`,
-                              code: `${propName}={...}`
-                            });
-                          }
-                        }
-                      } else if (propSpec.type === 'array') {
-                        // Check if value could be an array
-                        if (value && t.isJSXExpressionContainer(value)) {
-                          const expr = value.expression;
-                          if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || 
-                              t.isBooleanLiteral(expr) || (t.isObjectExpression(expr) && !t.isArrayExpression(expr))) {
-                            violations.push({
-                              rule: 'validate-dependency-props',
-                              severity: 'high',
-                              line: attrNode.loc?.start.line || 0,
-                              column: attrNode.loc?.start.column || 0,
-                              message: `Prop "${propName}" on component "${componentName}" expects type "array" but received a different type.`,
-                              code: `${propName}={...}`
-                            });
-                          }
-                        }
-                      } else if (propSpec.type === 'object') {
-                        // Check if value could be an object
-                        if (value && t.isJSXExpressionContainer(value)) {
-                          const expr = value.expression;
-                          if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || 
-                              t.isBooleanLiteral(expr) || t.isArrayExpression(expr)) {
-                            violations.push({
-                              rule: 'validate-dependency-props',
-                              severity: 'high',
-                              line: attrNode.loc?.start.line || 0,
-                              column: attrNode.loc?.start.column || 0,
-                              message: `Prop "${propName}" on component "${componentName}" expects type "object" but received a different type.`,
-                              code: `${propName}={...}`
-                            });
-                          }
-                        }
-                      }
-                    }
-                  }
-                  
-                  // Check for unknown props (props not in the spec)
-                  const specPropNames = new Set<string>(depSpec.properties.map(p => p.name).filter(Boolean));
-                  const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
-                  const reactSpecialProps = new Set(['children']);
-                  
-                  for (const passedProp of passedProps) {
-                    if (!specPropNames.has(passedProp) && !standardProps.has(passedProp) && !reactSpecialProps.has(passedProp)) {
-                      violations.push({
-                        rule: 'validate-dependency-props',
-                        severity: 'medium',
-                        line: passedPropNodes.get(passedProp)?.loc?.start.line || 0,
-                        column: passedPropNodes.get(passedProp)?.loc?.start.column || 0,
-                        message: `Prop "${passedProp}" is not defined in the specification for component "${componentName}". In addition to the standard MJ props, valid custom props: ${Array.from(specPropNames).join(', ') || 'none'}.`,
-                        code: `${passedProp}={...}`
-                      });
-                    }
-                  }
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
-
-    {
       name: 'unsafe-array-operations',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -5213,35 +4975,46 @@ Correct pattern:
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
-        
+
         // Skip if no dependencies
         if (!componentSpec?.dependencies || componentSpec.dependencies.length === 0) {
           return violations;
         }
-        
-        // Build a map of dependency components and their expected props
-        const dependencyPropsMap = new Map<string, { 
-          required: string[], 
-          all: string[],
-          location: string 
-        }>();
-        
+
+        // Build a map of dependency components to their full specs
+        const dependencySpecs = new Map<string, ComponentSpec>();
+
+        // Process all dependencies (embedded and registry)
         for (const dep of componentSpec.dependencies) {
-          const requiredProps = dep.properties
-            ?.filter(p => p.required)
-            ?.map(p => p.name) || [];
-          const allProps = dep.properties?.map(p => p.name) || [];
-          dependencyPropsMap.set(dep.name, { 
-            required: requiredProps, 
-            all: allProps,
-            location: dep.location || 'embedded'
-          });
+          if (dep && dep.name) {
+            if (dep.location === 'registry') {
+              // Try to load from registry
+              // check if registry is defined; if not, don't pass it to find component
+              let match;
+              if (dep.registry) {
+                match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
+              } else {
+                match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace);
+              }
+
+              if (!match) {
+                console.warn(`Dependency component not found in registry: ${dep.name} (${dep.namespace || 'no namespace'})`);
+              } else {
+                dependencySpecs.set(dep.name, match.spec);
+              }
+            } else {
+              // Embedded dependencies have their spec inline
+              dependencySpecs.set(dep.name, dep);
+            }
+          } else {
+            console.warn(`Invalid dependency in component spec: ${dep?.name || 'unknown'}`);
+          }
         }
-        
-        // Helper function to find closest matching prop name
+
+        // Helper function to find closest matching prop name using Levenshtein distance
         function findClosestMatch(target: string, candidates: string[]): string | null {
           if (candidates.length === 0) return null;
-          
+
           // Simple Levenshtein distance implementation
           function levenshtein(a: string, b: string): number {
             const matrix: number[][] = [];
@@ -5266,11 +5039,11 @@ Correct pattern:
             }
             return matrix[b.length][a.length];
           }
-          
+
           // Find the closest match
           let bestMatch = '';
           let bestDistance = Infinity;
-          
+
           for (const candidate of candidates) {
             const distance = levenshtein(target.toLowerCase(), candidate.toLowerCase());
             if (distance < bestDistance && distance <= 3) { // Max distance of 3 for suggestions
@@ -5278,101 +5051,242 @@ Correct pattern:
               bestMatch = candidate;
             }
           }
-          
+
           return bestMatch || null;
         }
-        
+
         // Standard props that are always valid (passed by the runtime)
         const standardProps = new Set([
-          'styles', 'utilities', 'components', 'callbacks', 
+          'utilities', 'styles', 'components', 'callbacks',
           'savedUserSettings', 'onSaveUserSettings'
         ]);
-        
-        // Track JSX elements and their props
+
+        const reactSpecialProps = new Set(['children', 'key', 'ref']);
+
+        // Traverse JSX to find component usage
         traverse(ast, {
           JSXElement(path: NodePath<t.JSXElement>) {
             const openingElement = path.node.openingElement;
-            
+
             // Get the element name
             let elementName = '';
             if (t.isJSXIdentifier(openingElement.name)) {
               elementName = openingElement.name.name;
             } else if (t.isJSXMemberExpression(openingElement.name)) {
-              // Handle cases like <MaterialUI.Button>
-              return; // Skip member expressions for now
+              // Handle cases like <components.Button> - skip for now
+              return;
             }
-            
-            // Check if this is one of our dependencies
-            if (dependencyPropsMap.has(elementName)) {
-              const { required, all, location } = dependencyPropsMap.get(elementName)!;
-              
-              // Get passed props
-              const passedProps = new Set<string>();
-              const propLocations = new Map<string, { line: number, column: number }>();
-              
-              for (const attr of openingElement.attributes) {
-                if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
-                  const propName = attr.name.name;
-                  passedProps.add(propName);
-                  propLocations.set(propName, {
-                    line: attr.loc?.start.line || 0,
-                    column: attr.loc?.start.column || 0
-                  });
+
+            // Check if this is one of our dependency components
+            const depSpec = dependencySpecs.get(elementName);
+            if (!depSpec) return;
+
+            // Collect passed props
+            const passedProps = new Set<string>();
+            const passedPropNodes = new Map<string, t.JSXAttribute>();
+
+            for (const attr of openingElement.attributes) {
+              if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+                const propName = attr.name.name;
+                passedProps.add(propName);
+                passedPropNodes.set(propName, attr);
+              }
+            }
+
+            // Build lists of valid props and events
+            const specPropNames: string[] = depSpec.properties?.map(p => p.name).filter(Boolean) || [];
+            const specEventNames: string[] = depSpec.events?.map(e => e.name).filter(Boolean) || [];
+            const allValidProps = [...specPropNames, ...specEventNames];
+
+            // Get required props
+            const requiredProps: string[] = [];
+            if (depSpec.properties && Array.isArray(depSpec.properties)) {
+              for (const prop of depSpec.properties) {
+                if (prop && prop.name && prop.required === true) {
+                  requiredProps.push(prop.name);
                 }
               }
-              
-              // Check for missing required props
-              for (const requiredProp of required) {
-                if (!passedProps.has(requiredProp) && !standardProps.has(requiredProp)) {
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // 1. CHECK MISSING REQUIRED PROPS
+            // ═══════════════════════════════════════════════════════════════
+            const missingRequired = requiredProps.filter(prop => {
+              // Special handling for 'children' prop
+              if (prop === 'children') {
+                // Check if JSX element has children nodes
+                const hasChildren = path.node.children && path.node.children.length > 0 &&
+                  path.node.children.some(child =>
+                    !t.isJSXText(child) || (t.isJSXText(child) && child.value.trim() !== '')
+                  );
+                return !passedProps.has(prop) && !hasChildren;
+              }
+              return !passedProps.has(prop) && !standardProps.has(prop);
+            });
+
+            // Separate children warnings from other critical props
+            const missingChildren = missingRequired.filter(prop => prop === 'children');
+            const missingOtherProps = missingRequired.filter(prop => prop !== 'children');
+
+            // Critical violation for non-children required props
+            if (missingOtherProps.length > 0) {
+              violations.push({
+                rule: 'dependency-prop-validation',
+                severity: 'critical',
+                line: openingElement.loc?.start.line || 0,
+                column: openingElement.loc?.start.column || 0,
+                message: `Dependency component "${elementName}" is missing required props: ${missingOtherProps.join(', ')}. These props are marked as required in the component's specification.`,
+                code: `<${elementName} ... />`
+              });
+            }
+
+            // Medium severity warning for missing children when required
+            if (missingChildren.length > 0) {
+              violations.push({
+                rule: 'dependency-prop-validation',
+                severity: 'medium',
+                line: openingElement.loc?.start.line || 0,
+                column: openingElement.loc?.start.column || 0,
+                message: `Component "${elementName}" expects children but none were provided. The 'children' prop is marked as required in the component's specification.`,
+                code: `<${elementName} ... />`
+              });
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // 2. VALIDATE PROP TYPES
+            // ═══════════════════════════════════════════════════════════════
+            if (depSpec.properties && Array.isArray(depSpec.properties)) {
+              for (const [propName, attrNode] of passedPropNodes) {
+                const propSpec = depSpec.properties.find(p => p.name === propName);
+                if (propSpec && propSpec.type) {
+                  const value = attrNode.value;
+
+                  // Type validation based on prop spec type
+                  if (propSpec.type === 'string') {
+                    // Check if value could be a string
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      // Check for obvious non-string types
+                      if (t.isNumericLiteral(expr) || t.isBooleanLiteral(expr) ||
+                          t.isArrayExpression(expr) || (t.isObjectExpression(expr) && !t.isTemplateLiteral(expr))) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "string" but received a different type.`,
+                          code: `${propName}={...}`
+                        });
+                      }
+                    }
+                  } else if (propSpec.type === 'number') {
+                    // Check if value could be a number
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (t.isStringLiteral(expr) || t.isBooleanLiteral(expr) ||
+                          t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "number" but received a different type.`,
+                          code: `${propName}={...}`
+                        });
+                      }
+                    }
+                  } else if (propSpec.type === 'boolean') {
+                    // Check if value could be a boolean
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) ||
+                          t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "boolean" but received a different type.`,
+                          code: `${propName}={...}`
+                        });
+                      }
+                    }
+                  } else if (propSpec.type === 'array' || propSpec.type.startsWith('Array<')) {
+                    // Check if value could be an array
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) ||
+                          t.isBooleanLiteral(expr) || (t.isObjectExpression(expr) && !t.isArrayExpression(expr))) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "array" but received a different type.`,
+                          code: `${propName}={...}`
+                        });
+                      }
+                    }
+                  } else if (propSpec.type === 'object') {
+                    // Check if value could be an object
+                    if (value && t.isJSXExpressionContainer(value)) {
+                      const expr = value.expression;
+                      if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) ||
+                          t.isBooleanLiteral(expr) || t.isArrayExpression(expr)) {
+                        violations.push({
+                          rule: 'dependency-prop-validation',
+                          severity: 'high',
+                          line: attrNode.loc?.start.line || 0,
+                          column: attrNode.loc?.start.column || 0,
+                          message: `Prop "${propName}" on component "${elementName}" expects type "object" but received a different type.`,
+                          code: `${propName}={...}`
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // 3. CHECK UNKNOWN PROPS (with Levenshtein suggestions)
+            // ═══════════════════════════════════════════════════════════════
+            for (const passedProp of passedProps) {
+              // Skip standard props and React special props
+              if (standardProps.has(passedProp) || reactSpecialProps.has(passedProp)) {
+                continue;
+              }
+
+              // Check if prop is valid (in properties or events)
+              if (!allValidProps.includes(passedProp)) {
+                // Try to find a close match using Levenshtein distance
+                const suggestion = findClosestMatch(passedProp, allValidProps);
+                const loc = passedPropNodes.get(passedProp);
+
+                if (suggestion) {
                   violations.push({
                     rule: 'dependency-prop-validation',
-                    severity: 'critical',
-                    line: openingElement.loc?.start.line || 0,
-                    column: openingElement.loc?.start.column || 0,
-                    message: `Missing required prop '${requiredProp}' for dependency component '${elementName}'`,
-                    code: `<${elementName} ... />`
+                    severity: 'high',
+                    line: loc?.loc?.start.line || openingElement.loc?.start.line || 0,
+                    column: loc?.loc?.start.column || openingElement.loc?.start.column || 0,
+                    message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. Did you mean '${suggestion}'?`,
+                    code: `${passedProp}={...}`
                   });
-                }
-              }
-              
-              // Check for unknown props (potential typos)
-              for (const passedProp of passedProps) {
-                // Skip standard props and spread operators
-                if (standardProps.has(passedProp) || passedProp === 'key' || passedProp === 'ref') {
-                  continue;
-                }
-                
-                if (!all.includes(passedProp)) {
-                  // Try to find a close match
-                  const suggestion = findClosestMatch(passedProp, all);
-                  
-                  if (suggestion) {
-                    const loc = propLocations.get(passedProp);
-                    violations.push({
-                      rule: 'dependency-prop-validation',
-                      severity: 'high',
-                      line: loc?.line || openingElement.loc?.start.line || 0,
-                      column: loc?.column || openingElement.loc?.start.column || 0,
-                      message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. Did you mean '${suggestion}'?`,
-                      code: `${passedProp}={...}`
-                    });
-                  } else {
-                    const loc = propLocations.get(passedProp);
-                    violations.push({
-                      rule: 'dependency-prop-validation',
-                      severity: 'medium',
-                      line: loc?.line || openingElement.loc?.start.line || 0,
-                      column: loc?.column || openingElement.loc?.start.column || 0,
-                      message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. Expected props: ${all.join(', ')}`,
-                      code: `${passedProp}={...}`
-                    });
-                  }
+                } else {
+                  violations.push({
+                    rule: 'dependency-prop-validation',
+                    severity: 'medium',
+                    line: loc?.loc?.start.line || openingElement.loc?.start.line || 0,
+                    column: loc?.loc?.start.column || openingElement.loc?.start.column || 0,
+                    message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. Expected props and events: ${allValidProps.join(', ') || 'none'}.`,
+                    code: `${passedProp}={...}`
+                  });
                 }
               }
             }
           }
         });
-        
+
         return violations;
       }
     },

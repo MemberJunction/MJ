@@ -1,5 +1,24 @@
 # @memberjunction/ng-dashboards
 
+## 2.121.0
+
+### Patch Changes
+
+- Updated dependencies [a2bef0a]
+- Updated dependencies [7d5a046]
+  - @memberjunction/core@2.121.0
+  - @memberjunction/ng-core-entity-forms@2.121.0
+  - @memberjunction/ng-shared@2.121.0
+  - @memberjunction/ng-testing@2.121.0
+  - @memberjunction/ng-action-gallery@2.121.0
+  - @memberjunction/ng-ai-test-harness@2.121.0
+  - @memberjunction/ng-container-directives@2.121.0
+  - @memberjunction/ng-notifications@2.121.0
+  - @memberjunction/graphql-dataprovider@2.121.0
+  - @memberjunction/core-entities@2.121.0
+  - @memberjunction/templates-base-types@2.121.0
+  - @memberjunction/testing-engine-base@2.121.0
+
 ## 2.120.0
 
 ### Patch Changes
