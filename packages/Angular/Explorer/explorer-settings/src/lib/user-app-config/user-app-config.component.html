@@ -26,7 +26,7 @@
     <div *ngIf="!isLoading" class="config-content">
       <p class="config-description">
         Select which applications appear in your app switcher and arrange them in your preferred order.
-        Drag and drop to reorder, or use the arrow buttons.
+        Double-click to quickly add or remove. Drag and drop to reorder, or use the arrow buttons.
       </p>
 
       <div class="panels-container">
@@ -45,7 +45,7 @@
               <p>All applications added!</p>
             </div>
 
-            <div *ngFor="let item of availableApps" class="available-app-item">
+            <div *ngFor="let item of availableApps" class="available-app-item" (dblclick)="addApp(item)">
               <div class="app-icon" [style.background-color]="item.app.GetColor()">
                 <span [class]="item.app.Icon || 'fa-solid fa-cube'"></span>
               </div>
@@ -94,7 +94,7 @@
               (dragEnd)="onDragEnd($event)"
             >
               <ng-template let-item="item" let-index="index">
-                <div class="app-item-content" [style.border-left-color]="item.app.GetColor()">
+                <div class="app-item-content" [style.border-left-color]="item.app.GetColor()" (dblclick)="removeApp(item); $event.stopPropagation()">
                   <div class="drag-handle">
                     <span class="fa-solid fa-grip-vertical"></span>
                   </div>
