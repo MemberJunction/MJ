@@ -145,6 +145,13 @@ export class OpenAILLM extends BaseLLM {
                 break;
         }
 
+        // GPT 5 doesn't support a temperature value other than 1.
+        if ((openAIParams.model.toLowerCase() === 'gpt-5') && (openAIParams.temperature)) {
+            if (openAIParams.temperature !== 1) {
+                openAIParams.temperature = 1;
+            }
+        }
+
         const result = await this.OpenAI.chat.completions.create(openAIParams);
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();

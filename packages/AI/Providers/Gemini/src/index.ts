@@ -44,21 +44,34 @@ export class GeminiLLM extends BaseLLM {
     }
 
     protected geminiMessageSpacing(messages: Content[]): Content[] {
-        // This method makes sure that we alternate messages between user and model
-        // If we find two messages in a row with the same role, we insert a message 
-        // with the opposite role between them with just "OK"
-        const result: Content[] = [];
-        let lastRole = "model";
-        for (let i = 0; i < messages.length; i++) {
-            if (messages[i].role === lastRole) {
-                result.push({
-                    role: "model", // we are using the ChatMessage type from the MJ package
-                    parts: [{text: "OK"}]
-                });
-            }
-            result.push(messages[i]);
-            lastRole = messages[i].role;
+        // This method ensures messages alternate between user and model roles
+        // by combining consecutive messages with the same role
+        if (messages.length === 0) {
+            return [];
         }
+
+        const result: Content[] = [];
+        let currentMessage: Content | null = null;
+
+        for (const message of messages) {
+            if (currentMessage === null) {
+                // First message - start accumulating
+                currentMessage = { role: message.role, parts: [...message.parts] };
+            } else if (currentMessage.role === message.role) {
+                // Same role as current - combine the parts
+                currentMessage.parts.push(...message.parts);
+            } else {
+                // Different role - push current and start new
+                result.push(currentMessage);
+                currentMessage = { role: message.role, parts: [...message.parts] };
+            }
+        }
+
+        // Push the last accumulated message
+        if (currentMessage !== null) {
+            result.push(currentMessage);
+        }
+
         return result;
     }
     
@@ -71,19 +84,40 @@ export class GeminiLLM extends BaseLLM {
             const startTime = new Date();
             const modelName = params.model || "gemini-pro";
             
-            const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
-            const noSystemMessages = allMessagesButLast.filter(m => m.role !== 'system');
-            // we filter out system messages becuase those are sent seprately to Google via
-            // the the systemInstruction property of the config object below
+            // Filter out system messages and extract system instruction content
+            const noSystemMessages = params.messages.filter(m => m.role !== 'system');
+            const sysPrompts = params.messages.filter(m => m.role === 'system');
+            const systemInstructionText = sysPrompts.length > 0
+                ? sysPrompts.map(m => typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')).join('\n\n')
+                : '';
+
+            // Convert all non-system messages and apply role alternation
             const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
-            
+
+            // Split: all but last message go in history, last message gets system instructions prepended
+            const history = tempMessages.slice(0, -1);
+            const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
+
+            // Prepare the final message with system instructions prepended to the last user message
+            let finalMessageParts: Part[] = [];
+            if (systemInstructionText) {
+                finalMessageParts.push({ text: systemInstructionText });
+            }
+            if (lastMessage) {
+                finalMessageParts.push(...lastMessage.parts);
+            }
+            // If no messages at all, send empty
+            if (finalMessageParts.length === 0) {
+                finalMessageParts = [{ text: '' }];
+            }
+
             // Create the model and then chat
             const modelOptions: Record<string, any> = {
                 temperature: params.temperature || 0.5,
                 responseType: params.responseFormat,
             };
-            
+
             // Add supported parameters
             if (params.topP != null) {
                 modelOptions.top_p = params.topP;
@@ -108,7 +142,7 @@ export class GeminiLLM extends BaseLLM {
             if (params.minP != null) {
                 console.warn('Gemini provider does not support minP parameter, ignoring');
             }
-            
+
             // Add generationConfig with reasoningMode if effortLevel is provided
             if (params.effortLevel) {
                 // Gemini has generationConfig.reasoningMode which can be set to 'full' for higher quality
@@ -118,30 +152,23 @@ export class GeminiLLM extends BaseLLM {
                     reasoningMode: 'full'
                 };
             }
-            
-            // Use the new API structure
-            const systemInstructions: string[] = [];
-            const sysPrompts = params.messages.filter(m => m.role === 'system');
-            if (sysPrompts.length > 0) {
-                systemInstructions.push(...sysPrompts.map(m => 
-                    typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')));
-            }
+
+            // Create chat with history (all messages except the last)
+            // Don't use systemInstruction parameter - we're bundling it with the user message
             const chat = this.GeminiClient.chats.create({
                 config: {
-                    systemInstruction: systemInstructions,
                     thinkingConfig: {
                         includeThoughts: true,
                         thinkingBudget: -1
                     }
                 },
                 model: modelName,
-                history: tempMessages 
+                history: history
             });
-            
-            // Send the latest message
-            const latestMessage = params.messages[params.messages.length - 1].content;
+
+            // Send the last message with system instructions prepended
             const result = await chat.sendMessage({
-                message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
+                message: finalMessageParts,
                 config: modelOptions
             });
             
@@ -223,17 +250,41 @@ export class GeminiLLM extends BaseLLM {
         // Reset streaming state for new request
         this.resetStreamingState();
         const modelName = params.model || "gemini-pro";
-        
-        const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
-        const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+
+        // Filter out system messages and extract system instruction content
+        const noSystemMessages = params.messages.filter(m => m.role !== 'system');
+        const sysPrompts = params.messages.filter(m => m.role === 'system');
+        const systemInstructionText = sysPrompts.length > 0
+            ? sysPrompts.map(m => typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')).join('\n\n')
+            : '';
+
+        // Convert all non-system messages and apply role alternation
+        const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
         const tempMessages = this.geminiMessageSpacing(convertedMessages);
-        
+
+        // Split: all but last message go in history, last message gets system instructions prepended
+        const history = tempMessages.slice(0, -1);
+        const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
+
+        // Prepare the final message with system instructions prepended to the last user message
+        let finalMessageParts: Part[] = [];
+        if (systemInstructionText) {
+            finalMessageParts.push({ text: systemInstructionText });
+        }
+        if (lastMessage) {
+            finalMessageParts.push(...lastMessage.parts);
+        }
+        // If no messages at all, send empty
+        if (finalMessageParts.length === 0) {
+            finalMessageParts = [{ text: '' }];
+        }
+
         // Create the model and then chat
         const modelOptions: Record<string, any> = {
             temperature: params.temperature || 0.5,
             responseType: params.responseFormat,
         };
-        
+
         // Add supported parameters
         if (params.topP != null) {
             modelOptions.top_p = params.topP;
@@ -258,7 +309,7 @@ export class GeminiLLM extends BaseLLM {
         if (params.minP != null) {
             console.warn('Gemini provider does not support minP parameter, ignoring');
         }
-        
+
         // Add generationConfig with reasoningMode if effortLevel is provided
         if (params.effortLevel) {
             // Gemini has generationConfig.reasoningMode which can be set to 'full' for higher quality
@@ -268,18 +319,23 @@ export class GeminiLLM extends BaseLLM {
                 reasoningMode: 'full'
             };
         }
-        
-        // Use the new API structure
-        const chat = this.GeminiClient.chats.create({
-            model: modelName,
-            history: tempMessages
-        });
-        
-        const latestMessage = params.messages[params.messages.length - 1].content;
 
-        // Send message with streaming
+        // Create chat with history (all messages except the last)
+        // Don't use systemInstruction parameter - we're bundling it with the user message
+        const chat = this.GeminiClient.chats.create({
+            config: {
+                thinkingConfig: {
+                    includeThoughts: true,
+                    thinkingBudget: -1
+                }
+            },
+            model: modelName,
+            history: history
+        });
+
+        // Send the last message with system instructions prepended (streaming)
         const streamResult = await chat.sendMessageStream({
-            message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
+            message: finalMessageParts,
             config: modelOptions
         });
         

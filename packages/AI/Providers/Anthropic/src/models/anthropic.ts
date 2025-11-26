@@ -191,12 +191,17 @@ export class AnthropicLLM extends BaseLLM {
                 messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
 
-            // Add temperature if specified
+            // Add temperature if specified. Note that Claude 4.5 Opus doesn't support temperature changes when extended thinking is enabled.
+            // Skip the temperature set in that case.
             if (params.temperature != null) {
-                createParams.temperature = params.temperature;
+                //2025-11-25: With thinking enabled on Claude 4.5 Opus, temperature must be 1.
+                if (!(params.model.toLowerCase().startsWith('claude-opus-4-5') && thinkingBudget !== undefined)) {
+                    createParams.temperature = params.temperature;
+                }
             }
 
-            // Add supported parameters
+            // Add supported parameters.
+
             if (params.topP != null) {
                 createParams.top_p = params.topP;
             }
