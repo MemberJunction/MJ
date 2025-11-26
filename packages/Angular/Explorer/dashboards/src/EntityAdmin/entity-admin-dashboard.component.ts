@@ -50,8 +50,9 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     });
   }
 
-  ngOnDestroy(): void {
+  override ngOnDestroy(): void {
     this.userStateChangeSubject.complete();
+    super.ngOnDestroy();
   }
 
   protected initDashboard(): void {

@@ -917,8 +917,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
           const newDriverClass = tab.configuration['driverClass'] || tab.configuration['resourceTypeDriverClass'];
 
           // Normalize record IDs for comparison (treat null/undefined as empty string)
+          // IMPORTANT: Check both tab.resourceRecordId AND tab.configuration['recordId']
+          // because for nav items, the recordId is stored in configuration, not resourceRecordId
           const existingRecordId = existingResourceData?.ResourceRecordID || '';
-          const newRecordId = tab.resourceRecordId || '';
+          const newRecordId = tab.resourceRecordId || tab.configuration['recordId'] as string || '';
 
           const needsReload = existingResourceData?.ResourceType !== tab.configuration['resourceType'] ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
@@ -931,6 +933,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
               title: tab.title,
               existingRecordId,
               newRecordId,
+              configRecordId: tab.configuration['recordId'],
               recordIdChanged: existingRecordId !== newRecordId
             });
             // Clean up old component
