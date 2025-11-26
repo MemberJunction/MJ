@@ -17,7 +17,7 @@ interface SchedulingDashboardState {
 @Component({
   selector: 'mj-scheduling-dashboard',
   templateUrl: './scheduling-dashboard.component.html',
-  styleUrls: ['./scheduling-dashboard.component.scss'],
+  styleUrls: ['./scheduling-dashboard.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 @RegisterClass(BaseDashboard, 'SchedulingDashboard')

@@ -41,7 +41,7 @@ interface PermissionLevel {
 @Component({
   selector: 'mj-entity-permissions',
   templateUrl: './entity-permissions.component.html',
-  styleUrls: ['./entity-permissions.component.scss']
+  styleUrls: ['./entity-permissions.component.css']
 })
 @RegisterClass(BaseDashboard, 'EntityPermissions')
 export class EntityPermissionsComponent extends BaseDashboard implements OnDestroy {

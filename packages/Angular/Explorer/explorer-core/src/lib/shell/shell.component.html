@@ -1,15 +1,21 @@
 <div class="shell-container" *ngIf="!loading" [class.tabs-visible]="tabBarVisible">
   <!-- Header -->
   <header class="shell-header">
+    <!-- Mobile Hamburger Button -->
+    <button class="hamburger-btn" (click)="toggleMobileNav()" title="Menu">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+
     <!-- App Switcher -->
     <mj-app-switcher
       [activeApp]="activeApp"
       (appSelected)="onAppSwitch($event)">
     </mj-app-switcher>
 
-    <!-- App Navigation -->
+    <!-- App Navigation (desktop only) -->
     <mj-app-nav
       *ngIf="activeApp"
+      class="desktop-nav"
       [app]="activeApp"
       (navItemClick)="onNavItemClick($event)">
     </mj-app-nav>
@@ -19,10 +25,10 @@
 
     <!-- Actions (search, notifications, user menu) -->
     <div class="header-actions">
-      <button class="icon-btn" title="Search">
+      <button class="icon-btn desktop-only" title="Search">
         <i class="fa-solid fa-search"></i>
       </button>
-      <button class="icon-btn" title="Notifications">
+      <button class="icon-btn desktop-only" title="Notifications">
         <i class="fa-solid fa-bell"></i>
       </button>
       <div class="user-menu">
@@ -44,6 +50,34 @@
       </div>
     </div>
   </header>
+
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-nav-overlay" *ngIf="mobileNavOpen" (click)="closeMobileNav()"></div>
+  <div class="mobile-nav-drawer" [class.open]="mobileNavOpen">
+    <div class="mobile-nav-header">
+      <span>Navigation</span>
+      <button class="close-btn" (click)="closeMobileNav()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="mobile-nav-content" *ngIf="activeApp">
+      <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
+      <mj-app-nav
+        [app]="activeApp"
+        (navItemClick)="onNavItemClick($event)">
+      </mj-app-nav>
+    </div>
+    <div class="mobile-nav-footer">
+      <button class="mobile-nav-action" title="Search">
+        <i class="fa-solid fa-search"></i>
+        <span>Search</span>
+      </button>
+      <button class="mobile-nav-action" title="Notifications">
+        <i class="fa-solid fa-bell"></i>
+        <span>Notifications</span>
+      </button>
+    </div>
+  </div>
 
   <!-- Tab Container - with dynamic tab bar visibility -->
   <mj-tab-container [class.hide-tab-bar]="!tabBarVisible"></mj-tab-container>

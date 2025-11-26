@@ -15,7 +15,7 @@ import { DataExplorerState } from './models/explorer-state.interface';
 @Component({
   selector: 'mj-data-explorer-dashboard',
   templateUrl: './data-explorer-dashboard.component.html',
-  styleUrls: ['./data-explorer-dashboard.component.scss']
+  styleUrls: ['./data-explorer-dashboard.component.css']
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy {
@@ -219,6 +219,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Fall back to primary key
     return record.PrimaryKey.ToString();
+  }
+
+  /**
+   * Handle data loaded event from grid view
+   */
+  public onGridDataLoaded(event: { totalRowCount: number; loadTime: number }): void {
+    this.totalRecordCount = event.totalRowCount;
+    this.cdr.detectChanges();
   }
 
   /**

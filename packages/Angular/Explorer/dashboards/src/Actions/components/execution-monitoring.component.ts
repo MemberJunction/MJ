@@ -37,7 +37,7 @@ interface ExecutionTrend {
 @Component({
   selector: 'mj-execution-monitoring',
   templateUrl: './execution-monitoring.component.html',
-  styleUrls: ['./execution-monitoring.component.scss']
+  styleUrls: ['./execution-monitoring.component.css']
 })
 export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;

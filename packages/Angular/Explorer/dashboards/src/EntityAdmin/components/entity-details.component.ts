@@ -5,7 +5,7 @@ import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@me
 @Component({
   selector: 'mj-entity-details',
   templateUrl: './entity-details.component.html',
-  styleUrls: ['./entity-details.component.scss']
+  styleUrls: ['./entity-details.component.css']
 })
 export class EntityDetailsComponent implements OnInit, OnChanges {
   @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;

@@ -30,7 +30,7 @@ export function LoadAIModelsResource() {
 @Component({
   selector: 'app-model-management-v2',
   templateUrl: './model-management-v2.component.html',
-  styleUrls: ['./model-management-v2.component.scss']
+  styleUrls: ['./model-management-v2.component.css']
 })
 export class ModelManagementV2Component extends BaseResourceComponent implements OnInit, OnDestroy {
 

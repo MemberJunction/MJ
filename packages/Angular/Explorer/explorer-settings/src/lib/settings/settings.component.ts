@@ -22,7 +22,7 @@ export interface SettingsComponentState {
 @Component({
   selector: 'mj-settings',
   templateUrl: './settings.component.html',
-  styleUrls: ['./settings.component.scss']
+  styleUrls: ['./settings.component.css']
 })
 @RegisterClass(BaseNavigationComponent, 'Settings')
 export class SettingsComponent extends BaseNavigationComponent implements OnInit, OnDestroy {

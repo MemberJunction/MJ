@@ -9,7 +9,7 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 @Component({
   selector: 'mj-app-switcher',
   templateUrl: './app-switcher.component.html',
-  styleUrls: ['./app-switcher.component.scss']
+  styleUrls: ['./app-switcher.component.css']
 })
 export class AppSwitcherComponent {
   @Input() activeApp: BaseApplication | null = null;

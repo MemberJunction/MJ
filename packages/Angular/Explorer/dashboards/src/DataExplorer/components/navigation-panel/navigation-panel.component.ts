@@ -5,7 +5,7 @@ import { RecentItem, FavoriteItem } from '../../models/explorer-state.interface'
 @Component({
   selector: 'mj-explorer-navigation-panel',
   templateUrl: './navigation-panel.component.html',
-  styleUrls: ['./navigation-panel.component.scss']
+  styleUrls: ['./navigation-panel.component.css']
 })
 export class NavigationPanelComponent {
   @Input() entities: EntityInfo[] = [];
@@ -111,7 +111,23 @@ export class NavigationPanelComponent {
    * Get icon for entity
    */
   getEntityIcon(entity: EntityInfo): string {
-    return entity.Icon || 'fa-solid fa-table';
+    const icon = entity.Icon;
+    if (!icon) {
+      return 'fa-solid fa-table';
+    }
+    // If icon already has fa- prefix, use it as-is
+    if (icon.startsWith('fa-') || icon.startsWith('fa ')) {
+      // Ensure it has a style prefix (fa-solid, fa-regular, etc.)
+      if (icon.startsWith('fa-solid') || icon.startsWith('fa-regular') ||
+          icon.startsWith('fa-light') || icon.startsWith('fa-brands') ||
+          icon.startsWith('fa ')) {
+        return icon;
+      }
+      // It's just "fa-something", add fa-solid prefix
+      return `fa-solid ${icon}`;
+    }
+    // Check if it's just an icon name like "table" or "users"
+    return `fa-solid fa-${icon}`;
   }
 
   /**

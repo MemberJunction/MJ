@@ -25,7 +25,7 @@ export function LoadAIConfigResource() {
 @Component({
   selector: 'app-system-configuration',
   templateUrl: './system-configuration.component.html',
-  styleUrls: ['./system-configuration.component.scss']
+  styleUrls: ['./system-configuration.component.css']
 })
 export class SystemConfigurationComponent extends BaseResourceComponent implements OnInit {
 

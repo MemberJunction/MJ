@@ -79,41 +79,45 @@
 
     <!-- Content Body -->
     <div class="content-body">
-      @if (isLoading) {
-        <div class="loading-container">
-          <div class="loading-spinner">
-            <i class="fa-solid fa-spinner fa-spin"></i>
-          </div>
-          <p class="loading-message">{{ loadingMessage }}</p>
-        </div>
-      } @else if (!selectedEntity) {
+      @if (!selectedEntity) {
         <div class="empty-state">
           <i class="fa-solid fa-database empty-icon"></i>
           <h3>Welcome to Data Explorer</h3>
           <p>Select an entity from the navigation panel to start exploring your data.</p>
         </div>
-      } @else if (records.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-inbox empty-icon"></i>
-          <h3>No Records Found</h3>
-          <p>No records match your current filter criteria.</p>
-        </div>
       } @else {
         @if (state.viewMode === 'cards') {
-          <mj-explorer-cards-view
-            [entity]="selectedEntity"
-            [records]="records"
-            [selectedRecordId]="state.selectedRecordId"
-            (recordSelected)="onRecordSelected($event)"
-            (recordOpened)="onOpenRecord($event)">
-          </mj-explorer-cards-view>
+          @if (isLoading) {
+            <div class="loading-container">
+              <div class="loading-spinner">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              </div>
+              <p class="loading-message">{{ loadingMessage }}</p>
+            </div>
+          } @else if (records.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-inbox empty-icon"></i>
+              <h3>No Records Found</h3>
+              <p>No records match your current filter criteria.</p>
+            </div>
+          } @else {
+            <mj-explorer-cards-view
+              [entity]="selectedEntity"
+              [records]="records"
+              [selectedRecordId]="state.selectedRecordId"
+              (recordSelected)="onRecordSelected($event)"
+              (recordOpened)="onOpenRecord($event)">
+            </mj-explorer-cards-view>
+          }
         } @else {
+          <!-- Grid view - UserViewGridComponent handles its own loading -->
           <mj-explorer-grid-view
             [entity]="selectedEntity"
             [viewId]="state.selectedViewId"
             [extraFilter]="state.smartFilterPrompt"
             (recordSelected)="onRecordSelected($event)"
-            (recordOpened)="onOpenRecord($event)">
+            (recordOpened)="onOpenRecord($event)"
+            (dataLoaded)="onGridDataLoaded($event)">
           </mj-explorer-grid-view>
         }
       }

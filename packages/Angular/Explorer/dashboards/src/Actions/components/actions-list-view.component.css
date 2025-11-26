@@ -1,0 +1,325 @@
+.actions-list-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--kendo-color-app-surface);
+}
+.actions-list-view .list-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--kendo-color-border);
+  background: var(--kendo-color-surface);
+}
+.actions-list-view .list-header .header-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.actions-list-view .list-header .header-title h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.actions-list-view .list-header .header-title h2 i {
+  color: var(--kendo-color-primary);
+}
+.actions-list-view .list-header .header-title .results-count {
+  font-size: 0.875rem;
+  color: var(--kendo-color-subtle);
+  font-weight: 600;
+}
+.actions-list-view .list-header .filters-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.actions-list-view .list-header .filters-row .search-container {
+  flex: 1;
+  min-width: 200px;
+}
+.actions-list-view .list-header .filters-row .search-container kendo-textbox {
+  width: 100%;
+}
+.actions-list-view .list-header .filters-row .filter-group {
+  display: flex;
+  gap: 0.75rem;
+}
+.actions-list-view .list-header .filters-row .filter-group kendo-dropdownlist {
+  min-width: 140px;
+}
+.actions-list-view .list-header .filters-row .filter-group .category-filter-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.actions-list-view .list-header .filters-row .filter-group .category-filter-button i {
+  font-size: 14px;
+}
+.actions-list-view .list-header .filters-row .filter-group .category-filter-button .badge {
+  background: var(--kendo-color-primary-subtle);
+  color: var(--kendo-color-primary);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-left: 8px;
+}
+.actions-list-view .category-tree-panel {
+  position: absolute;
+  top: 120px;
+  right: 20px;
+  width: 350px;
+  max-height: 70vh;
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+.actions-list-view .category-tree-panel .tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--kendo-color-border);
+}
+.actions-list-view .category-tree-panel .tree-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.actions-list-view .category-tree-panel .tree-actions {
+  padding: 8px;
+  border-bottom: 1px solid var(--kendo-color-border);
+}
+.actions-list-view .category-tree-panel .tree-actions button {
+  width: 100%;
+  justify-content: flex-start;
+}
+.actions-list-view .category-tree-panel .tree-actions button.selected {
+  background: var(--kendo-color-primary-subtle);
+}
+.actions-list-view .category-tree-panel .tree-actions button .badge {
+  margin-left: auto;
+  background: var(--kendo-color-base-subtle);
+  color: var(--kendo-color-on-app-surface);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+.actions-list-view .category-tree-panel .tree-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button {
+  width: 100%;
+  justify-content: flex-start;
+  padding-left: 8px;
+  margin-bottom: 2px;
+}
+.actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button.selected {
+  background: var(--kendo-color-primary-subtle);
+  color: var(--kendo-color-primary);
+}
+.actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button .expand-button {
+  padding: 0;
+  min-width: 20px;
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+}
+.actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button .expand-button i {
+  font-size: 10px;
+}
+.actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button .no-expand {
+  display: inline-block;
+  width: 24px;
+}
+.actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button i.fa-folder {
+  margin-right: 6px;
+  color: var(--kendo-color-warning);
+}
+.actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button .badge {
+  margin-left: auto;
+  background: var(--kendo-color-base-subtle);
+  color: var(--kendo-color-on-app-surface);
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+.actions-list-view .actions-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+.actions-list-view .actions-list .action-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.actions-list-view .actions-list .action-card:hover {
+  background: var(--kendo-color-base-hover);
+  border-color: var(--kendo-color-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.actions-list-view .actions-list .action-card .action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.5rem;
+  background: var(--kendo-color-primary-subtle);
+  flex-shrink: 0;
+}
+.actions-list-view .actions-list .action-card .action-icon i {
+  color: var(--kendo-color-primary);
+  font-size: 1.25rem;
+}
+.actions-list-view .actions-list .action-card .action-main {
+  flex: 1;
+}
+.actions-list-view .actions-list .action-card .action-main .action-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.actions-list-view .actions-list .action-card .action-main .action-header .action-name {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--kendo-color-on-app-surface);
+}
+.actions-list-view .actions-list .action-card .action-main .action-header .action-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.actions-list-view .actions-list .action-card .action-main .action-header .action-badges kendo-chip:has(i) {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.actions-list-view .actions-list .action-card .action-main .action-description {
+  color: var(--kendo-color-subtle);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+.actions-list-view .actions-list .action-card .action-main .action-details {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.actions-list-view .actions-list .action-card .action-main .action-details .detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--kendo-color-subtle);
+}
+.actions-list-view .actions-list .action-card .action-main .action-details .detail-item i {
+  color: var(--kendo-color-primary);
+  width: 0.75rem;
+}
+.actions-list-view .actions-list .action-card .action-actions {
+  flex-shrink: 0;
+}
+.actions-list-view .actions-list .action-card .action-actions button {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.actions-list-view .actions-list .action-card:hover .action-actions button {
+  opacity: 1;
+}
+.actions-list-view .actions-list .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--kendo-color-subtle);
+}
+.actions-list-view .actions-list .empty-state i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+.actions-list-view .actions-list .empty-state h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.actions-list-view .actions-list .empty-state p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+.actions-list-view .loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+@media (max-width: 768px) {
+  .actions-list-view .list-header {
+    padding: 1rem;
+  }
+  .actions-list-view .list-header .header-title {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .actions-list-view .list-header .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .actions-list-view .list-header .filters-row .search-container,
+  .actions-list-view .list-header .filters-row .filter-group {
+    min-width: unset;
+  }
+  .actions-list-view .list-header .filters-row .filter-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.5rem;
+  }
+  .actions-list-view .actions-list {
+    padding: 1rem;
+  }
+  .actions-list-view .actions-list .action-card {
+    padding: 1rem;
+  }
+  .actions-list-view .actions-list .action-card .action-main .action-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .actions-list-view .actions-list .action-card .action-main .action-header .action-badges {
+    align-self: flex-start;
+  }
+  .actions-list-view .actions-list .action-card .action-main .action-details {
+    gap: 1rem;
+  }
+}

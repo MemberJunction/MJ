@@ -31,7 +31,7 @@ export function LoadAIPromptsResource() {
 @Component({
   selector: 'app-prompt-management-v2',
   templateUrl: './prompt-management-v2.component.html',
-  styleUrls: ['./prompt-management-v2.component.scss']
+  styleUrls: ['./prompt-management-v2.component.css']
 })
 export class PromptManagementV2Component extends BaseResourceComponent implements OnInit, OnDestroy {
 

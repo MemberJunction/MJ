@@ -45,6 +45,10 @@ export class UserAppConfigComponent {
   isSaving = false;
   errorMessage = '';
 
+  // Panel collapse state (for mobile)
+  availablePanelCollapsed = false;
+  selectedPanelCollapsed = false;
+
   constructor(
     private appManager: ApplicationManager,
     private sharedService: SharedService,
@@ -202,8 +206,8 @@ export class UserAppConfigComponent {
       item.isDirty = true;
       prevItem.isDirty = true;
 
-      // Re-sort
-      this.activeApps.sort((a, b) => a.sequence - b.sequence);
+      // Re-sort and create new array reference to trigger change detection
+      this.activeApps = [...this.activeApps].sort((a, b) => a.sequence - b.sequence);
     }
   }
 
@@ -224,8 +228,8 @@ export class UserAppConfigComponent {
       item.isDirty = true;
       nextItem.isDirty = true;
 
-      // Re-sort
-      this.activeApps.sort((a, b) => a.sequence - b.sequence);
+      // Re-sort and create new array reference to trigger change detection
+      this.activeApps = [...this.activeApps].sort((a, b) => a.sequence - b.sequence);
     }
   }
 

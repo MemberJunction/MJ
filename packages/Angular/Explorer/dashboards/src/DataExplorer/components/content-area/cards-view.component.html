@@ -7,16 +7,10 @@
 
       <!-- Card Header with Avatar/Icon -->
       <div class="card-header">
-        @if (cardTemplate?.thumbnailField; as thumbField) {
-          @if (getFieldValue(record, thumbField)) {
-            <div class="card-thumbnail">
-              <img [src]="getFieldValue(record, thumbField)" alt="" />
-            </div>
-          } @else {
-            <div class="card-avatar" [style.background-color]="getRecordColor(record)">
-              {{ getInitials(record) }}
-            </div>
-          }
+        @if (hasThumbnail(record)) {
+          <div class="card-thumbnail">
+            <img [src]="getThumbnailUrl(record)" alt="" />
+          </div>
         } @else {
           <div class="card-avatar" [style.background-color]="getRecordColor(record)">
             {{ getInitials(record) }}

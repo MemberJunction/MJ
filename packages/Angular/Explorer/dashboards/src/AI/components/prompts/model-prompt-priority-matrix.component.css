@@ -1,0 +1,528 @@
+.model-prompt-priority-matrix {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f8f9fa;
+}
+.model-prompt-priority-matrix .matrix-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: white;
+  border-bottom: 1px solid #dee2e6;
+  flex-shrink: 0;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .toolbar-title {
+  margin: 0;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .toolbar-title i {
+  color: #0d6efd;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .matrix-stats {
+  display: flex;
+  gap: 1rem;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .matrix-stats .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .matrix-stats .stat-item i {
+  font-size: 1rem;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .bulk-actions,
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .bulk-actions .btn,
+.model-prompt-priority-matrix .matrix-toolbar .toolbar-section .action-buttons .btn {
+  font-size: 0.875rem;
+}
+.model-prompt-priority-matrix .bulk-edit-panel {
+  padding: 1rem;
+  background: #fff3cd;
+  border-bottom: 1px solid #ffeaa7;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-controls .form-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-controls .form-group .form-label {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-controls .form-group .form-control,
+.model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-controls .form-group .form-select {
+  min-width: 100px;
+}
+.model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-info {
+  font-size: 0.875rem;
+  color: #856404;
+}
+.model-prompt-priority-matrix .loading-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.model-prompt-priority-matrix .loading-container .loading-content {
+  text-align: center;
+}
+.model-prompt-priority-matrix .loading-container .loading-content .loading-message {
+  margin-top: 1rem;
+  color: #6c757d;
+}
+.model-prompt-priority-matrix .matrix-container {
+  flex: 1;
+  overflow: hidden;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll {
+  height: 100%;
+  overflow: auto;
+  padding: 1rem;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table {
+  border-collapse: separate;
+  border-spacing: 2px;
+  background: white;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header,
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .model-header {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  padding: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header .header-content,
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .model-header .header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header .header-content .header-name,
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .model-header .header-content .header-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header .header-content .header-stats,
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .model-header .header-content .header-stats {
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header {
+  min-width: 200px;
+  position: sticky;
+  left: 0;
+  z-index: 11;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell {
+  width: 80px;
+  height: 60px;
+  border: 2px solid #e9ecef;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell:hover {
+  border-color: #007bff;
+  transform: scale(1.05);
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.selected {
+  border-color: #007bff;
+  background: rgba(0, 123, 255, 0.1);
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.editing {
+  border-color: #28a745;
+  background: rgba(40, 167, 69, 0.1);
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.no-association {
+  background: #f8f9fa;
+  border-style: dashed;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.no-association .empty-cell-indicator {
+  color: #6c757d;
+  font-size: 1.5rem;
+  opacity: 0.5;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.cannot-assign {
+  background: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.cannot-assign .blocked-cell-indicator {
+  color: #dc3545;
+  font-size: 1.25rem;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association {
+  background: white;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-1 {
+  border-color: #28a745;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-2 {
+  border-color: #20c997;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-3 {
+  border-color: #ffc107;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-4 {
+  border-color: #fd7e14;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-5 {
+  border-color: #dc3545;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.inactive {
+  opacity: 0.6;
+  background: #f8f9fa;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.new {
+  box-shadow: 0 0 0 2px #28a745;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.modified {
+  box-shadow: 0 0 0 2px #ffc107;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  gap: 0.25rem;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge {
+  background: #007bff;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-1 {
+  background: #28a745;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-2 {
+  background: #20c997;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-3 {
+  background: #ffc107;
+  color: #212529;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-4 {
+  background: #fd7e14;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-5 {
+  background: #dc3545;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .status-indicator {
+  font-size: 0.75rem;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .status-indicator.inactive {
+  color: #dc3545;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  font-size: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator.new {
+  background: #28a745;
+  color: white;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator.modified {
+  background: #ffc107;
+  color: #212529;
+}
+.model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .performance-overlay {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 0.25rem;
+  padding: 0.125rem;
+  font-size: 0.625rem;
+}
+.model-prompt-priority-matrix .list-container {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.model-prompt-priority-matrix .list-container .list-header {
+  margin-bottom: 1.5rem;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+.model-prompt-priority-matrix .list-container .list-header .list-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.model-prompt-priority-matrix .list-container .list-header .list-controls .sort-controls,
+.model-prompt-priority-matrix .list-container .list-header .list-controls .filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.model-prompt-priority-matrix .list-container .list-header .list-controls .sort-controls .form-label,
+.model-prompt-priority-matrix .list-container .list-header .list-controls .filter-controls .form-label {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6c757d;
+  white-space: nowrap;
+}
+.model-prompt-priority-matrix .list-container .list-header .list-controls .sort-controls .form-select,
+.model-prompt-priority-matrix .list-container .list-header .list-controls .filter-controls .form-select {
+  min-width: 120px;
+}
+.model-prompt-priority-matrix .list-container .list-header .list-controls .sort-controls .form-check,
+.model-prompt-priority-matrix .list-container .list-header .list-controls .filter-controls .form-check {
+  margin: 0;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  transition: all 0.2s ease;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item:hover {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  transform: translateY(-1px);
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item.inactive {
+  opacity: 0.7;
+  background: #f8f9fa;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item.new {
+  border-color: #28a745;
+  border-left-width: 4px;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item.modified {
+  border-color: #ffc107;
+  border-left-width: 4px;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-names {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-names .prompt-name,
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-names .model-name {
+  color: #495057;
+  font-weight: 500;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-names i {
+  color: #6c757d;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-actions .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .detail-label {
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge {
+  background: #007bff;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-1 {
+  background: #28a745;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-2 {
+  background: #20c997;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-3 {
+  background: #ffc107;
+  color: #212529;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-4 {
+  background: #fd7e14;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-5 {
+  background: #dc3545;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .status-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .status-badge.badge-success {
+  background: #d4edda;
+  color: #155724;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .status-badge.badge-secondary {
+  background: #e2e3e5;
+  color: #383d41;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .change-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .change-badge.new {
+  background: #d4edda;
+  color: #155724;
+}
+.model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .change-badge.modified {
+  background: #fff3cd;
+  color: #856404;
+}
+.model-prompt-priority-matrix .list-container .associations-list .no-associations-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #6c757d;
+}
+.model-prompt-priority-matrix .list-container .associations-list .no-associations-message i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+  opacity: 0.5;
+}
+.model-prompt-priority-matrix .list-container .associations-list .no-associations-message p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.model-prompt-priority-matrix .error-container {
+  padding: 1rem;
+}
+.model-prompt-priority-matrix .error-container .alert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1200px) {
+  .model-prompt-priority-matrix .matrix-toolbar .toolbar-section {
+    min-width: 100%;
+    justify-content: space-between;
+  }
+  .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell {
+    width: 60px;
+    height: 50px;
+  }
+}
+@media (max-width: 768px) {
+  .model-prompt-priority-matrix .matrix-toolbar {
+    padding: 0.75rem;
+  }
+  .model-prompt-priority-matrix .matrix-toolbar .toolbar-section {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .model-prompt-priority-matrix .bulk-edit-panel {
+    padding: 0.75rem;
+  }
+  .model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .model-prompt-priority-matrix .matrix-container .matrix-scroll {
+    padding: 0.75rem;
+  }
+  .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell {
+    width: 50px;
+    height: 40px;
+  }
+  .model-prompt-priority-matrix .list-container {
+    padding: 0.75rem;
+  }
+  .model-prompt-priority-matrix .list-container .list-header .list-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .model-prompt-priority-matrix .list-container .associations-list .association-item .association-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -34,7 +34,7 @@ export interface ActionWithDetails extends ActionEntity {
 @Component({
   selector: 'mj-action-gallery',
   templateUrl: './action-gallery.component.html',
-  styleUrls: ['./action-gallery.component.scss']
+  styleUrls: ['./action-gallery.component.css']
 })
 export class ActionGalleryComponent implements OnInit, OnDestroy {
   @Input() config: ActionGalleryConfig = {

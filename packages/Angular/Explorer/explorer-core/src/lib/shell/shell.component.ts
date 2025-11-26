@@ -39,6 +39,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   initialized = false;
   tabBarVisible = true; // Controlled by workspace manager
   userMenuVisible = false; // User avatar context menu
+  mobileNavOpen = false; // Mobile navigation drawer
 
   constructor(
     private appManager: ApplicationManager,
@@ -467,6 +468,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const { item, shiftKey } = event;
 
+    // Close mobile nav if open
+    this.mobileNavOpen = false;
+
     // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
       this.activeApp.ID,
@@ -474,6 +478,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.activeApp.GetColor(),
       { forceNewTab: shiftKey }
     );
+  }
+
+  /**
+   * Toggle mobile navigation drawer
+   */
+  toggleMobileNav(): void {
+    this.mobileNavOpen = !this.mobileNavOpen;
+  }
+
+  /**
+   * Close mobile navigation drawer
+   */
+  closeMobileNav(): void {
+    this.mobileNavOpen = false;
   }
 
   /**

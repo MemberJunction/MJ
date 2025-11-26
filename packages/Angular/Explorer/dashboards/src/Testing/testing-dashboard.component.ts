@@ -16,7 +16,7 @@ interface TestingDashboardState {
 @Component({
   selector: 'mj-testing-dashboard',
   templateUrl: './testing-dashboard.component.html',
-  styleUrls: ['./testing-dashboard.component.scss'],
+  styleUrls: ['./testing-dashboard.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 @RegisterClass(BaseDashboard, 'TestingDashboard')

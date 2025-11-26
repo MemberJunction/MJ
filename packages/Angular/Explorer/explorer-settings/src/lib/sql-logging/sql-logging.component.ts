@@ -58,7 +58,7 @@ interface SqlLoggingConfig {
 @Component({
   selector: 'mj-sql-logging',
   templateUrl: './sql-logging.component.html',
-  styleUrls: ['./sql-logging.component.scss']
+  styleUrls: ['./sql-logging.component.css']
 })
 @RegisterClass(BaseDashboard, 'SqlLogging')
 export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {

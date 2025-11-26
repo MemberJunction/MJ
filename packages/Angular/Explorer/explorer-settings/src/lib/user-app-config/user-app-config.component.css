@@ -20,6 +20,11 @@
   font-weight: 600;
 }
 
+/* Hide minimize/maximize buttons, keep only close */
+:host ::ng-deep .full-screen-dialog .k-window-titlebar-action:not(:last-child) {
+  display: none;
+}
+
 :host ::ng-deep .full-screen-dialog .k-window-content {
   padding: 0;
   display: flex;
@@ -88,8 +93,45 @@
 
 @media (max-width: 900px) {
   .panels-container {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  /* Show collapse toggle on mobile */
+  .panel-header .collapse-toggle {
+    display: inline-block !important;
+    color: var(--kendo-subtle-text, #666) !important;
+  }
+
+  /* Make header clickable on mobile */
+  .panel-header {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .panel-header:hover {
+    background: var(--kendo-hover-bg, #f0f0f0);
+  }
+
+  /* Collapsed panel - just show header */
+  .panel.collapsed {
+    flex: 0 0 auto !important;
+  }
+
+  .panel.collapsed .panel-content {
+    display: none !important;
+  }
+
+  .panel.collapsed .panel-header {
+    border-bottom: none;
+  }
+
+  /* Non-collapsed panel takes available space */
+  .panel:not(.collapsed) {
+    flex: 1 1 auto;
+    min-height: 150px;
   }
 }
 
@@ -131,6 +173,14 @@
   border-radius: 12px;
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+/* Collapse toggle - hidden by default, shown on mobile */
+.panel-header .collapse-toggle {
+  display: none;
+  color: var(--kendo-subtle-text, #666);
+  font-size: 0.9rem;
+  margin-left: 8px;
 }
 
 .panel-content {

@@ -85,6 +85,7 @@ import { OracleBreakdownTableComponent } from './Testing/components/widgets/orac
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 import { TestingModule } from '@memberjunction/ng-testing';
+import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
@@ -188,7 +189,8 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
     TabStripModule,
     PanelBarModule,
     MJNotificationsModule,
-    TestingModule
+    TestingModule,
+    UserViewGridModule
   ],
   providers: [
     AIInstrumentationService,

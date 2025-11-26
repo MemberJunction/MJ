@@ -22,7 +22,7 @@ interface FilterOptions {
 @Component({
   selector: 'mj-role-management',
   templateUrl: './role-management.component.html',
-  styleUrls: ['./role-management.component.scss']
+  styleUrls: ['./role-management.component.css']
 })
 @RegisterClass(BaseDashboard, 'RoleManagement')
 export class RoleManagementComponent extends BaseDashboard implements OnDestroy {

@@ -15,7 +15,7 @@ export interface NavItemClickEvent {
 @Component({
   selector: 'mj-app-nav',
   templateUrl: './app-nav.component.html',
-  styleUrls: ['./app-nav.component.scss']
+  styleUrls: ['./app-nav.component.css']
 })
 export class AppNavComponent implements OnInit, OnChanges {
   @Input() app: BaseApplication | null = null;

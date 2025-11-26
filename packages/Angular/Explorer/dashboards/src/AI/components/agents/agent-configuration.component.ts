@@ -29,7 +29,7 @@ export function LoadAIAgentsResource() {
 @Component({
   selector: 'app-agent-configuration',
   templateUrl: './agent-configuration.component.html',
-  styleUrls: ['./agent-configuration.component.scss']
+  styleUrls: ['./agent-configuration.component.css']
 })
 export class AgentConfigurationComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
   public isLoading = false;

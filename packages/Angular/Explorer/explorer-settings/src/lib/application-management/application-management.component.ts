@@ -22,7 +22,7 @@ interface FilterOptions {
 @Component({
   selector: 'mj-application-management',
   templateUrl: './application-management.component.html',
-  styleUrls: ['./application-management.component.scss']
+  styleUrls: ['./application-management.component.css']
 })
 @RegisterClass(BaseDashboard, 'ApplicationManagement')
 export class ApplicationManagementComponent extends BaseDashboard implements OnDestroy {

@@ -1,6 +1,15 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
-import { EntityInfo, CompositeKey } from '@memberjunction/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { EntityInfo, CompositeKey, Metadata, RunViewParams } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
+
+/**
+ * Event emitted when a row is clicked in the grid
+ */
+export interface GridRowClickedEvent {
+  entityId: string;
+  entityName: string;
+  CompositeKey: CompositeKey;
+}
 
 /**
  * Grid View wrapper component that integrates with UserViewGridComponent
@@ -9,7 +18,7 @@ import { BaseEntity } from '@memberjunction/core';
 @Component({
   selector: 'mj-explorer-grid-view',
   templateUrl: './grid-view.component.html',
-  styleUrls: ['./grid-view.component.scss']
+  styleUrls: ['./grid-view.component.css']
 })
 export class GridViewComponent implements OnChanges {
   @Input() entity: EntityInfo | null = null;
@@ -18,9 +27,10 @@ export class GridViewComponent implements OnChanges {
 
   @Output() recordSelected = new EventEmitter<BaseEntity>();
   @Output() recordOpened = new EventEmitter<BaseEntity>();
+  @Output() dataLoaded = new EventEmitter<{ totalRowCount: number; loadTime: number }>();
 
   // Parameters for UserViewGridComponent
-  public viewParams: { EntityName?: string; ViewID?: string; ExtraFilter?: string } = {};
+  public viewParams: RunViewParams = {};
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['entity'] || changes['viewId'] || changes['extraFilter']) {
@@ -48,25 +58,31 @@ export class GridViewComponent implements OnChanges {
   }
 
   /**
-   * Handle row click from grid
+   * Handle row click from UserViewGridComponent
    */
-  onRowClick(event: { record: BaseEntity }): void {
-    this.recordSelected.emit(event.record);
+  onGridRowClick(event: GridRowClickedEvent): void {
+    // Load the entity object and emit
+    this.loadAndEmitRecord(event.entityName, event.CompositeKey);
   }
 
   /**
-   * Handle row double-click from grid
+   * Handle data loaded event from UserViewGridComponent
    */
-  onRowDoubleClick(event: { record: BaseEntity }): void {
-    this.recordOpened.emit(event.record);
+  onDataLoaded(event: { totalRowCount: number; loadTime: number }): void {
+    this.dataLoaded.emit(event);
   }
 
   /**
-   * Handle record open from grid's context menu or action buttons
+   * Load the entity record and emit the selection event
    */
-  onRecordOpen(event: { EntityName: string; RecordPKey: CompositeKey }): void {
-    // The grid emits EntityName and PKey, but we need the actual record
-    // For now, emit with what we have - parent will need to handle
-    // TODO: Consider fetching the full record or adjusting the interface
+  private async loadAndEmitRecord(entityName: string, compositeKey: CompositeKey): Promise<void> {
+    try {
+      const md = new Metadata();
+      const record = await md.GetEntityObject<BaseEntity>(entityName);
+      await record.InnerLoad(compositeKey);
+      this.recordSelected.emit(record);
+    } catch (error) {
+      console.error('Error loading record:', error);
+    }
   }
 }

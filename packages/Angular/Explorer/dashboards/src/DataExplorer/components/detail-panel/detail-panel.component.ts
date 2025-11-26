@@ -12,7 +12,7 @@ interface RelatedEntityCount {
 @Component({
   selector: 'mj-explorer-detail-panel',
   templateUrl: './detail-panel.component.html',
-  styleUrls: ['./detail-panel.component.scss']
+  styleUrls: ['./detail-panel.component.css']
 })
 export class DetailPanelComponent implements OnChanges {
   @Input() entity: EntityInfo | null = null;

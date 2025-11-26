@@ -1,26 +1,19 @@
 <div class="grid-view-container">
   @if (entity) {
-    <!--
-      Note: This will use the existing UserViewGridComponent from MJ
-      The actual implementation will depend on the available grid component API
-      For MVP, we can use a simple Kendo grid or wrap the existing UserViewGridComponent
-    -->
-    <div class="grid-placeholder">
-      <p>Grid view for: <strong>{{ entity.Name }}</strong></p>
-      @if (viewId) {
-        <p>Using view ID: {{ viewId }}</p>
-      }
-      @if (extraFilter) {
-        <p>Filter: {{ extraFilter }}</p>
-      }
-      <p class="placeholder-note">
-        <i class="fa-solid fa-info-circle"></i>
-        Integration with UserViewGridComponent pending
-      </p>
-    </div>
+    <mj-user-view-grid
+      [Params]="viewParams"
+      [Height]="'auto'"
+      [BottomMargin]="24"
+      [AutoNavigate]="false"
+      [ShowCreateNewRecordButton]="true"
+      [CreateRecordMode]="'Tab'"
+      (rowClicked)="onGridRowClick($event)"
+      (dataLoaded)="onDataLoaded($event)">
+    </mj-user-view-grid>
   } @else {
     <div class="no-entity">
-      <p>No entity selected</p>
+      <i class="fa-solid fa-database"></i>
+      <p>Select an entity from the navigation panel</p>
     </div>
   }
 </div>

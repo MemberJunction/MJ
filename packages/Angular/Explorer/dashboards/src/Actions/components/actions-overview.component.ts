@@ -46,7 +46,7 @@ interface ExecutionWithExpanded extends ActionExecutionLogEntity {
 @Component({
   selector: 'mj-actions-overview',
   templateUrl: './actions-overview.component.html',
-  styleUrls: ['./actions-overview.component.scss']
+  styleUrls: ['./actions-overview.component.css']
 })
 export class ActionsOverviewComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;

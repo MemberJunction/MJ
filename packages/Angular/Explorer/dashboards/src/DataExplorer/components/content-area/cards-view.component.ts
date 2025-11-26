@@ -6,7 +6,7 @@ import { AutoCardTemplate } from '../../models/explorer-state.interface';
 @Component({
   selector: 'mj-explorer-cards-view',
   templateUrl: './cards-view.component.html',
-  styleUrls: ['./cards-view.component.scss']
+  styleUrls: ['./cards-view.component.css']
 })
 export class CardsViewComponent implements OnChanges {
   @Input() entity: EntityInfo | null = null;
@@ -278,6 +278,53 @@ export class CardsViewComponent implements OnChanges {
       return words[0].substring(0, 2).toUpperCase();
     }
     return (words[0][0] + words[1][0]).toUpperCase();
+  }
+
+  /**
+   * Check if record has a valid thumbnail image
+   */
+  hasThumbnail(record: BaseEntity): boolean {
+    if (!this.cardTemplate?.thumbnailField) return false;
+    const url = this.getFieldValue(record, this.cardTemplate.thumbnailField);
+    return this.isValidImageUrl(url);
+  }
+
+  /**
+   * Get the thumbnail URL for a record
+   */
+  getThumbnailUrl(record: BaseEntity): string {
+    if (!this.cardTemplate?.thumbnailField) return '';
+    return this.getFieldValue(record, this.cardTemplate.thumbnailField);
+  }
+
+  /**
+   * Check if a URL is likely a valid image URL
+   */
+  isValidImageUrl(url: string): boolean {
+    if (!url || url.trim() === '') return false;
+
+    // Check if it starts with http/https
+    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/')) {
+      return false;
+    }
+
+    // Check for common image extensions
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'];
+    const urlLower = url.toLowerCase();
+
+    // Check if URL ends with image extension (before query params)
+    const urlWithoutParams = urlLower.split('?')[0];
+    if (imageExtensions.some(ext => urlWithoutParams.endsWith(ext))) {
+      return true;
+    }
+
+    // Check if it's a data URL for an image
+    if (url.startsWith('data:image/')) {
+      return true;
+    }
+
+    // Be conservative - if we can't confirm it's an image, don't try to load it
+    return false;
   }
 
   /**

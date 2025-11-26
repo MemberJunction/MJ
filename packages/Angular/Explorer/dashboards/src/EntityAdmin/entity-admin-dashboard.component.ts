@@ -21,7 +21,7 @@ interface DashboardState {
 @Component({
   selector: 'mj-entity-admin-dashboard',
   templateUrl: './entity-admin-dashboard.component.html',
-  styleUrls: ['./entity-admin-dashboard.component.scss']
+  styleUrls: ['./entity-admin-dashboard.component.css']
 })
 @RegisterClass(BaseDashboard, 'EntityAdmin')
 export class EntityAdminDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
