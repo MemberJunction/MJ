@@ -70,7 +70,7 @@ import { UserInfo } from '@memberjunction/core';
       height: 100%;
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.7);
+      color: var(--gray-800);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -81,13 +81,13 @@ import { UserInfo } from '@memberjunction/core';
       border-bottom: 3px solid transparent;
     }
     .nav-tab:hover {
-      background: rgba(255,255,255,0.05);
-      color: white;
+      background: var(--gray-700);
+      color: var(--gray-900);
     }
     .nav-tab.active {
       color: white;
-      background: rgba(255,255,255,0.1);
-      border-bottom-color: #AAE7FD;
+      background: var(--navy);
+      border-bottom-color: var(--navy);
     }
     .nav-right { display: flex; gap: 8px; }
     .nav-btn {
@@ -96,7 +96,7 @@ import { UserInfo } from '@memberjunction/core';
       border-radius: 6px;
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.7);
+      color: var(--gray-800);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -104,8 +104,8 @@ import { UserInfo } from '@memberjunction/core';
       transition: all 0.2s;
     }
     .nav-btn:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: var(--gray-700);
+      color: var(--gray-900);
     }
     .sidebar-toggle {
       display: flex;
