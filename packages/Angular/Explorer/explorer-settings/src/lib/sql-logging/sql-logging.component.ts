@@ -1,82 +1,102 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Component, OnDestroy } from '@angular/core';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, BaseDashboard } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { SharedSettingsModule } from '../shared/shared-settings.module';
-import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { RegisterClass } from '@memberjunction/global';
+
+/** Session options for SQL logging */
+interface SqlLoggingSessionOptions {
+  formatAsMigration: boolean;
+  statementTypes: string;
+  prettyPrint: boolean;
+}
+
+/** Represents an active SQL logging session */
+interface SqlLoggingSession {
+  id: string;
+  filePath: string;
+  startTime: string;
+  statementCount: number;
+  sessionName: string;
+  filterByUserId?: string;
+  options?: SqlLoggingSessionOptions;
+}
+
+/** SQL logging configuration from the server */
+interface SqlLoggingConfig {
+  enabled: boolean;
+  allowedLogDirectory?: string;
+  maxActiveSessions?: number;
+  autoCleanupEmptyFiles?: boolean;
+  sessionTimeout?: number;
+  activeSessionCount?: number;
+  defaultOptions?: SqlLoggingSessionOptions;
+}
 
 /**
  * Angular component for managing SQL logging sessions in MemberJunction.
- * 
+ *
  * This component provides a user interface for:
  * - Viewing SQL logging configuration and status
  * - Starting and stopping SQL logging sessions
  * - Managing session options (filtering, formatting, etc.)
  * - Real-time monitoring of active sessions
- * 
+ *
  * **Security**: Only users with 'Owner' type can access SQL logging features.
- * 
+ *
  * @example
  * ```html
  * <mj-sql-logging></mj-sql-logging>
  * ```
- * 
+ *
  * @requires Owner-level user privileges
  * @requires SQL logging enabled in server configuration
  */
 @Component({
   selector: 'mj-sql-logging',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SharedSettingsModule,
-    CodeEditorModule
-  ],
   templateUrl: './sql-logging.component.html',
   styleUrls: ['./sql-logging.component.scss']
 })
-export class SqlLoggingComponent implements OnInit, OnDestroy {
+@RegisterClass(BaseDashboard, 'SqlLogging')
+export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   private destroy$ = new Subject<void>();
 
   /** Whether the component is currently performing an async operation */
   loading = false;
-  
+
   /** Current error message to display to the user, if any */
   error: string | null = null;
-  
+
   /** Whether the current user has Owner privileges to access SQL logging */
   isOwner = false;
-  
+
   /** Whether SQL logging is enabled in the server configuration */
   configEnabled = false;
-  
+
   /** Current SQL logging configuration from the server */
-  sqlLoggingConfig: any = null;
-  
+  sqlLoggingConfig: SqlLoggingConfig | null = null;
+
   /** List of currently active SQL logging sessions */
-  activeSessions: any[] = [];
-  
+  activeSessions: SqlLoggingSession[] = [];
+
   /** Currently selected session for viewing logs */
-  selectedSession: any = null;
-  
+  selectedSession: SqlLoggingSession | null = null;
+
   /** Content of the currently viewed log file */
   logContent = '';
-  
+
   /** Whether to automatically refresh session data */
   autoRefresh = false;
-  
+
   /** Interval in milliseconds for auto-refresh functionality */
   refreshInterval = 5000; // 5 seconds
-  
+
   /** Whether the start session dialog is currently visible */
   showStartSessionDialog = false;
-  
+
   /** Options for creating a new SQL logging session */
   newSessionOptions = {
     /** Custom filename for the log file */
@@ -92,7 +112,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     /** Human-readable name for the session */
     sessionName: ''
   };
-  
+
   /** Available options for SQL statement type filtering */
   statementTypeOptions = [
     { text: 'Both Queries and Mutations', value: 'both' },
@@ -100,28 +120,26 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     { text: 'Mutations Only', value: 'mutations' }
   ];
 
-  constructor(private sharedService: SharedService) {}
+  constructor(private sharedService: SharedService) {
+    super();
+  }
 
-  /**
-   * Component initialization.
-   * Checks user permissions and loads initial data if authorized.
-   */
-  async ngOnInit() {
+  protected initDashboard(): void {
+    this.startAutoRefresh();
+  }
+
+  protected async loadData(): Promise<void> {
     await this.checkUserPermissions();
     if (this.isOwner) {
       await this.loadSqlLoggingConfig();
       await this.loadActiveSessions();
-      this.startAutoRefresh();
     }
   }
 
-  /**
-   * Component cleanup.
-   * Stops auto-refresh and cleans up subscriptions.
-   */
-  ngOnDestroy() {
+  override ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    super.ngOnDestroy();
   }
   
   /**
@@ -543,7 +561,8 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
       
       // Update selected session if it still exists
       if (this.selectedSession) {
-        const stillExists = this.activeSessions.find(s => s.id === this.selectedSession.id);
+        const selectedId = this.selectedSession.id;
+        const stillExists = this.activeSessions.find(s => s.id === selectedId);
         if (stillExists) {
           this.selectedSession = stillExists;
         } else {

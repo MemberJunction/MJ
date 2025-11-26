@@ -15,10 +15,38 @@
         "isDefault": true
       },
       {
-        "Label": "Security",
-        "Icon": "fa-solid fa-user-shield",
+        "Label": "Entity Permissions",
+        "Icon": "fa-solid fa-lock",
         "ResourceType": "Dashboards",
-        "RecordId": "@lookup:Dashboards.Name=Security",
+        "RecordId": "@lookup:Dashboards.Name=Entity Permissions",
+        "isDefault": true
+      },
+      {
+        "Label": "Roles",
+        "Icon": "fa-solid fa-shield-halved",
+        "ResourceType": "Dashboards",
+        "RecordId": "@lookup:Dashboards.Name=Role Management",
+        "isDefault": true
+      },
+      {
+        "Label": "Users",
+        "Icon": "fa-solid fa-users",
+        "ResourceType": "Dashboards",
+        "RecordId": "@lookup:Dashboards.Name=User Management",
+        "isDefault": true
+      },
+      {
+        "Label": "Applications",
+        "Icon": "fa-solid fa-th-large",
+        "ResourceType": "Dashboards",
+        "RecordId": "@lookup:Dashboards.Name=Application Management",
+        "isDefault": true
+      },
+      {
+        "Label": "SQL Logging",
+        "Icon": "fa-solid fa-file-code",
+        "ResourceType": "Dashboards",
+        "RecordId": "@lookup:Dashboards.Name=SQL Logging",
         "isDefault": true
       }
     ]
@@ -30,7 +58,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-11-26T09:30:21.999Z",
-    "checksum": "6c1f1f2035fbc1cf12239c8fb92e46be7413b9b138cf0aa3f56a018ed09df847"
+    "lastModified": "2025-11-26T09:56:04.567Z",
+    "checksum": "2a3e1680f5b76fe21cbc43137356bafd0f7d81b58df33c03297dc730bfb447cf"
   }
 }

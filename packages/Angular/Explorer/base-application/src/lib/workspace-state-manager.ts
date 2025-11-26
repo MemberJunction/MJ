@@ -320,8 +320,10 @@ export class WorkspaceStateManager {
       // For resource-based tabs, match by resourceType in configuration
       if (request.Configuration?.resourceType) {
         // Normalize empty/null/undefined to empty string for comparison
-        const requestRecordId = request.ResourceRecordId || '';
-        const tabRecordId = tab.resourceRecordId || '';
+        // IMPORTANT: Check both ResourceRecordId AND Configuration.recordId
+        // because for nav items, the recordId is stored in Configuration, not ResourceRecordId
+        const requestRecordId = request.ResourceRecordId || (request.Configuration?.recordId as string) || '';
+        const tabRecordId = tab.resourceRecordId || (tab.configuration?.recordId as string) || '';
 
         // For Custom resource types, also compare navItemName or driverClass
         // to distinguish between different custom resources (Monitor vs Prompts vs Agents, etc.)

@@ -1,13 +1,11 @@
-import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map } from 'rxjs/operators';
+import { Component, OnDestroy } from '@angular/core';
+import { Subject, BehaviorSubject } from 'rxjs';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { UserEntity, RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
-import { SharedSettingsModule } from '../shared/shared-settings.module';
-import { UserDialogComponent, UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
-import { WindowModule } from '@progress/kendo-angular-dialog';
+import { BaseDashboard } from '@memberjunction/ng-shared';
+import { RegisterClass } from '@memberjunction/global';
+import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
 
 interface UserStats {
   totalUsers: number;
@@ -24,18 +22,11 @@ interface FilterOptions {
 
 @Component({
   selector: 'mj-user-management',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SharedSettingsModule,
-    UserDialogComponent,
-    WindowModule
-  ],
   templateUrl: './user-management.component.html',
   styleUrls: ['./user-management.component.scss']
 })
-export class UserManagementComponent implements OnInit, OnDestroy {
+@RegisterClass(BaseDashboard, 'UserManagement')
+export class UserManagementComponent extends BaseDashboard implements OnDestroy {
   
   // State management
   public users: UserEntity[] = [];
@@ -82,17 +73,23 @@ export class UserManagementComponent implements OnInit, OnDestroy {
   
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
-  
-  constructor() {}
-  
-  ngOnInit(): void {
-    this.loadInitialData();
+
+  constructor() {
+    super();
+  }
+
+  protected initDashboard(): void {
     this.setupFilterSubscription();
   }
-  
-  ngOnDestroy(): void {
+
+  protected loadData(): void {
+    this.loadInitialData();
+  }
+
+  override ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    super.ngOnDestroy();
   }
   
   public async loadInitialData(): Promise<void> {

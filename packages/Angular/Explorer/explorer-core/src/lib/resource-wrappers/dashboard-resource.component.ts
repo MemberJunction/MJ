@@ -26,7 +26,7 @@ export function LoadDashboardResource() {
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
-    private componentRef: ComponentRef<any> | null = null;
+    private componentRef: ComponentRef<unknown> | null = null;
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
 
