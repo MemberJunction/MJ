@@ -2551,6 +2551,12 @@ export const ApplicationSchema = z.object({
     *   * Left of App Switcher
     *   * Left of User Menu
         * * Description: Position of the permanent nav icon when NavigationStyle is Nav Bar or Both. Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar. Ignored when NavigationStyle is App Switcher.`),
+    HideNavBarIconWhenActive: z.boolean().describe(`
+        * * Field Name: HideNavBarIconWhenActive
+        * * Display Name: Hide Nav Bar Icon When Active
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.`),
 });
 
 export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
@@ -24259,6 +24265,20 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     }
     set TopNavLocation(value: 'Left of App Switcher' | 'Left of User Menu' | null) {
         this.Set('TopNavLocation', value);
+    }
+
+    /**
+    * * Field Name: HideNavBarIconWhenActive
+    * * Display Name: Hide Nav Bar Icon When Active
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.
+    */
+    get HideNavBarIconWhenActive(): boolean {
+        return this.Get('HideNavBarIconWhenActive');
+    }
+    set HideNavBarIconWhenActive(value: boolean) {
+        this.Set('HideNavBarIconWhenActive', value);
     }
 }
 

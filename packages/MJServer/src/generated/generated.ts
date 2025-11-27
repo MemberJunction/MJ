@@ -16690,6 +16690,9 @@ export class MJApplication_ {
     @MaxLength(60)
     TopNavLocation?: string;
         
+    @Field(() => Boolean, {description: `When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.`}) 
+    HideNavBarIconWhenActive: boolean;
+        
     @Field(() => [MJApplicationEntity_])
     ApplicationEntities_ApplicationIDArray: MJApplicationEntity_[]; // Link to ApplicationEntities
     
@@ -16750,6 +16753,9 @@ export class CreateMJApplicationInput {
 
     @Field({ nullable: true })
     TopNavLocation: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HideNavBarIconWhenActive?: boolean;
 }
     
 
@@ -16796,6 +16802,9 @@ export class UpdateMJApplicationInput {
 
     @Field({ nullable: true })
     TopNavLocation?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HideNavBarIconWhenActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

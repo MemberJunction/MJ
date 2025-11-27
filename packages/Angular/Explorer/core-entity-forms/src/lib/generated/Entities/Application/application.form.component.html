@@ -99,7 +99,7 @@
     <mj-collapsible-panel slot="field-panels"
         sectionKey="navigationSettings"
         sectionName="Navigation Settings"
-        icon="fa fa-compass"
+        icon="fa fa-sliders-h"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -123,6 +123,14 @@
             [ShowLabel]="true"
             FieldName="TopNavLocation"
             Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="HideNavBarIconWhenActive"
+            Type="checkbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
