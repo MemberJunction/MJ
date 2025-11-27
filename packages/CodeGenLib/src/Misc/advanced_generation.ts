@@ -38,6 +38,11 @@ export type EntityImportanceInfo = {
     recommendedSequence?: number;
 }
 
+export type CategoryInfo = {
+    icon: string;
+    description: string;
+}
+
 export type FormLayoutResult = {
     entityIcon?: string;
     fieldCategories: Array<{
@@ -48,7 +53,10 @@ export type FormLayoutResult = {
         extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
+    /** @deprecated Use categoryInfo instead */
     categoryIcons?: Record<string, string>;
+    /** New format: category name -> { icon, description } */
+    categoryInfo?: Record<string, CategoryInfo>;
     entityImportance?: EntityImportanceInfo;
 }
 
@@ -218,7 +226,7 @@ export class AdvancedGeneration {
     private getExistingCategoryInfo(entity: any): {
         categories: string[];
         fieldsByCategory: Record<string, string[]>;
-        icons: Record<string, string> | null;
+        categoryInfo: Record<string, CategoryInfo> | null;
     } {
         // Get ALL fields that have categories assigned (not just locked ones)
         // This ensures the LLM sees existing categories and reuses them
@@ -244,29 +252,80 @@ export class AdvancedGeneration {
             fieldsByCategory[field.Category].push(field.Name);
         }
 
-        // Load category icons from EntitySettings
-        let icons: Record<string, string> | null = null;
-        const iconSetting = entity.Settings?.find(
-            (s: any) => s.Name === 'FieldCategoryIcons'
+        // Load category info (icons and descriptions) from EntitySettings
+        let categoryInfo: Record<string, CategoryInfo> | null = null;
+        const infoSetting = entity.Settings?.find(
+            (s: any) => s.Name === 'FieldCategoryInfo'
         );
-        if (iconSetting?.Value) {
+        if (infoSetting?.Value) {
             try {
-                icons = JSON.parse(iconSetting.Value);
+                categoryInfo = JSON.parse(infoSetting.Value);
             } catch (e) {
                 // Invalid JSON, ignore
             }
         }
 
-        return { categories, fieldsByCategory, icons };
+        // Fallback: check for legacy FieldCategoryIcons format and convert
+        if (!categoryInfo) {
+            const iconSetting = entity.Settings?.find(
+                (s: any) => s.Name === 'FieldCategoryIcons'
+            );
+            if (iconSetting?.Value) {
+                try {
+                    const icons = JSON.parse(iconSetting.Value) as Record<string, string>;
+                    // Convert legacy format to new format
+                    categoryInfo = {};
+                    for (const [category, icon] of Object.entries(icons)) {
+                        categoryInfo[category] = { icon, description: '' };
+                    }
+                } catch (e) {
+                    // Invalid JSON, ignore
+                }
+            }
+        }
+
+        return { categories, fieldsByCategory, categoryInfo };
+    }
+
+    /**
+     * Calculate FK statistics for an entity to help LLM determine entity importance
+     */
+    private calculateFkStatistics(fields: Array<{ IsForeignKey?: boolean; IsPrimaryKey?: boolean; Name?: string }>): {
+        totalFields: number;
+        fkCount: number;
+        nonFkCount: number;
+        fkRatio: number;
+    } {
+        // Exclude system fields (__mj_*) and primary key from the ratio calculation
+        const businessFields = fields.filter(
+            (f) => !f.IsPrimaryKey && !f.Name?.startsWith('__mj')
+        );
+
+        const fkCount = businessFields.filter((f) => f.IsForeignKey).length;
+        const nonFkCount = businessFields.length - fkCount;
+        const fkRatio = businessFields.length > 0
+            ? Math.round((fkCount / businessFields.length) * 100)
+            : 0;
+
+        return {
+            totalFields: fields.length,
+            fkCount,
+            nonFkCount,
+            fkRatio
+        };
     }
 
     /**
      * Form Layout Generation - create semantic field categories with icons
-     * Also analyzes entity importance for default visibility in applications
+     * Also analyzes entity importance for default visibility in applications (for NEW entities only)
+     * @param entity The entity to generate form layout for
+     * @param contextUser The user context
+     * @param isNewEntity If true, this is a newly created entity; if false, entityImportance will be ignored
      */
     public async generateFormLayout(
         entity: any,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        isNewEntity: boolean = false
     ): Promise<FormLayoutResult | null> {
         if (!this.featureEnabled('FormLayoutGeneration')) {
             return null;
@@ -279,55 +338,71 @@ export class AdvancedGeneration {
             const existingInfo = this.getExistingCategoryInfo(entity);
             const hasExistingCategories = existingInfo.categories.length > 0;
 
+            // Map fields with FK flag for statistics calculation
+            const mappedFields = entity.Fields.map((f: any) => ({
+                Name: f.Name,
+                Type: f.Type,
+                IsNullable: f.AllowsNull,
+                IsPrimaryKey: f.IsPrimaryKey,
+                IsForeignKey: f.EntityIDFieldName != null,
+                RelatedEntity: f.RelatedEntityName,
+                Description: f.Description,
+                // Include existing category information for ALL fields
+                ExistingCategory: f.Category || null,
+                // HasExistingCategory=true means locked (don't update), false means can update
+                HasExistingCategory: !f.AutoUpdateCategory && f.Category != null,
+                IsNewField: f.AutoUpdateCategory === true && !f.Category
+            }));
+
+            // Calculate FK statistics for entity importance analysis
+            const fkStats = this.calculateFkStatistics(mappedFields);
+
             const params = new AIPromptParams();
             params.prompt = prompt;
             params.data = {
                 entityName: entity.Name,
                 entityDescription: entity.Description,
                 schemaName: entity.SchemaName,
-                virtualEntity: entity.VirtualEntity ?? false,
-                trackRecordChanges: entity.TrackRecordChanges ?? false,
-                auditRecordAccess: entity.AuditRecordAccess ?? false,
-                userFormGenerated: entity.UserFormGenerated ?? false,
-                fields: entity.Fields.map((f: any) => ({
-                    Name: f.Name,
-                    Type: f.Type,
-                    IsNullable: f.AllowsNull,
-                    IsPrimaryKey: f.IsPrimaryKey,
-                    IsForeignKey: f.EntityIDFieldName != null,
-                    RelatedEntity: f.RelatedEntityName,
-                    Description: f.Description,
-                    // Include existing category information for ALL fields
-                    ExistingCategory: f.Category || null,
-                    // HasExistingCategory=true means locked (don't update), false means can update
-                    HasExistingCategory: !f.AutoUpdateCategory && f.Category != null,
-                    IsNewField: f.AutoUpdateCategory === true && !f.Category
-                })),
+                // FK statistics for entity importance determination
+                totalFields: fkStats.totalFields,
+                fkCount: fkStats.fkCount,
+                nonFkCount: fkStats.nonFkCount,
+                fkRatio: fkStats.fkRatio,
+                // Field data
+                fields: mappedFields,
                 // Pass existing category metadata
                 existingCategories: existingInfo.categories,
                 fieldsByCategory: existingInfo.fieldsByCategory,
-                hasExistingCategories: hasExistingCategories
+                hasExistingCategories: hasExistingCategories,
+                // Pass existing category info (icons + descriptions) so LLM can reference them
+                existingCategoryInfo: existingInfo.categoryInfo || {},
+                // Flag to tell LLM whether to bother with entityImportance
+                isExistingEntity: !isNewEntity
             };
             params.contextUser = contextUser;
 
             const result = await this.executePrompt<FormLayoutResult>(params);
 
             if (result.success && result.result) {
-                // Merge icons instead of replacing - preserve existing custom icons
-                if (result.result.categoryIcons && existingInfo.icons) {
-                    result.result.categoryIcons = {
-                        ...existingInfo.icons,  // Preserve existing
-                        ...result.result.categoryIcons  // Add new (overwrites if same key)
+                // Merge category info - preserve ALL existing categories, only add new ones
+                if (existingInfo.categoryInfo) {
+                    const newCategoryInfo = result.result.categoryInfo || {};
+                    result.result.categoryInfo = {
+                        ...newCategoryInfo  // Only new categories from LLM
                     };
+                    // Preserve existing - don't let LLM overwrite
+                    for (const [category, info] of Object.entries(existingInfo.categoryInfo)) {
+                        result.result.categoryInfo[category] = info;
+                    }
                 }
 
-                // Log entity importance analysis if available
-                if (result.result.entityImportance) {
-                    // LogStatus(
-                    //     `Entity importance for ${entity.Name}: ${result.result.entityImportance.entityCategory} ` +
-                    //     `(defaultForNewUser: ${result.result.entityImportance.defaultForNewUser}, ` +
-                    //     `confidence: ${result.result.entityImportance.confidence})`
-                    // );
+                // Handle legacy categoryIcons format for backwards compatibility
+                if (result.result.categoryIcons && !result.result.categoryInfo) {
+                    // Convert legacy format to new format
+                    result.result.categoryInfo = {};
+                    for (const [category, icon] of Object.entries(result.result.categoryIcons)) {
+                        result.result.categoryInfo[category] = { icon, description: '' };
+                    }
                 }
 
                 return result.result;

@@ -2057,7 +2057,10 @@ NumberedRows AS (
                ef.Description,
                ef.AutoUpdateIsNameField,
                ef.AutoUpdateDefaultInView,
-               ef.AutoUpdateCategory
+               ef.AutoUpdateCategory,
+               ef.AutoUpdateDisplayName,
+               ef.EntityIDFieldName,
+               ef.RelatedEntityName
             FROM
                [${mj_core_schema()}].vwEntityFields ef
             WHERE
@@ -2069,6 +2072,35 @@ NumberedRows AS (
 
          const fieldsResult = await pool.request().query(fieldsSQL);
          const allFields = fieldsResult.recordset;
+
+         // Get EntitySettings for all entities (for existing category icons/info)
+         const settingsSQL = `
+            SELECT
+               es.EntityID,
+               es.Name,
+               es.Value
+            FROM
+               [${mj_core_schema()}].EntitySetting es
+            WHERE
+               es.EntityID IN (${entityIds})
+               AND es.Name IN ('FieldCategoryIcons', 'FieldCategoryInfo')
+         `;
+         const settingsResult = await pool.request().query(settingsSQL);
+         const allSettings = settingsResult.recordset;
+
+         // Group settings by entity
+         const settingsByEntity: Record<string, any[]> = {};
+         for (const setting of allSettings) {
+            if (!settingsByEntity[setting.EntityID]) {
+               settingsByEntity[setting.EntityID] = [];
+            }
+            settingsByEntity[setting.EntityID].push(setting);
+         }
+
+         // Attach settings to entities
+         for (const entity of entities) {
+            entity.Settings = settingsByEntity[entity.ID] || [];
+         }
 
          // Process entities in batches with parallelization
          return await this.processEntitiesBatched(pool, entities, allFields, ag, currentUser);
@@ -2142,6 +2174,9 @@ NumberedRows AS (
       // Filter fields for this entity (client-side filtering)
       const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
 
+      // Determine if this is a new entity (for DefaultForNewUser decision)
+      const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
+
       // Smart Field Identification
       // Only run if at least one field allows auto-update
       if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView)) {
@@ -2163,16 +2198,12 @@ NumberedRows AS (
             Name: entity.Name,
             Description: entity.Description,
             SchemaName: entity.SchemaName,
-            VirtualEntity: entity.VirtualEntity,
-            TrackRecordChanges: entity.TrackRecordChanges,
-            AuditRecordAccess: entity.AuditRecordAccess,
-            UserFormGenerated: entity.UserFormGenerated,
             Settings: entity.Settings,
             Fields: fields
-         }, currentUser);
+         }, currentUser, isNewEntity);
 
          if (layoutAnalysis) {
-            await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis);
+            await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis, isNewEntity);
             logStatus(`         Applied form layout for ${entity.Name}`);
          }
       }
@@ -2235,15 +2266,29 @@ NumberedRows AS (
 
    /**
     * Apply form layout generation results to set category on entity fields
+    * @param pool Database connection pool
+    * @param entityId Entity ID to update
+    * @param fields Entity fields
+    * @param result Form layout result from LLM
+    * @param isNewEntity If true, apply entityImportance; if false, skip it
     */
    protected async applyFormLayout(
       pool: sql.ConnectionPool,
       entityId: string,
       fields: any[],
-      result: FormLayoutResult
+      result: FormLayoutResult,
+      isNewEntity: boolean = false
    ): Promise<void> {
       // Collect all SQL statements for batch execution
       const sqlStatements: string[] = [];
+
+      // Build set of existing categories from fields for enforcement
+      const existingCategories = new Set<string>();
+      for (const field of fields) {
+         if (field.Category && field.Category.trim() !== '') {
+            existingCategories.add(field.Category);
+         }
+      }
 
       // Assign category to each field
       for (const fieldCategory of result.fieldCategories) {
@@ -2254,6 +2299,22 @@ NumberedRows AS (
             let category = fieldCategory.category;
             if (field.Name.startsWith('__mj_')) {
                category = 'System Metadata';
+            }
+
+            // ENFORCEMENT: Prevent category renaming
+            // If field already has a category, only allow:
+            // 1. Keeping the same category
+            // 2. Moving to another EXISTING category
+            // New categories are only allowed for fields that don't already have a category
+            const fieldHasExistingCategory = field.Category && field.Category.trim() !== '';
+            const categoryIsExisting = existingCategories.has(category);
+            const categoryIsNew = !categoryIsExisting;
+
+            if (fieldHasExistingCategory && categoryIsNew) {
+               // LLM is trying to move an existing field to a brand new category
+               // This could be an attempt to rename a category - reject it
+               logStatus(`         Rejected category change for field '${field.Name}': cannot move from existing category '${field.Category}' to new category '${category}'. Keeping original category.`);
+               category = field.Category; // Keep the original category
             }
 
             // Build SET clause with all available metadata
@@ -2322,39 +2383,81 @@ NumberedRows AS (
          }
       }
 
-      // Store category icons in EntitySetting if provided
-      if (result.categoryIcons && Object.keys(result.categoryIcons).length > 0) {
-         const iconsJSON = JSON.stringify(result.categoryIcons).replace(/'/g, "''");
+      // Store category info (icons + descriptions) in EntitySetting if provided
+      // Use the new categoryInfo format, with backwards compatibility for categoryIcons
+      const categoryInfoToStore = result.categoryInfo ||
+         (result.categoryIcons ?
+            // Convert legacy format: { icon: string } -> { icon, description: '' }
+            Object.fromEntries(
+               Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
+            ) : null);
 
-         // First check if setting already exists
-         const checkSQL = `
+      if (categoryInfoToStore && Object.keys(categoryInfoToStore).length > 0) {
+         const infoJSON = JSON.stringify(categoryInfoToStore).replace(/'/g, "''");
+
+         // First check if new format setting already exists
+         const checkNewSQL = `
+            SELECT ID FROM [${mj_core_schema()}].EntitySetting
+            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
+         `;
+         const existingNew = await pool.request().query(checkNewSQL);
+
+         if (existingNew.recordset.length > 0) {
+            // Update existing setting
+            const updateSQL = `
+               UPDATE [${mj_core_schema()}].EntitySetting
+               SET Value = '${infoJSON}',
+                   __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
+            `;
+            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryInfo setting for entity`, false);
+         } else {
+            // Insert new setting
+            const newId = uuidv4();
+            const insertSQL = `
+               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
+            `;
+            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryInfo setting for entity`, false);
+         }
+
+         // Also update legacy FieldCategoryIcons for backwards compatibility
+         // Extract just icons from categoryInfo
+         const iconsOnly: Record<string, string> = {};
+         for (const [category, info] of Object.entries(categoryInfoToStore)) {
+            if (info && typeof info === 'object' && 'icon' in info) {
+               iconsOnly[category] = (info as { icon: string }).icon;
+            }
+         }
+         const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
+
+         const checkLegacySQL = `
             SELECT ID FROM [${mj_core_schema()}].EntitySetting
             WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
          `;
-         const existing = await pool.request().query(checkSQL);
+         const existingLegacy = await pool.request().query(checkLegacySQL);
 
-         if (existing.recordset.length > 0) {
-            // Update existing setting
+         if (existingLegacy.recordset.length > 0) {
             const updateSQL = `
                UPDATE [${mj_core_schema()}].EntitySetting
                SET Value = '${iconsJSON}',
                    __mj_UpdatedAt = GETUTCDATE()
                WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
             `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity`, false);
+            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity (legacy format)`, false);
          } else {
-            // Insert new setting
             const newId = uuidv4();
             const insertSQL = `
                INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
                VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
             `;
-            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity`, false);
+            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity (legacy format)`, false);
          }
       }
 
-      // Apply entity importance analysis to ApplicationEntity records if provided
-      if (result.entityImportance) {
+      // Apply entity importance analysis to ApplicationEntity records ONLY for NEW entities
+      // For existing entities, preserve admin's decision
+      if (isNewEntity && result.entityImportance) {
          const defaultForNewUser = result.entityImportance.defaultForNewUser ? 1 : 0;
 
          // Update all ApplicationEntity records for this entity
@@ -2364,9 +2467,9 @@ NumberedRows AS (
                 __mj_UpdatedAt = GETUTCDATE()
             WHERE EntityID = '${entityId}'
          `;
-         await this.LogSQLAndExecute(pool, updateAppEntitySQL, `Set DefaultForNewUser=${defaultForNewUser} for entity based on AI analysis (category: ${result.entityImportance.entityCategory}, confidence: ${result.entityImportance.confidence})`, false);
+         await this.LogSQLAndExecute(pool, updateAppEntitySQL, `Set DefaultForNewUser=${defaultForNewUser} for NEW entity based on AI analysis (category: ${result.entityImportance.entityCategory}, confidence: ${result.entityImportance.confidence})`, false);
 
-         logStatus(`  ✓ Entity importance: ${result.entityImportance.entityCategory} (defaultForNewUser: ${result.entityImportance.defaultForNewUser}, confidence: ${result.entityImportance.confidence})`);
+         logStatus(`  ✓ Entity importance (NEW Entity): ${result.entityImportance.entityCategory} (defaultForNewUser: ${result.entityImportance.defaultForNewUser}, confidence: ${result.entityImportance.confidence})`);
          logStatus(`    Reasoning: ${result.entityImportance.reasoning}`);
       }
    }
