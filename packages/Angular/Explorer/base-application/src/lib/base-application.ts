@@ -58,6 +58,9 @@ export class BaseApplication {
   /** Position of permanent nav icon when NavigationStyle is Nav Bar or Both */
   public TopNavLocation: 'Left of App Switcher' | 'Left of User Menu' | null = null;
 
+  /** When true, hide the Nav Bar icon when this application is active */
+  public HideNavBarIconWhenActive: boolean = false;
+
   constructor(data?: Partial<BaseApplication>) {
     if (data) {
       Object.assign(this, data);

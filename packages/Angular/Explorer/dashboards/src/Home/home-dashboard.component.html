@@ -1,16 +1,21 @@
-<div class="home-dashboard" kendoDialogContainer>
+<div class="home-dashboard">
   <!-- Header Section -->
   <div class="home-header">
     <div class="greeting-section">
       <h1>{{ greeting }}, {{ currentUser?.Name }}</h1>
       <p class="date">{{ formattedDate }}</p>
     </div>
-    <div class="header-actions">
+    <!--
+      Configure button hidden - the Kendo dialog doesn't display properly when launched
+      from within the dashboard (attaches to wrong container). Users can access Configure
+      from the app switcher dropdown instead, which is redundant anyway.
+    -->
+    <!-- <div class="header-actions">
       <button class="config-btn" (click)="openConfigDialog()" title="Configure Applications">
         <i class="fa-solid fa-gear"></i>
         <span>Configure</span>
       </button>
-    </div>
+    </div> -->
   </div>
 
   <!-- Loading State -->
@@ -70,26 +75,28 @@
         <i class="fa-solid fa-folder-open"></i>
       </div>
       <h3>No Applications Available</h3>
-      <p>You don't have any applications configured yet.</p>
-      <button class="configure-btn" (click)="openConfigDialog()">
-        <i class="fa-solid fa-plus"></i>
-        Add Applications
-      </button>
+      <p>You don't have any applications configured yet. Use the app switcher to configure your applications.</p>
     </div>
 
-    <!-- Mobile Configure Button (shown at bottom on mobile) -->
-    <div class="mobile-config-section">
+    <!--
+      Mobile Configure Button hidden - same Kendo dialog issue as header button.
+      Users can access Configure from the app switcher dropdown.
+    -->
+    <!-- <div class="mobile-config-section">
       <button class="config-btn mobile-config-btn" (click)="openConfigDialog()" title="Configure Applications">
         <i class="fa-solid fa-gear"></i>
         <span>Configure Applications</span>
       </button>
-    </div>
+    </div> -->
   </div>
 
-  <!-- App Config Dialog -->
-  <mj-user-app-config
+  <!--
+    App Config Dialog hidden - Kendo dialog doesn't attach to top-level container
+    when launched from within dashboard. Use app switcher dropdown instead.
+  -->
+  <!-- <mj-user-app-config
     *ngIf="showConfigDialog"
     #appConfigDialog
     (configSaved)="onConfigSaved()">
-  </mj-user-app-config>
+  </mj-user-app-config> -->
 </div>

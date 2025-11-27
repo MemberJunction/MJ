@@ -1,8 +1,9 @@
 <div class="app-switcher-container">
-  <div class="app-switcher-button" (click)="toggleDropdown()">
+  <div class="app-switcher-button"
+       (click)="toggleDropdown()">
     <i class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
-       [style.color]="activeApp?.GetColor()"></i>
-    <span class="app-name">{{ activeApp?.Name || 'Select App' }}</span>
+       [style.color]="activeApp?.GetColor()"
+       [style.--active-color]="activeApp?.GetColor()"></i>
     <i class="dropdown-arrow fa-solid fa-chevron-down"></i>
   </div>
 
@@ -20,10 +21,10 @@
     <!-- Divider -->
     <div class="app-switcher-divider"></div>
 
-    <!-- Configure Apps option -->
+    <!-- Configure option -->
     <div class="app-switcher-item configure-item" (click)="openConfigDialog()">
       <i class="fa-solid fa-gear"></i>
-      <span>Configure Apps...</span>
+      <span>Configure...</span>
     </div>
   </div>
 </div>

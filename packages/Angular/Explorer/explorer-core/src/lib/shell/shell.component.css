@@ -64,7 +64,8 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .nav-bar-apps.left-of-switcher {
-  margin-right: 8px;
+  /* No extra margin - header gap handles spacing */
+  /* This prevents the app switcher from shifting when icons are hidden */
 }
 
 .nav-bar-apps.left-of-user-menu {
@@ -101,7 +102,7 @@ mj-tab-container ::ng-deep .lm_stack {
 .nav-bar-app-btn.active::after {
   content: '';
   position: absolute;
-  bottom: 2px;
+  bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
   width: 16px;
@@ -112,6 +113,7 @@ mj-tab-container ::ng-deep .lm_stack {
 
 .nav-bar-app-btn i {
   transition: transform 0.15s ease;
+  margin-top: 2px; /* Align with app switcher icon */
 }
 
 .nav-bar-app-btn:hover i {

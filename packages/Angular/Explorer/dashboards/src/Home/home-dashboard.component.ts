@@ -44,13 +44,28 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
       Email: this.metadata.CurrentUser?.Email || ''
     };
 
+    // Subscribe to loading state from ApplicationManager
+    this.appManager.Loading
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(loading => {
+        // Only update isLoading if manager is actively loading
+        // (we start with isLoading=true and only set to false when we have apps)
+        if (loading) {
+          this.isLoading = true;
+          this.cdr.detectChanges();
+        }
+      });
+
     // Subscribe to applications list, filtering out the Home app
     this.appManager.Applications
       .pipe(takeUntil(this.destroy$))
       .subscribe(apps => {
         // Exclude the Home app from the list (users are already on Home)
         this.apps = apps.filter(app => app.Name !== 'Home');
-        this.isLoading = false;
+        // Only stop loading when we actually have apps (non-empty array means loaded)
+        if (apps.length > 0) {
+          this.isLoading = false;
+        }
         this.cdr.detectChanges();
       });
   }

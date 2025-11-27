@@ -211,6 +211,13 @@ export class ApplicationInfo extends BaseInfo {
     */
     TopNavLocation: 'Left of App Switcher' | 'Left of User Menu' | null = null;
 
+    /**
+    * When true, the Nav Bar icon for this application is hidden when the application is active.
+    * Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app.
+    * Only applies when NavigationStyle is Nav Bar or Both.
+    */
+    HideNavBarIconWhenActive: boolean = false;
+
 
     private _ApplicationEntities: ApplicationEntityInfo[] = []
     /**

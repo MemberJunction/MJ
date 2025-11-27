@@ -45,16 +45,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /**
    * Get Nav Bar apps positioned to the left of the app switcher
+   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
    */
   get leftOfSwitcherApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of App Switcher');
+    return this.appManager.GetNavBarApps('Left of App Switcher')
+      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
   }
 
   /**
    * Get Nav Bar apps positioned to the left of the user menu
+   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
    */
   get leftOfUserMenuApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of User Menu');
+    return this.appManager.GetNavBarApps('Left of User Menu')
+      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
   }
 
   constructor(

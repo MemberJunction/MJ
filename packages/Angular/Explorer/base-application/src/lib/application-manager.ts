@@ -165,7 +165,8 @@ export class ApplicationManager {
             DefaultSequence: appInfo.DefaultSequence,
             Status: appInfo.Status,
             NavigationStyle: appInfo.NavigationStyle,
-            TopNavLocation: appInfo.TopNavLocation
+            TopNavLocation: appInfo.TopNavLocation,
+            HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive
           }
         );
 

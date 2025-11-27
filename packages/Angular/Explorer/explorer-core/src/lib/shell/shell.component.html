@@ -7,7 +7,7 @@
     </button>
 
     <!-- Nav Bar Apps: Left of App Switcher -->
-    <div class="nav-bar-apps left-of-switcher">
+    <div class="nav-bar-apps left-of-switcher" *ngIf="leftOfSwitcherApps.length > 0">
       <button *ngFor="let app of leftOfSwitcherApps"
               class="nav-bar-app-btn"
               [class.active]="app.ID === activeApp?.ID"
@@ -46,7 +46,7 @@
       </button>
 
       <!-- Nav Bar Apps: Left of User Menu -->
-      <div class="nav-bar-apps left-of-user-menu">
+      <div class="nav-bar-apps left-of-user-menu" *ngIf="leftOfUserMenuApps.length > 0">
         <button *ngFor="let app of leftOfUserMenuApps"
                 class="nav-bar-app-btn"
                 [class.active]="app.ID === activeApp?.ID"

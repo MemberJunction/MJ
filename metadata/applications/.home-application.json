@@ -8,13 +8,14 @@
     "DefaultSequence": 0,
     "Status": "Active",
     "NavigationStyle": "Both",
-    "TopNavLocation": "Left of App Switcher"
+    "TopNavLocation": "Left of App Switcher",
+    "HideNavBarIconWhenActive": true
   },
   "primaryKey": {
     "ID": "5D0419BD-21AE-44DD-BC87-DCE0819860F5"
   },
   "sync": {
-    "lastModified": "2025-11-26T20:11:50.751Z",
-    "checksum": "95668f0ea40d842dc3eeb9dd4ce0578615aa846eb5e441ce07b42bd258d67549"
+    "lastModified": "2025-11-27T12:26:12.218Z",
+    "checksum": "5a5082a61676f89540dd7b24d1d35e8e67f759b13e990d0d23af2a20871967cb"
   }
 }
