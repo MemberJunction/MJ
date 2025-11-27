@@ -1,12 +1,7 @@
 <div class="model-management-v2">
   @if (isLoading) {
     <div class="loading-container">
-      <div class="loading-content">
-        <div class="loading-spinner">
-          <div class="spinner-ring"></div>
-        </div>
-        <div class="loading-text">{{ currentLoadingMessage }}</div>
-      </div>
+      <mj-loading [text]="currentLoadingMessage" size="large"></mj-loading>
     </div>
   } @else {
     <div class="dashboard-header">

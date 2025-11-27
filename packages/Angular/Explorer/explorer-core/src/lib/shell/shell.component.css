@@ -513,3 +513,12 @@ mj-tab-container ::ng-deep .lm_stack {
   overflow: auto;
   background: #fafafa;
 }
+
+/* Hide minimize/maximize buttons - only show close */
+::ng-deep .settings-fullscreen-window .k-window-titlebar-action[title="Minimize"],
+::ng-deep .settings-fullscreen-window .k-window-titlebar-action[title="Maximize"],
+::ng-deep .settings-fullscreen-window .k-window-titlebar-action .k-i-window-minimize,
+::ng-deep .settings-fullscreen-window .k-window-titlebar-action .k-i-window-maximize,
+::ng-deep .settings-fullscreen-window .k-window-titlebar-action .k-i-window {
+  display: none !important;
+}

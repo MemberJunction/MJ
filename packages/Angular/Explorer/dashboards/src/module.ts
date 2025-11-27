@@ -96,6 +96,7 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
 // Home Dashboard Components
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -196,7 +197,8 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
     MJNotificationsModule,
     TestingModule,
     UserViewGridModule,
-    ExplorerSettingsModule
+    ExplorerSettingsModule,
+    SharedGenericModule
   ],
   providers: [
     AIInstrumentationService,

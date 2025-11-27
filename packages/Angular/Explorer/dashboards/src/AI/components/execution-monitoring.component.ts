@@ -80,10 +80,7 @@ export function LoadAIMonitorResource() {
       <!-- Loading Overlay -->
       @if (isLoading) {
         <div class="loading-overlay">
-          <div class="loading-content">
-            <i class="fa-solid fa-spinner fa-spin fa-3x"></i>
-            <p>Loading dashboard data...</p>
-          </div>
+          <mj-loading text="Loading dashboard data..." size="large"></mj-loading>
         </div>
       }
       <!-- Header Controls -->
@@ -248,8 +245,7 @@ export function LoadAIMonitorResource() {
                         
                         @if (loadingDrillDown) {
                           <div class="loading-spinner">
-                            <i class="fa-solid fa-spinner fa-spin"></i>
-                            Loading execution details...
+                            <mj-loading text="Loading execution details..." size="small"></mj-loading>
                           </div>
                         } @else if (activeTab?.data?.length > 0) {
                           <div class="executions-table">
@@ -307,8 +303,7 @@ export function LoadAIMonitorResource() {
                         
                         @if (loadingDrillDown) {
                           <div class="loading-spinner">
-                            <i class="fa-solid fa-spinner fa-spin"></i>
-                            Loading model details...
+                            <mj-loading text="Loading model details..." size="small"></mj-loading>
                           </div>
                         } @else if (activeTab?.data) {
                           <div class="model-details">
@@ -591,8 +586,7 @@ export function LoadAIMonitorResource() {
             
             @if (loadingExecutionDetails) {
               <div class="loading-details">
-                <div class="spinner"></div>
-                <p>Loading execution details...</p>
+                <mj-loading text="Loading execution details..." size="medium"></mj-loading>
               </div>
             }
           </div>
@@ -630,26 +624,6 @@ export function LoadAIMonitorResource() {
       backdrop-filter: blur(1px);
     }
     
-    .loading-content {
-      text-align: center;
-      padding: 40px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    }
-    
-    .loading-content i {
-      color: #2196f3;
-      margin-bottom: 20px;
-      display: block;
-    }
-    
-    .loading-content p {
-      margin: 0;
-      font-size: 16px;
-      color: #666;
-      font-weight: 500;
-    }
 
     .monitoring-header {
       background: white;
@@ -1235,15 +1209,6 @@ export function LoadAIMonitorResource() {
       justify-content: center;
       padding: 40px;
       gap: 12px;
-    }
-
-    .spinner {
-      width: 32px;
-      height: 32px;
-      border: 3px solid #f3f3f3;
-      border-top: 3px solid #2196f3;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
     }
 
     /* Drill-down Tab Styles */

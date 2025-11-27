@@ -89,10 +89,7 @@
         @if (state.viewMode === 'cards') {
           @if (isLoading) {
             <div class="loading-container">
-              <div class="loading-spinner">
-                <i class="fa-solid fa-spinner fa-spin"></i>
-              </div>
-              <p class="loading-message">{{ loadingMessage }}</p>
+              <mj-loading [text]="loadingMessage" size="large"></mj-loading>
             </div>
           } @else if (records.length === 0) {
             <div class="empty-state">

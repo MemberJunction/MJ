@@ -11,10 +11,7 @@
 
     <!-- Loading State -->
     <div class="loading-container" *ngIf="isLoading">
-      <div class="loading-spinner">
-        <i class="fa-solid fa-spinner fa-spin"></i>
-      </div>
-      <p>Loading your applications...</p>
+      <mj-loading text="Loading your applications..." size="large"></mj-loading>
     </div>
 
     <!-- Apps Grid -->
