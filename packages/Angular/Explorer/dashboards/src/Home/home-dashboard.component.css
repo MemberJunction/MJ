@@ -16,9 +16,9 @@
   transition: margin-right 0.3s ease;
 }
 
-/* Sidebar open state adjusts main content */
+/* Sidebar open state adjusts main content on desktop */
 .home-dashboard.sidebar-open .main-content {
-  margin-right: 0;
+  margin-right: 320px;
 }
 
 /* Header */
@@ -42,10 +42,10 @@
   color: #6c757d;
 }
 
-/* FAB Toggle Button for Quick Access (all screen sizes) */
+/* FAB Toggle Button for Quick Access - top-right on desktop */
 .sidebar-fab-toggle {
   position: fixed;
-  bottom: 24px;
+  top: 80px; /* Below shell header with some spacing */
   right: 24px;
   width: 56px;
   height: 56px;
@@ -564,6 +564,10 @@
     width: 280px;
   }
 
+  .home-dashboard.sidebar-open .main-content {
+    margin-right: 280px;
+  }
+
   .apps-grid {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
@@ -582,7 +586,7 @@
   /* Make sidebar an overlay on tablet */
   .quick-access-sidebar {
     position: fixed;
-    top: 0;
+    top: 60px; /* Below shell header */
     right: 0;
     bottom: 0;
     width: 320px;
@@ -598,7 +602,7 @@
   .home-dashboard.sidebar-open::after {
     content: '';
     position: fixed;
-    top: 0;
+    top: 60px;
     left: 0;
     right: 320px;
     bottom: 0;
@@ -687,7 +691,9 @@
     display: none;
   }
 
+  /* Move FAB to bottom-right on mobile */
   .sidebar-fab-toggle {
+    top: auto;
     bottom: 20px;
     right: 20px;
     width: 48px;
