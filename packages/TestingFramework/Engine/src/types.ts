@@ -300,6 +300,46 @@ export interface DriverExecutionContext {
 }
 
 /**
+ * Result from a single turn in multi-turn test
+ */
+export interface TurnResult {
+  /**
+   * Turn number (1-indexed)
+   */
+  turnNumber: number;
+
+  /**
+   * Agent run for this turn
+   */
+  agentRun: AIAgentRunEntity;
+
+  /**
+   * Input payload for this turn
+   */
+  inputPayload?: Record<string, unknown>;
+
+  /**
+   * Output payload from this turn
+   */
+  outputPayload: Record<string, unknown>;
+
+  /**
+   * Oracle results for this turn (if per-turn evaluation)
+   */
+  oracleResults?: OracleResult[];
+
+  /**
+   * Duration in milliseconds
+   */
+  durationMs?: number;
+
+  /**
+   * Cost in USD
+   */
+  cost?: number;
+}
+
+/**
  * Result from driver execution
  */
 export interface DriverExecutionResult {
@@ -309,7 +349,7 @@ export interface DriverExecutionResult {
   targetType: string;
 
   /**
-   * Target entity ID
+   * Target entity ID (final AgentRun ID for single/multi-turn)
    */
   targetLogId: string;
 
@@ -372,6 +412,21 @@ export interface DriverExecutionResult {
    * Error message if status is Error
    */
   errorMessage?: string;
+
+  /**
+   * Multi-turn specific: Total number of turns
+   */
+  totalTurns?: number;
+
+  /**
+   * Multi-turn specific: Results for each turn
+   */
+  turnResults?: TurnResult[];
+
+  /**
+   * Multi-turn specific: All AgentRun IDs
+   */
+  allAgentRunIds?: string[];
 }
 
 /**
