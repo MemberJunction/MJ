@@ -1,177 +1,175 @@
-<div class="home-dashboard">
-  <!-- Header Section -->
-  <div class="home-header">
-    <div class="greeting-section">
-      <h1>{{ greeting }}, {{ currentUser?.Name }}</h1>
-      <p class="date">{{ formattedDate }}</p>
-    </div>
-    <!--
-      Configure button hidden - the Kendo dialog doesn't display properly when launched
-      from within the dashboard (attaches to wrong container). Users can access Configure
-      from the app switcher dropdown instead, which is redundant anyway.
-    -->
-    <!-- <div class="header-actions">
-      <button class="config-btn" (click)="openConfigDialog()" title="Configure Applications">
-        <i class="fa-solid fa-gear"></i>
-        <span>Configure</span>
-      </button>
-    </div> -->
-  </div>
-
-  <!-- Loading State -->
-  <div class="loading-container" *ngIf="isLoading">
-    <div class="loading-spinner">
-      <i class="fa-solid fa-spinner fa-spin"></i>
-    </div>
-    <p>Loading your applications...</p>
-  </div>
-
-  <!-- Quick Access Sections -->
-  <div class="quick-access-sections" *ngIf="!isLoading">
-    <!-- Unread Notifications Section -->
-    <div class="quick-access-section notifications-section" *ngIf="unreadNotifications.length > 0">
-      <h3 class="quick-section-title">
-        <i class="fa-solid fa-bell"></i>
-        Unread Notifications
-        <span class="badge">{{ unreadNotifications.length }}</span>
-      </h3>
-      <div class="quick-items-row">
-        <div *ngFor="let notification of unreadNotifications"
-             class="quick-item notification-item"
-             (click)="onNotificationClick(notification)">
-          <div class="quick-item-icon notification-icon">
-            <i class="fa-solid fa-bell"></i>
-          </div>
-          <div class="quick-item-info">
-            <span class="quick-item-title">{{ notification.Title }}</span>
-            <span class="quick-item-subtitle">{{ notification.Message | slice:0:50 }}{{ (notification.Message?.length || 0) > 50 ? '...' : '' }}</span>
-          </div>
-        </div>
+<div class="home-dashboard" [class.sidebar-open]="sidebarOpen && hasSidebarContent">
+  <!-- Main Content Area -->
+  <div class="main-content">
+    <!-- Header Section -->
+    <div class="home-header">
+      <div class="greeting-section">
+        <h1>{{ greeting }}, {{ currentUser?.Name }}</h1>
+        <p class="date">{{ formattedDate }}</p>
       </div>
     </div>
 
-    <!-- Favorites Section -->
-    <div class="quick-access-section favorites-section" *ngIf="favorites.length > 0 || favoritesLoading">
-      <h3 class="quick-section-title">
-        <i class="fa-solid fa-star"></i>
-        Favorites
-      </h3>
-      <div class="quick-items-row" *ngIf="!favoritesLoading">
-        <div *ngFor="let favorite of favorites"
-             class="quick-item favorite-item"
-             (click)="onFavoriteClick(favorite)">
-          <div class="quick-item-icon">
-            <i [class]="getFavoriteIcon(favorite)"></i>
-          </div>
-          <div class="quick-item-info">
-            <span class="quick-item-title">{{ favorite.RecordID }}</span>
-            <span class="quick-item-subtitle">{{ favorite.Entity }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="quick-loading" *ngIf="favoritesLoading">
+    <!-- Loading State -->
+    <div class="loading-container" *ngIf="isLoading">
+      <div class="loading-spinner">
         <i class="fa-solid fa-spinner fa-spin"></i>
-        Loading favorites...
       </div>
+      <p>Loading your applications...</p>
     </div>
 
-    <!-- Recents Section -->
-    <div class="quick-access-section recents-section" *ngIf="recentItems.length > 0 || recentsLoading">
-      <h3 class="quick-section-title">
-        <i class="fa-solid fa-clock-rotate-left"></i>
-        Recently Accessed
-      </h3>
-      <div class="quick-items-row" *ngIf="!recentsLoading">
-        <div *ngFor="let item of recentItems"
-             class="quick-item recent-item"
-             (click)="onRecentClick(item)">
-          <div class="quick-item-icon">
-            <i [class]="getResourceIcon(item.resourceType)"></i>
-          </div>
-          <div class="quick-item-info">
-            <span class="quick-item-title">{{ item.recordName || item.recordId }}</span>
-            <span class="quick-item-subtitle">{{ item.entityName }} · {{ formatDate(item.latestAt) }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="quick-loading" *ngIf="recentsLoading">
-        <i class="fa-solid fa-spinner fa-spin"></i>
-        Loading recent items...
-      </div>
-    </div>
-  </div>
+    <!-- Apps Grid -->
+    <div class="apps-section" *ngIf="!isLoading">
+      <h2 class="section-title">
+        <i class="fa-solid fa-grid-2"></i>
+        Your Applications
+      </h2>
 
-  <!-- Apps Grid -->
-  <div class="apps-section" *ngIf="!isLoading">
-    <h2 class="section-title">
-      <i class="fa-solid fa-grid-2"></i>
-      Your Applications
-    </h2>
-
-    <div class="apps-grid">
-      <div *ngFor="let app of apps"
-           class="app-card"
-           [style.--app-color]="app.GetColor()"
-           (click)="onAppClick(app)">
-        <!-- App Icon -->
-        <div class="app-icon-wrapper">
-          <div class="app-icon">
-            <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
-          </div>
-        </div>
-
-        <!-- App Info -->
-        <div class="app-info">
-          <h3 class="app-name">{{ app.Name }}</h3>
-          <p class="app-description" *ngIf="app.Description">{{ app.Description }}</p>
-
-          <!-- Nav Items Preview -->
-          <div class="nav-preview" *ngIf="getNavItemsCount(app) > 0">
-            <div class="nav-item-chip" *ngFor="let item of getNavItemsPreview(app)">
-              <i [class]="item.Icon"></i>
-              <span>{{ item.Label }}</span>
+      <div class="apps-grid">
+        <div *ngFor="let app of apps"
+             class="app-card"
+             [style.--app-color]="app.GetColor()"
+             (click)="onAppClick(app)">
+          <!-- App Icon -->
+          <div class="app-icon-wrapper">
+            <div class="app-icon">
+              <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
             </div>
-            <span class="more-items" *ngIf="getNavItemsCount(app) > 3">
-              +{{ getNavItemsCount(app) - 3 }} more
-            </span>
+          </div>
+
+          <!-- App Info -->
+          <div class="app-info">
+            <h3 class="app-name">{{ app.Name }}</h3>
+            <p class="app-description" *ngIf="app.Description">{{ app.Description }}</p>
+
+            <!-- Nav Items Preview -->
+            <div class="nav-preview" *ngIf="getNavItemsCount(app) > 0">
+              <div class="nav-item-chip" *ngFor="let item of getNavItemsPreview(app)">
+                <i [class]="item.Icon"></i>
+                <span>{{ item.Label }}</span>
+              </div>
+              <span class="more-items" *ngIf="getNavItemsCount(app) > 3">
+                +{{ getNavItemsCount(app) - 3 }} more
+              </span>
+            </div>
+          </div>
+
+          <!-- Hover Arrow -->
+          <div class="app-arrow">
+            <i class="fa-solid fa-arrow-right"></i>
           </div>
         </div>
+      </div>
 
-        <!-- Hover Arrow -->
-        <div class="app-arrow">
-          <i class="fa-solid fa-arrow-right"></i>
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="apps.length === 0">
+        <div class="empty-icon">
+          <i class="fa-solid fa-folder-open"></i>
         </div>
+        <h3>No Applications Available</h3>
+        <p>You don't have any applications configured yet. Use the app switcher to configure your applications.</p>
       </div>
     </div>
-
-    <!-- Empty State -->
-    <div class="empty-state" *ngIf="apps.length === 0">
-      <div class="empty-icon">
-        <i class="fa-solid fa-folder-open"></i>
-      </div>
-      <h3>No Applications Available</h3>
-      <p>You don't have any applications configured yet. Use the app switcher to configure your applications.</p>
-    </div>
-
-    <!--
-      Mobile Configure Button hidden - same Kendo dialog issue as header button.
-      Users can access Configure from the app switcher dropdown.
-    -->
-    <!-- <div class="mobile-config-section">
-      <button class="config-btn mobile-config-btn" (click)="openConfigDialog()" title="Configure Applications">
-        <i class="fa-solid fa-gear"></i>
-        <span>Configure Applications</span>
-      </button>
-    </div> -->
   </div>
 
-  <!--
-    App Config Dialog hidden - Kendo dialog doesn't attach to top-level container
-    when launched from within dashboard. Use app switcher dropdown instead.
-  -->
-  <!-- <mj-user-app-config
-    *ngIf="showConfigDialog"
-    #appConfigDialog
-    (configSaved)="onConfigSaved()">
-  </mj-user-app-config> -->
+  <!-- Collapsible Right Sidebar -->
+  <div class="quick-access-sidebar" *ngIf="hasSidebarContent">
+    <div class="sidebar-header">
+      <h3>
+        <i class="fa-solid fa-bolt"></i>
+        Quick Access
+      </h3>
+      <button class="sidebar-close-btn" (click)="toggleSidebar()" title="Close panel">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="sidebar-content">
+      <!-- Unread Notifications Section -->
+      <div class="sidebar-section notifications-section" *ngIf="unreadNotifications.length > 0">
+        <h4 class="sidebar-section-title">
+          <i class="fa-solid fa-bell"></i>
+          Notifications
+          <span class="section-badge">{{ unreadNotifications.length }}</span>
+        </h4>
+        <div class="sidebar-items">
+          <div *ngFor="let notification of unreadNotifications"
+               class="sidebar-item notification-item"
+               (click)="onNotificationClick(notification)">
+            <div class="sidebar-item-icon">
+              <i class="fa-solid fa-bell"></i>
+            </div>
+            <div class="sidebar-item-info">
+              <span class="sidebar-item-title">{{ notification.Title }}</span>
+              <span class="sidebar-item-subtitle">{{ notification.Message | slice:0:40 }}{{ (notification.Message?.length || 0) > 40 ? '...' : '' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Favorites Section -->
+      <div class="sidebar-section favorites-section" *ngIf="favorites.length > 0 || favoritesLoading">
+        <h4 class="sidebar-section-title">
+          <i class="fa-solid fa-star"></i>
+          Favorites
+        </h4>
+        <div class="sidebar-items" *ngIf="!favoritesLoading">
+          <div *ngFor="let favorite of favorites"
+               class="sidebar-item favorite-item"
+               (click)="onFavoriteClick(favorite)">
+            <div class="sidebar-item-icon">
+              <i [class]="getFavoriteIcon(favorite)"></i>
+            </div>
+            <div class="sidebar-item-info">
+              <span class="sidebar-item-title">{{ favorite.RecordID }}</span>
+              <span class="sidebar-item-subtitle">{{ favorite.Entity }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="sidebar-loading" *ngIf="favoritesLoading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>Loading...</span>
+        </div>
+      </div>
+
+      <!-- Recents Section -->
+      <div class="sidebar-section recents-section" *ngIf="recentItems.length > 0 || recentsLoading">
+        <h4 class="sidebar-section-title">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          Recent
+        </h4>
+        <div class="sidebar-items" *ngIf="!recentsLoading">
+          <div *ngFor="let item of recentItems"
+               class="sidebar-item recent-item"
+               (click)="onRecentClick(item)">
+            <div class="sidebar-item-icon">
+              <i [class]="getResourceIcon(item.resourceType)"></i>
+            </div>
+            <div class="sidebar-item-info">
+              <span class="sidebar-item-title">{{ item.recordName || item.recordId }}</span>
+              <span class="sidebar-item-subtitle">{{ item.entityName }} · {{ formatDate(item.latestAt) }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="sidebar-loading" *ngIf="recentsLoading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>Loading...</span>
+        </div>
+      </div>
+
+      <!-- Empty sidebar state -->
+      <div class="sidebar-empty" *ngIf="!favoritesLoading && !recentsLoading && unreadNotifications.length === 0 && favorites.length === 0 && recentItems.length === 0">
+        <i class="fa-solid fa-inbox"></i>
+        <p>No quick access items</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Access FAB Toggle (Fixed Button) -->
+  <button class="sidebar-fab-toggle"
+          *ngIf="hasSidebarContent && !sidebarOpen"
+          (click)="toggleSidebar()"
+          title="Quick Access">
+    <i class="fa-solid fa-bolt"></i>
+    <span class="fab-badge" *ngIf="unreadNotifications.length > 0">{{ unreadNotifications.length }}</span>
+  </button>
 </div>

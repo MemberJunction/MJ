@@ -181,22 +181,66 @@ mj-tab-container ::ng-deep .lm_stack {
   width: 36px;
   height: 36px;
   border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.15s, transform 0.15s;
+  padding: 0;
+  overflow: hidden;
+}
+
+.user-menu .avatar-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Icon fallback styling - shows gray circle with icon */
+.user-menu .avatar-btn .icon-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
   border: 2px solid #e0e0e0;
   background: #f5f5f5;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: border-color 0.15s;
 }
 
-.user-menu .avatar-btn:hover {
+.user-menu .avatar-btn:hover .icon-fallback {
   border-color: #1976d2;
 }
 
-.user-menu .avatar-btn i {
+.user-menu .avatar-btn .icon-fallback i {
   color: #757575;
   font-size: 16px;
+}
+
+/* Avatar image - replaces the gray circle entirely */
+.user-menu .avatar-btn .avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.user-menu .avatar-btn:hover .avatar-img {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* User Menu Header */
+.user-menu-header {
+  padding: 12px 16px;
+  background: #fafafa;
+}
+
+.user-menu-header .user-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #424242;
 }
 
 /* User Context Menu */

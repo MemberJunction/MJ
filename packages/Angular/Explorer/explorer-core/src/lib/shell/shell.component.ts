@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import {
   ApplicationManager,
@@ -12,11 +12,12 @@ import {
   WorkspaceTab
 } from '@memberjunction/ng-base-application';
 import { Metadata } from '@memberjunction/core';
-import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { NavigationService } from '@memberjunction/ng-shared';
+import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
+import { EventCodes, NavigationService } from '@memberjunction/ng-shared';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -45,6 +46,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
 
+  // User avatar state
+  userImageURL = '';
+  userIconClass: string | null = null;
+  userName = '';
+
   /**
    * Get Nav Bar apps positioned to the left of the app switcher
    * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
@@ -72,7 +78,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private route: ActivatedRoute,
     private router: Router,
     private authBase: MJAuthBase,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private userAvatarService: UserAvatarService
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -247,6 +254,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Check for deep link parameters on initialization
     this.handleDeepLink();
+
+    // Load user avatar
+    await this.loadUserAvatar(user);
+
+    // Listen for avatar updates from settings page
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener(false).subscribe(async (updateEvent) => {
+        if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
+          const md = new Metadata();
+          const currentUserInfo = md.CurrentUser;
+          const userEntity = await md.GetEntityObject<any>('Users');
+          await userEntity.Load(currentUserInfo.ID);
+          this.applyUserAvatar(userEntity);
+        }
+      })
+    );
 
     this.initialized = true;
     this.loading = false;
@@ -650,7 +673,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Generate a new tab ID
-    const newTabId = this.generateUUID();
+    const newTabId = uuidv4();
 
     // Create minimal configuration with single tab (will trigger single-resource mode)
     const freshConfig = {
@@ -688,13 +711,76 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Generate UUID for new tabs
+   * Load user avatar from database, auto-sync from auth provider if needed
    */
-  private generateUUID(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+  private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string }): Promise<void> {
+    try {
+      const md = new Metadata();
+      this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
+
+      // Load the full UserEntity to access avatar fields
+      const currentUserEntity = await md.GetEntityObject<any>('Users');
+      await currentUserEntity.Load(currentUserInfo.ID);
+
+      // Auto-sync avatar from auth provider if user has no avatar settings in DB
+      if (!currentUserEntity.UserImageURL && !currentUserEntity.UserImageIconClass) {
+        const synced = await this.syncAvatarFromAuthProvider(currentUserEntity);
+        if (synced) {
+          // Reload user entity to get saved values
+          await currentUserEntity.Load(currentUserInfo.ID);
+        }
+      }
+
+      // Load avatar for display (always from DB after potential sync)
+      this.applyUserAvatar(currentUserEntity);
+    } catch (error) {
+      console.warn('Could not load user avatar:', error);
+      // Use fallback
+      this.userImageURL = '';
+      this.userIconClass = null;
+    }
+  }
+
+  /**
+   * Syncs avatar from auth provider (Microsoft, Google, etc.)
+   */
+  private async syncAvatarFromAuthProvider(user: any): Promise<boolean> {
+    try {
+      const claims = await firstValueFrom(await this.authBase.getUserClaims());
+
+      // Check if Microsoft
+      if (claims && claims.authority &&
+          (claims.authority.includes('microsoftonline.com') || claims.authority.includes('microsoft.com'))) {
+        // Microsoft Graph API photo endpoint
+        const imageUrl = 'https://graph.microsoft.com/v1.0/me/photo/$value';
+        const authHeaders = { 'Authorization': `Bearer ${claims.accessToken}` };
+
+        return await this.userAvatarService.syncFromImageUrl(user, imageUrl, authHeaders);
+      }
+
+      return false;
+    } catch (error) {
+      console.warn('Could not sync avatar from auth provider:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Apply user avatar to component state
+   * Priority: UserImageURL > UserImageIconClass > default icon
+   */
+  private applyUserAvatar(user: any): void {
+    if (user.UserImageURL) {
+      this.userImageURL = user.UserImageURL;
+      this.userIconClass = null;
+    } else if (user.UserImageIconClass) {
+      this.userIconClass = user.UserImageIconClass;
+      this.userImageURL = '';
+    } else {
+      // Default fallback - show icon
+      this.userImageURL = '';
+      this.userIconClass = null;
+    }
+    this.cdr.detectChanges();
   }
 }

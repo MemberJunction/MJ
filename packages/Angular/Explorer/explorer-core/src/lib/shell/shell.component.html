@@ -63,10 +63,21 @@
 
       <div class="user-menu">
         <button class="avatar-btn" (click)="toggleUserMenu($event)">
-          <i class="fa-solid fa-user"></i>
+          <ng-container *ngIf="userImageURL; else iconAvatar">
+            <img [src]="userImageURL" alt="User avatar" class="avatar-img" />
+          </ng-container>
+          <ng-template #iconAvatar>
+            <div class="icon-fallback">
+              <i [class]="userIconClass || 'fa-solid fa-user'"></i>
+            </div>
+          </ng-template>
         </button>
         <!-- User Context Menu -->
         <div class="user-context-menu" *ngIf="userMenuVisible">
+          <div class="user-menu-header" *ngIf="userName">
+            <span class="user-name">{{ userName }}</span>
+          </div>
+          <div class="user-menu-divider" *ngIf="userName"></div>
           <div class="user-menu-item" (click)="onLogLayout()">
             <i class="fa-solid fa-code"></i>
             <span>Log Layout (Debug)</span>

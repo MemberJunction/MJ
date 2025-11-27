@@ -44,6 +44,34 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
   public unreadNotifications: UserNotificationEntity[] = [];
   public notificationsLoading = true;
 
+  // Sidebar state - default open on desktop, closed on mobile
+  public sidebarOpen = !this.isMobileDevice();
+
+  /**
+   * Check if sidebar has any content to show
+   */
+  get hasSidebarContent(): boolean {
+    return this.unreadNotifications.length > 0 ||
+           this.favorites.length > 0 ||
+           this.recentItems.length > 0 ||
+           this.favoritesLoading ||
+           this.recentsLoading;
+  }
+
+  /**
+   * Toggle sidebar visibility
+   */
+  toggleSidebar(): void {
+    this.sidebarOpen = !this.sidebarOpen;
+  }
+
+  /**
+   * Check if current device is mobile (width <= 768px)
+   */
+  private isMobileDevice(): boolean {
+    return typeof window !== 'undefined' && window.innerWidth <= 768;
+  }
+
   constructor(
     private appManager: ApplicationManager,
     private navigationService: NavigationService,
