@@ -1,11 +1,14 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
+import { BaseDashboard, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/core';
+import { UserFavoriteEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Home Dashboard - Personalized home screen showing all available applications
@@ -29,9 +32,23 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
   public currentUser: { Name: string; Email: string } | null = null;
   public showConfigDialog = false;
 
+  // Favorites
+  public favorites: UserFavoriteEntity[] = [];
+  public favoritesLoading = true;
+
+  // Recents
+  public recentItems: RecentAccessItem[] = [];
+  public recentsLoading = true;
+
+  // Notifications
+  public unreadNotifications: UserNotificationEntity[] = [];
+  public notificationsLoading = true;
+
   constructor(
     private appManager: ApplicationManager,
     private navigationService: NavigationService,
+    private recentAccessService: RecentAccessService,
+    private router: Router,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -68,6 +85,30 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
         }
         this.cdr.detectChanges();
       });
+
+    // Subscribe to unread notifications
+    MJNotificationService.Notifications$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(notifications => {
+        this.unreadNotifications = notifications.filter(n => n.Unread).slice(0, 5);
+        this.notificationsLoading = false;
+        this.cdr.detectChanges();
+      });
+
+    // Subscribe to recent items
+    this.recentAccessService.RecentItems
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(items => {
+        this.recentItems = items.slice(0, 5);
+        this.recentsLoading = false;
+        this.cdr.detectChanges();
+      });
+
+    // Load favorites and recents
+    await Promise.all([
+      this.loadFavorites(),
+      this.loadRecents()
+    ]);
   }
 
   override ngOnDestroy(): void {
@@ -147,6 +188,145 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
       Label: item.Label,
       Icon: item.Icon || 'fa-solid fa-circle'
     }));
+  }
+
+  /**
+   * Load user favorites from the database
+   */
+  private async loadFavorites(): Promise<void> {
+    try {
+      this.favoritesLoading = true;
+      const rv = new RunView();
+      const result = await rv.RunView<UserFavoriteEntity>({
+        EntityName: 'User Favorites',
+        ExtraFilter: `UserID='${this.metadata.CurrentUser.ID}'`,
+        OrderBy: '__mj_CreatedAt DESC',
+        MaxRows: 10,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results) {
+        this.favorites = result.Results;
+      }
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+    } finally {
+      this.favoritesLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Load recent items via the RecentAccessService
+   */
+  private async loadRecents(): Promise<void> {
+    try {
+      this.recentsLoading = true;
+      await this.recentAccessService.loadRecentItems(10);
+    } catch (error) {
+      console.error('Error loading recents:', error);
+    } finally {
+      this.recentsLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Navigate to a favorite item
+   */
+  onFavoriteClick(favorite: UserFavoriteEntity): void {
+    // Navigate based on entity type
+    const entityName = favorite.Entity?.toLowerCase();
+
+    if (entityName === 'dashboards') {
+      this.router.navigate(['/resource/dashboard', favorite.RecordID]);
+    } else if (entityName === 'user views') {
+      this.router.navigate(['/resource/view', favorite.RecordID]);
+    } else if (entityName === 'reports') {
+      this.router.navigate(['/resource/report', favorite.RecordID]);
+    } else if (entityName?.includes('artifact')) {
+      this.router.navigate(['/resource/artifact', favorite.RecordID]);
+    } else {
+      // Default: navigate to record
+      this.router.navigate(['/resource/record', favorite.Entity, favorite.RecordID]);
+    }
+  }
+
+  /**
+   * Navigate to a recent item
+   */
+  onRecentClick(item: RecentAccessItem): void {
+    switch (item.resourceType) {
+      case 'view':
+        this.router.navigate(['/resource/view', item.recordId]);
+        break;
+      case 'dashboard':
+        this.router.navigate(['/resource/dashboard', item.recordId]);
+        break;
+      case 'artifact':
+        this.router.navigate(['/resource/artifact', item.recordId]);
+        break;
+      case 'report':
+        this.router.navigate(['/resource/report', item.recordId]);
+        break;
+      default:
+        // Regular record
+        this.router.navigate(['/resource/record', item.entityName, item.recordId]);
+    }
+  }
+
+  /**
+   * Navigate to a notification
+   */
+  onNotificationClick(notification: UserNotificationEntity): void {
+    // Navigate to the notifications view or handle based on notification type
+    // For now, just navigate to the user notifications page
+    this.router.navigate(['/resource/view/dynamic/User%20Notifications']);
+  }
+
+  /**
+   * Get icon for a resource type
+   */
+  getResourceIcon(resourceType: string): string {
+    switch (resourceType) {
+      case 'view':
+        return 'fa-solid fa-table';
+      case 'dashboard':
+        return 'fa-solid fa-gauge-high';
+      case 'artifact':
+        return 'fa-solid fa-cube';
+      case 'report':
+        return 'fa-solid fa-chart-bar';
+      default:
+        return 'fa-solid fa-file';
+    }
+  }
+
+  /**
+   * Get icon for a favorite based on its entity type
+   */
+  getFavoriteIcon(favorite: UserFavoriteEntity): string {
+    const entityName = favorite.Entity?.toLowerCase();
+    if (entityName === 'dashboards') return 'fa-solid fa-gauge-high';
+    if (entityName === 'user views') return 'fa-solid fa-table';
+    if (entityName === 'reports') return 'fa-solid fa-chart-bar';
+    if (entityName?.includes('artifact')) return 'fa-solid fa-cube';
+    return 'fa-solid fa-star';
+  }
+
+  /**
+   * Format a date for display
+   */
+  formatDate(date: Date): string {
+    if (!date) return '';
+    const now = new Date();
+    const diff = now.getTime() - new Date(date).getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    return new Date(date).toLocaleDateString();
   }
 }
 

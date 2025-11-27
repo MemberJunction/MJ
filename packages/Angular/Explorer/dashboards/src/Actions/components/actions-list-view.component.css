@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100%;
   background: var(--kendo-color-app-surface);
+  position: relative; /* Required for scoped loading overlay */
 }
 .actions-list-view .list-header {
   padding: 1.5rem;

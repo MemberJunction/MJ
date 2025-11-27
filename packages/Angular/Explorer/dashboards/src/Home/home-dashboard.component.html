@@ -26,6 +26,81 @@
     <p>Loading your applications...</p>
   </div>
 
+  <!-- Quick Access Sections -->
+  <div class="quick-access-sections" *ngIf="!isLoading">
+    <!-- Unread Notifications Section -->
+    <div class="quick-access-section notifications-section" *ngIf="unreadNotifications.length > 0">
+      <h3 class="quick-section-title">
+        <i class="fa-solid fa-bell"></i>
+        Unread Notifications
+        <span class="badge">{{ unreadNotifications.length }}</span>
+      </h3>
+      <div class="quick-items-row">
+        <div *ngFor="let notification of unreadNotifications"
+             class="quick-item notification-item"
+             (click)="onNotificationClick(notification)">
+          <div class="quick-item-icon notification-icon">
+            <i class="fa-solid fa-bell"></i>
+          </div>
+          <div class="quick-item-info">
+            <span class="quick-item-title">{{ notification.Title }}</span>
+            <span class="quick-item-subtitle">{{ notification.Message | slice:0:50 }}{{ (notification.Message?.length || 0) > 50 ? '...' : '' }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Favorites Section -->
+    <div class="quick-access-section favorites-section" *ngIf="favorites.length > 0 || favoritesLoading">
+      <h3 class="quick-section-title">
+        <i class="fa-solid fa-star"></i>
+        Favorites
+      </h3>
+      <div class="quick-items-row" *ngIf="!favoritesLoading">
+        <div *ngFor="let favorite of favorites"
+             class="quick-item favorite-item"
+             (click)="onFavoriteClick(favorite)">
+          <div class="quick-item-icon">
+            <i [class]="getFavoriteIcon(favorite)"></i>
+          </div>
+          <div class="quick-item-info">
+            <span class="quick-item-title">{{ favorite.RecordID }}</span>
+            <span class="quick-item-subtitle">{{ favorite.Entity }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="quick-loading" *ngIf="favoritesLoading">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Loading favorites...
+      </div>
+    </div>
+
+    <!-- Recents Section -->
+    <div class="quick-access-section recents-section" *ngIf="recentItems.length > 0 || recentsLoading">
+      <h3 class="quick-section-title">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        Recently Accessed
+      </h3>
+      <div class="quick-items-row" *ngIf="!recentsLoading">
+        <div *ngFor="let item of recentItems"
+             class="quick-item recent-item"
+             (click)="onRecentClick(item)">
+          <div class="quick-item-icon">
+            <i [class]="getResourceIcon(item.resourceType)"></i>
+          </div>
+          <div class="quick-item-info">
+            <span class="quick-item-title">{{ item.recordName || item.recordId }}</span>
+            <span class="quick-item-subtitle">{{ item.entityName }} · {{ formatDate(item.latestAt) }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="quick-loading" *ngIf="recentsLoading">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Loading recent items...
+      </div>
+    </div>
+  </div>
+
   <!-- Apps Grid -->
   <div class="apps-section" *ngIf="!isLoading">
     <h2 class="section-title">

@@ -5,6 +5,7 @@
   padding: 1.5rem;
   height: 100%;
   overflow-y: auto;
+  position: relative; /* Required for scoped loading overlay */
 }
 .actions-overview .overview-header .filters-row {
   display: flex;

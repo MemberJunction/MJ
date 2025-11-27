@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
@@ -16,6 +16,7 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -42,6 +43,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   tabBarVisible = true; // Controlled by workspace manager
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
+  unreadNotificationCount = 0; // Notification badge count
 
   /**
    * Get Nav Bar apps positioned to the left of the app switcher
@@ -69,7 +71,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private navigationService: NavigationService,
     private route: ActivatedRoute,
     private router: Router,
-    private authBase: MJAuthBase
+    private authBase: MJAuthBase,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -121,6 +124,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.workspaceManager.TabBarVisible.subscribe(visible => {
         this.tabBarVisible = visible;
+      })
+    );
+
+    // Subscribe to unread notification count changes
+    this.subscriptions.push(
+      MJNotificationService.UnreadCount$.subscribe(count => {
+        this.unreadNotificationCount = count;
+        this.cdr.detectChanges();
       })
     );
 

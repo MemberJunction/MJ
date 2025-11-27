@@ -6,7 +6,7 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
 import { UserViewEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'mj-single-view',
@@ -31,9 +31,10 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   public canCreateRecord: boolean = false;
   private searchDebounce$: Subject<string> = new Subject();
   private _deferLoadCount: number = 0;
+  private recentAccessService: RecentAccessService;
 
   constructor(private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {
-
+    this.recentAccessService = new RecentAccessService();
   }
 
   ngAfterViewInit() { 
@@ -93,15 +94,18 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async LoadView(viewInfo: UserViewEntity) {
     // load up the view
-    if (this.viewGridWithAnalysis && 
-        viewInfo && viewInfo.ID && viewInfo.ID.length > 0)
+    if (this.viewGridWithAnalysis &&
+        viewInfo && viewInfo.ID && viewInfo.ID.length > 0) {
       this.selectedView = <UserViewEntityExtended>viewInfo; // didn't change the param type of this variable because we didn't want a breaking change in the 2.x era of the system, when we go to 3.0 we can change this to UserViewEntityExtended
       await this.viewGridWithAnalysis.Refresh({
         ViewEntity: viewInfo,
         ViewID: viewInfo.ID,
         UserSearchString: this.searchText
-      })
+      });
+      // Log access to view (fire-and-forget, don't await)
+      this.recentAccessService.logAccess('User Views', viewInfo.ID, 'view');
       this.loadComplete.emit();
+    }
   }
 
   public async LoadDynamicView() {

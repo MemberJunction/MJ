@@ -41,8 +41,11 @@
       <button class="icon-btn desktop-only" title="Search">
         <i class="fa-solid fa-search"></i>
       </button>
-      <button class="icon-btn desktop-only" title="Notifications">
+      <button class="icon-btn desktop-only notification-btn" title="Notifications">
         <i class="fa-solid fa-bell"></i>
+        <span class="notification-badge" *ngIf="unreadNotificationCount > 0">
+          {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+        </span>
       </button>
 
       <!-- Nav Bar Apps: Left of User Menu -->

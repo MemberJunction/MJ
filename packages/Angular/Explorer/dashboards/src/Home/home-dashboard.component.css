@@ -76,6 +76,152 @@
   color: #1976d2;
 }
 
+/* Quick Access Sections */
+.quick-access-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.quick-access-section {
+  background: white;
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e9ecef;
+}
+
+.quick-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.quick-section-title i {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.quick-section-title .badge {
+  background: #e53935;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.quick-items-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.quick-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 200px;
+  max-width: 280px;
+  flex-shrink: 0;
+}
+
+.quick-item:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.quick-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.quick-item-icon i {
+  font-size: 16px;
+  color: #6c757d;
+}
+
+.notification-item .quick-item-icon {
+  background: #fff3e0;
+}
+
+.notification-item .quick-item-icon i {
+  color: #f57c00;
+}
+
+.favorite-item .quick-item-icon {
+  background: #fff8e1;
+}
+
+.favorite-item .quick-item-icon i {
+  color: #ffc107;
+}
+
+.recent-item .quick-item-icon {
+  background: #e3f2fd;
+}
+
+.recent-item .quick-item-icon i {
+  color: #1976d2;
+}
+
+.quick-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.quick-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #212529;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-item-subtitle {
+  font-size: 12px;
+  color: #6c757d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6c757d;
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.quick-loading i {
+  color: #1976d2;
+}
+
 /* Apps Section */
 .apps-section {
   flex: 1;
@@ -342,6 +488,26 @@
   /* Show mobile config section at bottom */
   .mobile-config-section {
     display: block;
+  }
+
+  /* Quick access sections mobile */
+  .quick-access-sections {
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .quick-access-section {
+    padding: 16px;
+  }
+
+  .quick-item {
+    min-width: 180px;
+    padding: 10px 12px;
+  }
+
+  .quick-item-icon {
+    width: 36px;
+    height: 36px;
   }
 
   .apps-grid {

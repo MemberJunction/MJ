@@ -3,7 +3,7 @@ import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-a
 import { ResourceData } from '@memberjunction/core-entities';
 import { DashboardEntityExtended, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -38,6 +38,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   private saveChangesSubject: Subject<any> = new Subject();
   private selectedComponent: SingleDashboardComponent | null = null;
   private editOnLoad: boolean = false;
+  private recentAccessService: RecentAccessService;
 
   public get contentLoading(): boolean {
     for (const item of this.items) {
@@ -57,7 +58,8 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 
   constructor(private route: ActivatedRoute, public sharedService: SharedService) {
     super();
-    
+    this.recentAccessService = new RecentAccessService();
+
     this.saveChangesSubject
     .pipe(debounceTime(500))
     .subscribe(() => {
@@ -80,6 +82,9 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
       this.dashboardEntity = await md.GetEntityObject<DashboardEntityExtended>('Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
         await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
+        // Log access to dashboard (fire-and-forget, don't await)
+        this.recentAccessService.logAccess('Dashboards', this.ResourceData.ResourceRecordID, 'dashboard');
+
         // now we have loaded and we need to get the UIConfigDetails
         const raw = this.dashboardEntity.UIConfigDetails;
         if (raw) {
