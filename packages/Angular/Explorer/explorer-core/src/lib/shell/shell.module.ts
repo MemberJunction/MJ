@@ -5,6 +5,7 @@ import { AppSwitcherComponent } from './components/header/app-switcher.component
 import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @NgModule({
   declarations: [
@@ -15,7 +16,8 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
   ],
   imports: [
     CommonModule,
-    ExplorerSettingsModule
+    ExplorerSettingsModule,
+    SharedGenericModule
   ],
   exports: [
     ShellComponent

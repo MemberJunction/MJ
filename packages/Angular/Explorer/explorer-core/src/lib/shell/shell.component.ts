@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { filter } from 'rxjs/operators';
@@ -18,6 +18,7 @@ import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
+import { SettingsDialogService } from './services/settings-dialog.service';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -79,7 +80,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private router: Router,
     private authBase: MJAuthBase,
     private cdr: ChangeDetectorRef,
-    private userAvatarService: UserAvatarService
+    private userAvatarService: UserAvatarService,
+    private settingsDialogService: SettingsDialogService,
+    private viewContainerRef: ViewContainerRef
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -640,6 +643,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         document.addEventListener('click', closeHandler);
       }, 0);
     }
+  }
+
+  /**
+   * Open Settings in a full-screen modal dialog
+   */
+  onSettings(): void {
+    this.userMenuVisible = false;
+    this.settingsDialogService.open(this.viewContainerRef);
   }
 
   /**

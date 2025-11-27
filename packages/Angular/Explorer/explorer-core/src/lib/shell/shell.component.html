@@ -1,6 +1,9 @@
 <div class="shell-container" *ngIf="!loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
   <!-- Header -->
   <header class="shell-header">
+    <!-- MJ Logo -->
+    <div class="mj-logo" title="MemberJunction"></div>
+
     <!-- Mobile Hamburger Button -->
     <button class="hamburger-btn" (click)="toggleMobileNav()" title="Menu">
       <i class="fa-solid fa-bars"></i>
@@ -78,6 +81,11 @@
             <span class="user-name">{{ userName }}</span>
           </div>
           <div class="user-menu-divider" *ngIf="userName"></div>
+          <div class="user-menu-item" (click)="onSettings()">
+            <i class="fa-solid fa-gear"></i>
+            <span>Settings</span>
+          </div>
+          <div class="user-menu-divider"></div>
           <div class="user-menu-item" (click)="onLogLayout()">
             <i class="fa-solid fa-code"></i>
             <span>Log Layout (Debug)</span>
@@ -126,8 +134,5 @@
 
 <!-- Loading State -->
 <div class="shell-loading" *ngIf="loading">
-  <div class="loading-spinner">
-    <i class="fa-solid fa-spinner fa-spin"></i>
-  </div>
-  <p>Loading workspace...</p>
+  <mj-loading text="Loading workspace..." size="large"></mj-loading>
 </div>
