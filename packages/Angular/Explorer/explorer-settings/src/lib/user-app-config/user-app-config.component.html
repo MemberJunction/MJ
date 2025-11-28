@@ -12,8 +12,7 @@
   <div class="app-config-container">
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-container">
-      <kendo-loader type="converging-spinner"></kendo-loader>
-      <p>Loading your app configuration...</p>
+      <mj-loading text="Loading your app configuration..." size="medium"></mj-loading>
     </div>
 
     <!-- Error Message -->
@@ -166,7 +165,7 @@
           (click)="save()"
           [disabled]="isLoading || isSaving || !hasChanges()"
         >
-          <kendo-loader *ngIf="isSaving" type="pulsing" size="small"></kendo-loader>
+          <mj-loading *ngIf="isSaving" [showText]="false" size="small"></mj-loading>
           <span *ngIf="!isSaving" class="fa-solid fa-check"></span>
           {{ isSaving ? 'Saving...' : 'Save Changes' }}
         </button>

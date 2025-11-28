@@ -20,6 +20,7 @@ import { SimpleRecordListModule } from '@memberjunction/ng-simple-record-list';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { JoinGridModule } from '@memberjunction/ng-join-grid';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Shared module
 import { SharedSettingsModule } from './shared/shared-settings.module';
@@ -78,7 +79,8 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
-    SortableModule
+    SortableModule,
+    SharedGenericModule
   ],
   exports: [
     // Main dashboard components

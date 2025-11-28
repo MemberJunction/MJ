@@ -52,6 +52,7 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
 import { ChatWrapperComponent } from './lib/chat-wrapper/chat-wrapper.component';
 import { DashboardBrowserComponent } from './lib/dashboard-browser-component/dashboard-browser.component';
@@ -211,7 +212,8 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     CardModule,
     AvatarModule,
     AITestHarnessModule,
-    ArtifactsModule
+    ArtifactsModule,
+    SharedGenericModule
   ],
   exports: [
     FormToolbarComponent,

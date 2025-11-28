@@ -141,8 +141,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       <div class="collections-content">
         <!-- Loading state -->
         <div *ngIf="isLoading" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading collections...</p>
+          <mj-loading text="Loading collections..." size="large"></mj-loading>
         </div>
 
         <!-- Empty state -->
@@ -664,17 +663,6 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       color: #9CA3AF;
       text-align: center;
       padding: 48px 24px;
-    }
-
-    .loading-state i {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .loading-state p {
-      margin: 0;
-      font-size: 14px;
     }
 
     .empty-state i {

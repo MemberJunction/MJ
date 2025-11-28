@@ -1,6 +1,6 @@
 <div class="container">
   @if(_Loading) {
-    <kendo-loader></kendo-loader>
+    <mj-loading [showText]="false" size="medium"></mj-loading>
   }
   @if(ShowSaveButton) {
     <button kendoButton (click)="SavePermissions()">Save</button>

@@ -1,6 +1,6 @@
 <div  class="wrapper"> 
     @if (_IsLoading) {
-        <div><kendo-loader></kendo-loader></div>
+        <div><mj-loading [showText]="false" size="medium"></mj-loading></div>
     }
     @if (ShowSaveButton) {
         <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="Save()">Save</button>
