@@ -129,7 +129,8 @@
         [record]="selectedRecord"
         (close)="onDetailPanelClosed()"
         (openRecord)="onOpenRecord($event)"
-        (navigateToRelated)="onEntitySelected($event.entity)">
+        (navigateToRelated)="onNavigateToRelated($event)"
+        (openRelatedRecord)="onOpenRelatedRecord($event)">
       </mj-explorer-detail-panel>
     </div>
   }

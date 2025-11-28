@@ -29,7 +29,7 @@ export class GridViewComponent implements OnChanges {
   @Output() recordOpened = new EventEmitter<BaseEntity>();
   @Output() dataLoaded = new EventEmitter<{ totalRowCount: number; loadTime: number }>();
 
-  // Parameters for UserViewGridComponent
+  // Parameters for UserViewGridComponent - grid auto-refreshes when this changes
   public viewParams: RunViewParams = {};
 
   ngOnChanges(changes: SimpleChanges): void {

@@ -1,5 +1,6 @@
-<div class="cards-container">
-  @for (record of records; track record.PrimaryKey.ToString()) {
+<div class="cards-view-wrapper">
+  <div class="cards-container">
+    @for (record of records; track record.PrimaryKey.ToString()) {
     <div
       class="data-card"
       [class.selected]="isSelected(record)"
@@ -62,5 +63,6 @@
         </div>
       }
     </div>
-  }
+    }
+  </div>
 </div>

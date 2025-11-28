@@ -46,26 +46,61 @@
 
       @if (relationshipsSectionExpanded) {
         <div class="section-content">
-          @if (relatedEntities.length === 0 && !isLoadingRelationships) {
+          @if (relatedEntitiesWithRecords.length === 0 && !isLoadingRelationships) {
             <div class="empty-section">No related records</div>
           } @else {
-            @for (relEntity of relatedEntities; track relEntity.relatedEntityName) {
-              <div
-                class="related-entity-item"
-                [class.clickable]="relEntity.count > 0"
-                [class.loading]="relEntity.isLoading"
-                (click)="onRelatedEntityClick(relEntity)">
-                <i [class]="getRelatedEntityIcon(relEntity)"></i>
-                <span class="related-entity-name">{{ relEntity.relatedEntityName }}</span>
-                <span class="related-entity-count">
-                  @if (relEntity.isLoading) {
-                    <i class="fa-solid fa-spinner fa-spin"></i>
-                  } @else {
-                    {{ relEntity.count }}
-                  }
-                </span>
-                @if (relEntity.count > 0) {
-                  <i class="fa-solid fa-chevron-right nav-arrow"></i>
+            @for (relEntity of relatedEntitiesWithRecords; track relEntity.relatedEntityName) {
+              <div class="related-entity-group" [class.expanded]="relEntity.isExpanded">
+                <!-- Header row - click to expand -->
+                <div
+                  class="related-entity-header"
+                  [class.clickable]="relEntity.count > 0"
+                  [class.loading]="relEntity.isLoading"
+                  (click)="toggleRelatedEntityExpansion(relEntity, $event)">
+                  <i class="fa-solid expand-chevron"
+                     [class.fa-chevron-down]="relEntity.isExpanded"
+                     [class.fa-chevron-right]="!relEntity.isExpanded"></i>
+                  <i [class]="getRelatedEntityIcon(relEntity)"></i>
+                  <span class="related-entity-name">{{ relEntity.relatedEntityName }}</span>
+                  <span class="related-entity-count">
+                    @if (relEntity.isLoading) {
+                      <i class="fa-solid fa-spinner fa-spin"></i>
+                    } @else {
+                      {{ relEntity.count }}
+                    }
+                  </span>
+                </div>
+
+                <!-- Expanded records list -->
+                @if (relEntity.isExpanded) {
+                  <div class="related-records-list">
+                    @if (relEntity.isLoadingRecords) {
+                      <div class="records-loading">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Loading records...</span>
+                      </div>
+                    } @else {
+                      @for (rec of relEntity.records; track rec.PrimaryKey.ToString()) {
+                        <div class="related-record-item" (click)="onRelatedRecordClick(relEntity, rec, $event)">
+                          <div class="record-info">
+                            <span class="record-name">{{ getRelatedRecordDisplayName(relEntity, rec) }}</span>
+                            @if (getRelatedRecordSubtitle(relEntity, rec); as subtitle) {
+                              <span class="record-subtitle">{{ subtitle }}</span>
+                            }
+                          </div>
+                          <i class="fa-solid fa-external-link-alt record-open-icon"></i>
+                        </div>
+                      }
+
+                      <!-- View All link if there are more records -->
+                      @if (relEntity.count > 10) {
+                        <div class="view-all-link" (click)="onViewAllRelated(relEntity, $event)">
+                          <span>View all {{ relEntity.count }} records</span>
+                          <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                      }
+                    }
+                  </div>
                 }
               </div>
             }

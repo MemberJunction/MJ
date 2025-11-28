@@ -7,6 +7,7 @@ import { Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState } from './models/explorer-state.interface';
+import { NavigateToRelatedEvent } from './components/detail-panel/detail-panel.component';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -187,6 +188,36 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public onDetailPanelClosed(): void {
     this.selectedRecord = null;
     this.stateService.closeDetailPanel();
+  }
+
+  /**
+   * Handle navigation to a related entity from detail panel
+   */
+  public onNavigateToRelated(event: NavigateToRelatedEvent): void {
+    // Look up the EntityInfo by name
+    const entity = this.entities.find(e => e.Name === event.entityName);
+    if (!entity) {
+      console.warn(`Entity not found: ${event.entityName}`);
+      return;
+    }
+
+    // Select the entity and apply the filter
+    this.selectedEntity = entity;
+    this.stateService.selectEntity(entity.Name);
+
+    // TODO: Apply the filter from event.filter
+    // For now, just load all records from the related entity
+    this.loadRecords();
+  }
+
+  /**
+   * Handle opening a related record in a new tab
+   */
+  public onOpenRelatedRecord(event: { entityName: string; record: BaseEntity }): void {
+    this.OpenEntityRecord.emit({
+      EntityName: event.entityName,
+      RecordPKey: event.record.PrimaryKey
+    });
   }
 
   /**

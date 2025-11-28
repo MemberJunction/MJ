@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0; /* Critical for nested flex scrolling */
   position: relative;
   background: white;
   box-shadow: 1px 0 3px rgba(0, 0, 0, 0.05);
@@ -65,6 +66,7 @@
   height: 100%;
   overflow: hidden;
   padding-top: 48px;
+  min-height: 0; /* Allow flex children to shrink below content size */
 }
 
 .section {
@@ -130,7 +132,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 0; /* Allow content to shrink */
   overflow: hidden;
 }
 
@@ -268,6 +270,11 @@
 }
 .entity-list::-webkit-scrollbar-thumb:hover {
   background: #ccc;
+}
+
+.entity-list-inner {
+  /* Inner container grows naturally based on content */
+  /* Does not scroll - parent .entity-list handles scrolling */
 }
 
 .entity-item .nav-item-label {

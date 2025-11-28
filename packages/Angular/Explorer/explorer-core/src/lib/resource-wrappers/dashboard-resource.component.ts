@@ -17,11 +17,22 @@ export function LoadDashboardResource() {
 @RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
     selector: 'mj-dashboard-resource',
-    template: `<div #container class="dashboard-resource-container" style="width: 100%; height: 100%; overflow: auto;"></div>`,
+    template: `<div #container class="dashboard-resource-container"></div>`,
     styles: [`
-        .dashboard-resource-container {
+        :host {
+            display: block;
             width: 100%;
             height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        .dashboard-resource-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: auto;
         }
     `]
 })

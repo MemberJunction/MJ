@@ -19,16 +19,25 @@ export class CardsViewComponent implements OnChanges {
   public cardTemplate: AutoCardTemplate | null = null;
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entity'] && this.entity) {
+    if (changes['entity'] && this.entity && this.entity.Fields) {
       this.cardTemplate = this.generateCardTemplate(this.entity);
+    } else if (changes['entity'] && !this.entity) {
+      // Reset template when entity is cleared
+      this.cardTemplate = null;
     }
   }
 
   /**
    * Generate auto card template from entity metadata
    */
-  private generateCardTemplate(entity: EntityInfo): AutoCardTemplate {
+  private generateCardTemplate(entity: EntityInfo): AutoCardTemplate | null {
     const fields = entity.Fields;
+
+    // Guard against invalid entity without Fields
+    if (!fields || fields.length === 0) {
+      console.warn(`Entity ${entity.Name} has no fields defined`);
+      return null;
+    }
 
     return {
       titleField: this.findTitleField(entity, fields),

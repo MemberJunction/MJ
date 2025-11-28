@@ -54,9 +54,29 @@ export type GridPendingRecordItem = {
 export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
   title = 'UserViewGrid';
   /**
-   * Parameters for running the view
+   * Parameters for running the view.
+   * When this changes, the grid will automatically refresh if AutoRefreshOnParamsChange is true.
    */
-  @Input() Params: RunViewParams | undefined;
+  private _params: RunViewParams | undefined;
+  @Input()
+  get Params(): RunViewParams | undefined {
+    return this._params;
+  }
+  set Params(value: RunViewParams | undefined) {
+    const paramsChanged = this.hasParamsChanged(this._params, value);
+    this._params = value;
+
+    // Auto-refresh when params change (after initial load)
+    if (paramsChanged && this.AutoRefreshOnParamsChange && !this.neverLoaded) {
+      this.Refresh(value!);
+    }
+  }
+
+  /**
+   * If set to true (default), the grid will automatically refresh when Params input changes.
+   * Set to false if you want to manually control refresh timing.
+   */
+  @Input() AutoRefreshOnParamsChange: boolean = true;
   @Input() BottomMargin: number = 0;
   /**
    * Height of the grid. Can be:
@@ -722,7 +742,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
     await EntityActionEngineBase.Instance.Config(false);
     await EntityCommunicationsEngineClient.Instance.Config(false);
 
-    if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter))) {
+    // Check for valid params - ExtraFilter can be empty string (meaning no filter), so use != null check
+    if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter != null))) {
       const startTime = new Date().getTime();
       this.isLoading = true
       this.neverLoaded = false;
@@ -844,8 +865,24 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
       });
     }
     else {
-      LogError("Refresh(params) must have ViewID or ViewName or (EntityName and ExtraFilter)")
+      LogError("Refresh(params) must have ViewID or ViewName or (EntityName and ExtraFilter). Note: ExtraFilter can be an empty string for no filtering.")
     }
+  }
+
+  /**
+   * Check if params have meaningfully changed (compares key properties)
+   */
+  private hasParamsChanged(oldParams: RunViewParams | undefined, newParams: RunViewParams | undefined): boolean {
+    // If both are undefined/null, no change
+    if (!oldParams && !newParams) return false;
+    // If one is undefined/null and other isn't, changed
+    if (!oldParams || !newParams) return true;
+
+    // Compare key properties that would require a refresh
+    return oldParams.EntityName !== newParams.EntityName ||
+           oldParams.ViewID !== newParams.ViewID ||
+           oldParams.ViewName !== newParams.ViewName ||
+           oldParams.ExtraFilter !== newParams.ExtraFilter;
   }
 
   /**

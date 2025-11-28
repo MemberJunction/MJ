@@ -88,24 +88,27 @@
               }
             </div>
 
-            <!-- Entity List -->
+            <!-- Entity List (scrollable container) -->
             <div class="entity-list">
-              @for (entity of filteredEntities; track entity.ID) {
-                <div
-                  class="nav-item entity-item"
-                  [class.selected]="isEntitySelected(entity)"
-                  (click)="onEntityClick(entity)"
-                  [title]="entity.Description || entity.Name">
-                  <i [class]="getEntityIcon(entity)"></i>
-                  <span class="nav-item-label">{{ entity.Name }}</span>
-                </div>
-              }
+              <!-- Inner content that grows naturally -->
+              <div class="entity-list-inner">
+                @for (entity of filteredEntities; track entity.ID) {
+                  <div
+                    class="nav-item entity-item"
+                    [class.selected]="isEntitySelected(entity)"
+                    (click)="onEntityClick(entity)"
+                    [title]="entity.Description || entity.Name">
+                    <i [class]="getEntityIcon(entity)"></i>
+                    <span class="nav-item-label">{{ entity.Name }}</span>
+                  </div>
+                }
 
-              @if (filteredEntities.length === 0 && entitySearchTerm) {
-                <div class="empty-section">
-                  <span>No entities match "{{ entitySearchTerm }}"</span>
-                </div>
-              }
+                @if (filteredEntities.length === 0 && entitySearchTerm) {
+                  <div class="empty-section">
+                    <span>No entities match "{{ entitySearchTerm }}"</span>
+                  </div>
+                }
+              </div>
             </div>
           </div>
         }

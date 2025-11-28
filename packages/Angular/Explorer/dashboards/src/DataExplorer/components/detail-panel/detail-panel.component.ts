@@ -1,12 +1,23 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { EntityInfo, EntityRelationshipInfo, RunView } from '@memberjunction/core';
+import { EntityInfo, EntityRelationshipInfo, RunView, Metadata } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 
-interface RelatedEntityCount {
+interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
   relatedEntityName: string;
   count: number;
   isLoading: boolean;
+  isExpanded: boolean;
+  records: BaseEntity[];
+  isLoadingRecords: boolean;
+}
+
+/**
+ * Event emitted when navigating to a related entity
+ */
+export interface NavigateToRelatedEvent {
+  entityName: string;
+  filter: string;
 }
 
 @Component({
@@ -20,11 +31,14 @@ export class DetailPanelComponent implements OnChanges {
 
   @Output() close = new EventEmitter<void>();
   @Output() openRecord = new EventEmitter<BaseEntity>();
-  @Output() navigateToRelated = new EventEmitter<{ entity: EntityInfo; filter: string }>();
+  @Output() navigateToRelated = new EventEmitter<NavigateToRelatedEvent>();
+  @Output() openRelatedRecord = new EventEmitter<{ entityName: string; record: BaseEntity }>();
 
   // Related entity counts
-  public relatedEntities: RelatedEntityCount[] = [];
+  public relatedEntities: RelatedEntityData[] = [];
   public isLoadingRelationships = false;
+
+  private metadata = new Metadata();
 
   // Sections expanded state
   public detailsSectionExpanded = true;
@@ -48,13 +62,16 @@ export class DetailPanelComponent implements OnChanges {
     // Get relationships where this entity is the related entity (foreign keys pointing TO this record)
     const relationships = this.entity.RelatedEntities;
 
-    // Initialize relationship counts
+    // Initialize relationship data
     for (const rel of relationships) {
       this.relatedEntities.push({
         relationship: rel,
         relatedEntityName: rel.RelatedEntity,
         count: 0,
-        isLoading: true
+        isLoading: true,
+        isExpanded: false,
+        records: [],
+        isLoadingRecords: false
       });
     }
 
@@ -200,21 +217,112 @@ export class DetailPanelComponent implements OnChanges {
   }
 
   /**
-   * Handle click on related entity
+   * Toggle expansion of related entity section and load records if needed
    */
-  onRelatedEntityClick(relEntity: RelatedEntityCount): void {
-    if (relEntity.count === 0 || !this.record) return;
+  async toggleRelatedEntityExpansion(relEntity: RelatedEntityData, event: Event): Promise<void> {
+    event.stopPropagation();
+
+    if (relEntity.count === 0) return;
+
+    relEntity.isExpanded = !relEntity.isExpanded;
+
+    // Load records on first expansion
+    if (relEntity.isExpanded && relEntity.records.length === 0 && !relEntity.isLoadingRecords) {
+      await this.loadRelatedRecords(relEntity);
+    }
+  }
+
+  /**
+   * Load actual records for a related entity
+   */
+  private async loadRelatedRecords(relEntity: RelatedEntityData): Promise<void> {
+    if (!this.record) return;
 
     const pkValue = this.record.PrimaryKey.KeyValuePairs[0]?.Value;
     if (!pkValue) return;
 
-    // Find the related entity info
-    // For now, just emit the navigation request
-    // The parent component will handle the actual navigation
+    relEntity.isLoadingRecords = true;
+
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<BaseEntity>({
+        EntityName: relEntity.relationship.RelatedEntity,
+        ExtraFilter: `${relEntity.relationship.RelatedEntityJoinField}='${pkValue}'`,
+        ResultType: 'entity_object',
+        MaxRows: 10 // Limit inline display to 10 records
+      });
+
+      if (result.Success) {
+        relEntity.records = result.Results;
+      }
+    } catch (error) {
+      console.warn(`Failed to load records for ${relEntity.relatedEntityName}:`, error);
+    } finally {
+      relEntity.isLoadingRecords = false;
+    }
+  }
+
+  /**
+   * Handle click on individual related record - opens in new tab
+   */
+  onRelatedRecordClick(relEntity: RelatedEntityData, record: BaseEntity, event: Event): void {
+    event.stopPropagation();
+    this.openRelatedRecord.emit({
+      entityName: relEntity.relatedEntityName,
+      record
+    });
+  }
+
+  /**
+   * Navigate to view all related records (when count > 10)
+   */
+  onViewAllRelated(relEntity: RelatedEntityData, event: Event): void {
+    event.stopPropagation();
+
+    if (!this.record) return;
+
+    const pkValue = this.record.PrimaryKey.KeyValuePairs[0]?.Value;
+    if (!pkValue) return;
+
     this.navigateToRelated.emit({
-      entity: relEntity.relationship as unknown as EntityInfo, // Will need proper lookup
+      entityName: relEntity.relatedEntityName,
       filter: `${relEntity.relationship.RelatedEntityJoinField}='${pkValue}'`
     });
+  }
+
+  /**
+   * Get display name for a related record
+   */
+  getRelatedRecordDisplayName(relEntity: RelatedEntityData, record: BaseEntity): string {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
+    if (entityInfo?.NameField) {
+      const name = record.Get(entityInfo.NameField.Name);
+      if (name) return String(name);
+    }
+    return record.PrimaryKey.ToString();
+  }
+
+  /**
+   * Get subtitle/secondary info for a related record
+   */
+  getRelatedRecordSubtitle(relEntity: RelatedEntityData, record: BaseEntity): string {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
+    if (!entityInfo) return '';
+
+    // Look for common subtitle fields
+    const subtitleFieldNames = ['Description', 'Status', 'Type', 'Email', 'Date', 'Amount', 'Total'];
+    for (const fieldName of subtitleFieldNames) {
+      const field = entityInfo.Fields.find(f =>
+        f.Name.includes(fieldName) && f.Name !== entityInfo.NameField?.Name
+      );
+      if (field) {
+        const value = record.Get(field.Name);
+        if (value !== null && value !== undefined) {
+          return this.formatFieldValue(value, field.Name);
+        }
+      }
+    }
+    return '';
   }
 
   /**
@@ -229,10 +337,42 @@ export class DetailPanelComponent implements OnChanges {
   }
 
   /**
-   * Get icon for related entity
+   * Get only related entities that have records (count > 0)
    */
-  getRelatedEntityIcon(relEntity: RelatedEntityCount): string {
-    // Would need to look up the entity to get its icon
+  get relatedEntitiesWithRecords(): RelatedEntityData[] {
+    return this.relatedEntities.filter(r => r.count > 0 || r.isLoading);
+  }
+
+  /**
+   * Get icon for related entity by looking up EntityInfo from Metadata
+   */
+  getRelatedEntityIcon(relEntity: RelatedEntityData): string {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
+    if (entityInfo?.Icon) {
+      return this.formatEntityIcon(entityInfo.Icon);
+    }
     return 'fa-solid fa-table';
+  }
+
+  /**
+   * Format entity icon to ensure proper Font Awesome class format
+   */
+  private formatEntityIcon(icon: string): string {
+    if (!icon) {
+      return 'fa-solid fa-table';
+    }
+    // If icon already has fa- prefix, use it as-is
+    if (icon.startsWith('fa-') || icon.startsWith('fa ')) {
+      // Ensure it has a style prefix (fa-solid, fa-regular, etc.)
+      if (icon.startsWith('fa-solid') || icon.startsWith('fa-regular') ||
+          icon.startsWith('fa-light') || icon.startsWith('fa-brands') ||
+          icon.startsWith('fa ')) {
+        return icon;
+      }
+      // It's just "fa-something", add fa-solid prefix
+      return `fa-solid ${icon}`;
+    }
+    // Check if it's just an icon name like "table" or "users"
+    return `fa-solid fa-${icon}`;
   }
 }
