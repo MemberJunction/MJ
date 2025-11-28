@@ -24,6 +24,7 @@ export class GridViewComponent implements OnChanges {
   @Input() entity: EntityInfo | null = null;
   @Input() viewId: string | null = null;
   @Input() extraFilter: string = '';
+  @Input() userSearchString: string = '';
 
   @Output() recordSelected = new EventEmitter<BaseEntity>();
   @Output() recordOpened = new EventEmitter<BaseEntity>();
@@ -33,7 +34,7 @@ export class GridViewComponent implements OnChanges {
   public viewParams: RunViewParams = {};
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entity'] || changes['viewId'] || changes['extraFilter']) {
+    if (changes['entity'] || changes['viewId'] || changes['extraFilter'] || changes['userSearchString']) {
       this.updateViewParams();
     }
   }
@@ -49,7 +50,8 @@ export class GridViewComponent implements OnChanges {
 
     this.viewParams = {
       EntityName: this.entity.Name,
-      ExtraFilter: this.extraFilter || ''
+      ExtraFilter: this.extraFilter || '',
+      UserSearchString: this.userSearchString || ''
     };
 
     if (this.viewId) {

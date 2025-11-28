@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueListType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
-import { AutoCardTemplate } from '../../models/explorer-state.interface';
+import { AutoCardTemplate, CardDisplayField, CardFieldType } from '../../models/explorer-state.interface';
+import { PillColorUtil } from '../shared/status-pill.component';
 
 @Component({
   selector: 'mj-explorer-cards-view',
@@ -12,11 +13,18 @@ export class CardsViewComponent implements OnChanges {
   @Input() entity: EntityInfo | null = null;
   @Input() records: BaseEntity[] = [];
   @Input() selectedRecordId: string | null = null;
+  @Input() filterText: string = '';
 
   @Output() recordSelected = new EventEmitter<BaseEntity>();
   @Output() recordOpened = new EventEmitter<BaseEntity>();
+  @Output() filteredCountChanged = new EventEmitter<number>();
 
   public cardTemplate: AutoCardTemplate | null = null;
+
+  // Cached filtered records - only recomputed when inputs change
+  private _filteredRecords: BaseEntity[] = [];
+  private _lastFilterText: string = '';
+  private _lastRecordsLength: number = 0;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['entity'] && this.entity && this.entity.Fields) {
@@ -25,6 +33,45 @@ export class CardsViewComponent implements OnChanges {
       // Reset template when entity is cleared
       this.cardTemplate = null;
     }
+
+    // Recompute filtered records when records or filterText change
+    if (changes['records'] || changes['filterText']) {
+      this.updateFilteredRecords();
+    }
+  }
+
+  /**
+   * Update the cached filtered records
+   */
+  private updateFilteredRecords(): void {
+    if (!this.filterText || this.filterText.trim() === '') {
+      this._filteredRecords = this.records;
+      this._lastFilterText = '';
+      this._lastRecordsLength = this.records.length;
+      this.filteredCountChanged.emit(this.records.length);
+      return;
+    }
+
+    const searchTerm = this.filterText.toLowerCase().trim();
+
+    this._filteredRecords = this.records.filter(record => {
+      if (!this.entity) return true;
+
+      for (const field of this.entity.Fields) {
+        const value = record.Get(field.Name);
+        if (value !== null && value !== undefined) {
+          const strValue = String(value).toLowerCase();
+          if (strValue.includes(searchTerm)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+
+    this._lastFilterText = this.filterText;
+    this._lastRecordsLength = this.records.length;
+    this.filteredCountChanged.emit(this._filteredRecords.length);
   }
 
   /**
@@ -43,7 +90,7 @@ export class CardsViewComponent implements OnChanges {
       titleField: this.findTitleField(entity, fields),
       subtitleField: this.findSubtitleField(fields),
       descriptionField: this.findDescriptionField(fields),
-      metricFields: this.findMetricFields(fields),
+      displayFields: this.findDisplayFields(fields),
       thumbnailField: this.findThumbnailField(fields),
       badgeField: this.findBadgeField(fields)
     };
@@ -123,48 +170,96 @@ export class CardsViewComponent implements OnChanges {
   }
 
   /**
-   * Find numeric fields for metrics (Amount, Total, Count, etc.)
+   * Find fields for display in cards using DefaultInView metadata
+   * Returns fields with type information for smart rendering
    */
-  private findMetricFields(fields: EntityFieldInfo[]): string[] {
+  private findDisplayFields(fields: EntityFieldInfo[]): CardDisplayField[] {
+    const displayFields: CardDisplayField[] = [];
+
+    // Exclude title/subtitle/description candidates and non-displayable fields
+    const excludePatterns = ['id', 'name', 'title', 'description', 'desc', 'summary', 'notes',
+                            'status', 'type', 'category', 'state', 'stage', 'password', 'secret',
+                            '__mj_', 'createdat', 'updatedat', 'createdby', 'updatedby'];
+
+    // First priority: Use fields marked as DefaultInView (set by LLM in CodeGen)
+    const defaultInViewFields = fields.filter(f =>
+      f.DefaultInView === true &&
+      !f.IsPrimaryKey &&
+      !excludePatterns.some(p => f.Name.toLowerCase().includes(p))
+    );
+
+    // Take up to 4 DefaultInView fields
+    for (const field of defaultInViewFields) {
+      if (displayFields.length >= 4) break;
+      displayFields.push({
+        name: field.Name,
+        type: this.getFieldType(field),
+        label: this.getFieldLabel(field.Name)
+      });
+    }
+
+    // If we have enough from DefaultInView, return
+    if (displayFields.length >= 2) {
+      return displayFields;
+    }
+
+    // Fallback: Look for fields with metric-like names
     const metricKeywords = ['amount', 'total', 'count', 'value', 'price', 'cost', 'quantity', 'qty', 'balance', 'revenue', 'score'];
-    const metrics: string[] = [];
 
     for (const field of fields) {
-      if (metrics.length >= 3) break; // Max 3 metrics
+      if (displayFields.length >= 4) break;
+      if (displayFields.some(df => df.name === field.Name)) continue; // Already added
 
-      const isNumeric = field.TSType === 'number';
       const matchesKeyword = metricKeywords.some(kw =>
         field.Name.toLowerCase().includes(kw)
       );
 
-      if (isNumeric && matchesKeyword) {
-        metrics.push(field.Name);
+      if (matchesKeyword) {
+        displayFields.push({
+          name: field.Name,
+          type: this.getFieldType(field),
+          label: this.getFieldLabel(field.Name)
+        });
       }
     }
 
-    // If no keyword matches, take first numeric fields that aren't IDs
-    if (metrics.length === 0) {
-      const numericFields = fields.filter(f =>
-        f.TSType === 'number' &&
-        !f.IsPrimaryKey &&
-        !f.Name.toLowerCase().includes('id') &&
-        !f.Name.toLowerCase().includes('sequence')
-      );
+    return displayFields;
+  }
 
-      for (const field of numericFields.slice(0, 2)) {
-        metrics.push(field.Name);
-      }
+  /**
+   * Determine the display type for a field
+   */
+  private getFieldType(field: EntityFieldInfo): CardFieldType {
+    // Check for boolean (BIT in SQL)
+    if (field.TSType === 'boolean' || field.Type?.toLowerCase() === 'bit') {
+      return 'boolean';
     }
 
-    return metrics;
+    // Check for numeric types
+    if (field.TSType === 'number') {
+      return 'number';
+    }
+
+    // Check for date types
+    if (field.TSType === 'Date' || field.Type?.toLowerCase().includes('date') ||
+        field.Type?.toLowerCase().includes('time')) {
+      return 'date';
+    }
+
+    // Default to text
+    return 'text';
   }
 
   /**
    * Find thumbnail/image field
+   * Priority:
+   * 1. Fields with image-related names (most explicit)
+   * 2. Fields with ExtendedType='URL' that have image-related names
+   * 3. Fields with ExtendedType='URL' (could be image URLs)
    */
   private findThumbnailField(fields: EntityFieldInfo[]): string | null {
+    // Priority 1: Fields with explicit image-related names
     const imageKeywords = ['image', 'photo', 'picture', 'thumbnail', 'avatar', 'logo', 'icon'];
-
     for (const keyword of imageKeywords) {
       const field = fields.find(f =>
         f.Name.toLowerCase().includes(keyword) &&
@@ -173,12 +268,28 @@ export class CardsViewComponent implements OnChanges {
       if (field) return field.Name;
     }
 
-    // Also look for URL fields that might be images
+    // Priority 2: URL-typed fields with image-related names
+    const urlImageField = fields.find(f =>
+      f.ExtendedType === 'URL' &&
+      f.TSType === 'string' &&
+      imageKeywords.some(kw => f.Name.toLowerCase().includes(kw))
+    );
+    if (urlImageField) return urlImageField.Name;
+
+    // Priority 3: Any URL-typed field (might be an image URL)
     const urlField = fields.find(f =>
-      (f.Name.toLowerCase().includes('url') || f.Name.toLowerCase().includes('link')) &&
+      f.ExtendedType === 'URL' &&
       f.TSType === 'string'
     );
     if (urlField) return urlField.Name;
+
+    // Priority 4: Fields with URL/link in name (fallback for fields without ExtendedType set)
+    const urlNamedField = fields.find(f =>
+      (f.Name.toLowerCase().includes('url') || f.Name.toLowerCase().includes('link')) &&
+      f.TSType === 'string' &&
+      !f.Name.toLowerCase().includes('email') // Exclude email links
+    );
+    if (urlNamedField) return urlNamedField.Name;
 
     return null;
   }
@@ -212,7 +323,7 @@ export class CardsViewComponent implements OnChanges {
   /**
    * Get numeric value formatted
    */
-  getMetricValue(record: BaseEntity, fieldName: string): string {
+  getNumericValue(record: BaseEntity, fieldName: string): string {
     const value = record.Get(fieldName);
     if (value === null || value === undefined) return '-';
 
@@ -239,6 +350,53 @@ export class CardsViewComponent implements OnChanges {
     }
 
     return num.toLocaleString();
+  }
+
+  /**
+   * Get boolean value for display (true/false, 1/0 -> boolean)
+   */
+  getBooleanValue(record: BaseEntity, fieldName: string): boolean {
+    const value = record.Get(fieldName);
+    if (value === null || value === undefined) return false;
+    // Handle various boolean representations
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true' || value === '1';
+    }
+    return Boolean(value);
+  }
+
+  /**
+   * Get text value truncated for display
+   */
+  getTextValue(record: BaseEntity, fieldName: string, maxLength: number = 50): string {
+    const value = this.getFieldValue(record, fieldName);
+    if (!value) return '-';
+    if (value.length <= maxLength) return value;
+    return value.substring(0, maxLength) + '...';
+  }
+
+  /**
+   * Get date value formatted for display
+   */
+  getDateValue(record: BaseEntity, fieldName: string): string {
+    const value = record.Get(fieldName);
+    if (value === null || value === undefined) return '-';
+
+    try {
+      const date = value instanceof Date ? value : new Date(value);
+      if (isNaN(date.getTime())) return String(value);
+
+      // Format as short date
+      return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return String(value);
+    }
   }
 
   /**
@@ -290,16 +448,29 @@ export class CardsViewComponent implements OnChanges {
   }
 
   /**
-   * Check if record has a valid thumbnail image
+   * Determine the type of thumbnail content for a record
+   * Returns 'image' for URLs/base64 images, 'icon' for CSS icon classes, 'none' otherwise
    */
-  hasThumbnail(record: BaseEntity): boolean {
-    if (!this.cardTemplate?.thumbnailField) return false;
-    const url = this.getFieldValue(record, this.cardTemplate.thumbnailField);
-    return this.isValidImageUrl(url);
+  getThumbnailType(record: BaseEntity): 'image' | 'icon' | 'none' {
+    if (!this.cardTemplate?.thumbnailField) return 'none';
+    const value = this.getFieldValue(record, this.cardTemplate.thumbnailField);
+    if (!value || value.trim() === '') return 'none';
+
+    // Check for image URL or base64
+    if (this.isImageValue(value)) {
+      return 'image';
+    }
+
+    // Check for CSS icon class (Font Awesome, Material Icons, etc.)
+    if (this.isIconClass(value)) {
+      return 'icon';
+    }
+
+    return 'none';
   }
 
   /**
-   * Get the thumbnail URL for a record
+   * Get the thumbnail value for a record (URL, base64, or icon class)
    */
   getThumbnailUrl(record: BaseEntity): string {
     if (!this.cardTemplate?.thumbnailField) return '';
@@ -307,32 +478,65 @@ export class CardsViewComponent implements OnChanges {
   }
 
   /**
-   * Check if a URL is likely a valid image URL
+   * Check if a value is an image (URL or base64)
    */
-  isValidImageUrl(url: string): boolean {
-    if (!url || url.trim() === '') return false;
+  private isImageValue(value: string): boolean {
+    if (!value || value.trim() === '') return false;
 
-    // Check if it starts with http/https
-    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/')) {
-      return false;
-    }
+    const trimmed = value.trim();
 
-    // Check for common image extensions
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'];
-    const urlLower = url.toLowerCase();
-
-    // Check if URL ends with image extension (before query params)
-    const urlWithoutParams = urlLower.split('?')[0];
-    if (imageExtensions.some(ext => urlWithoutParams.endsWith(ext))) {
+    // Check for data URL (base64 encoded image)
+    if (trimmed.startsWith('data:image/')) {
       return true;
     }
 
-    // Check if it's a data URL for an image
-    if (url.startsWith('data:image/')) {
+    // Check for HTTP/HTTPS URL
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      // Check for common image extensions
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'];
+      const urlWithoutParams = trimmed.toLowerCase().split('?')[0];
+      if (imageExtensions.some(ext => urlWithoutParams.endsWith(ext))) {
+        return true;
+      }
+      // Could be a dynamic image URL without extension - be permissive for URLs
       return true;
     }
 
-    // Be conservative - if we can't confirm it's an image, don't try to load it
+    return false;
+  }
+
+  /**
+   * Check if a value is a CSS icon class
+   * Supports Font Awesome (fa-), Material Icons (mat-icon, material-icons),
+   * Bootstrap Icons (bi-), and other common icon libraries
+   */
+  private isIconClass(value: string): boolean {
+    if (!value || value.trim() === '') return false;
+
+    const trimmed = value.trim().toLowerCase();
+
+    // Font Awesome patterns: "fa-solid fa-user", "fa fa-user", "fas fa-user", etc.
+    if (trimmed.startsWith('fa-') || trimmed.startsWith('fa ') ||
+        trimmed.startsWith('fas ') || trimmed.startsWith('far ') ||
+        trimmed.startsWith('fal ') || trimmed.startsWith('fab ')) {
+      return true;
+    }
+
+    // Material Icons
+    if (trimmed.includes('material-icons') || trimmed.startsWith('mat-icon')) {
+      return true;
+    }
+
+    // Bootstrap Icons
+    if (trimmed.startsWith('bi-') || trimmed.startsWith('bi ')) {
+      return true;
+    }
+
+    // Glyphicons
+    if (trimmed.startsWith('glyphicon')) {
+      return true;
+    }
+
     return false;
   }
 
@@ -350,5 +554,59 @@ export class CardsViewComponent implements OnChanges {
       hash = pk.charCodeAt(i) + ((hash << 5) - hash);
     }
     return colors[Math.abs(hash) % colors.length];
+  }
+
+  /**
+   * Get filtered records (returns cached results computed in ngOnChanges)
+   */
+  get filteredRecords(): BaseEntity[] {
+    return this._filteredRecords;
+  }
+
+  /**
+   * Highlight matching text with a mark tag
+   */
+  highlightMatch(text: string): string {
+    if (!this.filterText || this.filterText.trim() === '' || !text) {
+      return text;
+    }
+
+    const searchTerm = this.filterText.trim();
+    const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
+    return text.replace(regex, '<mark class="highlight-match">$1</mark>');
+  }
+
+  /**
+   * Escape special regex characters
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Check if a field has enumerated values (value list)
+   */
+  isEnumField(fieldName: string): boolean {
+    if (!this.entity) return false;
+    const field = this.entity.Fields.find(f => f.Name === fieldName);
+    if (!field) return false;
+
+    return field.ValueListTypeEnum !== EntityFieldValueListType.None &&
+           field.EntityFieldValues.length > 0;
+  }
+
+  /**
+   * Check if the subtitle field should be shown as a pill
+   */
+  get subtitleIsPill(): boolean {
+    if (!this.cardTemplate?.subtitleField || !this.entity) return false;
+    return this.isEnumField(this.cardTemplate.subtitleField);
+  }
+
+  /**
+   * Get the pill color type for a value
+   */
+  getPillColorType(value: string): string {
+    return PillColorUtil.getColorType(value);
   }
 }

@@ -111,9 +111,9 @@ export class ExplorerStateService {
   addRecentItem(item: Omit<RecentItem, 'timestamp'>): void {
     const recentItems = [...this.state$.value.recentItems];
 
-    // Remove existing entry if present
+    // Remove existing entry if present (match by entity and composite key)
     const existingIndex = recentItems.findIndex(
-      r => r.entityName === item.entityName && r.recordId === item.recordId
+      r => r.entityName === item.entityName && r.compositeKeyString === item.compositeKeyString
     );
     if (existingIndex >= 0) {
       recentItems.splice(existingIndex, 1);
@@ -143,7 +143,7 @@ export class ExplorerStateService {
     const exists = favorites.some(f =>
       f.type === item.type &&
       f.entityName === item.entityName &&
-      f.recordId === item.recordId &&
+      f.compositeKeyString === item.compositeKeyString &&
       f.viewId === item.viewId
     );
 
@@ -160,7 +160,7 @@ export class ExplorerStateService {
     const favorites = this.state$.value.favorites.filter(f =>
       !(f.type === item.type &&
         f.entityName === item.entityName &&
-        f.recordId === item.recordId &&
+        f.compositeKeyString === item.compositeKeyString &&
         f.viewId === item.viewId)
     );
     this.updateState({ favorites });

@@ -103,6 +103,12 @@
   font-style: italic;
 }
 
+.relationships-loading {
+  padding: 20px 0;
+  display: flex;
+  justify-content: center;
+}
+
 .field-row {
   display: flex;
   flex-direction: column;

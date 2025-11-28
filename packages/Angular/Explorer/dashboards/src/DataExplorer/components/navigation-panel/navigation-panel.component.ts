@@ -1,6 +1,14 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, Metadata, CompositeKey } from '@memberjunction/core';
 import { RecentItem, FavoriteItem } from '../../models/explorer-state.interface';
+
+/**
+ * Event emitted when a record should be opened in a full tab
+ */
+export interface OpenRecordEvent {
+  entityName: string;
+  compositeKey: CompositeKey;
+}
 
 @Component({
   selector: 'mj-explorer-navigation-panel',
@@ -23,6 +31,9 @@ export class NavigationPanelComponent {
   @Output() entitySelected = new EventEmitter<EntityInfo>();
   @Output() toggleCollapse = new EventEmitter<void>();
   @Output() sectionToggled = new EventEmitter<'favorites' | 'recent' | 'entities' | 'views'>();
+  @Output() openRecord = new EventEmitter<OpenRecordEvent>();
+
+  private metadata = new Metadata();
 
   // Entity search/filter
   public entitySearchTerm = '';
@@ -63,7 +74,7 @@ export class NavigationPanelComponent {
   }
 
   /**
-   * Handle favorite click
+   * Handle favorite click - opens record in full tab
    */
   onFavoriteClick(favorite: FavoriteItem): void {
     if (favorite.type === 'entity' && favorite.entityName) {
@@ -71,19 +82,28 @@ export class NavigationPanelComponent {
       if (entity) {
         this.entitySelected.emit(entity);
       }
+    } else if (favorite.type === 'record' && favorite.entityName && favorite.compositeKeyString) {
+      // Deserialize the CompositeKey and open record in full tab
+      const compositeKey = new CompositeKey();
+      compositeKey.LoadFromConcatenatedString(favorite.compositeKeyString);
+      this.openRecord.emit({
+        entityName: favorite.entityName,
+        compositeKey
+      });
     }
-    // Record favorites would need different handling - navigate to record
   }
 
   /**
-   * Handle recent item click
+   * Handle recent item click - opens record in full tab
    */
   onRecentClick(item: RecentItem): void {
-    const entity = this.entities.find(e => e.Name === item.entityName);
-    if (entity) {
-      this.entitySelected.emit(entity);
-      // Note: The parent component should also navigate to the specific record
-    }
+    // Deserialize the CompositeKey and open the record in a full tab
+    const compositeKey = new CompositeKey();
+    compositeKey.LoadFromConcatenatedString(item.compositeKeyString);
+    this.openRecord.emit({
+      entityName: item.entityName,
+      compositeKey
+    });
   }
 
   /**
@@ -149,5 +169,39 @@ export class NavigationPanelComponent {
     if (diffDays < 7) return `${diffDays}d ago`;
 
     return date.toLocaleDateString();
+  }
+
+  /**
+   * Get icon for a recent item based on its entity
+   */
+  getRecentItemIcon(item: RecentItem): string {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === item.entityName);
+    if (entityInfo) {
+      return this.getEntityIcon(entityInfo);
+    }
+    return 'fa-solid fa-file-alt';
+  }
+
+  /**
+   * Get icon for a favorite item based on its type and entity
+   */
+  getFavoriteIcon(favorite: FavoriteItem): string {
+    if (favorite.type === 'view') {
+      return 'fa-solid fa-filter';
+    }
+
+    // For entity and record types, look up the entity icon
+    if (favorite.entityName) {
+      const entityInfo = this.metadata.Entities.find(e => e.Name === favorite.entityName);
+      if (entityInfo) {
+        return this.getEntityIcon(entityInfo);
+      }
+    }
+
+    // Fallback icons
+    if (favorite.type === 'entity') {
+      return 'fa-solid fa-table';
+    }
+    return 'fa-solid fa-file-alt';
   }
 }

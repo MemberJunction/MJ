@@ -7,55 +7,69 @@
   @if (!collapsed) {
     <div class="panel-content">
       <!-- Favorites Section -->
-      <div class="section">
+      <div class="section favorites-section">
         <div class="section-header" (click)="onSectionToggle('favorites')">
           <i class="fa-solid fa-star section-icon"></i>
           <span class="section-title">Favorites</span>
+          @if (favorites.length > 0) {
+            <span class="section-count">({{ favorites.length }})</span>
+          }
           <i class="fa-solid expand-icon" [class.fa-chevron-down]="favoritesSectionExpanded" [class.fa-chevron-right]="!favoritesSectionExpanded"></i>
         </div>
 
         @if (favoritesSectionExpanded) {
-          <div class="section-content">
+          <div class="section-content scrollable-section">
             @if (favorites.length === 0) {
               <div class="empty-section">
                 <span>No favorites yet</span>
               </div>
             } @else {
-              @for (favorite of favorites; track favorite.displayName) {
-                <div class="nav-item" (click)="onFavoriteClick(favorite)">
-                  <i class="fa-solid" [class.fa-table]="favorite.type === 'entity'" [class.fa-file-alt]="favorite.type === 'record'" [class.fa-filter]="favorite.type === 'view'"></i>
-                  <span class="nav-item-label">{{ favorite.displayName }}</span>
+              <div class="scrollable-list">
+                <div class="scrollable-list-inner">
+                  @for (favorite of favorites; track favorite.displayName) {
+                    <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
+                      <i [class]="getFavoriteIcon(favorite)"></i>
+                      <span class="nav-item-label">{{ favorite.displayName }}</span>
+                    </div>
+                  }
                 </div>
-              }
+              </div>
             }
           </div>
         }
       </div>
 
       <!-- Recent Items Section -->
-      <div class="section">
+      <div class="section recent-section">
         <div class="section-header" (click)="onSectionToggle('recent')">
           <i class="fa-solid fa-clock section-icon"></i>
           <span class="section-title">Recent</span>
+          @if (recentItems.length > 0) {
+            <span class="section-count">({{ recentItems.length }})</span>
+          }
           <i class="fa-solid expand-icon" [class.fa-chevron-down]="recentSectionExpanded" [class.fa-chevron-right]="!recentSectionExpanded"></i>
         </div>
 
         @if (recentSectionExpanded) {
-          <div class="section-content">
+          <div class="section-content scrollable-section">
             @if (recentItems.length === 0) {
               <div class="empty-section">
                 <span>No recent items</span>
               </div>
             } @else {
-              @for (item of recentItems; track item.recordId) {
-                <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
-                  <i class="fa-solid fa-file-alt"></i>
-                  <div class="nav-item-content">
-                    <span class="nav-item-label">{{ item.displayName }}</span>
-                    <span class="nav-item-meta">{{ formatTimestamp(item.timestamp) }}</span>
-                  </div>
+              <div class="scrollable-list">
+                <div class="scrollable-list-inner">
+                  @for (item of recentItems; track item.compositeKeyString) {
+                    <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
+                      <i [class]="getRecentItemIcon(item)"></i>
+                      <div class="nav-item-content">
+                        <span class="nav-item-label">{{ item.displayName }}</span>
+                        <span class="nav-item-meta">{{ formatTimestamp(item.timestamp) }}</span>
+                      </div>
+                    </div>
+                  }
                 </div>
-              }
+              </div>
             }
           </div>
         }

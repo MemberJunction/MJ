@@ -1,13 +1,14 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView } from '@memberjunction/core';
+import { Metadata, EntityInfo, RunView, CompositeKey } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState } from './models/explorer-state.interface';
 import { NavigateToRelatedEvent } from './components/detail-panel/detail-panel.component';
+import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.component';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -39,6 +40,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Selected record for detail panel
   public selectedRecord: BaseEntity | null = null;
 
+  // Debounced filter text for cards view (250ms delay)
+  public debouncedFilterText: string = '';
+  private filterInput$ = new Subject<string>();
+
+  // Filtered record count (updated by cards view)
+  public filteredRecordCount: number = 0;
+
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef
@@ -48,7 +56,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
-    // Load available entities
+    // Initialize debounced filter from persisted state BEFORE loading entities/records
+    // This ensures filter is applied when cards view receives the records
+    if (this.state.smartFilterPrompt) {
+      this.debouncedFilterText = this.state.smartFilterPrompt;
+    }
+
+    // Load available entities (may trigger loadRecords if entity was selected)
     this.loadEntities();
 
     // Subscribe to state changes
@@ -57,6 +71,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       .subscribe(state => {
         this.state = state;
         this.onStateChanged();
+        this.cdr.detectChanges();
+      });
+
+    // Setup debounced filter for cards view (250ms delay)
+    this.filterInput$
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(filterText => {
+        this.debouncedFilterText = filterText;
         this.cdr.detectChanges();
       });
   }
@@ -159,12 +185,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onRecordSelected(record: BaseEntity): void {
     this.selectedRecord = record;
-    this.stateService.selectRecord(record.PrimaryKey.ToString());
+    this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString());
 
-    // Add to recent items
+    // Add to recent items using serialized CompositeKey
     this.stateService.addRecentItem({
       entityName: this.selectedEntity!.Name,
-      recordId: record.PrimaryKey.ToString(),
+      compositeKeyString: record.PrimaryKey.ToConcatenatedString(),
       displayName: this.getRecordDisplayName(record)
     });
   }
@@ -221,12 +247,23 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Handle opening a record from navigation panel (recent/favorites)
+   */
+  public onOpenRecordFromNav(event: OpenRecordEvent): void {
+    // The event already contains a properly deserialized CompositeKey
+    this.OpenEntityRecord.emit({
+      EntityName: event.entityName,
+      RecordPKey: event.compositeKey
+    });
+  }
+
+  /**
    * Handle smart filter change
    */
   public onSmartFilterChanged(prompt: string): void {
     this.stateService.setSmartFilterPrompt(prompt);
-    // Trigger reload with filter
-    this.loadRecords();
+    // Push to debounce subject for cards view
+    this.filterInput$.next(prompt);
   }
 
   /**
@@ -271,6 +308,46 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.loadRecords();
       }
     }
+  }
+
+  /**
+   * Get the icon class for an entity
+   */
+  public getEntityIcon(entity: EntityInfo): string {
+    if (entity.Icon) {
+      return this.formatEntityIcon(entity.Icon);
+    }
+    return 'fa-solid fa-table';
+  }
+
+  /**
+   * Format entity icon to ensure proper Font Awesome class format
+   */
+  private formatEntityIcon(icon: string): string {
+    if (!icon) {
+      return 'fa-solid fa-table';
+    }
+    // If icon already has fa- prefix, use it as-is
+    if (icon.startsWith('fa-') || icon.startsWith('fa ')) {
+      // Ensure it has a style prefix (fa-solid, fa-regular, etc.)
+      if (icon.startsWith('fa-solid') || icon.startsWith('fa-regular') ||
+          icon.startsWith('fa-light') || icon.startsWith('fa-brands') ||
+          icon.startsWith('fa ')) {
+        return icon;
+      }
+      // It's just "fa-something", add fa-solid prefix
+      return `fa-solid ${icon}`;
+    }
+    // Check if it's just an icon name like "table" or "users"
+    return `fa-solid fa-${icon}`;
+  }
+
+  /**
+   * Update the filtered record count (called when filter changes)
+   */
+  public updateFilteredCount(count: number): void {
+    this.filteredRecordCount = count;
+    this.cdr.detectChanges();
   }
 }
 

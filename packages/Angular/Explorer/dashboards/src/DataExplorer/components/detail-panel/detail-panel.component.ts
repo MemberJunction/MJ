@@ -1,12 +1,11 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { EntityInfo, EntityRelationshipInfo, RunView, Metadata } from '@memberjunction/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { EntityInfo, EntityRelationshipInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 
 interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
   relatedEntityName: string;
   count: number;
-  isLoading: boolean;
   isExpanded: boolean;
   records: BaseEntity[];
   isLoadingRecords: boolean;
@@ -44,6 +43,8 @@ export class DetailPanelComponent implements OnChanges {
   public detailsSectionExpanded = true;
   public relationshipsSectionExpanded = true;
 
+  constructor(private cdr: ChangeDetectorRef) {}
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['record'] && this.record && this.entity) {
       this.loadRelationshipCounts();
@@ -51,7 +52,7 @@ export class DetailPanelComponent implements OnChanges {
   }
 
   /**
-   * Load counts for related entities
+   * Load counts for related entities using batch RunViews call
    */
   private async loadRelationshipCounts(): Promise<void> {
     if (!this.entity || !this.record) return;
@@ -62,58 +63,72 @@ export class DetailPanelComponent implements OnChanges {
     // Get relationships where this entity is the related entity (foreign keys pointing TO this record)
     const relationships = this.entity.RelatedEntities;
 
-    // Initialize relationship data
-    for (const rel of relationships) {
-      this.relatedEntities.push({
+    if (relationships.length === 0) {
+      this.isLoadingRelationships = false;
+      return;
+    }
+
+    // Build the filter using all primary key fields
+    const pkFilter = this.record.PrimaryKey.ToWhereClause();
+    if (!pkFilter) {
+      this.isLoadingRelationships = false;
+      return;
+    }
+
+    // Get the first PK value for the join field filter
+    const pkValue = this.record.PrimaryKey.KeyValuePairs[0]?.Value;
+    if (!pkValue) {
+      this.isLoadingRelationships = false;
+      return;
+    }
+
+    // Build batch query params for all relationships
+    const viewParams: RunViewParams[] = relationships.map(rel => ({
+      EntityName: rel.RelatedEntity,
+      ExtraFilter: `${rel.RelatedEntityJoinField}='${pkValue}'`,
+      ResultType: 'count_only'
+    }));
+
+    try {
+      const rv = new RunView();
+      const results = await rv.RunViews(viewParams);
+
+      // Map results back to relationship data
+      this.relatedEntities = relationships.map((rel, index) => {
+        const result = results[index];
+        return {
+          relationship: rel,
+          relatedEntityName: rel.RelatedEntity,
+          count: result.Success ? result.TotalRowCount : 0,
+          isExpanded: false,
+          records: [],
+          isLoadingRecords: false
+        };
+      });
+    } catch (error) {
+      console.warn('Failed to load relationship counts:', error);
+      // Initialize with zero counts on error
+      this.relatedEntities = relationships.map(rel => ({
         relationship: rel,
         relatedEntityName: rel.RelatedEntity,
         count: 0,
-        isLoading: true,
         isExpanded: false,
         records: [],
         isLoadingRecords: false
-      });
+      }));
+    } finally {
+      this.isLoadingRelationships = false;
+      this.cdr.detectChanges();
     }
-
-    // Load counts in parallel
-    const rv = new RunView();
-    const countPromises = this.relatedEntities.map(async (relEntity) => {
-      try {
-        const pkValue = this.record!.PrimaryKey.KeyValuePairs[0]?.Value;
-        if (!pkValue) {
-          relEntity.count = 0;
-          relEntity.isLoading = false;
-          return;
-        }
-
-        const result = await rv.RunView({
-          EntityName: relEntity.relationship.RelatedEntity,
-          ExtraFilter: `${relEntity.relationship.RelatedEntityJoinField}='${pkValue}'`,
-          ResultType: 'count_only'
-        });
-
-        if (result.Success) {
-          relEntity.count = result.TotalRowCount;
-        }
-      } catch (error) {
-        console.warn(`Failed to load count for ${relEntity.relatedEntityName}:`, error);
-        relEntity.count = 0;
-      } finally {
-        relEntity.isLoading = false;
-      }
-    });
-
-    await Promise.all(countPromises);
-    this.isLoadingRelationships = false;
   }
 
   /**
    * Get key fields to display in details section
    */
-  get displayFields(): { name: string; label: string; value: string }[] {
+  get displayFields(): { name: string; label: string; value: string; isPill: boolean }[] {
     if (!this.entity || !this.record) return [];
 
-    const fields: { name: string; label: string; value: string }[] = [];
+    const fields: { name: string; label: string; value: string; isPill: boolean }[] = [];
     const excludePatterns = ['__mj_', 'password', 'secret', 'token'];
 
     for (const field of this.entity.Fields) {
@@ -126,10 +141,15 @@ export class DetailPanelComponent implements OnChanges {
 
       const value = this.record.Get(field.Name);
       if (value !== null && value !== undefined && String(value).trim() !== '') {
+        // Check if this field has enumerated values
+        const isPill = field.ValueListTypeEnum !== EntityFieldValueListType.None &&
+                       field.EntityFieldValues.length > 0;
+
         fields.push({
           name: field.Name,
           label: this.formatFieldLabel(field.Name),
-          value: this.formatFieldValue(value, field.Name)
+          value: this.formatFieldValue(value, field.Name),
+          isPill
         });
       }
     }
@@ -340,7 +360,7 @@ export class DetailPanelComponent implements OnChanges {
    * Get only related entities that have records (count > 0)
    */
   get relatedEntitiesWithRecords(): RelatedEntityData[] {
-    return this.relatedEntities.filter(r => r.count > 0 || r.isLoading);
+    return this.relatedEntities.filter(r => r.count > 0);
   }
 
   /**

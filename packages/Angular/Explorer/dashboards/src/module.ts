@@ -93,6 +93,7 @@ import { CardsViewComponent as ExplorerCardsViewComponent } from './DataExplorer
 import { GridViewComponent as ExplorerGridViewComponent } from './DataExplorer/components/content-area/grid-view.component';
 import { DetailPanelComponent as ExplorerDetailPanelComponent } from './DataExplorer/components/detail-panel/detail-panel.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
+import { PillComponent } from './DataExplorer/components/shared/status-pill.component';
 // Home Dashboard Components
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
@@ -168,6 +169,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     ExplorerCardsViewComponent,
     ExplorerGridViewComponent,
     ExplorerDetailPanelComponent,
+    PillComponent,
     // Home Dashboard Components
     HomeDashboardComponent
   ],

@@ -17,7 +17,8 @@
       [viewsSectionExpanded]="state.viewsSectionExpanded"
       (entitySelected)="onEntitySelected($event)"
       (toggleCollapse)="toggleNavigationPanel()"
-      (sectionToggled)="stateService.toggleSection($event)">
+      (sectionToggled)="stateService.toggleSection($event)"
+      (openRecord)="onOpenRecordFromNav($event)">
     </mj-explorer-navigation-panel>
   </div>
 
@@ -27,8 +28,13 @@
     <div class="content-header">
       <div class="header-left">
         @if (selectedEntity) {
+          <i [class]="getEntityIcon(selectedEntity)" class="entity-icon"></i>
           <h2 class="entity-title">{{ selectedEntity.Name }}</h2>
-          <span class="record-count">{{ totalRecordCount | number }} records</span>
+          @if (debouncedFilterText && filteredRecordCount !== totalRecordCount) {
+            <span class="record-count">{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
+          } @else {
+            <span class="record-count">{{ totalRecordCount | number }} records</span>
+          }
         } @else {
           <h2 class="entity-title">Select an Entity</h2>
           <span class="record-count">Choose from the navigation panel</span>
@@ -41,7 +47,7 @@
             <input
               type="text"
               class="smart-filter-input"
-              placeholder="Filter with natural language... (e.g., 'active customers in California')"
+              placeholder="Filter records..."
               [ngModel]="state.smartFilterPrompt"
               (ngModelChange)="onSmartFilterChanged($event)"
             />
@@ -102,8 +108,10 @@
               [entity]="selectedEntity"
               [records]="records"
               [selectedRecordId]="state.selectedRecordId"
+              [filterText]="debouncedFilterText"
               (recordSelected)="onRecordSelected($event)"
-              (recordOpened)="onOpenRecord($event)">
+              (recordOpened)="onOpenRecord($event)"
+              (filteredCountChanged)="updateFilteredCount($event)">
             </mj-explorer-cards-view>
           }
         } @else {
@@ -111,7 +119,7 @@
           <mj-explorer-grid-view
             [entity]="selectedEntity"
             [viewId]="state.selectedViewId"
-            [extraFilter]="state.smartFilterPrompt"
+            [userSearchString]="state.smartFilterPrompt"
             (recordSelected)="onRecordSelected($event)"
             (recordOpened)="onOpenRecord($event)"
             (dataLoaded)="onGridDataLoaded($event)">

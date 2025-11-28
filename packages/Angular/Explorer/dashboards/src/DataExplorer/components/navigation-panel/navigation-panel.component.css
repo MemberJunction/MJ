@@ -73,6 +73,16 @@
   flex-shrink: 0;
   border-bottom: 1px solid #f0f0f0;
 }
+
+/* Scrollable sections (Favorites, Recent) - allow them to shrink and scroll */
+.section.favorites-section,
+.section.recent-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 200px; /* Limit height so entities section has room */
+}
+
 .section.entities-section {
   flex: 1;
   display: flex;
@@ -126,6 +136,39 @@
 .section-content {
   padding: 8px 12px 12px 12px;
   background: white;
+}
+
+/* Scrollable section content for Favorites and Recent */
+.section-content.scrollable-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scrollable-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+.scrollable-list::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollable-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollable-list::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 3px;
+}
+.scrollable-list::-webkit-scrollbar-thumb:hover {
+  background: #ccc;
+}
+
+.scrollable-list-inner {
+  /* Inner container grows naturally based on content */
 }
 
 .entities-section .section-content {

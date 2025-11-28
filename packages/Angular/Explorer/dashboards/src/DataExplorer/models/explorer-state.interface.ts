@@ -37,7 +37,8 @@ export interface DataExplorerState {
 
 export interface RecentItem {
   entityName: string;
-  recordId: string;
+  /** Serialized CompositeKey using ToConcatenatedString format (Field1|Value1||Field2|Value2) */
+  compositeKeyString: string;
   displayName: string;
   timestamp: Date;
 }
@@ -45,9 +46,24 @@ export interface RecentItem {
 export interface FavoriteItem {
   type: 'record' | 'view' | 'entity';
   entityName?: string;
-  recordId?: string;
+  /** Serialized CompositeKey using ToConcatenatedString format (Field1|Value1||Field2|Value2) */
+  compositeKeyString?: string;
   viewId?: string;
   displayName: string;
+}
+
+/**
+ * Field display type for smart rendering in cards
+ */
+export type CardFieldType = 'number' | 'boolean' | 'text' | 'date';
+
+/**
+ * Metadata for a field to display in a card
+ */
+export interface CardDisplayField {
+  name: string;
+  type: CardFieldType;
+  label: string;
 }
 
 /**
@@ -57,7 +73,8 @@ export interface AutoCardTemplate {
   titleField: string;
   subtitleField: string | null;
   descriptionField: string | null;
-  metricFields: string[];
+  /** Display fields with type information for smart rendering */
+  displayFields: CardDisplayField[];
   thumbnailField: string | null;
   badgeField: string | null;
 }

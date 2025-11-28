@@ -22,7 +22,11 @@
           @for (field of displayFields; track field.name) {
             <div class="field-row">
               <span class="field-label">{{ field.label }}</span>
-              <span class="field-value">{{ field.value }}</span>
+              @if (field.isPill) {
+                <mj-status-pill [value]="field.value"></mj-status-pill>
+              } @else {
+                <span class="field-value">{{ field.value }}</span>
+              }
             </div>
           }
 
@@ -38,15 +42,16 @@
       <div class="section-header" (click)="toggleSection('relationships')">
         <i class="fa-solid fa-project-diagram section-icon"></i>
         <span class="section-title">Related Records</span>
-        @if (isLoadingRelationships) {
-          <i class="fa-solid fa-spinner fa-spin loading-icon"></i>
-        }
         <i class="fa-solid expand-icon" [class.fa-chevron-down]="relationshipsSectionExpanded" [class.fa-chevron-right]="!relationshipsSectionExpanded"></i>
       </div>
 
       @if (relationshipsSectionExpanded) {
         <div class="section-content">
-          @if (relatedEntitiesWithRecords.length === 0 && !isLoadingRelationships) {
+          @if (isLoadingRelationships) {
+            <div class="relationships-loading">
+              <mj-loading text="Loading related records..." size="small"></mj-loading>
+            </div>
+          } @else if (relatedEntitiesWithRecords.length === 0) {
             <div class="empty-section">No related records</div>
           } @else {
             @for (relEntity of relatedEntitiesWithRecords; track relEntity.relatedEntityName) {
@@ -55,20 +60,13 @@
                 <div
                   class="related-entity-header"
                   [class.clickable]="relEntity.count > 0"
-                  [class.loading]="relEntity.isLoading"
                   (click)="toggleRelatedEntityExpansion(relEntity, $event)">
                   <i class="fa-solid expand-chevron"
                      [class.fa-chevron-down]="relEntity.isExpanded"
                      [class.fa-chevron-right]="!relEntity.isExpanded"></i>
                   <i [class]="getRelatedEntityIcon(relEntity)"></i>
                   <span class="related-entity-name">{{ relEntity.relatedEntityName }}</span>
-                  <span class="related-entity-count">
-                    @if (relEntity.isLoading) {
-                      <i class="fa-solid fa-spinner fa-spin"></i>
-                    } @else {
-                      {{ relEntity.count }}
-                    }
-                  </span>
+                  <span class="related-entity-count">{{ relEntity.count }}</span>
                 </div>
 
                 <!-- Expanded records list -->
@@ -76,8 +74,7 @@
                   <div class="related-records-list">
                     @if (relEntity.isLoadingRecords) {
                       <div class="records-loading">
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                        <span>Loading records...</span>
+                        <mj-loading text="Loading..." size="small"></mj-loading>
                       </div>
                     } @else {
                       @for (rec of relEntity.records; track rec.PrimaryKey.ToString()) {

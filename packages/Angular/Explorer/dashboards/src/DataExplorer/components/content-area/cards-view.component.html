@@ -1,6 +1,6 @@
 <div class="cards-view-wrapper">
   <div class="cards-container">
-    @for (record of records; track record.PrimaryKey.ToString()) {
+    @for (record of filteredRecords; track record.PrimaryKey.ToString()) {
     <div
       class="data-card"
       [class.selected]="isSelected(record)"
@@ -8,20 +8,32 @@
 
       <!-- Card Header with Avatar/Icon -->
       <div class="card-header">
-        @if (hasThumbnail(record)) {
-          <div class="card-thumbnail">
-            <img [src]="getThumbnailUrl(record)" alt="" />
-          </div>
-        } @else {
-          <div class="card-avatar" [style.background-color]="getRecordColor(record)">
-            {{ getInitials(record) }}
-          </div>
+        @switch (getThumbnailType(record)) {
+          @case ('image') {
+            <div class="card-thumbnail">
+              <img [src]="getThumbnailUrl(record)" alt="" />
+            </div>
+          }
+          @case ('icon') {
+            <div class="card-avatar" [style.background-color]="getRecordColor(record)">
+              <i [class]="getThumbnailUrl(record)"></i>
+            </div>
+          }
+          @default {
+            <div class="card-avatar" [style.background-color]="getRecordColor(record)">
+              {{ getInitials(record) }}
+            </div>
+          }
         }
 
         <div class="card-header-content">
-          <h3 class="card-title">{{ getFieldValue(record, cardTemplate?.titleField ?? null) }}</h3>
+          <h3 class="card-title" [innerHTML]="highlightMatch(getFieldValue(record, cardTemplate?.titleField ?? null))"></h3>
           @if (cardTemplate?.subtitleField; as subField) {
-            <span class="card-subtitle">{{ getFieldValue(record, subField) }}</span>
+            @if (subtitleIsPill) {
+              <mj-status-pill [value]="getFieldValue(record, subField)"></mj-status-pill>
+            } @else {
+              <span class="card-subtitle" [innerHTML]="highlightMatch(getFieldValue(record, subField))"></span>
+            }
           }
         </div>
 
@@ -33,21 +45,37 @@
       <!-- Card Body -->
       <div class="card-body">
         @if (cardTemplate?.descriptionField; as descField) {
-          <p class="card-description">
-            {{ getFieldValue(record, descField) | slice:0:100 }}
-            @if (getFieldValue(record, descField).length > 100) {
-              ...
-            }
+          <p class="card-description" [innerHTML]="highlightMatch(getFieldValue(record, descField) | slice:0:100) + (getFieldValue(record, descField).length > 100 ? '...' : '')">
           </p>
         }
 
-        <!-- Metrics -->
-        @if (cardTemplate && cardTemplate.metricFields.length > 0) {
-          <div class="card-metrics">
-            @for (metricField of cardTemplate.metricFields; track metricField) {
-              <div class="metric">
-                <span class="metric-value">{{ getMetricValue(record, metricField) }}</span>
-                <span class="metric-label">{{ getFieldLabel(metricField) }}</span>
+        <!-- Display Fields -->
+        @if (cardTemplate && cardTemplate.displayFields.length > 0) {
+          <div class="card-fields">
+            @for (field of cardTemplate.displayFields; track field.name) {
+              <div class="field-item" [class.field-boolean]="field.type === 'boolean'" [class.field-text]="field.type === 'text'">
+                @switch (field.type) {
+                  @case ('boolean') {
+                    <i class="field-icon" [class.fa-solid]="true"
+                       [class.fa-check]="getBooleanValue(record, field.name)"
+                       [class.fa-minus]="!getBooleanValue(record, field.name)"
+                       [class.bool-true]="getBooleanValue(record, field.name)"
+                       [class.bool-false]="!getBooleanValue(record, field.name)"></i>
+                    <span class="field-label">{{ field.label }}</span>
+                  }
+                  @case ('number') {
+                    <span class="field-value">{{ getNumericValue(record, field.name) }}</span>
+                    <span class="field-label">{{ field.label }}</span>
+                  }
+                  @case ('date') {
+                    <span class="field-value field-date">{{ getDateValue(record, field.name) }}</span>
+                    <span class="field-label">{{ field.label }}</span>
+                  }
+                  @default {
+                    <span class="field-label">{{ field.label }}</span>
+                    <span class="field-text-value">{{ getTextValue(record, field.name, 40) }}</span>
+                  }
+                }
               </div>
             }
           </div>
@@ -57,12 +85,17 @@
       <!-- Card Footer with Badge -->
       @if (cardTemplate?.badgeField; as badgeField) {
         <div class="card-footer">
-          <span class="card-badge">
-            {{ getFieldValue(record, badgeField) }}
-          </span>
+          <mj-status-pill [value]="getFieldValue(record, badgeField)"></mj-status-pill>
         </div>
       }
     </div>
+    }
+
+    @if (filteredRecords.length === 0 && records.length > 0) {
+      <div class="no-results">
+        <i class="fa-solid fa-filter"></i>
+        <p>No records match your filter</p>
+      </div>
     }
   </div>
 </div>

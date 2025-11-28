@@ -121,30 +121,79 @@
   line-height: 1.5;
 }
 
-.card-metrics {
+/* Card Display Fields */
+.card-fields {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
   padding-top: 12px;
   border-top: 1px solid #f0f0f0;
 }
 
-.metric {
+.field-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 60px;
 }
 
-.metric-value {
-  font-size: 16px;
+/* Numeric fields - compact metric style */
+.field-item .field-value {
+  font-size: 15px;
   font-weight: 600;
   color: #212121;
 }
 
-.metric-label {
-  font-size: 11px;
+.field-item .field-label {
+  font-size: 10px;
   color: #9e9e9e;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+}
+
+/* Boolean fields - icon with label */
+.field-item.field-boolean {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: auto;
+}
+
+.field-item.field-boolean .field-icon {
+  font-size: 14px;
+}
+
+.field-item.field-boolean .field-icon.bool-true {
+  color: #2e7d32;
+}
+
+.field-item.field-boolean .field-icon.bool-false {
+  color: #bdbdbd;
+}
+
+.field-item.field-boolean .field-label {
+  font-size: 12px;
+  text-transform: none;
+  color: #616161;
+}
+
+/* Text fields - label above, value below */
+.field-item.field-text {
+  flex: 1 1 100%;
+  max-width: 100%;
+}
+
+.field-item .field-text-value {
+  font-size: 13px;
+  color: #424242;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Date fields */
+.field-item .field-date {
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .card-footer {
@@ -161,4 +210,37 @@
   border-radius: 4px;
   background: #e3f2fd;
   color: #1565c0;
+}
+
+/* Highlight matches for filtered text */
+::ng-deep .highlight-match {
+  background-color: #fff176;
+  border-radius: 2px;
+}
+
+/* Status pill spacing when used as subtitle */
+.card-header-content mj-status-pill {
+  display: block;
+  margin-top: 4px;
+}
+
+/* No results state */
+.no-results {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #9e9e9e;
+  text-align: center;
+}
+.no-results i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+.no-results p {
+  margin: 0;
+  font-size: 14px;
 }
