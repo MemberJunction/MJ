@@ -2052,6 +2052,7 @@ NumberedRows AS (
                ef.Type,
                ef.Category,
                ef.AllowsNull,
+               ef.DisplayName,
                ef.IsPrimaryKey,
                ef.IsUnique,
                ef.Description,
@@ -2060,7 +2061,7 @@ NumberedRows AS (
                ef.AutoUpdateCategory,
                ef.AutoUpdateDisplayName,
                ef.EntityIDFieldName,
-               ef.RelatedEntityName
+               ef.RelatedEntity
             FROM
                [${mj_core_schema()}].vwEntityFields ef
             WHERE

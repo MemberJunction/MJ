@@ -6399,20 +6399,23 @@ export type EntityFieldValueEntityType = z.infer<typeof EntityFieldValueSchema>;
 export const EntityFieldSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     Sequence: z.number().describe(`
         * * Field Name: Sequence
+        * * Display Name: Sequence
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Display order of the field within the entity`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the field within the database table`),
     DisplayName: z.string().nullable().describe(`
@@ -6422,6 +6425,7 @@ export const EntityFieldSchema = z.object({
         * * Description: A user friendly alternative to the field name`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Descriptive text explaining the purpose of the field`),
     AutoUpdateDescription: z.boolean().describe(`
@@ -6432,13 +6436,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Is Primary Key
+        * * Display Name: Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`),
     IsUnique: z.boolean().describe(`
         * * Field Name: IsUnique
-        * * Display Name: Is Unique
+        * * Display Name: Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field must have unique values within the entity.`),
@@ -6449,18 +6453,22 @@ export const EntityFieldSchema = z.object({
         * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category`),
     Type: z.string().describe(`
         * * Field Name: Type
+        * * Display Name: Data Type
         * * SQL Data Type: nvarchar(100)
         * * Description: SQL Data type (auto maintained by CodeGen)`),
     Length: z.number().nullable().describe(`
         * * Field Name: Length
+        * * Display Name: Length
         * * SQL Data Type: int
         * * Description: SQL data length (auto maintained by CodeGen)`),
     Precision: z.number().nullable().describe(`
         * * Field Name: Precision
+        * * Display Name: Precision
         * * SQL Data Type: int
         * * Description: SQL precision (auto maintained by CodeGen)`),
     Scale: z.number().nullable().describe(`
         * * Field Name: Scale
+        * * Display Name: Scale
         * * SQL Data Type: int
         * * Description: SQL scale (auto maintained by CodeGen)`),
     AllowsNull: z.boolean().describe(`
@@ -6588,7 +6596,7 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
-        * * Display Name: Is Virtual
+        * * Display Name: Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: NULL`),
@@ -6600,7 +6608,7 @@ export const EntityFieldSchema = z.object({
         * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.`),
     RelatedEntityID: z.string().nullable().describe(`
         * * Field Name: RelatedEntityID
-        * * Display Name: RelatedEntity ID
+        * * Display Name: Related Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RelatedEntityFieldName: z.string().nullable().describe(`
@@ -6627,17 +6635,17 @@ export const EntityFieldSchema = z.object({
         * * Description: Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown`),
     EntityIDFieldName: z.string().nullable().describe(`
         * * Field Name: EntityIDFieldName
-        * * Display Name: Entity IDField Name
+        * * Display Name: Entity ID Field Name
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     ScopeDefault: z.string().nullable().describe(`
@@ -6691,12 +6699,19 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field`),
+    AutoUpdateDisplayName: z.boolean().describe(`
+        * * Field Name: AutoUpdateDisplayName
+        * * Display Name: Auto Update Display Name
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
         * * SQL Data Type: nvarchar(MAX)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     SchemaName: z.string().describe(`
         * * Field Name: SchemaName
@@ -34260,6 +34275,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -34272,7 +34288,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -34282,6 +34298,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Sequence
+    * * Display Name: Sequence
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Display order of the field within the entity
@@ -34292,6 +34309,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the field within the database table
     */
@@ -34314,6 +34332,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Descriptive text explaining the purpose of the field
     */
@@ -34340,7 +34359,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Is Primary Key
+    * * Display Name: Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
@@ -34354,7 +34373,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsUnique
-    * * Display Name: Is Unique
+    * * Display Name: Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
@@ -34381,6 +34400,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Type
+    * * Display Name: Data Type
     * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)
     */
@@ -34390,6 +34410,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Length
+    * * Display Name: Length
     * * SQL Data Type: int
     * * Description: SQL data length (auto maintained by CodeGen)
     */
@@ -34399,6 +34420,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Precision
+    * * Display Name: Precision
     * * SQL Data Type: int
     * * Description: SQL precision (auto maintained by CodeGen)
     */
@@ -34408,6 +34430,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Scale
+    * * Display Name: Scale
     * * SQL Data Type: int
     * * Description: SQL scale (auto maintained by CodeGen)
     */
@@ -34659,7 +34682,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsVirtual
-    * * Display Name: Is Virtual
+    * * Display Name: Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: NULL
@@ -34684,7 +34707,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityID
-    * * Display Name: RelatedEntity ID
+    * * Display Name: Related Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -34751,7 +34774,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: EntityIDFieldName
-    * * Display Name: Entity IDField Name
+    * * Display Name: Entity ID Field Name
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.
     */
@@ -34764,7 +34787,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34774,7 +34797,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34890,6 +34913,20 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: AutoUpdateDisplayName
+    * * Display Name: Auto Update Display Name
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field
+    */
+    get AutoUpdateDisplayName(): boolean {
+        return this.Get('AutoUpdateDisplayName');
+    }
+    set AutoUpdateDisplayName(value: boolean) {
+        this.Set('AutoUpdateDisplayName', value);
+    }
+
+    /**
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -34900,6 +34937,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Entity
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {

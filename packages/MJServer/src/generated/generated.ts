@@ -12184,6 +12184,9 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When 1, allows system/LLM to auto-update Category; when 0, user has locked this field`}) 
     AutoUpdateCategory: boolean;
         
+    @Field(() => Boolean, {description: `When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field`}) 
+    AutoUpdateDisplayName: boolean;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -12342,6 +12345,9 @@ export class CreateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateCategory?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDisplayName?: boolean;
 }
     
 
@@ -12451,6 +12457,9 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateCategory?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDisplayName?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

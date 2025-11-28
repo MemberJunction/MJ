@@ -345,7 +345,7 @@ export class AdvancedGeneration {
                 IsNullable: f.AllowsNull,
                 IsPrimaryKey: f.IsPrimaryKey,
                 IsForeignKey: f.EntityIDFieldName != null,
-                RelatedEntity: f.RelatedEntityName,
+                RelatedEntity: f.RelatedEntity,
                 Description: f.Description,
                 // Include existing category information for ALL fields
                 ExistingCategory: f.Category || null,
