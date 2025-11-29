@@ -1,10 +1,10 @@
 import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef } from '@angular/core';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
 import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
 import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
+import { DataExplorerDashboardComponent, DataExplorerFilter } from '@memberjunction/ng-dashboards';
 
 export function LoadDashboardResource() {
 }
@@ -73,7 +73,10 @@ export class DashboardResource extends BaseResourceComponent {
      */
     private async loadDashboard(): Promise<void> {
         const data = this.Data;
+        console.log('[DashboardResource] loadDashboard called with:', data);
+
         if (!data?.ResourceRecordID) {
+            console.log('[DashboardResource] No ResourceRecordID, exiting');
             this.NotifyLoadStarted();
             this.NotifyLoadComplete();
             return;
@@ -82,6 +85,17 @@ export class DashboardResource extends BaseResourceComponent {
         this.NotifyLoadStarted();
 
         try {
+            // Check if this is a special dashboard type (not a database record)
+            const config = data.Configuration || {};
+            console.log('[DashboardResource] Config:', config, 'ResourceRecordID:', data.ResourceRecordID);
+
+            if (config['dashboardType'] === 'DataExplorer' || data.ResourceRecordID === 'DataExplorer') {
+                console.log('[DashboardResource] Loading DataExplorer with filter:', config['entityFilter']);
+                // Special case: Data Explorer dashboard with optional entity filter
+                await this.loadDataExplorer(config['entityFilter']);
+                return;
+            }
+
             await DashboardEngine.Instance.Config(false); // make sure it is configured, if already configured does nothing
             const dashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === data.ResourceRecordID);
             if (!dashboard) {
@@ -98,6 +112,53 @@ export class DashboardResource extends BaseResourceComponent {
             }
         } catch (error) {
             console.error('Error loading dashboard:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
+    /**
+     * Load the Data Explorer dashboard component with optional entity filter
+     */
+    private async loadDataExplorer(entityFilter?: DataExplorerFilter): Promise<void> {
+        try {
+            // Create the Data Explorer component directly (it's already registered)
+            this.containerElement.nativeElement.innerHTML = '';
+            const componentRef = this.viewContainer.createComponent(DataExplorerDashboardComponent);
+            this.componentRef = componentRef;
+            const instance = componentRef.instance;
+
+            // Set the entity filter - ngOnInit will use this when it runs
+            if (entityFilter) {
+                instance.entityFilter = entityFilter;
+            }
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
+            this.containerElement.nativeElement.appendChild(nativeElement);
+
+            // Handle open entity record events
+            instance.OpenEntityRecord.subscribe((eventData: { EntityName: string; RecordPKey: CompositeKey }) => {
+                if (eventData && eventData.EntityName && eventData.RecordPKey) {
+                    this.navigationService.OpenEntityRecord(eventData.EntityName, eventData.RecordPKey);
+                }
+            });
+
+            // Initialize dashboard (no database config needed for DataExplorer)
+            const config: DashboardConfig = {
+                dashboard: null as unknown as DashboardEntity, // No database record
+                userState: {}
+            };
+            instance.Config = config;
+            instance.Refresh();
+
+            // Trigger change detection to ensure the component updates
+            componentRef.changeDetectorRef.detectChanges();
+
+            this.NotifyLoadComplete();
+        } catch (error) {
+            console.error('Error loading Data Explorer:', error);
             this.NotifyLoadComplete();
         }
     }

@@ -1,10 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo } from '@memberjunction/core';
+import { Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
+import { ApplicationEntityEntity } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -15,7 +16,7 @@ import {
   NavigateToRelatedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter } from './models/explorer-state.interface';
 import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.component';
 
 /**
@@ -31,15 +32,25 @@ import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.
   styleUrls: ['./data-explorer-dashboard.component.css']
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
-export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy {
+export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
+
+  /**
+   * Optional filter to constrain which entities are shown in the explorer.
+   * Can filter by applicationId, schemaNames, or explicit entityNames.
+   */
+  @Input() entityFilter: DataExplorerFilter | null = null;
 
   // State
   public state: DataExplorerState;
 
-  // Entity data
+  // Entity data - all entities available to the user
+  private allEntities: EntityInfo[] = [];
+  // Filtered entities based on entityFilter
   public entities: EntityInfo[] = [];
+  // Entity IDs for the current application (loaded when applicationId filter is set)
+  private applicationEntityIds: Set<string> = new Set();
   public selectedEntity: EntityInfo | null = null;
 
   // Record counts (updated by mj-entity-viewer)
@@ -79,8 +90,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.debouncedFilterText = this.state.smartFilterPrompt;
     }
 
-    // Load available entities
-    this.loadEntities();
+    // Load available entities (async to support applicationId filter)
+    await this.loadEntities();
 
     // Subscribe to state changes
     this.stateService.State
@@ -118,6 +129,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     super.ngOnDestroy();
   }
 
+  async ngOnChanges(changes: SimpleChanges): Promise<void> {
+    // Re-apply filter when entityFilter changes
+    if (changes['entityFilter'] && !changes['entityFilter'].firstChange) {
+      await this.loadEntities();
+    }
+  }
+
   protected initDashboard(): void {
     // Called by BaseDashboard
   }
@@ -131,20 +149,99 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // ========================================
 
   /**
-   * Load all available entities the user can access
+   * Load all available entities the user can access, applying any configured filter
    */
-  private loadEntities(): void {
-    this.entities = this.metadata.Entities
+  private async loadEntities(): Promise<void> {
+    console.log('[DataExplorer] loadEntities called, entityFilter:', this.entityFilter);
+
+    // First, load all entities the user can access
+    this.allEntities = this.metadata.Entities
       .filter(e => {
         const perms = e.GetUserPermisions(this.metadata.CurrentUser);
         return perms.CanRead && e.IncludeInAPI;
       })
       .sort((a, b) => a.Name.localeCompare(b.Name));
 
+    console.log('[DataExplorer] allEntities count:', this.allEntities.length);
+
+    // If we have an applicationId filter, load the application entities
+    if (this.entityFilter?.applicationId) {
+      await this.loadApplicationEntityIds(this.entityFilter.applicationId);
+      console.log('[DataExplorer] applicationEntityIds count:', this.applicationEntityIds.size);
+    }
+
+    // Apply filter to get the final entity list
+    this.entities = this.applyEntityFilter(this.allEntities);
+
+    console.log('[DataExplorer] filtered entities count:', this.entities.length);
+
     // If there's a selected entity in state, restore it
     if (this.state.selectedEntityName) {
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
     }
+  }
+
+  /**
+   * Load entity IDs associated with a specific application
+   */
+  private async loadApplicationEntityIds(applicationId: string): Promise<void> {
+    this.applicationEntityIds.clear();
+
+    const rv = new RunView();
+    const result = await rv.RunView<ApplicationEntityEntity>({
+      EntityName: 'Application Entities',
+      ExtraFilter: `ApplicationID = '${applicationId}'`,
+      ResultType: 'entity_object'
+    });
+
+    if (result.Success && result.Results) {
+      for (const appEntity of result.Results) {
+        this.applicationEntityIds.add(appEntity.EntityID);
+      }
+    }
+  }
+
+  /**
+   * Apply the configured filter to the entity list
+   */
+  private applyEntityFilter(entities: EntityInfo[]): EntityInfo[] {
+    if (!this.entityFilter) {
+      return entities;
+    }
+
+    return entities.filter(entity => {
+      // Filter by application (via ApplicationEntities)
+      if (this.entityFilter!.applicationId) {
+        if (!this.applicationEntityIds.has(entity.ID)) {
+          return false;
+        }
+      }
+
+      // Filter by schema names
+      if (this.entityFilter!.schemaNames && this.entityFilter!.schemaNames.length > 0) {
+        if (!this.entityFilter!.schemaNames.includes(entity.SchemaName)) {
+          return false;
+        }
+      }
+
+      // Filter by explicit entity names
+      if (this.entityFilter!.entityNames && this.entityFilter!.entityNames.length > 0) {
+        if (!this.entityFilter!.entityNames.includes(entity.Name)) {
+          return false;
+        }
+      }
+
+      // Filter out system entities unless explicitly included
+      if (!this.entityFilter!.includeSystemEntities) {
+        // Skip entities with names starting with __ (MJ system entities)
+        if (entity.Name.startsWith('__')) {
+          return false;
+        }
+        // Could add more system schema checks here if needed
+      }
+
+      return true;
+    });
   }
 
   /**
@@ -324,6 +421,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // ========================================
   // HELPERS
   // ========================================
+
+  /**
+   * Get the set of allowed entity names for filtering favorites/recents.
+   * Returns null if no filter is active (all entities allowed).
+   */
+  public get allowedEntityNames(): Set<string> | null {
+    if (!this.entityFilter) {
+      return null;
+    }
+    return new Set(this.entities.map(e => e.Name));
+  }
 
   /**
    * Get display name for a record

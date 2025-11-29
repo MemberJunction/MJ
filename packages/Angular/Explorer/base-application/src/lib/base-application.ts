@@ -209,7 +209,31 @@ export class BaseApplication {
       console.error(`[${this.Name}] Error loading default dashboard:`, error);
     }
 
-    return null;
+    // No dashboard configured - fall back to Data Explorer filtered by this application
+    return this.createDataExplorerTab();
+  }
+
+  /**
+   * Creates a Data Explorer tab filtered to entities within this application.
+   * Used as a fallback when no dashboard or nav items are configured.
+   */
+  private createDataExplorerTab(): TabRequest {
+    return {
+      ApplicationId: this.ID,
+      Title: this.Name,
+      ResourceType: 'Dashboards',
+      ResourceRecordId: 'DataExplorer',
+      Configuration: {
+        resourceType: 'Dashboards',
+        dashboardType: 'DataExplorer',
+        appName: this.Name,
+        isAppDefault: true,
+        // Pass filter configuration for Data Explorer
+        entityFilter: {
+          applicationId: this.ID
+        }
+      }
+    };
   }
 
   /**

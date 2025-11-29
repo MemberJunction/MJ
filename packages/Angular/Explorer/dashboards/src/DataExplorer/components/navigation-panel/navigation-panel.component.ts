@@ -21,6 +21,11 @@ export class NavigationPanelComponent {
   @Input() favorites: FavoriteItem[] = [];
   @Input() recentItems: RecentItem[] = [];
   @Input() collapsed = false;
+  /**
+   * Optional set of allowed entity names for filtering favorites/recents.
+   * If provided, only items matching these entities will be shown.
+   */
+  @Input() allowedEntityNames: Set<string> | null = null;
 
   // Section expansion states
   @Input() favoritesSectionExpanded = true;
@@ -53,17 +58,35 @@ export class NavigationPanelComponent {
   }
 
   /**
-   * Get favorites filtered to records only
+   * Get recent items filtered by allowed entities (if filter is active)
    */
-  get favoriteRecords(): FavoriteItem[] {
-    return this.favorites.filter(f => f.type === 'record');
+  get filteredRecentItems(): RecentItem[] {
+    if (!this.allowedEntityNames) {
+      return this.recentItems;
+    }
+    return this.recentItems.filter(r => this.allowedEntityNames!.has(r.entityName));
   }
 
   /**
-   * Get favorites filtered to entities only
+   * Get favorites filtered to records only (respecting entity filter)
+   */
+  get favoriteRecords(): FavoriteItem[] {
+    const records = this.favorites.filter(f => f.type === 'record');
+    if (!this.allowedEntityNames) {
+      return records;
+    }
+    return records.filter(f => f.entityName && this.allowedEntityNames!.has(f.entityName));
+  }
+
+  /**
+   * Get favorites filtered to entities only (respecting entity filter)
    */
   get favoriteEntities(): FavoriteItem[] {
-    return this.favorites.filter(f => f.type === 'entity');
+    const entities = this.favorites.filter(f => f.type === 'entity');
+    if (!this.allowedEntityNames) {
+      return entities;
+    }
+    return entities.filter(f => f.entityName && this.allowedEntityNames!.has(f.entityName));
   }
 
   /**

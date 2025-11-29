@@ -1,4 +1,34 @@
 /**
+ * Filter configuration for the Data Explorer
+ * Allows constraining which entities are shown in the explorer
+ */
+export interface DataExplorerFilter {
+  /**
+   * Application ID to filter entities by.
+   * Only entities linked via ApplicationEntities will be shown.
+   */
+  applicationId?: string;
+
+  /**
+   * Schema names to filter by (e.g., ['dbo', 'sales'])
+   * Only entities in these schemas will be shown.
+   */
+  schemaNames?: string[];
+
+  /**
+   * Explicit entity names to include (e.g., ['Accounts', 'Contacts'])
+   * If provided, only these entities will be shown.
+   */
+  entityNames?: string[];
+
+  /**
+   * Whether to show system entities (entities starting with __ or system schemas)
+   * Default: false
+   */
+  includeSystemEntities?: boolean;
+}
+
+/**
  * Per-entity cached state (filters, scroll position, etc.)
  */
 export interface EntityCacheEntry {
