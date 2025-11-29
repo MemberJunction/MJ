@@ -48,6 +48,14 @@ export interface OpenRelatedRecordEvent {
 }
 
 /**
+ * Event emitted when opening a foreign key record
+ */
+export interface OpenForeignKeyRecordEvent {
+  entityName: string;
+  recordId: string;
+}
+
+/**
  * EntityRecordDetailPanelComponent - A reusable panel for displaying entity record details
  *
  * This component provides a detail panel view for entity records with:
@@ -81,6 +89,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   @Output() openRecord = new EventEmitter<BaseEntity>();
   @Output() navigateToRelated = new EventEmitter<NavigateToRelatedEvent>();
   @Output() openRelatedRecord = new EventEmitter<OpenRelatedRecordEvent>();
+  @Output() openForeignKeyRecord = new EventEmitter<OpenForeignKeyRecordEvent>();
 
   // Related entity counts
   public relatedEntities: RelatedEntityData[] = [];
@@ -375,16 +384,15 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   }
 
   /**
-   * Navigate to a related record (FK link click)
+   * Open a foreign key record (FK link click)
+   * Emits openForeignKeyRecord event for parent to handle opening the record
    */
   onForeignKeyClick(field: FieldDisplay, event: Event): void {
     event.stopPropagation();
     if (field.relatedEntityName && field.relatedRecordId) {
-      // Emit event to navigate to the related record
-      // The parent component can handle opening in a new tab or navigating
-      this.navigateToRelated.emit({
+      this.openForeignKeyRecord.emit({
         entityName: field.relatedEntityName,
-        filter: `ID='${field.relatedRecordId}'`
+        recordId: field.relatedRecordId
       });
     }
   }
@@ -534,6 +542,16 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
       return this.formatEntityIcon(entityInfo.Icon);
     }
     return 'fa-solid fa-table';
+  }
+
+  /**
+   * Get the icon class for the current entity
+   */
+  getEntityIconClass(): string {
+    if (!this.entity?.Icon) {
+      return 'fa-solid fa-table';
+    }
+    return this.formatEntityIcon(this.entity.Icon);
   }
 
   /**

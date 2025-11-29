@@ -37,6 +37,8 @@ export class NavigationPanelComponent {
   @Output() toggleCollapse = new EventEmitter<void>();
   @Output() sectionToggled = new EventEmitter<'favorites' | 'recent' | 'entities' | 'views'>();
   @Output() openRecord = new EventEmitter<OpenRecordEvent>();
+  /** Emitted when a collapsed icon is clicked - expands panel and focuses section */
+  @Output() expandAndFocus = new EventEmitter<'favorites' | 'recent' | 'entities'>();
 
   private metadata = new Metadata();
 
@@ -141,6 +143,13 @@ export class NavigationPanelComponent {
    */
   onToggleCollapse(): void {
     this.toggleCollapse.emit();
+  }
+
+  /**
+   * Handle collapsed icon click - expands panel and focuses section
+   */
+  onCollapsedIconClick(section: 'favorites' | 'recent' | 'entities'): void {
+    this.expandAndFocus.emit(section);
   }
 
   /**

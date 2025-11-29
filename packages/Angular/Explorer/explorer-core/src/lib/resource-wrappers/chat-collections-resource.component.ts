@@ -22,7 +22,7 @@ export function LoadChatCollectionsResource() {
       <mj-collections-full-view
         *ngIf="currentUser"
         [environmentId]="environmentId"
-        [currentUser]="currentUser">
+        [currentUser]="currentUser" style="height: 100%;">
       </mj-collections-full-view>
     </div>
   `,

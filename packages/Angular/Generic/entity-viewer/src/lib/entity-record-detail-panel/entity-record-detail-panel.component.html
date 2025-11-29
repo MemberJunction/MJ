@@ -1,7 +1,12 @@
 <div class="entity-record-card-container">
   <!-- Header -->
   <div class="panel-header">
-    <h3 class="panel-title">{{ recordTitle }}</h3>
+    <div class="panel-title-row">
+      @if (entity?.Icon) {
+        <i [class]="getEntityIconClass()" class="entity-icon"></i>
+      }
+      <h3 class="panel-title">{{ recordTitle }}</h3>
+    </div>
     <button class="close-btn" (click)="onClose()" title="Close">
       <i class="fa-solid fa-times"></i>
     </button>
@@ -32,28 +37,24 @@
                 </div>
               </div>
             }
-            <!-- Foreign Key Field - Show friendly name with link -->
+            <!-- Foreign Key Field - Show friendly name with open button -->
             @else if (field.type === 'foreign-key') {
               <div class="field-row field-row-fk">
                 <span class="field-label">{{ field.label }}</span>
-                @if (hasFriendlyName(field)) {
-                  <div class="fk-value-row">
+                <div class="fk-value-row" [class.fk-id-only]="!hasFriendlyName(field)">
+                  @if (hasFriendlyName(field)) {
                     <span class="field-value fk-display-value">{{ field.displayValue }}</span>
-                    @if (field.relatedEntityName) {
-                      <button class="fk-link-btn" (click)="onForeignKeyClick(field, $event)" title="Open {{ field.relatedEntityName }}">
-                        <i class="fa-solid fa-external-link-alt"></i>
-                      </button>
-                    }
-                  </div>
-                } @else {
-                  <!-- No friendly name available, show ID with copy option -->
-                  <div class="fk-value-row fk-id-only">
+                  } @else {
+                    <!-- No friendly name available, show ID in muted style -->
                     <span class="field-value fk-id-value">{{ field.value }}</span>
-                    <button class="copy-btn" (click)="copyToClipboard(field.value, $event)" title="Copy ID">
-                      <i class="fa-solid fa-copy"></i>
+                  }
+                  <!-- Always show open button for FK fields that have a related entity -->
+                  @if (field.relatedEntityName) {
+                    <button class="fk-link-btn" (click)="onForeignKeyClick(field, $event)" title="Open {{ field.relatedEntityName }} record">
+                      <i class="fa-solid fa-external-link-alt"></i>
                     </button>
-                  </div>
-                }
+                  }
+                </div>
               </div>
             }
             <!-- Enum Field - Show as pill -->

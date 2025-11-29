@@ -137,14 +137,21 @@
   } @else {
     <!-- Collapsed State - Show Icons Only -->
     <div class="collapsed-icons">
-      <button class="icon-btn" title="Favorites">
+      <button class="icon-btn" title="Favorites" (click)="onCollapsedIconClick('favorites')">
         <i class="fa-solid fa-star"></i>
+        @if (favoriteRecords.length + favoriteEntities.length > 0) {
+          <span class="collapsed-badge">{{ favoriteRecords.length + favoriteEntities.length }}</span>
+        }
       </button>
-      <button class="icon-btn" title="Recent">
+      <button class="icon-btn" title="Recent" (click)="onCollapsedIconClick('recent')">
         <i class="fa-solid fa-clock"></i>
+        @if (filteredRecentItems.length > 0) {
+          <span class="collapsed-badge">{{ filteredRecentItems.length }}</span>
+        }
       </button>
-      <button class="icon-btn" title="Entities">
+      <button class="icon-btn" title="Entities" (click)="onCollapsedIconClick('entities')">
         <i class="fa-solid fa-database"></i>
+        <span class="collapsed-badge">{{ entities.length }}</span>
       </button>
     </div>
   }

@@ -183,11 +183,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
 
           if (appMatch) {
-            const routeAppName = decodeURIComponent(appMatch[1]);
-            // Find the app from the URL
-            const urlApp = apps.find(a =>
-              a.Name.trim().toLowerCase() === routeAppName.trim().toLowerCase()
-            );
+            const routeAppPath = decodeURIComponent(appMatch[1]);
+            // Find the app from the URL by Path (or Name for backwards compatibility)
+            const urlApp = this.appManager.GetAppByPath(routeAppPath);
 
             if (urlApp) {
               // Set the app from URL - takes precedence over workspace restoration
@@ -396,7 +394,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Build a shareable resource URL from tab data
+   * Build a shareable resource URL from tab data.
+   * Uses app.Path for cleaner URLs (e.g., /app/data-explorer instead of /app/Data%20Explorer)
    */
   private buildResourceUrl(tab: WorkspaceTab): string | null {
     const config = tab.configuration || {};
@@ -409,9 +408,26 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const tabAppId = tab.applicationId;
     const tabTitle = tab.title;
 
+    // Helper function to get app path for URL
+    const getAppPath = (appIdOrName: string): string | null => {
+      // First try by ID
+      let app = this.appManager.GetAppById(appIdOrName);
+      if (!app) {
+        // Try by name
+        app = this.appManager.GetAppByName(appIdOrName);
+      }
+      if (app) {
+        // Prefer Path, fall back to Name for backwards compatibility
+        return app.Path || app.Name;
+      }
+      return null;
+    };
+
     // If this is an app nav item, build app-based URL
     if (appName && navItemName) {
-      let url = `/app/${encodeURIComponent(appName)}/${encodeURIComponent(navItemName)}`;
+      // Look up the app to get its Path
+      const appPath = getAppPath(appName) || appName;
+      let url = `/app/${encodeURIComponent(appPath)}/${encodeURIComponent(navItemName)}`;
 
       // Add query params if present
       if (queryParams && Object.keys(queryParams).length > 0) {
@@ -424,7 +440,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // If this is an app's default dashboard (no nav items), use app-level URL
     if (isAppDefault && appName) {
-      return `/app/${encodeURIComponent(appName)}`;
+      const appPath = getAppPath(appName) || appName;
+      return `/app/${encodeURIComponent(appPath)}`;
     }
 
     // Fallback: If tab belongs to a non-system app but doesn't have appName/navItemName,
@@ -432,6 +449,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (tabAppId && tabAppId !== '__explorer') {
       const app = this.appManager.GetAppById(tabAppId);
       if (app) {
+        // Prefer Path, fall back to Name
+        const appPath = app.Path || app.Name;
         const navItems = app.GetNavItems();
 
         // If app has nav items, try to find the matching one by title
@@ -441,7 +460,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           );
 
           if (navItem) {
-            let url = `/app/${encodeURIComponent(app.Name)}/${encodeURIComponent(navItem.Label)}`;
+            let url = `/app/${encodeURIComponent(appPath)}/${encodeURIComponent(navItem.Label)}`;
 
             // Add query params if present
             if (queryParams && Object.keys(queryParams).length > 0) {
@@ -454,7 +473,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         } else {
           // App has zero nav items - use app-level URL
           // This handles apps that only have a default dashboard
-          return `/app/${encodeURIComponent(app.Name)}`;
+          return `/app/${encodeURIComponent(appPath)}`;
         }
       }
     }

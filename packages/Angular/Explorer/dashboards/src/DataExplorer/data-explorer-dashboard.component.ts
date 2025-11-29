@@ -16,7 +16,7 @@ import {
   NavigateToRelatedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink } from './models/explorer-state.interface';
 import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.component';
 
 /**
@@ -42,6 +42,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   @Input() entityFilter: DataExplorerFilter | null = null;
 
+  /**
+   * Optional deep link to navigate to a specific entity/record on load.
+   * Parsed from URL query parameters (e.g., ?entity=Users&record=123)
+   */
+  @Input() deepLink: DataExplorerDeepLink | null = null;
+
   // State
   public state: DataExplorerState;
 
@@ -59,10 +65,32 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Selected record for detail panel
   public selectedRecord: BaseEntity | null = null;
+  // Entity info for the detail panel (may differ from selectedEntity when viewing FK/related records)
+  public detailPanelEntity: EntityInfo | null = null;
 
   // Debounced filter text (synced with mj-entity-viewer)
   public debouncedFilterText: string = '';
   private filterInput$ = new Subject<string>();
+
+  // Entity filter text for home screen
+  public entityFilterText: string = '';
+
+  // Breadcrumbs for navigation display
+  public breadcrumbs: BreadcrumbItem[] = [];
+
+  /**
+   * Filtered entities based on entityFilterText (for home screen)
+   */
+  get filteredEntities(): EntityInfo[] {
+    if (!this.entityFilterText || this.entityFilterText.trim() === '') {
+      return this.entities;
+    }
+    const filter = this.entityFilterText.toLowerCase().trim();
+    return this.entities.filter(e =>
+      e.Name.toLowerCase().includes(filter) ||
+      (e.Description && e.Description.toLowerCase().includes(filter))
+    );
+  }
 
   /**
    * Configuration for mj-entity-viewer composite component
@@ -85,6 +113,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
+    // Set context for state service (enables context-specific settings)
+    await this.stateService.setContext(this.entityFilter);
+    this.state = this.stateService.CurrentState;
+
     // Initialize debounced filter from persisted state
     if (this.state.smartFilterPrompt) {
       this.debouncedFilterText = this.state.smartFilterPrompt;
@@ -92,6 +124,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Load available entities (async to support applicationId filter)
     await this.loadEntities();
+
+    // Apply deep link if provided (overrides persisted state)
+    if (this.deepLink) {
+      await this.applyDeepLink(this.deepLink);
+    }
 
     // Subscribe to state changes
     this.stateService.State
@@ -107,6 +144,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         }
 
         this.onStateChanged();
+        this.cdr.detectChanges();
+      });
+
+    // Subscribe to breadcrumb changes
+    this.stateService.Breadcrumbs
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(breadcrumbs => {
+        this.breadcrumbs = breadcrumbs;
         this.cdr.detectChanges();
       });
 
@@ -132,6 +177,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // Re-apply filter when entityFilter changes
     if (changes['entityFilter'] && !changes['entityFilter'].firstChange) {
+      // Update context for new filter (loads context-specific state)
+      await this.stateService.setContext(this.entityFilter);
+      this.state = this.stateService.CurrentState;
       await this.loadEntities();
     }
   }
@@ -297,14 +345,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onViewerRecordSelected(event: RecordSelectedEvent): void {
     this.selectedRecord = event.record;
-    this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString());
+    // When selecting from grid, detail panel entity matches the grid entity
+    this.detailPanelEntity = this.selectedEntity;
+    const recordName = this.getRecordDisplayName(event.record);
+    this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString(), recordName);
 
     // Add to recent items
     if (this.selectedEntity) {
       this.stateService.addRecentItem({
         entityName: this.selectedEntity.Name,
         compositeKeyString: event.record.PrimaryKey.ToConcatenatedString(),
-        displayName: this.getRecordDisplayName(event.record)
+        displayName: recordName
       });
     }
   }
@@ -326,13 +377,35 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.totalRecordCount = event.totalRowCount;
     this.filteredRecordCount = event.loadedRowCount;
 
+    // Handle pending record selection from deep link
+    if (this.pendingRecordSelection) {
+      const recordId = this.pendingRecordSelection;
+      this.pendingRecordSelection = null; // Clear it so we don't keep trying
+
+      // Try to find the record by primary key or concatenated string
+      const record = event.records.find(r => {
+        const pkString = r.PrimaryKey.ToConcatenatedString();
+        const pkValue = r.PrimaryKey.KeyValuePairs[0]?.Value?.toString();
+        return pkString === recordId || pkValue === recordId;
+      });
+
+      if (record) {
+        this.selectedRecord = record;
+        this.detailPanelEntity = this.selectedEntity;
+        const recordName = this.getRecordDisplayName(record);
+        this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString(), recordName);
+      } else {
+        console.warn(`[DataExplorer] Deep link record not found: ${recordId}`);
+      }
+    }
     // Restore selected record if we have a persisted selectedRecordId
-    if (this.state.selectedRecordId && this.state.detailPanelOpen && !this.selectedRecord) {
+    else if (this.state.selectedRecordId && this.state.detailPanelOpen && !this.selectedRecord) {
       const record = event.records.find(r =>
         r.PrimaryKey.ToConcatenatedString() === this.state.selectedRecordId
       );
       if (record) {
         this.selectedRecord = record;
+        this.detailPanelEntity = this.selectedEntity;
       }
     }
 
@@ -357,44 +430,122 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onDetailPanelClosed(): void {
     this.selectedRecord = null;
+    this.detailPanelEntity = null;
     this.stateService.closeDetailPanel();
   }
 
   /**
    * Handle opening a record in full view (from detail panel)
+   * Uses detailPanelEntity since the panel may be showing a different entity than the grid
    */
   public onOpenRecord(record: BaseEntity): void {
-    if (!this.selectedEntity) return;
+    if (!this.detailPanelEntity) return;
 
     this.OpenEntityRecord.emit({
-      EntityName: this.selectedEntity.Name,
+      EntityName: this.detailPanelEntity.Name,
       RecordPKey: record.PrimaryKey
     });
   }
 
   /**
-   * Handle navigation to a related entity from detail panel
+   * Handle navigation to a related entity from detail panel.
+   * Navigates within the explorer and applies filter to show related records.
    */
   public onNavigateToRelated(event: NavigateToRelatedEvent): void {
     const entity = this.entities.find(e => e.Name === event.entityName);
     if (!entity) {
-      console.warn(`Entity not found: ${event.entityName}`);
+      // Entity not in our filtered list - it may exist in the system but not be part of this app
+      console.warn(`Entity not found in explorer: ${event.entityName}`);
       return;
     }
 
+    // Close detail panel and clear current record
+    this.selectedRecord = null;
+    this.detailPanelEntity = null;
+    this.stateService.closeDetailPanel();
+
+    // Navigate to the entity
     this.selectedEntity = entity;
     this.stateService.selectEntity(entity.Name);
-    // mj-entity-viewer will automatically load data when entity changes
+
+    // Apply the filter to show related records
+    // The filter is in SQL format like "ParentID='xxx'" - we just show it in the filter box
+    // The entity viewer will apply it as a smart filter
+    if (event.filter) {
+      // For now, we'll apply the filter as-is
+      // A future enhancement could parse and display it more user-friendly
+      this.stateService.setSmartFilterPrompt(event.filter);
+      this.debouncedFilterText = event.filter;
+    }
   }
 
   /**
-   * Handle opening a related record in a new tab
+   * Handle opening a related record - display in detail panel (not new tab)
+   * The record is already loaded, so just update the detail panel
    */
   public onOpenRelatedRecord(event: { entityName: string; record: BaseEntity }): void {
-    this.OpenEntityRecord.emit({
-      EntityName: event.entityName,
-      RecordPKey: event.record.PrimaryKey
-    });
+    this.showRecordInDetailPanel(event.entityName, event.record);
+  }
+
+  /**
+   * Handle opening a foreign key record (from FK field link in detail panel)
+   * Loads the record and displays it in the detail panel
+   */
+  public async onOpenForeignKeyRecord(event: { entityName: string; recordId: string }): Promise<void> {
+    await this.loadAndShowRecordInDetailPanel(event.entityName, event.recordId);
+  }
+
+  /**
+   * Show an already-loaded record in the detail panel
+   * Note: This does NOT change selectedEntity (the main grid's entity)
+   * It only updates detailPanelEntity which is used by the detail panel
+   */
+  private showRecordInDetailPanel(entityName: string, record: BaseEntity): void {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
+    if (!entityInfo) {
+      console.warn(`Entity not found: ${entityName}`);
+      return;
+    }
+
+    // Update the detail panel entity and record
+    // detailPanelEntity may differ from selectedEntity when viewing FK/related records
+    this.detailPanelEntity = entityInfo;
+    this.selectedRecord = record;
+
+    // Use selectRecord to open the panel with proper state tracking
+    const recordName = this.getRecordDisplayName(record);
+    this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString(), recordName);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Load a record by ID and show it in the detail panel
+   */
+  private async loadAndShowRecordInDetailPanel(entityName: string, recordId: string): Promise<void> {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
+    if (!entityInfo) {
+      console.warn(`Entity not found: ${entityName}`);
+      return;
+    }
+
+    try {
+      // Load the record
+      const rv = new RunView();
+      const result = await rv.RunView<BaseEntity>({
+        EntityName: entityName,
+        ExtraFilter: `ID='${recordId}'`,
+        ResultType: 'entity_object',
+        MaxRows: 1
+      });
+
+      if (result.Success && result.Results.length > 0) {
+        this.showRecordInDetailPanel(entityName, result.Results[0]);
+      } else {
+        console.warn(`Record not found: ${entityName} ID=${recordId}`);
+      }
+    } catch (error) {
+      console.error(`Failed to load record: ${entityName} ID=${recordId}`, error);
+    }
   }
 
   // ========================================
@@ -416,6 +567,79 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public toggleNavigationPanel(): void {
     this.stateService.toggleNavigationPanel();
+  }
+
+  /**
+   * Handle expand and focus from collapsed nav icon click
+   */
+  public onExpandAndFocus(section: 'favorites' | 'recent' | 'entities'): void {
+    this.stateService.expandAndFocusSection(section);
+  }
+
+  // ========================================
+  // DEEP LINK HANDLING
+  // ========================================
+
+  /**
+   * Apply a deep link to navigate to a specific entity/record
+   */
+  private async applyDeepLink(deepLink: DataExplorerDeepLink): Promise<void> {
+    // Apply view mode if specified
+    if (deepLink.viewMode) {
+      this.stateService.setViewMode(deepLink.viewMode);
+    }
+
+    // Navigate to entity if specified
+    if (deepLink.entity) {
+      const entity = this.entities.find(e =>
+        e.Name.toLowerCase() === deepLink.entity!.toLowerCase()
+      );
+
+      if (entity) {
+        this.selectedEntity = entity;
+        this.stateService.selectEntity(entity.Name);
+
+        // Apply filter if specified
+        if (deepLink.filter) {
+          this.stateService.setSmartFilterPrompt(deepLink.filter);
+          this.debouncedFilterText = deepLink.filter;
+        }
+
+        // Note: Record selection is handled after data loads via onDataLoaded
+        // We store the record ID to select once data is available
+        if (deepLink.record) {
+          this.pendingRecordSelection = deepLink.record;
+        }
+      } else {
+        console.warn(`[DataExplorer] Deep link entity not found: ${deepLink.entity}`);
+      }
+    }
+  }
+
+  /** Record ID to select once data loads (from deep link) */
+  private pendingRecordSelection: string | null = null;
+
+  // ========================================
+  // BREADCRUMB NAVIGATION
+  // ========================================
+
+  /**
+   * Handle breadcrumb click - navigate to that level
+   */
+  public onBreadcrumbClick(breadcrumb: BreadcrumbItem, index: number): void {
+    // Don't navigate if it's the last (current) breadcrumb
+    if (index === this.breadcrumbs.length - 1) {
+      return;
+    }
+
+    this.stateService.navigateToBreadcrumb(breadcrumb);
+
+    // If navigating to application level, clear entity selection
+    if (breadcrumb.type === 'application') {
+      this.selectedEntity = null;
+      this.selectedRecord = null;
+      this.detailPanelEntity = null;
+    }
   }
 
   // ========================================

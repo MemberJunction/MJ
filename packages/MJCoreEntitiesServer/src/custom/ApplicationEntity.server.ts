@@ -4,9 +4,11 @@ import { RegisterClass } from "@memberjunction/global";
 
 /**
  * Server-Only custom sub-class for Applications entity.
- * Handles automatic UserApplication record creation when:
- * 1. A new application is created with DefaultForNewUser = true
- * 2. An existing application's DefaultForNewUser is changed from false to true
+ * Handles:
+ * 1. Auto-generation of Path from Name (when AutoUpdatePath = true)
+ * 2. Automatic UserApplication record creation when:
+ *    a. A new application is created with DefaultForNewUser = true
+ *    b. An existing application's DefaultForNewUser is changed from false to true
  */
 @RegisterClass(BaseEntity, 'Applications')
 export class ApplicationEntityServerEntity extends ApplicationEntity {
@@ -20,10 +22,15 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
     }
 
     /**
-     * Override Save to handle automatic UserApplication creation for default apps
+     * Override Save to handle:
+     * 1. Auto-generation of Path from Name
+     * 2. Automatic UserApplication creation for default apps
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const provider = Metadata.Provider as DatabaseProviderBase;
+
+        // Auto-generate Path from Name if AutoUpdatePath is true
+        await this.autoGeneratePath();
 
         // Track state before save
         const isNewRecord = !this.IsSaved;
@@ -64,6 +71,97 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
             LogError(`Failed to save Application ${this.Name}:`, e);
             throw e;
         }
+    }
+
+    /**
+     * Auto-generates Path from Name if AutoUpdatePath is true.
+     * Path is a URL-friendly slug: lowercase, spaces to hyphens, special chars removed.
+     * Handles duplicates by appending a number suffix.
+     */
+    protected async autoGeneratePath(): Promise<void> {
+        // Only auto-generate if AutoUpdatePath is true
+        if (!this.AutoUpdatePath) {
+            return;
+        }
+
+        // Only auto-generate if Name changed or Path is empty
+        const nameField = this.GetFieldByName('Name');
+        const pathField = this.GetFieldByName('Path');
+        const isNewRecord = !this.IsSaved;
+
+        if (!isNewRecord && !nameField.Dirty && this.Path) {
+            return; // Name hasn't changed and Path already exists
+        }
+
+        // Generate base slug from Name
+        let baseSlug = this.generateSlugFromName(this.Name);
+
+        // Check for duplicates and append number if needed
+        const uniqueSlug = await this.ensureUniqueSlug(baseSlug);
+
+        // Set the Path
+        this.Path = uniqueSlug;
+    }
+
+    /**
+     * Converts a name to a URL-friendly slug.
+     * Example: "Data Explorer" -> "data-explorer"
+     */
+    protected generateSlugFromName(name: string): string {
+        if (!name) {
+            return '';
+        }
+
+        return name
+            .toLowerCase()
+            .trim()
+            .replace(/['"]/g, '')           // Remove quotes and apostrophes
+            .replace(/[()[\]{}]/g, '')      // Remove brackets and parentheses
+            .replace(/[^a-z0-9\s-]/g, '')   // Remove other special characters
+            .replace(/\s+/g, '-')           // Replace spaces with hyphens
+            .replace(/-+/g, '-')            // Collapse multiple hyphens
+            .replace(/^-|-$/g, '');         // Remove leading/trailing hyphens
+    }
+
+    /**
+     * Ensures the slug is unique by appending a number suffix if needed.
+     * Example: "my-app" -> "my-app-2" if "my-app" already exists.
+     */
+    protected async ensureUniqueSlug(baseSlug: string): Promise<string> {
+        const rv = this.RunViewProviderToUse;
+
+        // Look for existing applications with this path or path-N pattern
+        const result = await rv.RunView<ApplicationEntity>({
+            EntityName: 'Applications',
+            ExtraFilter: `Path = '${baseSlug}' OR Path LIKE '${baseSlug}-%'`,
+            ResultType: 'simple'
+        }, this.ContextCurrentUser);
+
+        if (!result.Success || !result.Results || result.Results.length === 0) {
+            return baseSlug; // No conflicts, use base slug
+        }
+
+        // Filter out the current record if we're updating
+        const existingPaths = result.Results
+            .filter((app: { ID: string }) => app.ID !== this.ID)
+            .map((app: { Path: string }) => app.Path);
+
+        if (existingPaths.length === 0) {
+            return baseSlug; // Only our own record has this path
+        }
+
+        // If base slug is not taken, use it
+        if (!existingPaths.includes(baseSlug)) {
+            return baseSlug;
+        }
+
+        // Find the next available number suffix
+        let suffix = 2;
+        while (existingPaths.includes(`${baseSlug}-${suffix}`)) {
+            suffix++;
+        }
+
+        return `${baseSlug}-${suffix}`;
     }
 
     /**

@@ -61,6 +61,12 @@ export class BaseApplication {
   /** When true, hide the Nav Bar icon when this application is active */
   public HideNavBarIconWhenActive: boolean = false;
 
+  /** URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer") */
+  public Path: string = '';
+
+  /** When true, Path is automatically generated from Name on save */
+  public AutoUpdatePath: boolean = true;
+
   constructor(data?: Partial<BaseApplication>) {
     if (data) {
       Object.assign(this, data);

@@ -218,6 +218,19 @@ export class ApplicationInfo extends BaseInfo {
     */
     HideNavBarIconWhenActive: boolean = false;
 
+    /**
+    * URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer").
+    * Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true.
+    * Must be unique across all applications.
+    */
+    Path: string = null;
+
+    /**
+    * When true, Path is automatically generated from Name on save.
+    * Set to false to manually control the Path value. Defaults to true for new applications.
+    */
+    AutoUpdatePath: boolean = true;
+
 
     private _ApplicationEntities: ApplicationEntityInfo[] = []
     /**

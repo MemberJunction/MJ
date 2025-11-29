@@ -14,6 +14,20 @@
   flex-shrink: 0;
 }
 
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.entity-icon {
+  font-size: 18px;
+  color: #757575;
+  flex-shrink: 0;
+}
+
 .panel-title {
   margin: 0;
   font-size: 16px;

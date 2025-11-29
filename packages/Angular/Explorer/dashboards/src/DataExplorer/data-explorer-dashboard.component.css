@@ -29,6 +29,62 @@
   background: #f5f7fa;
 }
 
+/* Breadcrumb Bar */
+.breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: white;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+  font-size: 13px;
+  min-height: 40px;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #666;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  max-width: 200px;
+}
+
+.breadcrumb-item.clickable {
+  cursor: pointer;
+}
+
+.breadcrumb-item.clickable:hover {
+  background: #f0f0f0;
+  color: #1976d2;
+}
+
+.breadcrumb-item.current {
+  color: #1a1a1a;
+  font-weight: 500;
+  cursor: default;
+}
+
+.breadcrumb-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.breadcrumb-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumb-separator {
+  font-size: 10px;
+  color: #ccc;
+  flex-shrink: 0;
+}
+
 .content-header {
   display: flex;
   align-items: center;
@@ -214,6 +270,92 @@
   font-size: 14px;
   max-width: 400px;
   color: #666;
+}
+
+/* Entity Home View - Card Grid */
+.entity-home-view {
+  flex: 1;
+  overflow: auto;
+  padding: 4px;
+}
+
+.entity-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0;
+}
+
+.entity-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  background: white;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #e8e8e8;
+}
+
+.entity-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  border-color: #1976d2;
+}
+
+.entity-card:active {
+  transform: translateY(0);
+}
+
+.entity-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.entity-card-icon i {
+  font-size: 20px;
+  color: #1976d2;
+}
+
+.entity-card:hover .entity-card-icon {
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+}
+
+.entity-card:hover .entity-card-icon i {
+  color: white;
+}
+
+.entity-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.entity-card-title {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card-description {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .detail-panel {

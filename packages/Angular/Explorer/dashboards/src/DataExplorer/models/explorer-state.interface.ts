@@ -10,6 +10,11 @@ export interface DataExplorerFilter {
   applicationId?: string;
 
   /**
+   * Application name for display purposes (breadcrumbs, titles)
+   */
+  applicationName?: string;
+
+  /**
    * Schema names to filter by (e.g., ['dbo', 'sales'])
    * Only entities in these schemas will be shown.
    */
@@ -26,6 +31,35 @@ export interface DataExplorerFilter {
    * Default: false
    */
   includeSystemEntities?: boolean;
+}
+
+/**
+ * Breadcrumb item for navigation display
+ */
+export interface BreadcrumbItem {
+  label: string;
+  type: 'application' | 'entity' | 'record';
+  /** For entity type - the entity name */
+  entityName?: string;
+  /** For record type - the composite key string */
+  compositeKeyString?: string;
+  /** Icon class for the breadcrumb */
+  icon?: string;
+}
+
+/**
+ * Initial navigation state from URL query parameters.
+ * Used for deep linking into the Data Explorer.
+ */
+export interface DataExplorerDeepLink {
+  /** Entity name to navigate to */
+  entity?: string;
+  /** Record ID or composite key string to select */
+  record?: string;
+  /** Filter text to apply */
+  filter?: string;
+  /** View mode to use */
+  viewMode?: 'cards' | 'grid';
 }
 
 /**
@@ -63,6 +97,8 @@ export interface DataExplorerState {
   detailPanelOpen: boolean;
   detailPanelWidth: number;
   selectedRecordId: string | null;
+  /** Display name of the currently selected record (for breadcrumbs) */
+  selectedRecordName: string | null;
 
   // Section states
   favoritesSectionExpanded: boolean;
@@ -136,6 +172,7 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   detailPanelOpen: false,
   detailPanelWidth: 400,
   selectedRecordId: null,
+  selectedRecordName: null,
   favoritesSectionExpanded: true,
   recentSectionExpanded: true,
   entitiesSectionExpanded: true,

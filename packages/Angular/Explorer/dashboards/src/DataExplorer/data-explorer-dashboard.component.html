@@ -19,12 +19,35 @@
       (entitySelected)="onEntitySelected($event)"
       (toggleCollapse)="toggleNavigationPanel()"
       (sectionToggled)="stateService.toggleSection($event)"
-      (openRecord)="onOpenRecordFromNav($event)">
+      (openRecord)="onOpenRecordFromNav($event)"
+      (expandAndFocus)="onExpandAndFocus($event)">
     </mj-explorer-navigation-panel>
   </div>
 
   <!-- Main Content Area -->
   <div class="content-area">
+    <!-- Breadcrumb Bar -->
+    @if (breadcrumbs.length > 0) {
+      <div class="breadcrumb-bar">
+        @for (crumb of breadcrumbs; track crumb.label; let i = $index; let last = $last) {
+          <span
+            class="breadcrumb-item"
+            [class.clickable]="!last"
+            [class.current]="last"
+            (click)="onBreadcrumbClick(crumb, i)"
+            [title]="crumb.label">
+            @if (crumb.icon) {
+              <i [class]="crumb.icon" class="breadcrumb-icon"></i>
+            }
+            <span class="breadcrumb-label">{{ crumb.label }}</span>
+          </span>
+          @if (!last) {
+            <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+          }
+        }
+      </div>
+    }
+
     <!-- Header -->
     <div class="content-header">
       <div class="header-left">
@@ -37,8 +60,12 @@
             <span class="record-count">{{ totalRecordCount | number }} records</span>
           }
         } @else {
-          <h2 class="entity-title">Select an Entity</h2>
-          <span class="record-count">Choose from the navigation panel</span>
+          <h2 class="entity-title">{{ entityFilter?.applicationName || 'Data Explorer' }}</h2>
+          @if (entityFilterText && filteredEntities.length !== entities.length) {
+            <span class="record-count">{{ filteredEntities.length }} of {{ entities.length }} entities</span>
+          } @else {
+            <span class="record-count">{{ entities.length }} entities available</span>
+          }
         }
       </div>
 
@@ -54,6 +81,21 @@
             />
             @if (state.smartFilterPrompt) {
               <button class="clear-filter-btn" (click)="onSmartFilterChanged('')">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
+          </div>
+        } @else {
+          <!-- Entity filter for home screen -->
+          <div class="smart-filter-container">
+            <input
+              type="text"
+              class="smart-filter-input"
+              placeholder="Filter entities..."
+              [(ngModel)]="entityFilterText"
+            />
+            @if (entityFilterText) {
+              <button class="clear-filter-btn" (click)="entityFilterText = ''">
                 <i class="fa-solid fa-times"></i>
               </button>
             }
@@ -87,10 +129,40 @@
     <!-- Content Body - Using mj-entity-viewer composite -->
     <div class="content-body">
       @if (!selectedEntity) {
-        <div class="empty-state">
-          <i class="fa-solid fa-database empty-icon"></i>
-          <h3>Welcome to Data Explorer</h3>
-          <p>Select an entity from the navigation panel to start exploring your data.</p>
+        <!-- Entity Home View - Card Grid -->
+        <div class="entity-home-view">
+          <div class="entity-card-grid">
+            @for (entity of filteredEntities; track entity.ID) {
+              <div
+                class="entity-card"
+                (click)="onEntitySelected(entity)"
+                [title]="entity.Description || entity.Name">
+                <div class="entity-card-icon">
+                  <i [class]="getEntityIcon(entity)"></i>
+                </div>
+                <div class="entity-card-content">
+                  <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                  @if (entity.Description) {
+                    <p class="entity-card-description">{{ entity.Description }}</p>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+          @if (filteredEntities.length === 0 && entities.length > 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-search empty-icon"></i>
+              <h3>No Matching Entities</h3>
+              <p>No entities match "{{ entityFilterText }}"</p>
+            </div>
+          }
+          @if (entities.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-database empty-icon"></i>
+              <h3>No Entities Available</h3>
+              <p>There are no entities configured for this application.</p>
+            </div>
+          }
         </div>
       } @else {
         <mj-entity-viewer
@@ -114,12 +186,13 @@
   @if (state.detailPanelOpen && selectedRecord) {
     <div class="detail-panel" [style.width.px]="state.detailPanelWidth">
       <mj-entity-record-detail-panel
-        [entity]="selectedEntity"
+        [entity]="detailPanelEntity"
         [record]="selectedRecord"
         (close)="onDetailPanelClosed()"
         (openRecord)="onOpenRecord($event)"
         (navigateToRelated)="onNavigateToRelated($event)"
-        (openRelatedRecord)="onOpenRelatedRecord($event)">
+        (openRelatedRecord)="onOpenRelatedRecord($event)"
+        (openForeignKeyRecord)="onOpenForeignKeyRecord($event)">
       </mj-entity-record-detail-panel>
     </div>
   }

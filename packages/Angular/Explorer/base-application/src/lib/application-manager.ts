@@ -166,7 +166,9 @@ export class ApplicationManager {
             Status: appInfo.Status,
             NavigationStyle: appInfo.NavigationStyle,
             TopNavLocation: appInfo.TopNavLocation,
-            HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive
+            HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive,
+            Path: appInfo.Path || '',
+            AutoUpdatePath: appInfo.AutoUpdatePath
           }
         );
 
@@ -325,6 +327,29 @@ export class ApplicationManager {
    */
   GetAppByName(name: string): BaseApplication | undefined {
     return this.applications$.value.find(a => a.Name === name);
+  }
+
+  /**
+   * Get application by URL path slug.
+   * Matches case-insensitively against the app's Path property.
+   * Falls back to Name match if Path is not found (for backwards compatibility).
+   */
+  GetAppByPath(path: string): BaseApplication | undefined {
+    const normalizedPath = path.trim().toLowerCase();
+
+    // First try exact path match
+    const pathMatch = this.applications$.value.find(a =>
+      a.Path?.toLowerCase() === normalizedPath
+    );
+
+    if (pathMatch) {
+      return pathMatch;
+    }
+
+    // Fallback: try matching by name (for backwards compatibility with old URLs)
+    return this.applications$.value.find(a =>
+      a.Name.trim().toLowerCase() === normalizedPath
+    );
   }
 
   /**

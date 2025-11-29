@@ -344,11 +344,29 @@
   justify-content: center;
   color: #666;
   transition: all 0.15s ease;
+  position: relative;
 }
 .icon-btn:hover {
   background: #f0f0f0;
-  color: #333;
+  color: #1976d2;
 }
 .icon-btn i {
   font-size: 16px;
+}
+
+.collapsed-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  background: #1976d2;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
 }
