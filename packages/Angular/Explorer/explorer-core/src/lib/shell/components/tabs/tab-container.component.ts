@@ -753,9 +753,13 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       resourceTypeDriverClass: driverClass  // Store resolved driver class for component lookup
     };
 
+    // Get ResourceRecordID from config or fall back to tab.resourceRecordId
+    // Important: Some tabs store the record ID in config['recordId'], others in tab.resourceRecordId
+    const resourceRecordId = (config['recordId'] as string) || tab.resourceRecordId || '';
+
     const resourceData = new ResourceData({
       ResourceTypeID: await this.getResourceTypeId(resourceType),
-      ResourceRecordID: config['recordId'] as string || '',
+      ResourceRecordID: resourceRecordId,
       Configuration: resourceConfig
     });
 
