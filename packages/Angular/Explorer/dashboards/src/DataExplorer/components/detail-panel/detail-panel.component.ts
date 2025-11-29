@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
-import { EntityInfo, EntityRelationshipInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType } from '@memberjunction/core';
+import { EntityInfo, EntityRelationshipInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 
 interface RelatedEntityData {
@@ -147,7 +147,7 @@ export class DetailPanelComponent implements OnChanges {
 
         fields.push({
           name: field.Name,
-          label: this.formatFieldLabel(field.Name),
+          label: this.formatFieldLabel(field),
           value: this.formatFieldValue(value, field.Name),
           isPill
         });
@@ -160,11 +160,16 @@ export class DetailPanelComponent implements OnChanges {
   /**
    * Format field name to display label
    */
-  private formatFieldLabel(fieldName: string): string {
-    return fieldName
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .trim();
+  private formatFieldLabel(field: EntityFieldInfo): string {
+    if (field.DisplayName) {
+      return field.DisplayName;
+    }
+    else {
+      return field.Name
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, str => str.toUpperCase())
+        .trim();
+    }
   }
 
   /**

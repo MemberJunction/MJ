@@ -87,8 +87,8 @@ export class CardsViewComponent implements OnChanges, OnInit {
 
         const value = record.Get(field.Name);
         if (value !== null && value !== undefined) {
-          const strValue = String(value).toLowerCase();
-          if (strValue.includes(searchTerm)) {
+          const strValue = String(value);
+          if (this.matchesSearchTerm(strValue, searchTerm)) {
             matchedField = field.Name;
             if (visibleFields.has(field.Name)) {
               matchedInVisibleField = true;
@@ -126,6 +126,46 @@ export class CardsViewComponent implements OnChanges, OnInit {
    */
   private isUUIDField(field: EntityFieldInfo): boolean {
     return field.SQLFullType?.trim().toLowerCase() === 'uniqueidentifier';
+  }
+
+  /**
+   * Check if a value matches the search term, supporting SQL-style % wildcards
+   * This provides consistent behavior with server-side SQL LIKE queries
+   * Examples:
+   *   "test" matches "this is a test string" (implicit %term%)
+   *   "hub%updat%comp" matches "hubspot update company" (fragments in order)
+   *   "%comp" matches "my company"
+   */
+  private matchesSearchTerm(value: string, searchTerm: string): boolean {
+    const lowerValue = value.toLowerCase();
+    const lowerTerm = searchTerm.toLowerCase();
+
+    if (!lowerTerm.includes('%')) {
+      // No wildcards - use simple substring match (equivalent to %term%)
+      return lowerValue.includes(lowerTerm);
+    }
+
+    // Split by % to get fragments that must appear in order
+    const fragments = lowerTerm.split('%').filter(s => s.length > 0);
+
+    if (fragments.length === 0) {
+      // Just wildcards, matches everything
+      return true;
+    }
+
+    // Each fragment must appear in the value, in order
+    // Search for each fragment starting from where the previous one ended
+    let searchStartIndex = 0;
+    for (const fragment of fragments) {
+      const foundIndex = lowerValue.indexOf(fragment, searchStartIndex);
+      if (foundIndex === -1) {
+        return false; // Fragment not found
+      }
+      // Next search starts after this fragment
+      searchStartIndex = foundIndex + fragment.length;
+    }
+
+    return true;
   }
 
   /**
@@ -698,6 +738,7 @@ export class CardsViewComponent implements OnChanges, OnInit {
 
   /**
    * Highlight matching text with a mark tag
+   * Supports SQL-style % wildcards for consistent behavior with server-side search
    */
   highlightMatch(text: string): string {
     if (!this.filterText || this.filterText.trim() === '' || !text) {
@@ -705,8 +746,26 @@ export class CardsViewComponent implements OnChanges, OnInit {
     }
 
     const searchTerm = this.filterText.trim();
-    const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-    return text.replace(regex, '<mark class="highlight-match">$1</mark>');
+
+    if (!searchTerm.includes('%')) {
+      // No wildcards - simple highlight
+      const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
+      return text.replace(regex, '<mark class="highlight-match">$1</mark>');
+    }
+
+    // With wildcards - highlight each non-wildcard segment that matches
+    // Split by % and highlight each segment separately
+    const segments = searchTerm.split('%').filter(s => s.length > 0);
+    if (segments.length === 0) {
+      return text;
+    }
+
+    let result = text;
+    for (const segment of segments) {
+      const regex = new RegExp(`(${this.escapeRegex(segment)})`, 'gi');
+      result = result.replace(regex, '<mark class="highlight-match">$1</mark>');
+    }
+    return result;
   }
 
   /**

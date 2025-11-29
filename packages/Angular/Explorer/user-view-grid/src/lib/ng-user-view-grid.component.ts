@@ -882,7 +882,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
     return oldParams.EntityName !== newParams.EntityName ||
            oldParams.ViewID !== newParams.ViewID ||
            oldParams.ViewName !== newParams.ViewName ||
-           oldParams.ExtraFilter !== newParams.ExtraFilter;
+           oldParams.ExtraFilter !== newParams.ExtraFilter ||
+           oldParams.UserSearchString !== newParams.UserSearchString;
   }
 
   /**
