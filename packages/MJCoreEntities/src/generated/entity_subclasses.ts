@@ -2464,13 +2464,16 @@ export type ApplicationSettingEntityType = z.infer<typeof ApplicationSettingSche
 export const ApplicationSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     Icon: z.string().nullable().describe(`
         * * Field Name: Icon
@@ -2485,12 +2488,12 @@ export const ApplicationSchema = z.object({
         * * Description: If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     SchemaAutoAddNewEntities: z.string().nullable().describe(`
@@ -2557,6 +2560,17 @@ export const ApplicationSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.`),
+    Path: z.string().describe(`
+        * * Field Name: Path
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(100)
+        * * Description: URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer"). Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true. Must be unique across all applications.`),
+    AutoUpdatePath: z.boolean().describe(`
+        * * Field Name: AutoUpdatePath
+        * * Display Name: Auto Update Path
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`),
 });
 
 export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
@@ -24081,6 +24095,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -24093,6 +24108,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -24104,6 +24120,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string | null {
@@ -24142,7 +24159,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -24152,7 +24169,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -24294,6 +24311,33 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     }
     set HideNavBarIconWhenActive(value: boolean) {
         this.Set('HideNavBarIconWhenActive', value);
+    }
+
+    /**
+    * * Field Name: Path
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(100)
+    * * Description: URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer"). Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true. Must be unique across all applications.
+    */
+    get Path(): string {
+        return this.Get('Path');
+    }
+    set Path(value: string) {
+        this.Set('Path', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdatePath
+    * * Display Name: Auto Update Path
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.
+    */
+    get AutoUpdatePath(): boolean {
+        return this.Get('AutoUpdatePath');
+    }
+    set AutoUpdatePath(value: boolean) {
+        this.Set('AutoUpdatePath', value);
     }
 }
 

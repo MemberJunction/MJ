@@ -16702,6 +16702,13 @@ export class MJApplication_ {
     @Field(() => Boolean, {description: `When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.`}) 
     HideNavBarIconWhenActive: boolean;
         
+    @Field({description: `URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer"). Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true. Must be unique across all applications.`}) 
+    @MaxLength(200)
+    Path: string;
+        
+    @Field(() => Boolean, {description: `When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`}) 
+    AutoUpdatePath: boolean;
+        
     @Field(() => [MJApplicationEntity_])
     ApplicationEntities_ApplicationIDArray: MJApplicationEntity_[]; // Link to ApplicationEntities
     
@@ -16765,6 +16772,12 @@ export class CreateMJApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     HideNavBarIconWhenActive?: boolean;
+
+    @Field({ nullable: true })
+    Path?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdatePath?: boolean;
 }
     
 
@@ -16814,6 +16827,12 @@ export class UpdateMJApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     HideNavBarIconWhenActive?: boolean;
+
+    @Field({ nullable: true })
+    Path?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdatePath?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
