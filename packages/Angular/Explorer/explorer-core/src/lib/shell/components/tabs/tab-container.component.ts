@@ -330,6 +330,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    // Track which content we're loading (signature includes resource type and record ID)
+    const newSignature = this.getTabContentSignature(activeTab);
+    if (this.currentSingleResourceSignature === newSignature) {
+      // Content already loaded, no action needed
+      return;
+    }
+    this.currentSingleResourceSignature = newSignature;
+
     // Get the container element
     const container = this.directContentContainer?.nativeElement;
     if (!container) {
@@ -349,9 +357,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get driver class for component lookup
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
 
-    // Track which content we're loading (signature includes resource type and record ID)
-    this.currentSingleResourceSignature = this.getTabContentSignature(activeTab);
-
     // **OPTIMIZATION: Check cache first to reuse existing loaded component**
     const cached = this.cacheManager.getCachedComponent(
       driverClass,
@@ -369,6 +374,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.cacheManager.markAsDetached(activeTab.id);
 
       // Reattach the cached wrapper element to single-resource container
+      cached.wrapperElement.style.height = "100%"; // Ensure full height
       container.appendChild(cached.wrapperElement);
 
       // Store reference for cleanup
@@ -415,6 +421,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get the native element and append to container
     const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
     container.appendChild(nativeElement);
+    // now make sure that the container's direct child is 100% height
+    if (container.children?.length > 0) {
+      (container.children[0] as any).style.height = "100%";
+    }
 
     // Store reference for cleanup
     this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
