@@ -57,7 +57,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   async ngOnInit(): Promise<void> {
     // Initialize debounced filter from persisted state BEFORE loading entities/records
-    // This ensures filter is applied when cards view receives the records
     if (this.state.smartFilterPrompt) {
       this.debouncedFilterText = this.state.smartFilterPrompt;
     }
@@ -69,7 +68,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.stateService.State
       .pipe(takeUntil(this.destroy$))
       .subscribe(state => {
+        const entityChanged = state.selectedEntityName !== this.state.selectedEntityName;
+
         this.state = state;
+
+        // When entity changes, immediately update the debounced filter text
+        // (don't wait for debounce - the restored filter should apply instantly)
+        if (entityChanged && state.smartFilterPrompt !== this.debouncedFilterText) {
+          this.debouncedFilterText = state.smartFilterPrompt;
+        }
+
         this.onStateChanged();
         this.cdr.detectChanges();
       });

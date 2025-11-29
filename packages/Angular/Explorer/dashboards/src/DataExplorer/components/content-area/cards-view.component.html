@@ -1,6 +1,6 @@
 <div class="cards-view-wrapper">
   <div class="cards-container">
-    @for (record of filteredRecords; track record.PrimaryKey.ToString()) {
+    @for (record of filteredRecords; track getRecordTrackId(record, $index)) {
     <div
       class="data-card"
       [class.selected]="isSelected(record)"
@@ -86,6 +86,14 @@
       @if (cardTemplate?.badgeField; as badgeField) {
         <div class="card-footer">
           <mj-status-pill [value]="getFieldValue(record, badgeField)"></mj-status-pill>
+        </div>
+      }
+
+      <!-- Hidden field match indicator -->
+      @if (hasHiddenFieldMatch(record)) {
+        <div class="hidden-match-indicator" [title]="'Matched in: ' + getHiddenMatchFieldName(record)">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>{{ getHiddenMatchFieldName(record) }}</span>
         </div>
       }
     </div>

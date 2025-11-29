@@ -2,10 +2,11 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { UserSettingEntity } from '@memberjunction/core-entities';
-import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem } from '../models/explorer-state.interface';
+import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry } from '../models/explorer-state.interface';
 
 const SETTING_KEY = 'DataExplorer.State';
 const MAX_RECENT_ITEMS = 20;
+const MAX_ENTITY_CACHE_SIZE = 50; // LRU cache limit
 
 @Injectable({
   providedIn: 'root'
@@ -44,15 +45,53 @@ export class ExplorerStateService {
 
   /**
    * Set selected entity
+   * Caches current entity's filter before switching, restores new entity's cached filter
    */
   selectEntity(entityName: string | null): void {
+    const currentState = this.state$.value;
+    const entityCache = { ...currentState.entityCache };
+
+    // Cache current entity's filter before switching (if we have a current entity)
+    if (currentState.selectedEntityName && currentState.smartFilterPrompt) {
+      entityCache[currentState.selectedEntityName] = {
+        filterText: currentState.smartFilterPrompt,
+        lastAccessed: Date.now()
+      };
+    }
+
+    // Restore filter for new entity (if cached) or clear it
+    let restoredFilter = '';
+    if (entityName && entityCache[entityName]) {
+      restoredFilter = entityCache[entityName].filterText;
+      entityCache[entityName].lastAccessed = Date.now();
+    }
+
+    // Evict old entries if cache is too large (LRU)
+    this.evictOldCacheEntries(entityCache);
+
     this.updateState({
       selectedEntityName: entityName,
       selectedViewId: null, // Reset view when entity changes
-      smartFilterPrompt: '', // Reset filter when entity changes
+      smartFilterPrompt: restoredFilter, // Restore cached filter or empty
       selectedRecordId: null,
-      detailPanelOpen: false
+      detailPanelOpen: false,
+      entityCache
     });
+  }
+
+  /**
+   * Evict oldest cache entries if over limit (LRU eviction)
+   */
+  private evictOldCacheEntries(cache: Record<string, EntityCacheEntry>): void {
+    const entries = Object.entries(cache);
+    if (entries.length <= MAX_ENTITY_CACHE_SIZE) return;
+
+    // Sort by lastAccessed (oldest first) and remove excess
+    entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+    const toRemove = entries.length - MAX_ENTITY_CACHE_SIZE;
+    for (let i = 0; i < toRemove; i++) {
+      delete cache[entries[i][0]];
+    }
   }
 
   /**
@@ -71,9 +110,26 @@ export class ExplorerStateService {
 
   /**
    * Set smart filter prompt
+   * Also updates the entity cache for the current entity
    */
   setSmartFilterPrompt(prompt: string): void {
-    this.updateState({ smartFilterPrompt: prompt });
+    const currentState = this.state$.value;
+    const entityCache = { ...currentState.entityCache };
+
+    // Update cache for current entity
+    if (currentState.selectedEntityName) {
+      if (prompt) {
+        entityCache[currentState.selectedEntityName] = {
+          filterText: prompt,
+          lastAccessed: Date.now()
+        };
+      } else {
+        // Clear cache entry if filter is empty
+        delete entityCache[currentState.selectedEntityName];
+      }
+    }
+
+    this.updateState({ smartFilterPrompt: prompt, entityCache });
   }
 
   /**

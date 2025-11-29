@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueListType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { AutoCardTemplate, CardDisplayField, CardFieldType } from '../../models/explorer-state.interface';
@@ -9,7 +9,7 @@ import { PillColorUtil } from '../shared/status-pill.component';
   templateUrl: './cards-view.component.html',
   styleUrls: ['./cards-view.component.css']
 })
-export class CardsViewComponent implements OnChanges {
+export class CardsViewComponent implements OnChanges, OnInit {
   @Input() entity: EntityInfo | null = null;
   @Input() records: BaseEntity[] = [];
   @Input() selectedRecordId: string | null = null;
@@ -23,55 +23,170 @@ export class CardsViewComponent implements OnChanges {
 
   // Cached filtered records - only recomputed when inputs change
   private _filteredRecords: BaseEntity[] = [];
-  private _lastFilterText: string = '';
-  private _lastRecordsLength: number = 0;
+
+  // Track which records matched on hidden (non-visible) fields
+  // Key is record primary key, value is the field name that matched
+  private _hiddenFieldMatches = new Map<string, string>();
+
+  ngOnInit(): void {
+    // Generate card template if entity is available (and not already set by ngOnChanges)
+    if (this.entity?.Fields && !this.cardTemplate) {
+      this.cardTemplate = this.generateCardTemplate(this.entity);
+    }
+
+    // Always apply filter on init - critical for when component is created
+    // with both records and filterText already set
+    this.updateFilteredRecords();
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // IMPORTANT: Generate card template BEFORE filtering so visible fields are known
     if (changes['entity'] && this.entity && this.entity.Fields) {
       this.cardTemplate = this.generateCardTemplate(this.entity);
     } else if (changes['entity'] && !this.entity) {
-      // Reset template when entity is cleared
       this.cardTemplate = null;
     }
 
-    // Recompute filtered records when records or filterText change
-    if (changes['records'] || changes['filterText']) {
+    // Recompute filtered records when records, filterText, or entity change
+    // Entity change matters because it affects the cardTemplate and visible fields
+    if (changes['records'] || changes['filterText'] || changes['entity']) {
       this.updateFilteredRecords();
     }
   }
 
   /**
    * Update the cached filtered records
+   * Also tracks which records matched on hidden (non-visible) fields
    */
   private updateFilteredRecords(): void {
+    // Clear hidden field matches
+    this._hiddenFieldMatches.clear();
+
     if (!this.filterText || this.filterText.trim() === '') {
       this._filteredRecords = this.records;
-      this._lastFilterText = '';
-      this._lastRecordsLength = this.records.length;
       this.filteredCountChanged.emit(this.records.length);
       return;
     }
 
     const searchTerm = this.filterText.toLowerCase().trim();
+    const visibleFields = this.getVisibleFieldNames();
 
     this._filteredRecords = this.records.filter(record => {
       if (!this.entity) return true;
 
+      let matchedField: string | null = null;
+      let matchedInVisibleField = false;
+
       for (const field of this.entity.Fields) {
+        // Skip date/time fields - searching on stringified dates produces weird matches
+        // (e.g., "Standard" in "Central Standard Time" matching "da")
+        // Skip UUID fields - users rarely search for UUID fragments
+        if (this.isDateTimeField(field) || this.isUUIDField(field)) {
+          continue;
+        }
+
         const value = record.Get(field.Name);
         if (value !== null && value !== undefined) {
           const strValue = String(value).toLowerCase();
           if (strValue.includes(searchTerm)) {
-            return true;
+            matchedField = field.Name;
+            if (visibleFields.has(field.Name)) {
+              matchedInVisibleField = true;
+              break; // Found visible match, no need to continue
+            }
+            // Keep searching for a visible match, but remember this hidden match
           }
         }
+      }
+
+      if (matchedField) {
+        // Track if match was only in hidden fields
+        // Use the record's stable key (primary key string) for tracking
+        if (!matchedInVisibleField) {
+          const recordKey = this.getStableRecordKey(record);
+          this._hiddenFieldMatches.set(recordKey, matchedField);
+        }
+        return true;
       }
       return false;
     });
 
-    this._lastFilterText = this.filterText;
-    this._lastRecordsLength = this.records.length;
     this.filteredCountChanged.emit(this._filteredRecords.length);
+  }
+
+  /**
+   * Check if a field is a date/time type (should be excluded from text search)
+   */
+  private isDateTimeField(field: EntityFieldInfo): boolean {
+    return field.TSType === 'Date';
+  }
+
+  /**
+   * Check if a field is a UUID/GUID type (should be excluded from text search)
+   */
+  private isUUIDField(field: EntityFieldInfo): boolean {
+    return field.SQLFullType?.trim().toLowerCase() === 'uniqueidentifier';
+  }
+
+  /**
+   * Get a stable key for a record that doesn't depend on array index
+   * Used for tracking hidden field matches across filter updates
+   */
+  private getStableRecordKey(record: BaseEntity): string {
+    try {
+      const pk = record?.PrimaryKey?.ToString();
+      if (pk && pk.trim().length > 0) {
+        return pk;
+      }
+    } catch {
+      // PrimaryKey access failed
+    }
+    // Fallback: use stringified field values as a pseudo-key
+    // This is less ideal but handles edge cases
+    try {
+      const nameField = this.cardTemplate?.titleField;
+      if (nameField) {
+        const name = record.Get(nameField);
+        if (name) return `name_${String(name)}`;
+      }
+    } catch {
+      // Ignore
+    }
+    return `unknown_${Date.now()}_${Math.random()}`;
+  }
+
+  /**
+   * Get set of field names that are visible on the card
+   */
+  private getVisibleFieldNames(): Set<string> {
+    const visible = new Set<string>();
+    if (!this.cardTemplate) return visible;
+
+    if (this.cardTemplate.titleField) visible.add(this.cardTemplate.titleField);
+    if (this.cardTemplate.subtitleField) visible.add(this.cardTemplate.subtitleField);
+    if (this.cardTemplate.descriptionField) visible.add(this.cardTemplate.descriptionField);
+    if (this.cardTemplate.badgeField) visible.add(this.cardTemplate.badgeField);
+    this.cardTemplate.displayFields.forEach(df => visible.add(df.name));
+
+    return visible;
+  }
+
+  /**
+   * Check if a record matched on a hidden (non-visible) field
+   */
+  hasHiddenFieldMatch(record: BaseEntity): boolean {
+    if (!this.filterText) return false;
+    const recordKey = this.getStableRecordKey(record);
+    return this._hiddenFieldMatches.has(recordKey);
+  }
+
+  /**
+   * Get the name of the hidden field that matched for a record
+   */
+  getHiddenMatchFieldName(record: BaseEntity): string {
+    const recordKey = this.getStableRecordKey(record);
+    const fieldName = this._hiddenFieldMatches.get(recordKey);
+    return fieldName ? this.getFieldLabel(fieldName) : '';
   }
 
   /**
@@ -255,7 +370,8 @@ export class CardsViewComponent implements OnChanges {
    * Priority:
    * 1. Fields with image-related names (most explicit)
    * 2. Fields with ExtendedType='URL' that have image-related names
-   * 3. Fields with ExtendedType='URL' (could be image URLs)
+   * NOTE: We deliberately exclude generic URL fields (like 'Website') as they typically
+   * contain website URLs, not image URLs
    */
   private findThumbnailField(fields: EntityFieldInfo[]): string | null {
     // Priority 1: Fields with explicit image-related names
@@ -276,18 +392,15 @@ export class CardsViewComponent implements OnChanges {
     );
     if (urlImageField) return urlImageField.Name;
 
-    // Priority 3: Any URL-typed field (might be an image URL)
-    const urlField = fields.find(f =>
-      f.ExtendedType === 'URL' &&
-      f.TSType === 'string'
-    );
-    if (urlField) return urlField.Name;
-
-    // Priority 4: Fields with URL/link in name (fallback for fields without ExtendedType set)
+    // Priority 3: Fields with URL/link in name that suggest images (fallback for fields without ExtendedType set)
+    // Exclude generic website/profile URLs as they're typically not images
+    const excludeUrlPatterns = ['website', 'site', 'profile', 'linkedin', 'twitter', 'facebook', 'email'];
     const urlNamedField = fields.find(f =>
       (f.Name.toLowerCase().includes('url') || f.Name.toLowerCase().includes('link')) &&
       f.TSType === 'string' &&
-      !f.Name.toLowerCase().includes('email') // Exclude email links
+      !excludeUrlPatterns.some(p => f.Name.toLowerCase().includes(p)) &&
+      // Only include if it looks image-related
+      imageKeywords.some(kw => f.Name.toLowerCase().includes(kw))
     );
     if (urlNamedField) return urlNamedField.Name;
 
@@ -408,6 +521,26 @@ export class CardsViewComponent implements OnChanges {
       .replace(/([A-Z])/g, ' $1')
       .replace(/^./, str => str.toUpperCase())
       .trim();
+  }
+
+  /**
+   * Get a unique track ID for a record (for Angular @for loop)
+   * Falls back to index if primary key is empty or unavailable
+   */
+  getRecordTrackId(record: BaseEntity, index: number): string {
+    try {
+      const pk = record?.PrimaryKey?.ToString();
+      if (pk && pk.trim().length > 0) {
+        return pk;
+      }
+      else {
+        return `record_${index}`;
+      }
+    } catch {
+      // PrimaryKey access failed
+    }
+    // Always return a unique fallback based on index
+    return `record_${index}`;
   }
 
   /**

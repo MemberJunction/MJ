@@ -1,4 +1,13 @@
 /**
+ * Per-entity cached state (filters, scroll position, etc.)
+ */
+export interface EntityCacheEntry {
+  filterText: string;
+  scrollPosition?: number;
+  lastAccessed: number; // timestamp for LRU eviction
+}
+
+/**
  * State interface for the Data Explorer dashboard
  */
 export interface DataExplorerState {
@@ -10,9 +19,12 @@ export interface DataExplorerState {
   selectedEntityName: string | null;
   selectedViewId: string | null;
 
-  // Smart filter
+  // Smart filter (current entity's filter - also cached in entityCache)
   smartFilterPrompt: string;
   smartFilterEnabled: boolean;
+
+  // Per-entity cache for filters and state
+  entityCache: Record<string, EntityCacheEntry>;
 
   // View mode
   viewMode: 'cards' | 'grid';
@@ -89,6 +101,7 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   selectedViewId: null,
   smartFilterPrompt: '',
   smartFilterEnabled: true,
+  entityCache: {},
   viewMode: 'grid',
   detailPanelOpen: false,
   detailPanelWidth: 400,

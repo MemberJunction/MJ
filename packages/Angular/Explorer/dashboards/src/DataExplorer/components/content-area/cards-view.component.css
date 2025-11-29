@@ -75,9 +75,12 @@
   font-size: 15px;
   font-weight: 600;
   color: #212121;
-  white-space: nowrap;
+  line-height: 1.3;
+  /* Allow up to 2 lines, then truncate */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .card-subtitle {
@@ -222,6 +225,26 @@
 .card-header-content mj-status-pill {
   display: block;
   margin-top: 4px;
+}
+
+/* Hidden field match indicator */
+.hidden-match-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #fff8e1;
+  border-top: 1px solid #ffe082;
+  font-size: 11px;
+  color: #f57c00;
+}
+
+.hidden-match-indicator i {
+  font-size: 10px;
+}
+
+.hidden-match-indicator span {
+  font-weight: 500;
 }
 
 /* No results state */
