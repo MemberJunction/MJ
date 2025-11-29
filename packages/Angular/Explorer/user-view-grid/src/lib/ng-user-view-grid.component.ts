@@ -1,8 +1,7 @@
 import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, OnDestroy, Renderer2} from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
-import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest, FieldValueCollection, RunViewResult } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, CompositeKey, PotentialDuplicateRequest, RunViewResult } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntityExtended, ResourcePermissionEngine, EntityActionEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -17,7 +16,7 @@ import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } 
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent, PendingRecordItem } from '@memberjunction/ng-base-types';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
@@ -310,8 +309,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   constructor(private elementRef: ElementRef,
-              private formBuilder: FormBuilder, 
-              private router: Router,
+              private formBuilder: FormBuilder,
+              private navigationService: NavigationService,
               private renderer: Renderer2) {
 
   } 
@@ -510,23 +509,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (this.EditMode ==='None' && this.AutoNavigate) {
-      // tell app router to go to this record
-      let decodedUrl: string = decodeURIComponent(this.router.url).slice(1);
-      if(decodedUrl.includes('?')){
-        decodedUrl = decodedUrl.split('?')[0];
-      }
-
-      const newURL: string[] = ['resource', 'record', compositeKey.ToURLSegment()];
-      const newURLString: string = newURL.join('/');
-
-      if (newURLString === decodedUrl) {
-        // we have to force the router to change its state otherwise the next line below won't do anything because the
-        // router thinks it is the same URL, since we have the Entity on the query params, we can just change the URL to something else
-        // and skipLocationChange so that the browser history doesn't get messed up
-        await this.router.navigateByUrl('/dummy', { skipLocationChange: true }) 
-      }
-
-      this.router.navigate(newURL, { queryParams: { Entity: this._entityInfo!.Name } });
+      // Use NavigationService to open the record
+      this.navigationService.OpenEntityRecord(this._entityInfo!.Name, compositeKey);
     }
   } 
 
@@ -1263,20 +1247,13 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
    * this method will do nothing.
    */
   public async doCreateNewRecord() {
-    // creates a new record either using a dialog or with the router
+    // creates a new record either using a dialog or with NavigationService
     if (this.UserCanCreateNewRecord && this._entityInfo) {
       if (this.CreateRecordMode === 'Tab') {
-        // route to a resource/record with a blank string for the 3rd segment which is normally the pkey value
-        // here we don't provide the pkey value so the record component will know to create a new record
-        this.router.navigate(
-                              ['resource', 'record',''/*add this 3rd param that's blank so the route validates*/], 
-                              { queryParams: 
-                                { 
-                                  Entity: this._entityInfo.Name,
-                                  NewRecordValues: this.NewRecordValues ? FieldValueCollection.FromObject(this.NewRecordValues)?.ToURLSegment() : null
-                                } 
-                              }
-                            );
+        // Use NavigationService to open a new record form, passing initial values if provided
+        this.navigationService.OpenNewEntityRecord(this._entityInfo.Name, {
+          newRecordValues: this.NewRecordValues || undefined
+        });
       }
       else {
         // configured to display a dialog instead, we'll use the entity-form-dialog for this

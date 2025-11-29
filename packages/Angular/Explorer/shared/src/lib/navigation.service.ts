@@ -460,6 +460,55 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Open a new entity record creation form
+   * System-wide resource using __explorer app ID and neutral color
+   * @param entityName The name of the entity to create a new record for
+   * @param options Navigation options including optional newRecordValues for pre-populating fields
+   */
+  public OpenNewEntityRecord(
+    entityName: string,
+    options?: NavigationOptions
+  ): string {
+    console.log('NavigationService.OpenNewEntityRecord called:', {
+      entityName,
+      systemAppId: SYSTEM_APP_ID,
+      color: this.ExplorerAppColor,
+      options
+    });
+
+    const forceNew = this.shouldForceNewTab(options);
+
+    const request: TabRequest = {
+      ApplicationId: SYSTEM_APP_ID,
+      Title: `New ${entityName}`,
+      Configuration: {
+        resourceType: 'Records',
+        Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
+        recordId: '',        // Empty recordId indicates new record
+        isNew: true,         // Flag to indicate this is a new record
+        NewRecordValues: options?.newRecordValues  // Pass through initial values if provided
+      },
+      ResourceRecordId: '',  // Empty for new records
+      IsPinned: options?.pinTab || false
+    };
+
+    console.log('NavigationService.OpenNewEntityRecord request:', request, 'forceNew:', forceNew);
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
+    if (forceNew) {
+      const tabId = this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      console.log('NavigationService.OpenNewEntityRecord created new tab:', tabId);
+      return tabId;
+    } else {
+      const tabId = this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      console.log('NavigationService.OpenNewEntityRecord opened tab:', tabId);
+      return tabId;
+    }
+  }
+
+  /**
    * Switch to an application by ID.
    * This sets the app as active and either opens a specific nav item or creates a default tab.
    * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.
