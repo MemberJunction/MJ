@@ -120,7 +120,7 @@ const codegenConfig = {
       {
         name: 'SmartFieldIdentification',
         description: 'Use AI to identify the best name field and default field to show in views for each entity',
-        enabled: true,
+        enabled: true, 
       },
       {
         name: 'TransitiveJoinIntelligence',
