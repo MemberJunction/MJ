@@ -14,6 +14,8 @@ export type SmartFieldIdentificationResult = {
     nameFieldReason: string;
     defaultInView: string[];
     defaultInViewReason: string;
+    searchableFields: string[];
+    searchableFieldsReason: string;
     confidence: 'high' | 'medium' | 'low';
 }
 
@@ -144,6 +146,8 @@ export class AdvancedGeneration {
                     IsNullable: f.AllowsNull,
                     IsPrimaryKey: f.IsPrimaryKey,
                     IsUnique: f.IsUnique,
+                    IsForeignKey: f.EntityIDFieldName != null || (f.RelatedEntityID && f.RelatedEntityID.length > 0),
+                    RelatedEntity: f.RelatedEntity || null,
                     Description: f.Description
                 })),
                 relationships: entity.RelatedEntities?.map((r: any) => ({

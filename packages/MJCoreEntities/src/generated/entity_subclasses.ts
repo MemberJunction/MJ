@@ -6467,7 +6467,7 @@ export const EntityFieldSchema = z.object({
         * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Data Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
         * * Description: SQL Data type (auto maintained by CodeGen)`),
     Length: z.number().nullable().describe(`
@@ -6616,7 +6616,7 @@ export const EntityFieldSchema = z.object({
         * * Description: NULL`),
     IsNameField: z.boolean().describe(`
         * * Field Name: IsNameField
-        * * Display Name: Is Name Field
+        * * Display Name: Name Field
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.`),
@@ -6719,6 +6719,12 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field`),
+    AutoUpdateIncludeInUserSearchAPI: z.boolean().describe(`
+        * * Field Name: AutoUpdateIncludeInUserSearchAPI
+        * * Display Name: Auto Update Include In User Search API
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -34444,7 +34450,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Data Type
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)
     */
@@ -34737,7 +34743,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsNameField
-    * * Display Name: Is Name Field
+    * * Display Name: Name Field
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
@@ -34968,6 +34974,20 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
     set AutoUpdateDisplayName(value: boolean) {
         this.Set('AutoUpdateDisplayName', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateIncludeInUserSearchAPI
+    * * Display Name: Auto Update Include In User Search API
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field
+    */
+    get AutoUpdateIncludeInUserSearchAPI(): boolean {
+        return this.Get('AutoUpdateIncludeInUserSearchAPI');
+    }
+    set AutoUpdateIncludeInUserSearchAPI(value: boolean) {
+        this.Set('AutoUpdateIncludeInUserSearchAPI', value);
     }
 
     /**

@@ -179,6 +179,12 @@ const advancedGenerationSchema = z.object({
       enabled: false,
     },
     {
+      name: 'SmartFieldIdentification',
+      description:
+        'Use AI to determine the Name Field, Default In View fields, and Searchable fields for entities. This sets IsNameField, DefaultInView, and IncludeInUserSearchAPI properties on entity fields. Only applies when new entities/fields are created or when fields allow auto-update.',
+      enabled: false,
+    },
+    {
       name: 'DefaultInViewFields',
       description:
         'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',

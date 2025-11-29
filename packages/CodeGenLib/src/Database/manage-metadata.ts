@@ -2089,6 +2089,7 @@ NumberedRows AS (
                ef.Description,
                ef.AutoUpdateIsNameField,
                ef.AutoUpdateDefaultInView,
+               ef.AutoUpdateIncludeInUserSearchAPI,
                ef.AutoUpdateCategory,
                ef.AutoUpdateDisplayName,
                ef.EntityIDFieldName,
@@ -2210,8 +2211,8 @@ NumberedRows AS (
       const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
 
       // Smart Field Identification
-      // Only run if at least one field allows auto-update
-      if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView)) {
+      // Only run if at least one field allows auto-update for any of the smart field properties
+      if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI)) {
          const fieldAnalysis = await ag.identifyFields({
             Name: entity.Name,
             Description: entity.Description,
@@ -2287,6 +2288,31 @@ NumberedRows AS (
             WHERE ID = '${field.ID}'
             AND AutoUpdateDefaultInView = 1
          `);
+      }
+
+      // Find all searchable fields (one or more) - for IncludeInUserSearchAPI
+      if (result.searchableFields && result.searchableFields.length > 0) {
+         const searchableFields = fields.filter(f =>
+            result.searchableFields.includes(f.Name) && f.AutoUpdateIncludeInUserSearchAPI && f.ID
+         );
+
+         // Warn about any fields that weren't found
+         const missingSearchableFields = result.searchableFields.filter(name =>
+            !fields.some(f => f.Name === name)
+         );
+         if (missingSearchableFields.length > 0) {
+            logError(`Smart field identification returned invalid searchableFields: ${missingSearchableFields.join(', ')} not found in entity`);
+         }
+
+         // Build update statements for all searchable fields
+         for (const field of searchableFields) {
+            sqlStatements.push(`
+               UPDATE [${mj_core_schema()}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '${field.ID}'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            `);
+         }
       }
 
       // Execute all updates in one batch
