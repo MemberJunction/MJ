@@ -16,3 +16,6 @@ export * from './lib/entity-grid/entity-grid.component';
 export * from './lib/entity-cards/entity-cards.component';
 export * from './lib/entity-viewer/entity-viewer.component';
 export * from './lib/pill/pill.component';
+
+// Utilities
+export * from './lib/utils/highlight.util';

@@ -3,6 +3,7 @@ import { EntityInfo, EntityFieldInfo, EntityFieldValueListType } from '@memberju
 import { BaseEntity } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
 import { PillColorUtil } from '../pill/pill.component';
+import { HighlightUtil } from '../utils/highlight.util';
 
 /**
  * EntityCardsComponent - Card-based view for entity records
@@ -415,73 +416,9 @@ export class EntityCardsComponent implements OnChanges, OnInit {
 
   /**
    * Highlight matching text in a string based on the filter text
-   * Supports SQL-style % wildcards
+   * Uses HighlightUtil which only highlights if the text actually matches the pattern
    */
   highlightMatch(text: string): string {
-    if (!this.filterText || this.filterText.trim() === '' || !text) return text;
-
-    const searchTerm = this.filterText.trim();
-
-    if (!searchTerm.includes('%')) {
-      // Simple case: no wildcards, highlight the exact match
-      const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-      return text.replace(regex, '<span class="highlight-match">$1</span>');
-    }
-
-    // Wildcard case: collect all match ranges first, then apply highlights in one pass
-    // This prevents corrupting previously added <mark> tags
-    const segments = searchTerm.split('%').filter(s => s.length > 0);
-    if (segments.length === 0) return text;
-
-    // Find all match positions for all segments
-    interface MatchRange { start: number; end: number; }
-    const matches: MatchRange[] = [];
-    const lowerText = text.toLowerCase();
-
-    for (const segment of segments) {
-      const lowerSegment = segment.toLowerCase();
-      let searchStart = 0;
-      while (searchStart < lowerText.length) {
-        const idx = lowerText.indexOf(lowerSegment, searchStart);
-        if (idx === -1) break;
-        matches.push({ start: idx, end: idx + segment.length });
-        searchStart = idx + 1; // Find overlapping matches too
-      }
-    }
-
-    if (matches.length === 0) return text;
-
-    // Sort by start position and merge overlapping ranges
-    matches.sort((a, b) => a.start - b.start);
-    const merged: MatchRange[] = [];
-    for (const match of matches) {
-      if (merged.length === 0 || merged[merged.length - 1].end < match.start) {
-        merged.push({ ...match });
-      } else {
-        // Extend the previous range if overlapping
-        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, match.end);
-      }
-    }
-
-    // Build result string with highlights
-    let result = '';
-    let lastEnd = 0;
-    for (const range of merged) {
-      result += text.substring(lastEnd, range.start);
-      result += '<span class="highlight-match">';
-      result += text.substring(range.start, range.end);
-      result += '</span>';
-      lastEnd = range.end;
-    }
-    result += text.substring(lastEnd);
-
-    return result;
-  }
-
-  /**
-   * Escape special regex characters in a string
-   */
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return HighlightUtil.highlight(text, this.filterText, false);
   }
 }

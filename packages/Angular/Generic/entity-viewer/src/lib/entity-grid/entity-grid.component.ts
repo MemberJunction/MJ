@@ -15,6 +15,7 @@ import {
   ICellRendererParams
 } from 'ag-grid-community';
 import { GridColumnDef, RecordSelectedEvent, RecordOpenedEvent } from '../types';
+import { HighlightUtil } from '../utils/highlight.util';
 
 // Register AG Grid modules (required for v34+)
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -251,98 +252,14 @@ export class EntityGridComponent implements OnInit, OnChanges {
 
   /**
    * Cell renderer that highlights matching text
+   * Uses HighlightUtil which only highlights if the text actually matches the pattern
    */
   private highlightCellRenderer(params: ICellRendererParams): string {
     const value = params.value;
     if (value === null || value === undefined) return '';
 
     const text = String(value);
-    if (!this.filterText || this.filterText.trim() === '') {
-      return this.escapeHtml(text);
-    }
-
-    return this.highlightMatch(text);
-  }
-
-  /**
-   * Highlight matching text in a string based on the filter text
-   * Supports SQL-style % wildcards
-   */
-  private highlightMatch(text: string): string {
-    if (!this.filterText || this.filterText.trim() === '' || !text) {
-      return this.escapeHtml(text);
-    }
-
-    const searchTerm = this.filterText.trim();
-
-    if (!searchTerm.includes('%')) {
-      // Simple case: no wildcards, highlight the exact match
-      const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-      return this.escapeHtml(text).replace(regex, '<span class="highlight-match">$1</span>');
-    }
-
-    // Wildcard case: collect all match ranges first, then apply highlights in one pass
-    const segments = searchTerm.split('%').filter(s => s.length > 0);
-    if (segments.length === 0) return this.escapeHtml(text);
-
-    // Find all match positions for all segments
-    interface MatchRange { start: number; end: number; }
-    const matches: MatchRange[] = [];
-    const lowerText = text.toLowerCase();
-
-    for (const segment of segments) {
-      const lowerSegment = segment.toLowerCase();
-      let searchStart = 0;
-      while (searchStart < lowerText.length) {
-        const idx = lowerText.indexOf(lowerSegment, searchStart);
-        if (idx === -1) break;
-        matches.push({ start: idx, end: idx + segment.length });
-        searchStart = idx + 1;
-      }
-    }
-
-    if (matches.length === 0) return this.escapeHtml(text);
-
-    // Sort by start position and merge overlapping ranges
-    matches.sort((a, b) => a.start - b.start);
-    const merged: MatchRange[] = [];
-    for (const match of matches) {
-      if (merged.length === 0 || merged[merged.length - 1].end < match.start) {
-        merged.push({ ...match });
-      } else {
-        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, match.end);
-      }
-    }
-
-    // Build result string with highlights
-    let result = '';
-    let lastEnd = 0;
-    for (const range of merged) {
-      result += this.escapeHtml(text.substring(lastEnd, range.start));
-      result += '<span class="highlight-match">';
-      result += this.escapeHtml(text.substring(range.start, range.end));
-      result += '</span>';
-      lastEnd = range.end;
-    }
-    result += this.escapeHtml(text.substring(lastEnd));
-
-    return result;
-  }
-
-  /**
-   * Escape special regex characters
-   */
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  /**
-   * Escape HTML special characters to prevent XSS
-   */
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return HighlightUtil.highlight(text, this.filterText, true);
   }
 
   /**
