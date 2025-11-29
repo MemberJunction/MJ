@@ -99,7 +99,8 @@
 
 @media (prefers-color-scheme: dark) {
   .mention-editor {
-    color: #e0e0e0;
+    color: black; /*computer preference level not yet supported*/
+    /*color: #e0e0e0;*/ /*Matt - please work on this - for some as it didn't work*/
   }
   .mention-editor:empty:before {
     color: #777;
