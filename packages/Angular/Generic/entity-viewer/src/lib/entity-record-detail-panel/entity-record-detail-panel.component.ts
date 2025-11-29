@@ -12,6 +12,26 @@ interface RelatedEntityData {
 }
 
 /**
+ * Field display types for categorizing how to render each field
+ */
+type FieldDisplayType = 'primary-key' | 'foreign-key' | 'enum' | 'regular';
+
+/**
+ * Enhanced field display info with type categorization
+ */
+interface FieldDisplay {
+  type: FieldDisplayType;
+  name: string;
+  label: string;
+  value: string;
+  // For FK fields - the display name from the virtual/mapped field
+  displayValue?: string;
+  // For FK fields - related entity info for navigation
+  relatedEntityName?: string;
+  relatedRecordId?: string;
+}
+
+/**
  * Event emitted when navigating to a related entity
  */
 export interface NavigateToRelatedEvent {
@@ -19,19 +39,48 @@ export interface NavigateToRelatedEvent {
   filter: string;
 }
 
+/**
+ * Event emitted when opening a related record
+ */
+export interface OpenRelatedRecordEvent {
+  entityName: string;
+  record: BaseEntity;
+}
+
+/**
+ * EntityRecordDetailPanelComponent - A reusable panel for displaying entity record details
+ *
+ * This component provides a detail panel view for entity records with:
+ * - Primary key display with copy functionality
+ * - Foreign key fields showing friendly names with navigation
+ * - Enum fields displayed as pills
+ * - Related entities with expandable record lists
+ * - Configurable sections for details and relationships
+ *
+ * @example
+ * ```html
+ * <mj-entity-record-detail-panel
+ *   [entity]="selectedEntity"
+ *   [record]="selectedRecord"
+ *   (close)="onClosePanel()"
+ *   (openRecord)="onOpenRecord($event)"
+ *   (navigateToRelated)="onNavigateToRelated($event)">
+ * </mj-entity-record-detail-panel>
+ * ```
+ */
 @Component({
-  selector: 'mj-explorer-detail-panel',
-  templateUrl: './detail-panel.component.html',
-  styleUrls: ['./detail-panel.component.css']
+  selector: 'mj-entity-record-detail-panel',
+  templateUrl: './entity-record-detail-panel.component.html',
+  styleUrls: ['./entity-record-detail-panel.component.css']
 })
-export class DetailPanelComponent implements OnChanges {
+export class EntityRecordDetailPanelComponent implements OnChanges {
   @Input() entity: EntityInfo | null = null;
   @Input() record: BaseEntity | null = null;
 
   @Output() close = new EventEmitter<void>();
   @Output() openRecord = new EventEmitter<BaseEntity>();
   @Output() navigateToRelated = new EventEmitter<NavigateToRelatedEvent>();
-  @Output() openRelatedRecord = new EventEmitter<{ entityName: string; record: BaseEntity }>();
+  @Output() openRelatedRecord = new EventEmitter<OpenRelatedRecordEvent>();
 
   // Related entity counts
   public relatedEntities: RelatedEntityData[] = [];
@@ -123,53 +172,124 @@ export class DetailPanelComponent implements OnChanges {
   }
 
   /**
-   * Get key fields to display in details section
+   * Get key fields to display in details section, categorized by type
    */
-  get displayFields(): { name: string; label: string; value: string; isPill: boolean }[] {
+  get displayFields(): FieldDisplay[] {
     if (!this.entity || !this.record) return [];
 
-    const fields: { name: string; label: string; value: string; isPill: boolean }[] = [];
+    const fields: FieldDisplay[] = [];
     const excludePatterns = ['__mj_', 'password', 'secret', 'token'];
 
     for (const field of this.entity.Fields) {
       // Skip system fields and sensitive fields
       if (excludePatterns.some(p => field.Name.toLowerCase().includes(p))) continue;
-      // Skip very long text fields
-      if (field.Length && field.Length > 500) continue;
-      // Limit to reasonable number of fields
-      if (fields.length >= 10) break;
+      // Skip very long text fields (but not FK fields which are usually GUIDs)
+      if (field.Length && field.Length > 500 && !field.RelatedEntityID) continue;
 
       const value = this.record.Get(field.Name);
-      if (value !== null && value !== undefined && String(value).trim() !== '') {
-        // Check if this field has enumerated values
-        const isPill = field.ValueListTypeEnum !== EntityFieldValueListType.None &&
-                       field.EntityFieldValues.length > 0;
 
+      // Handle Primary Key fields specially
+      if (field.IsPrimaryKey) {
         fields.push({
+          type: 'primary-key',
           name: field.Name,
           label: this.formatFieldLabel(field),
-          value: this.formatFieldValue(value, field.Name),
-          isPill
+          value: value !== null && value !== undefined ? String(value) : ''
         });
+        continue;
       }
+
+      // Handle Foreign Key fields - show the related record name instead of ID
+      if (field.RelatedEntityID && field.RelatedEntityID.length > 0) {
+        const fkDisplay = this.buildForeignKeyDisplay(field, value);
+        if (fkDisplay) {
+          fields.push(fkDisplay);
+        }
+        continue;
+      }
+
+      // Skip empty values for regular fields
+      if (value === null || value === undefined || String(value).trim() === '') continue;
+
+      // Limit regular fields to reasonable number
+      if (fields.filter(f => f.type === 'regular' || f.type === 'enum').length >= 10) continue;
+
+      // Check if this field has enumerated values
+      const isEnum = field.ValueListTypeEnum !== EntityFieldValueListType.None &&
+                     field.EntityFieldValues.length > 0;
+
+      fields.push({
+        type: isEnum ? 'enum' : 'regular',
+        name: field.Name,
+        label: this.formatFieldLabel(field),
+        value: this.formatFieldValue(value, field.Name)
+      });
     }
 
     return fields;
   }
 
   /**
-   * Format field name to display label
+   * Build display info for a foreign key field
+   * Uses RelatedEntityNameFieldMap to get the human-readable name
+   * Label comes from the virtual field's DisplayNameOrName (e.g., "Template" not "Template ID")
+   */
+  private buildForeignKeyDisplay(field: EntityFieldInfo, value: unknown): FieldDisplay | null {
+    if (value === null || value === undefined || String(value).trim() === '') {
+      return null;
+    }
+
+    const fkValue = String(value);
+    let displayValue = fkValue;
+    let label = field.DisplayNameOrName; // Fallback to FK field's label
+
+    // Try to get the display name from the mapped field
+    // RelatedEntityNameFieldMap tells us which field contains the name of the related record
+    if (field.RelatedEntityNameFieldMap && field.RelatedEntityNameFieldMap.trim().length > 0) {
+      const mappedValue = this.record!.Get(field.RelatedEntityNameFieldMap);
+      if (mappedValue !== null && mappedValue !== undefined && String(mappedValue).trim() !== '') {
+        displayValue = String(mappedValue);
+      }
+      // Use the mapped field's DisplayNameOrName for the label
+      const mappedField = this.entity!.Fields.find(f => f.Name === field.RelatedEntityNameFieldMap);
+      if (mappedField) {
+        label = mappedField.DisplayNameOrName;
+      }
+    } else {
+      // Fallback: try to find a virtual field with the same name minus "ID" suffix
+      // e.g., for "TemplateID", look for "Template" field
+      const baseName = field.Name.replace(/ID$/i, '');
+      if (baseName !== field.Name) {
+        const virtualField = this.entity!.Fields.find(f =>
+          f.Name.toLowerCase() === baseName.toLowerCase() && f.IsVirtual
+        );
+        if (virtualField) {
+          const virtualValue = this.record!.Get(virtualField.Name);
+          if (virtualValue !== null && virtualValue !== undefined && String(virtualValue).trim() !== '') {
+            displayValue = String(virtualValue);
+          }
+          // Use the virtual field's DisplayNameOrName for the label
+          label = virtualField.DisplayNameOrName;
+        }
+      }
+    }
+
+    return {
+      type: 'foreign-key',
+      name: field.Name,
+      label: label,
+      value: fkValue,
+      displayValue: displayValue,
+      relatedEntityName: field.RelatedEntity || undefined,
+      relatedRecordId: fkValue
+    };
+  }
+
+  /**
+   * Format field name to display label using EntityFieldInfo's built-in property
    */
   private formatFieldLabel(field: EntityFieldInfo): string {
-    if (field.DisplayName) {
-      return field.DisplayName;
-    }
-    else {
-      return field.Name
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, str => str.toUpperCase())
-        .trim();
-    }
+    return field.DisplayNameOrName;
   }
 
   /**
@@ -239,6 +359,43 @@ export class DetailPanelComponent implements OnChanges {
     if (this.record) {
       this.openRecord.emit(this.record);
     }
+  }
+
+  /**
+   * Copy primary key value to clipboard
+   */
+  copyToClipboard(value: string, event: Event): void {
+    event.stopPropagation();
+    navigator.clipboard.writeText(value).then(() => {
+      // Could add a toast notification here
+      console.log('Copied to clipboard:', value);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+    });
+  }
+
+  /**
+   * Navigate to a related record (FK link click)
+   */
+  onForeignKeyClick(field: FieldDisplay, event: Event): void {
+    event.stopPropagation();
+    if (field.relatedEntityName && field.relatedRecordId) {
+      // Emit event to navigate to the related record
+      // The parent component can handle opening in a new tab or navigating
+      this.navigateToRelated.emit({
+        entityName: field.relatedEntityName,
+        filter: `ID='${field.relatedRecordId}'`
+      });
+    }
+  }
+
+  /**
+   * Check if a FK display value is different from the raw ID (i.e., we have a name to show)
+   */
+  hasFriendlyName(field: FieldDisplay): boolean {
+    return field.type === 'foreign-key' &&
+           field.displayValue !== undefined &&
+           field.displayValue !== field.value;
   }
 
   /**

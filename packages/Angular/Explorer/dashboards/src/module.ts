@@ -90,7 +90,6 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
-import { DetailPanelComponent as ExplorerDetailPanelComponent } from './DataExplorer/components/detail-panel/detail-panel.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
 // Home Dashboard Components
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
@@ -164,7 +163,6 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     // Data Explorer Dashboard Components
     DataExplorerDashboardComponent,
     ExplorerNavigationPanelComponent,
-    ExplorerDetailPanelComponent,
     // Home Dashboard Components
     HomeDashboardComponent
   ],

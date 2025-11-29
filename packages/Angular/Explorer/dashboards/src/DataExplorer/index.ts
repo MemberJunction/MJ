@@ -5,7 +5,6 @@ export { DataExplorerDashboardComponent, LoadDataExplorerDashboard } from './dat
 
 // Child components
 export { NavigationPanelComponent } from './components/navigation-panel/navigation-panel.component';
-export { DetailPanelComponent, NavigateToRelatedEvent } from './components/detail-panel/detail-panel.component';
 
 // Services
 export { ExplorerStateService } from './services/explorer-state.service';

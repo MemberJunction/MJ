@@ -112,14 +112,14 @@
   <!-- Detail Panel (Right - Slide In) -->
   @if (state.detailPanelOpen && selectedRecord) {
     <div class="detail-panel" [style.width.px]="state.detailPanelWidth">
-      <mj-explorer-detail-panel
+      <mj-entity-record-detail-panel
         [entity]="selectedEntity"
         [record]="selectedRecord"
         (close)="onDetailPanelClosed()"
         (openRecord)="onOpenRecord($event)"
         (navigateToRelated)="onNavigateToRelated($event)"
         (openRelatedRecord)="onOpenRelatedRecord($event)">
-      </mj-explorer-detail-panel>
+      </mj-entity-record-detail-panel>
     </div>
   }
 </div>

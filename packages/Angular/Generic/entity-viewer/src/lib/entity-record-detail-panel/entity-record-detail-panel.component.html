@@ -1,4 +1,4 @@
-<div class="detail-panel-container">
+<div class="entity-record-card-container">
   <!-- Header -->
   <div class="panel-header">
     <h3 class="panel-title">{{ recordTitle }}</h3>
@@ -20,14 +20,56 @@
       @if (detailsSectionExpanded) {
         <div class="section-content">
           @for (field of displayFields; track field.name) {
-            <div class="field-row">
-              <span class="field-label">{{ field.label }}</span>
-              @if (field.isPill) {
+            <!-- Primary Key Field - Compact with copy button -->
+            @if (field.type === 'primary-key') {
+              <div class="field-row field-row-pk">
+                <div class="pk-row">
+                  <i class="fa-solid fa-key pk-icon"></i>
+                  <span class="field-label">{{ field.label }}</span>
+                  <button class="copy-btn" (click)="copyToClipboard(field.value, $event)" title="Copy ID">
+                    <i class="fa-solid fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+            }
+            <!-- Foreign Key Field - Show friendly name with link -->
+            @else if (field.type === 'foreign-key') {
+              <div class="field-row field-row-fk">
+                <span class="field-label">{{ field.label }}</span>
+                @if (hasFriendlyName(field)) {
+                  <div class="fk-value-row">
+                    <span class="field-value fk-display-value">{{ field.displayValue }}</span>
+                    @if (field.relatedEntityName) {
+                      <button class="fk-link-btn" (click)="onForeignKeyClick(field, $event)" title="Open {{ field.relatedEntityName }}">
+                        <i class="fa-solid fa-external-link-alt"></i>
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <!-- No friendly name available, show ID with copy option -->
+                  <div class="fk-value-row fk-id-only">
+                    <span class="field-value fk-id-value">{{ field.value }}</span>
+                    <button class="copy-btn" (click)="copyToClipboard(field.value, $event)" title="Copy ID">
+                      <i class="fa-solid fa-copy"></i>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+            <!-- Enum Field - Show as pill -->
+            @else if (field.type === 'enum') {
+              <div class="field-row">
+                <span class="field-label">{{ field.label }}</span>
                 <mj-pill [value]="field.value"></mj-pill>
-              } @else {
+              </div>
+            }
+            <!-- Regular Field -->
+            @else {
+              <div class="field-row">
+                <span class="field-label">{{ field.label }}</span>
                 <span class="field-value">{{ field.value }}</span>
-              }
-            </div>
+              </div>
+            }
           }
 
           @if (displayFields.length === 0) {

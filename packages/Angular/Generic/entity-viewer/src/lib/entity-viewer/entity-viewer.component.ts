@@ -216,7 +216,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       const matchResult = this.recordMatchesFilter(record, filterText, visibleFields);
       if (matchResult.matches && matchResult.matchedField && !matchResult.matchedInVisibleField) {
         // Track hidden field match
-        const recordKey = record.PrimaryKey.ToString();
+        const recordKey = record.PrimaryKey.ToConcatenatedString();
         this.hiddenFieldMatches.set(recordKey, matchResult.matchedField);
       }
       return matchResult.matches;
@@ -326,17 +326,18 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   public hasHiddenFieldMatch(record: BaseEntity): boolean {
     if (!this.debouncedFilterText) return false;
-    return this.hiddenFieldMatches.has(record.PrimaryKey.ToString());
+    return this.hiddenFieldMatches.has(record.PrimaryKey.ToConcatenatedString());
   }
 
   /**
    * Get the name of the hidden field that matched for display
    */
   public getHiddenMatchFieldName(record: BaseEntity): string {
-    const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToString());
-    if (!fieldName) return '';
-    // Convert camelCase to readable label
-    return fieldName.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+    const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToConcatenatedString());
+    if (!fieldName || !this.entity) return '';
+    // Look up the field in entity metadata and use DisplayNameOrName
+    const field = this.entity.Fields.find(f => f.Name === fieldName);
+    return field ? field.DisplayNameOrName : fieldName;
   }
 
   // ========================================
@@ -476,7 +477,8 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         this.dataLoaded.emit({
           totalRowCount: result.TotalRowCount,
           loadedRowCount: result.Results.length,
-          loadTime: Date.now() - startTime
+          loadTime: Date.now() - startTime,
+          records: result.Results
         });
       } else {
         console.error('Failed to load records:', result.ErrorMessage);

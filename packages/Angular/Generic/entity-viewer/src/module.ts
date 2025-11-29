@@ -7,6 +7,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityGridComponent } from './lib/entity-grid/entity-grid.component';
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
+import { EntityRecordDetailPanelComponent } from './lib/entity-record-detail-panel/entity-record-detail-panel.component';
 import { PillComponent } from './lib/pill/pill.component';
 
 /**
@@ -16,6 +17,7 @@ import { PillComponent } from './lib/pill/pill.component';
  * - EntityViewerComponent: Composite component with grid/cards toggle
  * - EntityGridComponent: AG Grid-based table view
  * - EntityCardsComponent: Card-based view
+ * - EntityRecordDetailPanelComponent: Detail panel for displaying single record information
  * - PillComponent: Semantic color pills for categorical values
  *
  * @example
@@ -33,6 +35,7 @@ import { PillComponent } from './lib/pill/pill.component';
     EntityGridComponent,
     EntityCardsComponent,
     EntityViewerComponent,
+    EntityRecordDetailPanelComponent,
     PillComponent
   ],
   imports: [
@@ -45,6 +48,7 @@ import { PillComponent } from './lib/pill/pill.component';
     EntityGridComponent,
     EntityCardsComponent,
     EntityViewerComponent,
+    EntityRecordDetailPanelComponent,
     PillComponent
   ]
 })

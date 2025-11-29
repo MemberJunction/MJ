@@ -48,8 +48,11 @@ export interface CardTemplate {
   descriptionField: string | null;
   /** Display fields with type information for smart rendering */
   displayFields: CardDisplayField[];
-  /** Image/thumbnail field name */
-  thumbnailField: string | null;
+  /**
+   * Array of thumbnail field names in priority order
+   * Per-record fallback: if the first field is empty, try the next, etc.
+   */
+  thumbnailFields: string[];
   /** Badge/priority field name */
   badgeField: string | null;
 }
@@ -116,6 +119,8 @@ export interface DataLoadedEvent {
   loadedRowCount: number;
   /** Time taken to load in milliseconds */
   loadTime: number;
+  /** The loaded records - allows parent to access records for state restoration */
+  records: BaseEntity[];
 }
 
 /**
@@ -222,7 +227,7 @@ export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
     subtitleField: null,
     descriptionField: null,
     displayFields: [],
-    thumbnailField: null,
+    thumbnailFields: [],
     badgeField: null
   },
   height: '100%'

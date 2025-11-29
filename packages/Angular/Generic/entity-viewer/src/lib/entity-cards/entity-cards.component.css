@@ -19,7 +19,8 @@
   cursor: pointer;
   transition: all 0.2s ease;
 }
-.data-card:hover {
+/* Hover state for unselected cards */
+.data-card:hover:not(.selected) {
   border-color: #bdbdbd;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
@@ -27,9 +28,21 @@
 .data-card:hover .card-open-btn {
   opacity: 1;
 }
+
+/* Selected state - subtle but clear */
 .data-card.selected {
   border-color: #1976d2;
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+}
+
+.data-card.selected .card-title {
+  color: #1565c0;
+}
+
+/* Selected + hover state - same as regular hover */
+.data-card.selected:hover {
+  border-color: #1976d2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 .card-header {

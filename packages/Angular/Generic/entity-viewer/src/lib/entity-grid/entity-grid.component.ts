@@ -230,7 +230,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
     for (const field of visibleFields) {
       const colDef: ColDef = {
         field: field.Name,
-        headerName: this.getFieldLabel(field.Name),
+        headerName: field.DisplayNameOrName,
         width: this.estimateColumnWidth(field),
         sortable: true,
         resizable: true
@@ -357,7 +357,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
 
     this.rowData = this.records.map(record => {
       const row: Record<string, unknown> = {
-        __pk: record.PrimaryKey.ToString()
+        __pk: record.PrimaryKey.ToConcatenatedString()
       };
 
       // Copy all field values
@@ -388,16 +388,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
    * Find a record by its primary key string
    */
   private findRecordByPk(pkString: string): BaseEntity | undefined {
-    return this.records.find(r => r.PrimaryKey.ToString() === pkString);
+    return this.records.find(r => r.PrimaryKey.ToConcatenatedString() === pkString);
   }
 
-  /**
-   * Get a human-readable label for a field name
-   */
-  private getFieldLabel(fieldName: string): string {
-    return fieldName
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .trim();
-  }
 }

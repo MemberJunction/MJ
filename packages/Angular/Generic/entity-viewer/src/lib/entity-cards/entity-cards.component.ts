@@ -112,7 +112,7 @@ export class EntityCardsComponent implements OnChanges, OnInit {
       subtitleField: this.findSubtitleField(fields),
       descriptionField: this.findDescriptionField(fields),
       displayFields: this.findDisplayFields(fields),
-      thumbnailField: this.findThumbnailField(fields),
+      thumbnailFields: this.findThumbnailFields(fields),
       badgeField: this.findBadgeField(fields)
     };
   }
@@ -178,7 +178,7 @@ export class EntityCardsComponent implements OnChanges, OnInit {
       displayFields.push({
         name: field.Name,
         type: this.getFieldType(field),
-        label: this.getFieldLabel(field.Name)
+        label: this.getFieldLabel(field)
       });
     }
 
@@ -193,7 +193,7 @@ export class EntityCardsComponent implements OnChanges, OnInit {
         displayFields.push({
           name: field.Name,
           type: this.getFieldType(field),
-          label: this.getFieldLabel(field.Name)
+          label: this.getFieldLabel(field)
         });
       }
     }
@@ -201,13 +201,27 @@ export class EntityCardsComponent implements OnChanges, OnInit {
     return displayFields;
   }
 
-  private findThumbnailField(fields: EntityFieldInfo[]): string | null {
+  /**
+   * Find all potential thumbnail fields in priority order
+   * Returns an array so we can fall back per-record if one is empty
+   */
+  private findThumbnailFields(fields: EntityFieldInfo[]): string[] {
     const imageKeywords = ['image', 'photo', 'picture', 'thumbnail', 'avatar', 'logo', 'icon'];
+    const foundFields: string[] = [];
+    const foundFieldNames = new Set<string>();
+
     for (const keyword of imageKeywords) {
-      const field = fields.find(f => f.Name.toLowerCase().includes(keyword) && f.TSType === 'string');
-      if (field) return field.Name;
+      const matchingFields = fields.filter(f =>
+        f.Name.toLowerCase().includes(keyword) &&
+        f.TSType === 'string' &&
+        !foundFieldNames.has(f.Name)
+      );
+      for (const field of matchingFields) {
+        foundFields.push(field.Name);
+        foundFieldNames.add(field.Name);
+      }
     }
-    return null;
+    return foundFields;
   }
 
   private findBadgeField(fields: EntityFieldInfo[]): string | null {
@@ -284,8 +298,11 @@ export class EntityCardsComponent implements OnChanges, OnInit {
     }
   }
 
-  getFieldLabel(fieldName: string): string {
-    return fieldName.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+  /**
+   * Get display label for a field using EntityFieldInfo's built-in DisplayNameOrName property
+   */
+  getFieldLabel(field: EntityFieldInfo): string {
+    return field.DisplayNameOrName;
   }
 
   // ========================================
@@ -301,7 +318,7 @@ export class EntityCardsComponent implements OnChanges, OnInit {
   }
 
   isSelected(record: BaseEntity): boolean {
-    return record.PrimaryKey.ToString() === this.selectedRecordId;
+    return record.PrimaryKey.ToConcatenatedString() === this.selectedRecordId;
   }
 
   onCardClick(record: BaseEntity): void {
@@ -334,21 +351,55 @@ export class EntityCardsComponent implements OnChanges, OnInit {
     return (words[0][0] + words[1][0]).toUpperCase();
   }
 
+  /**
+   * Get the thumbnail type for a record, with per-record fallback through thumbnailFields
+   */
   getThumbnailType(record: BaseEntity): 'image' | 'icon' | 'none' {
-    const template = this.effectiveTemplate;
-    if (!template?.thumbnailField) return 'none';
-    const value = this.getFieldValue(record, template.thumbnailField);
-    if (!value || value.trim() === '') return 'none';
+    const fieldInfo = this.getEffectiveThumbnailField(record);
+    if (!fieldInfo) return 'none';
 
+    const { fieldName, value } = fieldInfo;
+
+    // Check if value is an image URL
     if (this.isImageValue(value)) return 'image';
+
+    // Check if value looks like an icon class
     if (this.isIconClass(value)) return 'icon';
+
+    // If field name suggests it's an icon field, treat non-URL values as icon classes
+    const fieldNameLower = fieldName.toLowerCase();
+    if (fieldNameLower.includes('icon') || fieldNameLower.includes('class')) {
+      return 'icon';
+    }
+
     return 'none';
   }
 
+  /**
+   * Get the thumbnail URL/value for a record, with per-record fallback
+   */
   getThumbnailUrl(record: BaseEntity): string {
+    const fieldInfo = this.getEffectiveThumbnailField(record);
+    return fieldInfo?.value || '';
+  }
+
+  /**
+   * Find the first thumbnail field that has a value for this record
+   * Returns both the field name and value for type determination
+   */
+  private getEffectiveThumbnailField(record: BaseEntity): { fieldName: string; value: string } | null {
     const template = this.effectiveTemplate;
-    if (!template?.thumbnailField) return '';
-    return this.getFieldValue(record, template.thumbnailField);
+    if (!template?.thumbnailFields || template.thumbnailFields.length === 0) return null;
+
+    // Try each field in priority order until we find one with a value
+    for (const fieldName of template.thumbnailFields) {
+      const value = this.getFieldValue(record, fieldName);
+      if (value && value.trim() !== '') {
+        return { fieldName, value };
+      }
+    }
+
+    return null;
   }
 
   private isImageValue(value: string): boolean {
@@ -401,17 +452,18 @@ export class EntityCardsComponent implements OnChanges, OnInit {
    * Check if a record matched on a hidden field
    */
   hasHiddenFieldMatch(record: BaseEntity): boolean {
-    return this.hiddenFieldMatches.has(record.PrimaryKey.ToString());
+    return this.hiddenFieldMatches.has(record.PrimaryKey.ToConcatenatedString());
   }
 
   /**
    * Get the display name of the hidden field that matched
    */
   getHiddenMatchFieldName(record: BaseEntity): string {
-    const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToString());
-    if (!fieldName) return '';
-    // Convert camelCase to readable label
-    return fieldName.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+    const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToConcatenatedString());
+    if (!fieldName || !this.entity) return '';
+    // Look up the field in entity metadata and use DisplayNameOrName
+    const field = this.entity.Fields.find(f => f.Name === fieldName);
+    return field ? field.DisplayNameOrName : fieldName;
   }
 
   /**

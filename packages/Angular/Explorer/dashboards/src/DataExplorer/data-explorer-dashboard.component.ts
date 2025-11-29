@@ -11,11 +11,11 @@ import {
   DataLoadedEvent,
   FilteredCountChangedEvent,
   EntityViewerConfig,
-  EntityViewMode
+  EntityViewMode,
+  NavigateToRelatedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState } from './models/explorer-state.interface';
-import { NavigateToRelatedEvent } from './components/detail-panel/detail-panel.component';
 import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.component';
 
 /**
@@ -228,6 +228,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public onDataLoaded(event: DataLoadedEvent): void {
     this.totalRecordCount = event.totalRowCount;
     this.filteredRecordCount = event.loadedRowCount;
+
+    // Restore selected record if we have a persisted selectedRecordId
+    if (this.state.selectedRecordId && this.state.detailPanelOpen && !this.selectedRecord) {
+      const record = event.records.find(r =>
+        r.PrimaryKey.ToConcatenatedString() === this.state.selectedRecordId
+      );
+      if (record) {
+        this.selectedRecord = record;
+      }
+    }
+
     this.cdr.detectChanges();
   }
 

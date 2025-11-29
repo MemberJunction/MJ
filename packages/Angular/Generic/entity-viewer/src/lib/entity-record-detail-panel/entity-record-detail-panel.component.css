@@ -1,4 +1,4 @@
-.detail-panel-container {
+.entity-record-card-container {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -132,6 +132,107 @@
   font-size: 14px;
   color: #424242;
   word-break: break-word;
+}
+
+/* Primary Key Field - Compact row with key icon and copy button */
+.field-row-pk {
+  flex-direction: row;
+  padding: 6px 0;
+}
+
+.pk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.pk-icon {
+  font-size: 12px;
+  color: #9e9e9e;
+}
+
+.pk-row .field-label {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.copy-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9e9e9e;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.copy-btn:hover {
+  background: #f0f0f0;
+  color: #1976d2;
+}
+.copy-btn i {
+  font-size: 12px;
+}
+
+/* Foreign Key Field - Display name with link button */
+.field-row-fk {
+  padding: 8px 0;
+}
+
+.fk-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fk-display-value {
+  flex: 1;
+  color: #333;
+  font-weight: 500;
+}
+
+.fk-link-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9e9e9e;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.fk-link-btn:hover {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+.fk-link-btn i {
+  font-size: 11px;
+}
+
+/* FK without friendly name - show ID in muted style */
+.fk-id-only {
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.fk-id-value {
+  font-size: 12px;
+  font-family: monospace;
+  color: #757575;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Related Entity Group - expandable container */
