@@ -1,15 +1,16 @@
 import { Component, ViewEncapsulation, OnInit, OnDestroy } from '@angular/core';
+import { Location } from '@angular/common';
 import { Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { ArtifactStateService, ArtifactPermissionService, CollectionStateService } from '@memberjunction/ng-conversations';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
 
 export function LoadChatCollectionsResource() {
   // Force inclusion in production builds (tree shaking workaround)
   // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatCollectionsResource(null!, null!, null!, null!);
+  const test = new ChatCollectionsResource(null!, null!, null!, null!, null!);
 }
 
 /**
@@ -144,12 +145,14 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
   private resizeStartWidth: number = 0;
 
   private destroy$ = new Subject<void>();
+  private skipUrlUpdate = true; // Skip URL updates during initialization
 
   constructor(
     private artifactState: ArtifactStateService,
     private artifactPermissionService: ArtifactPermissionService,
     public collectionState: CollectionStateService,
-    private navigationService: NavigationService
+    private navigationService: NavigationService,
+    private location: Location
   ) {
     super();
   }
@@ -164,13 +167,68 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     // Setup resize listeners
     this.setupResizeListeners();
 
-    // Check if we have navigation params to apply (e.g., from Conversations linking here)
-    this.applyNavigationParams();
+    // Parse URL first and apply state
+    const urlState = this.parseUrlState();
+    if (urlState) {
+      this.applyUrlState(urlState);
+    } else {
+      // Check if we have navigation params from config (e.g., from Conversations linking here)
+      this.applyNavigationParams();
+    }
+
+    // Subscribe to state changes to update URL
+    this.subscribeToUrlStateChanges();
+
+    // Setup browser back/forward navigation
+    this.setupPopStateListener();
+
+    // Enable URL updates after initialization
+    this.skipUrlUpdate = false;
+
+    // Update URL to reflect current state
+    this.updateUrl();
 
     // Notify load complete after user is set
     setTimeout(() => {
       this.NotifyLoadComplete();
     }, 100);
+  }
+
+  /**
+   * Parse URL query string for collection state.
+   * Query params: collectionId, artifactId, versionNumber
+   */
+  private parseUrlState(): { collectionId?: string; artifactId?: string; versionNumber?: number } | null {
+    const queryString = window.location.search;
+    if (!queryString) return null;
+
+    const params = new URLSearchParams(queryString);
+    const collectionId = params.get('collectionId');
+    const artifactId = params.get('artifactId');
+    const versionNumber = params.get('versionNumber');
+
+    if (!collectionId && !artifactId) return null;
+
+    return {
+      collectionId: collectionId || undefined,
+      artifactId: artifactId || undefined,
+      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
+    };
+  }
+
+  /**
+   * Apply URL state to collection services.
+   */
+  private applyUrlState(state: { collectionId?: string; artifactId?: string; versionNumber?: number }): void {
+    // Set active collection if specified
+    if (state.collectionId) {
+      this.collectionState.setActiveCollection(state.collectionId);
+    }
+
+    // Open artifact if specified
+    if (state.artifactId) {
+      this.artifactState.openArtifact(state.artifactId, state.versionNumber);
+    }
   }
 
   /**
@@ -183,15 +241,82 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
     // Set active collection if specified
     if (config.collectionId) {
-      console.log('📁 Setting active collection from navigation:', config.collectionId);
       this.collectionState.setActiveCollection(config.collectionId as string);
     }
 
     // Open artifact if specified
     if (config.artifactId) {
-      console.log('📎 Opening artifact from navigation:', config.artifactId);
       const versionNumber = config.versionNumber ? (config.versionNumber as number) : undefined;
       this.artifactState.openArtifact(config.artifactId as string, versionNumber);
+    }
+  }
+
+  /**
+   * Subscribe to state changes for URL updates.
+   */
+  private subscribeToUrlStateChanges(): void {
+    // Combine collection and artifact state changes
+    combineLatest([
+      this.collectionState.activeCollectionId$.pipe(distinctUntilChanged()),
+      this.artifactState.activeArtifactId$.pipe(distinctUntilChanged()),
+      this.artifactState.activeVersionNumber$.pipe(distinctUntilChanged())
+    ])
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        if (!this.skipUrlUpdate) {
+          this.updateUrl();
+        }
+      });
+  }
+
+  /**
+   * Update URL query string to reflect current state.
+   */
+  private updateUrl(): void {
+    const params = new URLSearchParams();
+
+    // Add collection ID
+    const collectionId = this.collectionState.activeCollectionId;
+    if (collectionId) {
+      params.set('collectionId', collectionId);
+    }
+
+    // Add artifact ID if panel is open
+    if (this.activeArtifactId) {
+      params.set('artifactId', this.activeArtifactId);
+      if (this.activeVersionNumber) {
+        params.set('versionNumber', this.activeVersionNumber.toString());
+      }
+    }
+
+    // Get current path without query string
+    const currentPath = this.location.path().split('?')[0];
+    const queryString = params.toString();
+    const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
+
+    this.location.replaceState(newUrl);
+  }
+
+  /** Bound handler for popstate events */
+  private boundPopStateHandler = this.onPopState.bind(this);
+
+  private setupPopStateListener(): void {
+    window.addEventListener('popstate', this.boundPopStateHandler);
+  }
+
+  private cleanupPopStateListener(): void {
+    window.removeEventListener('popstate', this.boundPopStateHandler);
+  }
+
+  /**
+   * Handle browser back/forward navigation.
+   */
+  private onPopState(): void {
+    const urlState = this.parseUrlState();
+    if (urlState) {
+      this.skipUrlUpdate = true;
+      this.applyUrlState(urlState);
+      this.skipUrlUpdate = false;
     }
   }
 
@@ -199,6 +324,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.destroy$.next();
     this.destroy$.complete();
     this.removeResizeListeners();
+    this.cleanupPopStateListener();
   }
 
   /**

@@ -1,14 +1,16 @@
-import { Component, ViewEncapsulation } from '@angular/core';
+import { Component, ViewEncapsulation, OnDestroy } from '@angular/core';
+import { Location } from '@angular/common';
 import { Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { ConversationStateService } from '@memberjunction/ng-conversations';
+import { ConversationStateService, ArtifactStateService } from '@memberjunction/ng-conversations';
+import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
 
 export function LoadChatConversationsResource() {
   // Force inclusion in production builds (tree shaking workaround)
   // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatConversationsResource(null!, null!);
+  const test = new ChatConversationsResource(null!, null!, null!, null!);
 }
 
 /**
@@ -75,12 +77,16 @@ export function LoadChatConversationsResource() {
   `],
   encapsulation: ViewEncapsulation.None
 })
-export class ChatConversationsResource extends BaseResourceComponent {
+export class ChatConversationsResource extends BaseResourceComponent implements OnDestroy {
   public currentUser: any = null;
+  private destroy$ = new Subject<void>();
+  private skipUrlUpdate = true; // Skip URL updates during initialization
 
   constructor(
     private navigationService: NavigationService,
-    private conversationState: ConversationStateService
+    private conversationState: ConversationStateService,
+    private artifactState: ArtifactStateService,
+    private location: Location
   ) {
     super();
   }
@@ -89,13 +95,75 @@ export class ChatConversationsResource extends BaseResourceComponent {
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
 
-    // Check if we have navigation params to apply (e.g., from Collections linking here)
-    this.applyNavigationParams();
+    // Parse URL first and apply state
+    const urlState = this.parseUrlState();
+    if (urlState) {
+      this.applyUrlState(urlState);
+    } else {
+      // Check if we have navigation params from config (e.g., from Collections linking here)
+      this.applyNavigationParams();
+    }
+
+    // Subscribe to state changes to update URL
+    this.subscribeToStateChanges();
+
+    // Setup browser back/forward navigation
+    this.setupPopStateListener();
+
+    // Enable URL updates after initialization
+    this.skipUrlUpdate = false;
+
+    // Update URL to reflect current state
+    this.updateUrl();
 
     // Notify load complete after user is set
     setTimeout(() => {
       this.NotifyLoadComplete();
     }, 100);
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+    this.cleanupPopStateListener();
+  }
+
+  /**
+   * Parse URL query string for conversation state.
+   * Query params: conversationId, artifactId, versionNumber
+   */
+  private parseUrlState(): { conversationId?: string; artifactId?: string; versionNumber?: number } | null {
+    const queryString = window.location.search;
+    if (!queryString) return null;
+
+    const params = new URLSearchParams(queryString);
+    const conversationId = params.get('conversationId');
+    const artifactId = params.get('artifactId');
+    const versionNumber = params.get('versionNumber');
+
+    if (!conversationId && !artifactId) return null;
+
+    return {
+      conversationId: conversationId || undefined,
+      artifactId: artifactId || undefined,
+      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
+    };
+  }
+
+  /**
+   * Apply URL state to conversation services.
+   */
+  private applyUrlState(state: { conversationId?: string; artifactId?: string; versionNumber?: number }): void {
+    // Set pending artifact if provided (must be set before activating conversation)
+    if (state.artifactId) {
+      this.conversationState.pendingArtifactId = state.artifactId;
+      this.conversationState.pendingArtifactVersionNumber = state.versionNumber || null;
+    }
+
+    // Activate the target conversation if specified
+    if (state.conversationId) {
+      this.conversationState.setActiveConversation(state.conversationId);
+    }
   }
 
   /**
@@ -108,15 +176,85 @@ export class ChatConversationsResource extends BaseResourceComponent {
 
     // Set pending artifact if provided (must be set before activating conversation)
     if (config.artifactId) {
-      console.log('📎 Setting pending artifact from navigation:', config.artifactId);
       this.conversationState.pendingArtifactId = config.artifactId as string;
       this.conversationState.pendingArtifactVersionNumber = (config.versionNumber as number) || null;
     }
 
     // Activate the target conversation if specified
     if (config.conversationId) {
-      console.log('💬 Setting active conversation from navigation:', config.conversationId);
       this.conversationState.setActiveConversation(config.conversationId as string);
+    }
+  }
+
+  /**
+   * Subscribe to state changes from services to update URL.
+   */
+  private subscribeToStateChanges(): void {
+    // Combine conversation and artifact state changes
+    combineLatest([
+      this.conversationState.activeConversationId$.pipe(distinctUntilChanged()),
+      this.artifactState.activeArtifactId$.pipe(distinctUntilChanged()),
+      this.artifactState.activeVersionNumber$.pipe(distinctUntilChanged())
+    ])
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        if (!this.skipUrlUpdate) {
+          this.updateUrl();
+        }
+      });
+  }
+
+  /**
+   * Update URL query string to reflect current state.
+   * Uses replaceState to avoid adding history entries for every state change.
+   */
+  private updateUrl(): void {
+    const params = new URLSearchParams();
+
+    // Add conversation ID
+    const conversationId = this.conversationState.activeConversationId;
+    if (conversationId) {
+      params.set('conversationId', conversationId);
+    }
+
+    // Add artifact ID if panel is open
+    const artifactId = this.artifactState['_activeArtifactId$']?.value;
+    if (artifactId) {
+      params.set('artifactId', artifactId);
+      const versionNumber = this.artifactState['_activeVersionNumber$']?.value;
+      if (versionNumber) {
+        params.set('versionNumber', versionNumber.toString());
+      }
+    }
+
+    // Get current path without query string
+    const currentPath = this.location.path().split('?')[0];
+    const queryString = params.toString();
+    const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
+
+    this.location.replaceState(newUrl);
+  }
+
+  /** Bound handler for popstate events */
+  private boundPopStateHandler = this.onPopState.bind(this);
+
+  private setupPopStateListener(): void {
+    window.addEventListener('popstate', this.boundPopStateHandler);
+  }
+
+  private cleanupPopStateListener(): void {
+    window.removeEventListener('popstate', this.boundPopStateHandler);
+  }
+
+  /**
+   * Handle browser back/forward navigation.
+   */
+  private onPopState(): void {
+    const urlState = this.parseUrlState();
+    if (urlState) {
+      this.skipUrlUpdate = true;
+      this.applyUrlState(urlState);
+      this.skipUrlUpdate = false;
     }
   }
 
