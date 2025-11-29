@@ -72,6 +72,37 @@ export interface EntityCacheEntry {
 }
 
 /**
+ * Recent entity access tracking for home screen
+ */
+export interface RecentEntityAccess {
+  entityName: string;
+  entityId: string;
+  lastAccessed: Date;
+  accessCount: number;
+}
+
+/**
+ * Favorite entity for home screen (using User Favorites entity)
+ */
+export interface FavoriteEntity {
+  userFavoriteId: string;  // ID from User Favorites entity
+  entityName: string;
+  entityId: string;
+}
+
+/**
+ * Recent record access for home screen (from User Record Logs)
+ */
+export interface RecentRecordAccess {
+  entityName: string;
+  entityId: string;
+  recordId: string;
+  recordName?: string;
+  latestAt: Date;
+  totalCount: number;
+}
+
+/**
  * State interface for the Data Explorer dashboard
  */
 export interface DataExplorerState {
@@ -106,11 +137,19 @@ export interface DataExplorerState {
   entitiesSectionExpanded: boolean;
   viewsSectionExpanded: boolean;
 
-  // Recent items
+  // Recent items (legacy - records within current explorer context)
   recentItems: RecentItem[];
 
-  // Favorites
+  // Favorites (legacy - records within current explorer context)
   favorites: FavoriteItem[];
+
+  // Home screen state
+  /** Whether to show all entities or just DefaultForNewUser entities */
+  showAllEntities: boolean;
+  /** Recent entity access tracking for home screen */
+  recentEntityAccesses: RecentEntityAccess[];
+  /** Favorite entities for home screen */
+  favoriteEntities: FavoriteEntity[];
 }
 
 export interface RecentItem {
@@ -178,5 +217,9 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   entitiesSectionExpanded: true,
   viewsSectionExpanded: true,
   recentItems: [],
-  favorites: []
+  favorites: [],
+  // Home screen state
+  showAllEntities: false,  // Default to showing only common entities
+  recentEntityAccesses: [],
+  favoriteEntities: []
 };

@@ -1,5 +1,6 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild } from '@angular/core';
 import { Location } from '@angular/common';
+import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard } from '@memberjunction/ng-shared';
@@ -17,7 +18,7 @@ import {
   NavigateToRelatedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess } from './models/explorer-state.interface';
 import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.component';
 
 /**
@@ -30,12 +31,26 @@ import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.
 @Component({
   selector: 'mj-data-explorer-dashboard',
   templateUrl: './data-explorer-dashboard.component.html',
-  styleUrls: ['./data-explorer-dashboard.component.css']
+  styleUrls: ['./data-explorer-dashboard.component.css'],
+  animations: [
+    trigger('slideInLeft', [
+      transition(':enter', [
+        style({ transform: 'translateX(-100%)', opacity: 0 }),
+        animate('200ms ease-out', style({ transform: 'translateX(0)', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('200ms ease-in', style({ transform: 'translateX(-100%)', opacity: 0 }))
+      ])
+    ])
+  ]
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
+
+  /** Reference to the filter input for keyboard shortcuts */
+  @ViewChild('filterInput') filterInputRef: ElementRef<HTMLInputElement> | undefined;
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -85,18 +100,89 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Flag to skip URL updates during initialization (when applying deep link)
   private skipUrlUpdates: boolean = true;
 
+  // Recent records from User Record Logs
+  public recentRecords: RecentRecordAccess[] = [];
+
+  // Loading state for home screen sections
+  public isLoadingRecentRecords: boolean = true;
+
   /**
    * Filtered entities based on entityFilterText (for home screen)
+   * Excludes entities shown in recent or favorites sections
+   * Applies Common/All toggle filtering
    */
   get filteredEntities(): EntityInfo[] {
-    if (!this.entityFilterText || this.entityFilterText.trim() === '') {
-      return this.entities;
+    // Get IDs of entities in recent and favorites to exclude
+    const recentEntityIds = new Set(this.state.recentEntityAccesses.map(r => r.entityId));
+    const favoriteEntityIds = new Set(this.state.favoriteEntities.map(f => f.entityId));
+
+    let result = this.entities.filter(e => {
+      // Exclude entities shown in recent or favorites sections
+      if (recentEntityIds.has(e.ID) || favoriteEntityIds.has(e.ID)) {
+        return false;
+      }
+
+      // Apply Common/All toggle filter (only if we have DefaultForNewUser info)
+      if (!this.state.showAllEntities && this.stateService.DefaultEntityIds.size > 0) {
+        if (!this.stateService.DefaultEntityIds.has(e.ID)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Apply text filter
+    if (this.entityFilterText && this.entityFilterText.trim() !== '') {
+      const filter = this.entityFilterText.toLowerCase().trim();
+      result = result.filter(e =>
+        e.Name.toLowerCase().includes(filter) ||
+        (e.Description && e.Description.toLowerCase().includes(filter))
+      );
     }
-    const filter = this.entityFilterText.toLowerCase().trim();
-    return this.entities.filter(e =>
-      e.Name.toLowerCase().includes(filter) ||
-      (e.Description && e.Description.toLowerCase().includes(filter))
-    );
+
+    return result;
+  }
+
+  /**
+   * Get recent entities for home screen display (max 5)
+   */
+  get recentEntities(): EntityInfo[] {
+    return this.state.recentEntityAccesses
+      .slice(0, 5)
+      .map(r => this.entities.find(e => e.ID === r.entityId))
+      .filter((e): e is EntityInfo => e !== undefined);
+  }
+
+  /**
+   * Get favorite entities for home screen display
+   */
+  get favoriteEntities(): EntityInfo[] {
+    return this.state.favoriteEntities
+      .map(f => this.entities.find(e => e.ID === f.entityId))
+      .filter((e): e is EntityInfo => e !== undefined);
+  }
+
+  /**
+   * Check if we should show the Common/All toggle
+   * Only show if we have DefaultForNewUser information
+   */
+  get showCommonAllToggle(): boolean {
+    return this.stateService.DefaultEntityIds.size > 0;
+  }
+
+  /**
+   * Total count of all entities (for display)
+   */
+  get allEntitiesCount(): number {
+    return this.entities.length;
+  }
+
+  /**
+   * Count of common (DefaultForNewUser) entities
+   */
+  get commonEntitiesCount(): number {
+    return this.entities.filter(e => this.stateService.DefaultEntityIds.has(e.ID)).length;
   }
 
   /**
@@ -196,11 +282,59 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.cdr.detectChanges();
       });
 
+    // Subscribe to recent records changes
+    this.stateService.RecentRecords
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(records => {
+        this.recentRecords = records;
+        this.isLoadingRecentRecords = false;
+        this.cdr.detectChanges();
+      });
+
     // Enable URL updates now that initialization is complete
     this.skipUrlUpdates = false;
 
     // Update URL to reflect current state (whether from URL, deepLink, or persisted)
     this.updateUrl();
+  }
+
+  /**
+   * Handle keyboard shortcuts
+   * "/" or Cmd+K focuses the filter input
+   */
+  @HostListener('document:keydown', ['$event'])
+  handleKeyboardShortcut(event: KeyboardEvent): void {
+    // Skip if user is typing in an input field
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      // Allow Escape to blur the input
+      if (event.key === 'Escape') {
+        (target as HTMLInputElement).blur();
+      }
+      return;
+    }
+
+    // "/" to focus filter
+    if (event.key === '/') {
+      event.preventDefault();
+      this.focusFilterInput();
+    }
+
+    // Cmd+K or Ctrl+K to focus filter
+    if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+      event.preventDefault();
+      this.focusFilterInput();
+    }
+  }
+
+  /**
+   * Focus the filter input
+   */
+  private focusFilterInput(): void {
+    if (this.filterInputRef) {
+      this.filterInputRef.nativeElement.focus();
+      this.filterInputRef.nativeElement.select();
+    }
   }
 
   override ngOnDestroy(): void {
@@ -338,12 +472,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Handle entity selection from navigation panel
+   * Handle entity selection from navigation panel or home screen
    */
   public onEntitySelected(entity: EntityInfo): void {
     this.resetRecordCounts();
     this.selectedEntity = entity;
     this.stateService.selectEntity(entity.Name);
+    // Track entity access for recent entities
+    this.stateService.trackEntityAccess(entity.Name, entity.ID);
     // mj-entity-viewer will automatically load data when entity changes
   }
 
@@ -923,6 +1059,85 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Update the URL without triggering navigation
     this.location.replaceState(newUrl);
+  }
+
+  // ========================================
+  // HOME SCREEN ACTIONS
+  // ========================================
+
+  /**
+   * Toggle entity favorite status
+   */
+  public async toggleEntityFavorite(entity: EntityInfo, event: Event): Promise<void> {
+    event.stopPropagation(); // Prevent card click
+    if (this.stateService.isEntityFavorited(entity.ID)) {
+      await this.stateService.removeEntityFromFavorites(entity.ID);
+    } else {
+      await this.stateService.addEntityToFavorites(entity.Name, entity.ID);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Check if entity is favorited (for template)
+   */
+  public isEntityFavorited(entity: EntityInfo): boolean {
+    return this.stateService.isEntityFavorited(entity.ID);
+  }
+
+  /**
+   * Toggle show all entities vs common entities
+   */
+  public toggleShowAllEntities(): void {
+    this.stateService.toggleShowAllEntities();
+  }
+
+  /**
+   * Handle clicking on a recent record from home screen
+   */
+  public onRecentRecordClick(record: RecentRecordAccess): void {
+    // Navigate to the entity first
+    const entity = this.entities.find(e => e.ID === record.entityId);
+    if (entity) {
+      this.onEntitySelected(entity);
+      // After entity loads, we could try to select the record
+      // For now, just navigate to the entity
+    }
+  }
+
+  /**
+   * Get the icon for an entity by ID (for recent records)
+   */
+  public getEntityIconById(entityId: string): string {
+    const entity = this.metadata.Entities.find(e => e.ID === entityId);
+    if (entity) {
+      return this.getEntityIcon(entity);
+    }
+    return 'fa-solid fa-table';
+  }
+
+  /**
+   * Format relative time for display (e.g., "2 hours ago")
+   */
+  public formatRelativeTime(date: Date): string {
+    const now = new Date();
+    const diff = now.getTime() - new Date(date).getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(date).toLocaleDateString();
+  }
+
+  /**
+   * Check if we're at the home level (no entity selected)
+   */
+  get isAtHomeLevel(): boolean {
+    return !this.selectedEntity;
   }
 }
 

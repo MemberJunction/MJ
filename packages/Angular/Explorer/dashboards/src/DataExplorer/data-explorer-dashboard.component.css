@@ -386,3 +386,346 @@
   flex-direction: column;
   min-height: 0;
 }
+
+/* ============================================
+   HOME SCREEN STYLES
+   ============================================ */
+
+/* Home-level header adjustments */
+.content-header.home-header {
+  border-bottom: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 24px 24px 16px;
+}
+
+.content-body.home-content {
+  padding-top: 0;
+}
+
+/* Smart filter with search icon */
+.filter-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.smart-filter-container .smart-filter-input {
+  padding-left: 40px;
+}
+
+/* ============================================
+   HOME SECTIONS
+   ============================================ */
+
+.home-section {
+  margin-bottom: 28px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-left: 4px;
+}
+
+.section-icon {
+  font-size: 14px;
+  color: #1976d2;
+  width: 20px;
+  text-align: center;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-count {
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+/* ============================================
+   COMPACT ENTITY CARDS (Recent/Favorites rows)
+   ============================================ */
+
+.entity-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0;
+}
+
+.entity-card.compact {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 180px;
+  max-width: 280px;
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.entity-card.compact .entity-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.entity-card.compact .entity-card-icon i {
+  font-size: 16px;
+}
+
+.entity-card.compact .entity-card-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.entity-card.compact .entity-card-content {
+  display: flex;
+  align-items: center;
+}
+
+/* ============================================
+   FAVORITE BUTTON
+   ============================================ */
+
+.favorite-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ccc;
+  transition: all 0.15s ease;
+  margin-left: auto;
+}
+
+.favorite-btn:hover {
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
+  transform: scale(1.1);
+}
+
+.favorite-btn.favorited {
+  color: #ffc107;
+}
+
+.favorite-btn.favorited:hover {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffb300;
+}
+
+.entity-card .favorite-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.entity-card:hover .favorite-btn {
+  opacity: 1;
+}
+
+.entity-card .favorite-btn.favorited {
+  opacity: 1;
+}
+
+/* ============================================
+   RECENT RECORDS LIST
+   ============================================ */
+
+.recent-records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: white;
+  border-radius: 10px;
+  padding: 8px;
+  border: 1px solid #e8e8e8;
+}
+
+.recent-record-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.recent-record-item:hover {
+  background: #f5f7fa;
+}
+
+.recent-record-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.recent-record-icon i {
+  font-size: 14px;
+  color: #4caf50;
+}
+
+.recent-record-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-record-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-record-entity {
+  font-size: 12px;
+  color: #888;
+}
+
+.recent-record-time {
+  font-size: 11px;
+  color: #aaa;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   COMMON/ALL TOGGLE WITH LABELS
+   ============================================ */
+
+.view-mode-toggle .toggle-btn {
+  width: auto;
+  padding: 0 12px;
+  gap: 6px;
+}
+
+.toggle-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ============================================
+   EMPTY STATE VARIANTS
+   ============================================ */
+
+.empty-state.small {
+  height: auto;
+  padding: 32px;
+  background: #fafafa;
+}
+
+.empty-state.small .empty-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.empty-state.small h3 {
+  font-size: 16px;
+}
+
+.empty-state.small p {
+  font-size: 13px;
+}
+
+/* ============================================
+   RESPONSIVE STYLES
+   ============================================ */
+
+@media (max-width: 1200px) {
+  .entity-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .content-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header-center {
+    order: 3;
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+
+  .entity-card.compact {
+    min-width: 160px;
+  }
+}
+
+@media (max-width: 600px) {
+  .data-explorer-container {
+    flex-direction: column;
+  }
+
+  .navigation-panel {
+    display: none;
+  }
+
+  .content-header {
+    padding: 12px 16px;
+  }
+
+  .content-body {
+    padding: 12px 16px;
+  }
+
+  .entity-card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .entity-card {
+    padding: 16px;
+  }
+
+  .entity-card.compact {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  .entity-card-row {
+    flex-direction: column;
+  }
+
+  .view-mode-toggle {
+    display: none;
+  }
+
+  .section-title {
+    font-size: 13px;
+  }
+
+  .home-section {
+    margin-bottom: 20px;
+  }
+}

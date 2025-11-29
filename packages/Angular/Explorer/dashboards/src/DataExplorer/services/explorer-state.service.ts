@@ -1,11 +1,13 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { UserSettingEntity } from '@memberjunction/core-entities';
-import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter } from '../models/explorer-state.interface';
+import { UserSettingEntity, UserFavoriteEntity, UserRecordLogEntity, ApplicationEntityEntity } from '@memberjunction/core-entities';
+import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, RecentEntityAccess, FavoriteEntity, RecentRecordAccess } from '../models/explorer-state.interface';
 
 const BASE_SETTING_KEY = 'DataExplorer.State';
 const MAX_RECENT_ITEMS = 20;
+const MAX_RECENT_ENTITIES = 10;
+const MAX_RECENT_RECORDS = 10;
 const MAX_ENTITY_CACHE_SIZE = 50; // LRU cache limit
 
 @Injectable({
@@ -22,6 +24,15 @@ export class ExplorerStateService {
   /** Computed breadcrumbs based on current state */
   private breadcrumbs$ = new BehaviorSubject<BreadcrumbItem[]>([]);
 
+  /** Recent records loaded from User Record Logs */
+  private recentRecords$ = new BehaviorSubject<RecentRecordAccess[]>([]);
+
+  /** Application entities with DefaultForNewUser info (loaded once per context) */
+  private applicationEntities: ApplicationEntityEntity[] = [];
+
+  /** Set of entity IDs that have DefaultForNewUser=true */
+  private defaultEntityIds = new Set<string>();
+
   constructor() {
     // Don't load state in constructor - wait for setContext to be called
   }
@@ -33,6 +44,12 @@ export class ExplorerStateService {
   async setContext(filter: DataExplorerFilter | null): Promise<void> {
     this.currentFilter = filter;
     await this.loadState();
+    // Load additional data in parallel
+    await Promise.all([
+      this.loadApplicationEntities(),
+      this.loadFavoriteEntities(),
+      this.loadRecentRecords()
+    ]);
     this.updateBreadcrumbs();
   }
 
@@ -80,6 +97,27 @@ export class ExplorerStateService {
    */
   get CurrentFilter(): DataExplorerFilter | null {
     return this.currentFilter;
+  }
+
+  /**
+   * Observable of recent records (from User Record Logs)
+   */
+  get RecentRecords(): Observable<RecentRecordAccess[]> {
+    return this.recentRecords$.asObservable();
+  }
+
+  /**
+   * Get current recent records value
+   */
+  get CurrentRecentRecords(): RecentRecordAccess[] {
+    return this.recentRecords$.value;
+  }
+
+  /**
+   * Get the set of entity IDs with DefaultForNewUser=true
+   */
+  get DefaultEntityIds(): Set<string> {
+    return this.defaultEntityIds;
   }
 
   /**
@@ -476,5 +514,250 @@ export class ExplorerStateService {
         // Already at record level, do nothing
         break;
     }
+  }
+
+  // ========================================
+  // HOME SCREEN ENTITY MANAGEMENT
+  // ========================================
+
+  /**
+   * Toggle between showing all entities or just common (DefaultForNewUser) entities
+   */
+  toggleShowAllEntities(): void {
+    this.updateState({ showAllEntities: !this.state$.value.showAllEntities });
+  }
+
+  /**
+   * Track entity access - called when user navigates to an entity
+   */
+  trackEntityAccess(entityName: string, entityId: string): void {
+    const recentEntityAccesses = [...this.state$.value.recentEntityAccesses];
+
+    // Find existing entry
+    const existingIndex = recentEntityAccesses.findIndex(r => r.entityId === entityId);
+
+    if (existingIndex >= 0) {
+      // Update existing entry
+      recentEntityAccesses[existingIndex] = {
+        ...recentEntityAccesses[existingIndex],
+        lastAccessed: new Date(),
+        accessCount: recentEntityAccesses[existingIndex].accessCount + 1
+      };
+      // Move to front
+      const [item] = recentEntityAccesses.splice(existingIndex, 1);
+      recentEntityAccesses.unshift(item);
+    } else {
+      // Add new entry at front
+      recentEntityAccesses.unshift({
+        entityName,
+        entityId,
+        lastAccessed: new Date(),
+        accessCount: 1
+      });
+    }
+
+    // Trim to max size
+    if (recentEntityAccesses.length > MAX_RECENT_ENTITIES) {
+      recentEntityAccesses.length = MAX_RECENT_ENTITIES;
+    }
+
+    this.updateState({ recentEntityAccesses });
+  }
+
+  /**
+   * Add entity to favorites using User Favorites entity
+   */
+  async addEntityToFavorites(entityName: string, entityId: string): Promise<boolean> {
+    try {
+      const userId = this.metadata.CurrentUser?.ID;
+      if (!userId) return false;
+
+      // Check if already favorited
+      const favorites = this.state$.value.favoriteEntities;
+      if (favorites.some(f => f.entityId === entityId)) {
+        return true; // Already favorited
+      }
+
+      // Get the Entities entity ID for favoriting
+      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
+      if (!entitiesEntity) return false;
+
+      // Create User Favorite record
+      const md = new Metadata();
+      const favorite = await md.GetEntityObject<UserFavoriteEntity>('User Favorites');
+      favorite.UserID = userId;
+      favorite.EntityID = entitiesEntity.ID;
+      favorite.RecordID = entityId;
+
+      const saved = await favorite.Save();
+      if (saved) {
+        // Update local state
+        const favoriteEntities = [...favorites, {
+          userFavoriteId: favorite.ID,
+          entityName,
+          entityId
+        }];
+        this.updateState({ favoriteEntities });
+      }
+      return saved;
+    } catch (error) {
+      console.warn('Failed to add entity to favorites:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove entity from favorites
+   */
+  async removeEntityFromFavorites(entityId: string): Promise<boolean> {
+    try {
+      const favorites = this.state$.value.favoriteEntities;
+      const favorite = favorites.find(f => f.entityId === entityId);
+      if (!favorite) return true; // Already not favorited
+
+      // Delete User Favorite record
+      const md = new Metadata();
+      const favoriteEntity = await md.GetEntityObject<UserFavoriteEntity>('User Favorites');
+      await favoriteEntity.Load(favorite.userFavoriteId);
+      const deleted = await favoriteEntity.Delete();
+
+      if (deleted) {
+        // Update local state
+        const favoriteEntities = favorites.filter(f => f.entityId !== entityId);
+        this.updateState({ favoriteEntities });
+      }
+      return deleted;
+    } catch (error) {
+      console.warn('Failed to remove entity from favorites:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if an entity is favorited
+   */
+  isEntityFavorited(entityId: string): boolean {
+    return this.state$.value.favoriteEntities.some(f => f.entityId === entityId);
+  }
+
+  /**
+   * Load application entities with DefaultForNewUser information
+   */
+  private async loadApplicationEntities(): Promise<void> {
+    try {
+      if (!this.currentFilter?.applicationId) {
+        this.applicationEntities = [];
+        this.defaultEntityIds.clear();
+        return;
+      }
+
+      const rv = new RunView();
+      const result = await rv.RunView<ApplicationEntityEntity>({
+        EntityName: 'Application Entities',
+        ExtraFilter: `ApplicationID = '${this.currentFilter.applicationId}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results) {
+        this.applicationEntities = result.Results;
+        this.defaultEntityIds.clear();
+        for (const appEntity of result.Results) {
+          if (appEntity.DefaultForNewUser) {
+            this.defaultEntityIds.add(appEntity.EntityID);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load application entities:', error);
+    }
+  }
+
+  /**
+   * Load favorite entities from User Favorites
+   */
+  private async loadFavoriteEntities(): Promise<void> {
+    try {
+      const userId = this.metadata.CurrentUser?.ID;
+      if (!userId) return;
+
+      // Get the Entities entity to filter favorites
+      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
+      if (!entitiesEntity) return;
+
+      const rv = new RunView();
+      const result = await rv.RunView<UserFavoriteEntity>({
+        EntityName: 'User Favorites',
+        ExtraFilter: `UserID='${userId}' AND EntityID='${entitiesEntity.ID}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results) {
+        const favoriteEntities: FavoriteEntity[] = [];
+        for (const fav of result.Results) {
+          // Look up entity name from RecordID (which is the Entity.ID)
+          const entity = this.metadata.Entities.find(e => e.ID === fav.RecordID);
+          if (entity) {
+            favoriteEntities.push({
+              userFavoriteId: fav.ID,
+              entityName: entity.Name,
+              entityId: fav.RecordID
+            });
+          }
+        }
+        this.updateState({ favoriteEntities });
+      }
+    } catch (error) {
+      console.warn('Failed to load favorite entities:', error);
+    }
+  }
+
+  /**
+   * Load recent records from User Record Logs
+   */
+  private async loadRecentRecords(): Promise<void> {
+    try {
+      const userId = this.metadata.CurrentUser?.ID;
+      if (!userId) return;
+
+      const rv = new RunView();
+      const result = await rv.RunView<UserRecordLogEntity>({
+        EntityName: 'User Record Logs',
+        ExtraFilter: `UserID='${userId}'`,
+        OrderBy: 'LatestAt DESC',
+        MaxRows: MAX_RECENT_RECORDS,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results) {
+        const recentRecords: RecentRecordAccess[] = [];
+        for (const log of result.Results) {
+          // Look up entity name from EntityID
+          const entity = this.metadata.Entities.find(e => e.ID === log.EntityID);
+          if (entity) {
+            // Filter by application context if applicable
+            if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === log.EntityID)) {
+              continue; // Skip records from entities not in this application
+            }
+            recentRecords.push({
+              entityName: entity.Name,
+              entityId: log.EntityID,
+              recordId: log.RecordID,
+              latestAt: log.LatestAt,
+              totalCount: log.TotalCount
+            });
+          }
+        }
+        this.recentRecords$.next(recentRecords);
+      }
+    } catch (error) {
+      console.warn('Failed to load recent records:', error);
+    }
+  }
+
+  /**
+   * Refresh recent records (call after navigating to a record)
+   */
+  async refreshRecentRecords(): Promise<void> {
+    await this.loadRecentRecords();
   }
 }
