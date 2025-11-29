@@ -248,6 +248,15 @@
   font-weight: 500;
 }
 
+/* Loading state */
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px;
+}
+
 /* No results state */
 .no-results {
   grid-column: 1 / -1;

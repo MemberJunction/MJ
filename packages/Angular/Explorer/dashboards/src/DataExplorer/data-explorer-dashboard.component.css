@@ -217,7 +217,8 @@
   flex-direction: column;
 }
 
-.loading-container {
+.loading-container,
+.loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;

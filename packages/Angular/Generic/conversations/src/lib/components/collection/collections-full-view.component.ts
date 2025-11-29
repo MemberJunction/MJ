@@ -1572,10 +1572,6 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   viewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
     this.activeArtifactId = item.artifact.ID;
     this.artifactState.openArtifact(item.artifact.ID, item.version.VersionNumber);
-
-    // Don't emit navigation event when just viewing an artifact in current collection
-    // Only emit when actually navigating between collections (handled by openCollection, navigateTo, etc.)
-    // The artifactState.openArtifact() already handles updating the artifact viewer
   }
 
   // Permission validation and checking methods
@@ -1902,6 +1898,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     if (item.type === 'folder' && item.collection) {
       this.openCollection(item.collection);
     } else if (item.type === 'artifact') {
+      if (!item.artifact || !item.version) {
+        console.error('Artifact or version is missing for item:', item.id);
+        return;
+      }
       this.viewArtifact({ artifact: item.artifact, version: item.version });
     }
   }

@@ -1,6 +1,11 @@
 <div class="cards-view-wrapper">
-  <div class="cards-container">
-    @for (record of records; track getRecordTrackId(record, $index)) {
+  @if (isLoading && effectiveRecords.length === 0) {
+    <div class="loading-container">
+      <mj-loading text="Loading records..."></mj-loading>
+    </div>
+  } @else {
+    <div class="cards-container">
+      @for (record of effectiveRecords; track getRecordTrackId(record, $index)) {
     <div
       class="data-card"
       [class.selected]="isSelected(record)"
@@ -98,11 +103,12 @@
     </div>
     }
 
-    @if (records.length === 0) {
+    @if (effectiveRecords.length === 0) {
       <div class="no-results">
         <i class="fa-solid fa-inbox"></i>
         <p>No records to display</p>
       </div>
     }
-  </div>
+    </div>
+  }
 </div>

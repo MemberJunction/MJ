@@ -509,6 +509,58 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Navigate to a nav item by name within the current or specified application.
+   * Allows passing additional configuration parameters to merge with the nav item's config.
+   * This is useful for cross-resource navigation where a component needs to navigate
+   * to another nav item with specific parameters (e.g., navigate to Conversations with a specific conversationId).
+   *
+   * @param navItemName The label/name of the nav item to navigate to
+   * @param configuration Additional configuration to merge (e.g., conversationId, artifactId)
+   * @param appId Optional app ID (defaults to current active app)
+   * @param options Navigation options
+   * @returns The tab ID if successful, null if nav item not found
+   */
+  public OpenNavItemByName(
+    navItemName: string,
+    configuration?: Record<string, unknown>,
+    appId?: string,
+    options?: NavigationOptions
+  ): string | null {
+    // Get app (use provided or current active)
+    const targetAppId = appId || this.appManager.GetActiveApp()?.ID;
+    if (!targetAppId) {
+      console.warn('[NavigationService.OpenNavItemByName] No app ID provided and no active app');
+      return null;
+    }
+
+    const app = this.appManager.GetAppById(targetAppId);
+    if (!app) {
+      console.warn('[NavigationService.OpenNavItemByName] App not found:', targetAppId);
+      return null;
+    }
+
+    // Find the nav item by name
+    const navItems = app.GetNavItems();
+    const navItem = navItems.find(item => item.Label === navItemName);
+    if (!navItem) {
+      console.warn('[NavigationService.OpenNavItemByName] Nav item not found:', navItemName, 'in app:', targetAppId);
+      return null;
+    }
+
+    // Create a merged nav item with additional configuration
+    const mergedNavItem: NavItem = {
+      ...navItem,
+      Configuration: {
+        ...(navItem.Configuration || {}),
+        ...(configuration || {})
+      }
+    };
+
+    // Use existing OpenNavItem
+    return this.OpenNavItem(targetAppId, mergedNavItem, app.GetColor(), options);
+  }
+
+  /**
    * Switch to an application by ID.
    * This sets the app as active and either opens a specific nav item or creates a default tab.
    * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.

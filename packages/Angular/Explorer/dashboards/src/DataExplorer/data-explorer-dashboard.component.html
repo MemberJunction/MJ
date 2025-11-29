@@ -131,37 +131,43 @@
       @if (!selectedEntity) {
         <!-- Entity Home View - Card Grid -->
         <div class="entity-home-view">
-          <div class="entity-card-grid">
-            @for (entity of filteredEntities; track entity.ID) {
-              <div
-                class="entity-card"
-                (click)="onEntitySelected(entity)"
-                [title]="entity.Description || entity.Name">
-                <div class="entity-card-icon">
-                  <i [class]="getEntityIcon(entity)"></i>
+          @if (isLoadingEntities) {
+            <div class="loading-state">
+              <mj-loading text="Loading entities..." size="medium"></mj-loading>
+            </div>
+          } @else {
+            <div class="entity-card-grid">
+              @for (entity of filteredEntities; track entity.ID) {
+                <div
+                  class="entity-card"
+                  (click)="onEntitySelected(entity)"
+                  [title]="entity.Description || entity.Name">
+                  <div class="entity-card-icon">
+                    <i [class]="getEntityIcon(entity)"></i>
+                  </div>
+                  <div class="entity-card-content">
+                    <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                    @if (entity.Description) {
+                      <p class="entity-card-description">{{ entity.Description }}</p>
+                    }
+                  </div>
                 </div>
-                <div class="entity-card-content">
-                  <h4 class="entity-card-title">{{ entity.Name }}</h4>
-                  @if (entity.Description) {
-                    <p class="entity-card-description">{{ entity.Description }}</p>
-                  }
-                </div>
+              }
+            </div>
+            @if (filteredEntities.length === 0 && entities.length > 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-search empty-icon"></i>
+                <h3>No Matching Entities</h3>
+                <p>No entities match "{{ entityFilterText }}"</p>
               </div>
             }
-          </div>
-          @if (filteredEntities.length === 0 && entities.length > 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-search empty-icon"></i>
-              <h3>No Matching Entities</h3>
-              <p>No entities match "{{ entityFilterText }}"</p>
-            </div>
-          }
-          @if (entities.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-database empty-icon"></i>
-              <h3>No Entities Available</h3>
-              <p>There are no entities configured for this application.</p>
-            </div>
+            @if (entities.length === 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-database empty-icon"></i>
+                <h3>No Entities Available</h3>
+                <p>There are no entities configured for this application.</p>
+              </div>
+            }
           }
         </div>
       } @else {

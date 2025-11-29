@@ -1,5 +1,9 @@
 <div class="entity-grid-container" [style.height]="height">
-  @if (entity && rowData.length > 0) {
+  @if (isLoading && rowData.length === 0) {
+    <div class="loading-state">
+      <mj-loading text="Loading..." size="medium"></mj-loading>
+    </div>
+  } @else if (entity && rowData.length > 0) {
     <ag-grid-angular
       class="entity-grid"
       [theme]="theme"
@@ -11,7 +15,8 @@
       [suppressCellFocus]="true"
       (gridReady)="onGridReady($event)"
       (rowClicked)="onRowClicked($event)"
-      (rowDoubleClicked)="onRowDoubleClicked($event)">
+      (rowDoubleClicked)="onRowDoubleClicked($event)"
+      (sortChanged)="onGridSortChanged($event)">
     </ag-grid-angular>
   } @else if (entity && rowData.length === 0) {
     <div class="no-data">

@@ -1,9 +1,10 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Location } from '@angular/common';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView } from '@memberjunction/core';
+import { Metadata, EntityInfo, RunView, CompositeKey } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { ApplicationEntityEntity } from '@memberjunction/core-entities';
 import {
@@ -78,6 +79,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Breadcrumbs for navigation display
   public breadcrumbs: BreadcrumbItem[] = [];
 
+  // Loading state for entities
+  public isLoadingEntities: boolean = true;
+
+  // Flag to skip URL updates during initialization (when applying deep link)
+  private skipUrlUpdates: boolean = true;
+
   /**
    * Filtered entities based on entityFilterText (for home screen)
    */
@@ -95,40 +102,56 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Configuration for mj-entity-viewer composite component
    * Hides the built-in header since we have a custom header in the dashboard
+   * Uses server-side pagination with 100 records per page (default)
    */
   public viewerConfig: Partial<EntityViewerConfig> = {
     showFilter: false,        // We have our own filter in the dashboard header
     showViewModeToggle: false, // We have our own toggle in the dashboard header
     showRecordCount: false,   // We show count in the dashboard header
-    pageSize: 1000,           // Load more records for better browsing
+    showPagination: true,     // Show the pagination UI with "Load More" button
+    serverSideFiltering: true, // Use RunView's UserSearchString for filtering
+    serverSideSorting: true,  // Use RunView's OrderBy for sorting
     height: '100%'
   };
 
   constructor(
     public stateService: ExplorerStateService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private location: Location
   ) {
     super();
     this.state = this.stateService.CurrentState;
   }
 
   async ngOnInit(): Promise<void> {
+    // Parse URL state FIRST - URL wins over persisted state
+    // This must happen before loading entities to prevent race conditions
+    const urlState = this.parseUrlState();
+
     // Set context for state service (enables context-specific settings)
     await this.stateService.setContext(this.entityFilter);
     this.state = this.stateService.CurrentState;
 
-    // Initialize debounced filter from persisted state
-    if (this.state.smartFilterPrompt) {
+    // Initialize debounced filter from persisted state (only if no URL state)
+    if (!urlState && this.state.smartFilterPrompt) {
       this.debouncedFilterText = this.state.smartFilterPrompt;
     }
 
     // Load available entities (async to support applicationId filter)
-    await this.loadEntities();
+    // Pass urlState so we don't restore persisted entity if URL specifies one
+    await this.loadEntities(urlState);
 
-    // Apply deep link if provided (overrides persisted state)
-    if (this.deepLink) {
+    // Apply URL state after entities are loaded
+    if (urlState) {
+      // URL has state - apply it (overrides persisted state)
+      this.applyUrlState(urlState);
+    } else if (this.deepLink) {
+      // No URL state but @Input deepLink provided - use that
       await this.applyDeepLink(this.deepLink);
     }
+
+    // Setup browser back/forward navigation listener
+    this.setupPopStateListener();
 
     // Subscribe to state changes
     this.stateService.State
@@ -144,6 +167,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         }
 
         this.onStateChanged();
+
+        // Update URL to reflect current state (for deep linking)
+        if (!this.skipUrlUpdates) {
+          this.updateUrl();
+        }
+
         this.cdr.detectChanges();
       });
 
@@ -166,9 +195,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.debouncedFilterText = filterText;
         this.cdr.detectChanges();
       });
+
+    // Enable URL updates now that initialization is complete
+    this.skipUrlUpdates = false;
+
+    // Update URL to reflect current state (whether from URL, deepLink, or persisted)
+    this.updateUrl();
   }
 
   override ngOnDestroy(): void {
+    this.cleanupPopStateListener();
     this.destroy$.next();
     this.destroy$.complete();
     super.ngOnDestroy();
@@ -198,34 +234,43 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /**
    * Load all available entities the user can access, applying any configured filter
+   * @param urlState Optional URL state - if provided, skip restoring persisted entity to avoid race conditions
    */
-  private async loadEntities(): Promise<void> {
+  private async loadEntities(urlState?: DataExplorerDeepLink | null): Promise<void> {
     console.log('[DataExplorer] loadEntities called, entityFilter:', this.entityFilter);
+    this.isLoadingEntities = true;
 
-    // First, load all entities the user can access
-    this.allEntities = this.metadata.Entities
-      .filter(e => {
-        const perms = e.GetUserPermisions(this.metadata.CurrentUser);
-        return perms.CanRead && e.IncludeInAPI;
-      })
-      .sort((a, b) => a.Name.localeCompare(b.Name));
+    try {
+      // First, load all entities the user can access
+      this.allEntities = this.metadata.Entities
+        .filter(e => {
+          const perms = e.GetUserPermisions(this.metadata.CurrentUser);
+          return perms.CanRead && e.IncludeInAPI;
+        })
+        .sort((a, b) => a.Name.localeCompare(b.Name));
 
-    console.log('[DataExplorer] allEntities count:', this.allEntities.length);
+      console.log('[DataExplorer] allEntities count:', this.allEntities.length);
 
-    // If we have an applicationId filter, load the application entities
-    if (this.entityFilter?.applicationId) {
-      await this.loadApplicationEntityIds(this.entityFilter.applicationId);
-      console.log('[DataExplorer] applicationEntityIds count:', this.applicationEntityIds.size);
-    }
+      // If we have an applicationId filter, load the application entities
+      if (this.entityFilter?.applicationId) {
+        await this.loadApplicationEntityIds(this.entityFilter.applicationId);
+        console.log('[DataExplorer] applicationEntityIds count:', this.applicationEntityIds.size);
+      }
 
-    // Apply filter to get the final entity list
-    this.entities = this.applyEntityFilter(this.allEntities);
+      // Apply filter to get the final entity list
+      this.entities = this.applyEntityFilter(this.allEntities);
 
-    console.log('[DataExplorer] filtered entities count:', this.entities.length);
+      console.log('[DataExplorer] filtered entities count:', this.entities.length);
 
-    // If there's a selected entity in state, restore it
-    if (this.state.selectedEntityName) {
-      this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
+      // Only restore entity from persisted state if there's no URL state
+      // This prevents race conditions where persisted entity triggers data load
+      // before URL state can override it
+      if (!urlState && this.state.selectedEntityName) {
+        this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
+      }
+    } finally {
+      this.isLoadingEntities = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -296,6 +341,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle entity selection from navigation panel
    */
   public onEntitySelected(entity: EntityInfo): void {
+    this.resetRecordCounts();
     this.selectedEntity = entity;
     this.stateService.selectEntity(entity.Name);
     // mj-entity-viewer will automatically load data when entity changes
@@ -306,8 +352,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   private onStateChanged(): void {
     if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
+      this.resetRecordCounts();
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
     }
+  }
+
+  /**
+   * Reset record counts when entity changes.
+   * The actual counts will be updated when mj-entity-viewer emits dataLoaded event.
+   */
+  private resetRecordCounts(): void {
+    this.totalRecordCount = 0;
+    this.filteredRecordCount = 0;
   }
 
   // ========================================
@@ -596,6 +652,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       );
 
       if (entity) {
+        // Reset counts before setting entity to prevent stale data display
+        this.resetRecordCounts();
         this.selectedEntity = entity;
         this.stateService.selectEntity(entity.Name);
 
@@ -697,6 +755,174 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return `fa-solid ${icon}`;
     }
     return `fa-solid fa-${icon}`;
+  }
+
+  // ========================================
+  // URL DEEP LINKING
+  // ========================================
+
+  /** Bound handler for popstate events (needed for removeEventListener) */
+  private boundPopStateHandler = this.onPopState.bind(this);
+
+  /**
+   * Setup listener for browser back/forward navigation.
+   * Called during ngOnInit.
+   */
+  private setupPopStateListener(): void {
+    window.addEventListener('popstate', this.boundPopStateHandler);
+  }
+
+  /**
+   * Clean up popstate listener.
+   * Called during ngOnDestroy.
+   */
+  private cleanupPopStateListener(): void {
+    window.removeEventListener('popstate', this.boundPopStateHandler);
+  }
+
+  /**
+   * Handle browser back/forward navigation.
+   * Parses URL and applies state without triggering URL update.
+   */
+  private onPopState(): void {
+    const urlState = this.parseUrlState();
+    if (urlState) {
+      this.skipUrlUpdates = true;
+      this.applyUrlState(urlState);
+      this.skipUrlUpdates = false;
+    }
+  }
+
+  /**
+   * Parse URL query string and return a deep link object.
+   * Returns null if no relevant params found.
+   *
+   * Query params:
+   * - entity: Selected entity name
+   * - record: Selected record ID (URL segment format via CompositeKey)
+   * - filter: Current filter text
+   * - view: View mode (grid or cards)
+   */
+  private parseUrlState(): DataExplorerDeepLink | null {
+    const queryString = window.location.search;
+    if (!queryString) {
+      return null;
+    }
+
+    const params = new URLSearchParams(queryString);
+    const entity = params.get('entity');
+    const record = params.get('record');
+    const filter = params.get('filter');
+    const view = params.get('view') as 'grid' | 'cards' | null;
+
+    // If no params, return null
+    if (!entity && !record && !filter && !view) {
+      return null;
+    }
+
+    return {
+      entity: entity || undefined,
+      record: record || undefined,
+      filter: filter || undefined,
+      viewMode: view || undefined
+    };
+  }
+
+  /**
+   * Apply URL state to the component.
+   * Used both during init and for popstate handling.
+   */
+  private applyUrlState(urlState: DataExplorerDeepLink): void {
+    // Apply view mode if specified
+    if (urlState.viewMode) {
+      this.stateService.setViewMode(urlState.viewMode);
+    }
+
+    // Navigate to entity if specified
+    if (urlState.entity) {
+      const entity = this.entities.find(e =>
+        e.Name.toLowerCase() === urlState.entity!.toLowerCase()
+      );
+
+      if (entity) {
+        // Reset counts before setting entity to prevent stale data display
+        this.resetRecordCounts();
+        this.selectedEntity = entity;
+        this.stateService.selectEntity(entity.Name);
+
+        // Apply filter if specified
+        if (urlState.filter) {
+          this.stateService.setSmartFilterPrompt(urlState.filter);
+          this.debouncedFilterText = urlState.filter;
+        } else {
+          // Clear filter if not in URL
+          this.stateService.setSmartFilterPrompt('');
+          this.debouncedFilterText = '';
+        }
+
+        // Handle record selection after data loads
+        if (urlState.record) {
+          this.pendingRecordSelection = urlState.record;
+        } else {
+          // Clear record selection if not in URL
+          this.selectedRecord = null;
+          this.detailPanelEntity = null;
+          this.stateService.closeDetailPanel();
+        }
+      } else {
+        console.warn(`[DataExplorer] URL entity not found: ${urlState.entity}`);
+      }
+    } else {
+      // No entity in URL - go to home view
+      this.selectedEntity = null;
+      this.selectedRecord = null;
+      this.detailPanelEntity = null;
+      this.stateService.selectEntity(null as unknown as string);
+      this.stateService.closeDetailPanel();
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Update the URL query string to reflect current navigation state.
+   * This enables deep linking - users can bookmark or share URLs to specific views.
+   * Called immediately on state changes (not debounced).
+   */
+  private updateUrl(): void {
+    const params = new URLSearchParams();
+
+    // Add entity if selected
+    if (this.state.selectedEntityName) {
+      params.set('entity', this.state.selectedEntityName);
+    }
+
+    // Add record if selected (only if entity is also selected)
+    // Use the stored selectedRecordId which is already in URL segment format
+    if (this.state.selectedRecordId && this.state.selectedEntityName) {
+      // The selectedRecordId is stored using ToConcatenatedString which uses the same format as ToURLSegment
+      params.set('record', this.state.selectedRecordId);
+    }
+
+    // Add filter if present (only if entity is also selected)
+    if (this.state.smartFilterPrompt && this.state.selectedEntityName) {
+      params.set('filter', this.state.smartFilterPrompt);
+    }
+
+    // Add view mode if not default (grid is default)
+    if (this.state.viewMode && this.state.viewMode !== 'grid') {
+      params.set('view', this.state.viewMode);
+    }
+
+    // Get the current path without query string
+    const currentPath = this.location.path().split('?')[0];
+
+    // Build the new URL
+    const queryString = params.toString();
+    const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
+
+    // Update the URL without triggering navigation
+    this.location.replaceState(newUrl);
   }
 }
 

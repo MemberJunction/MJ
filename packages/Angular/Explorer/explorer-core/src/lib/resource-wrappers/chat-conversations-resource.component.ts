@@ -1,12 +1,14 @@
 import { Component, ViewEncapsulation } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
-import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { ConversationStateService } from '@memberjunction/ng-conversations';
 
 export function LoadChatConversationsResource() {
-  const test = new ChatConversationsResource(); // Force inclusion in production builds (tree shaking workaround)
+  // Force inclusion in production builds (tree shaking workaround)
+  // Using null placeholders since Angular DI provides actual instances
+  const test = new ChatConversationsResource(null!, null!);
 }
 
 /**
@@ -34,7 +36,8 @@ export function LoadChatConversationsResource() {
         <mj-conversation-chat-area
           *ngIf="currentUser"
           [environmentId]="environmentId"
-          [currentUser]="currentUser">
+          [currentUser]="currentUser"
+          (artifactLinkClicked)="onArtifactLinkClicked($event)">
         </mj-conversation-chat-area>
       </div>
     </div>
@@ -75,14 +78,46 @@ export function LoadChatConversationsResource() {
 export class ChatConversationsResource extends BaseResourceComponent {
   public currentUser: any = null;
 
+  constructor(
+    private navigationService: NavigationService,
+    private conversationState: ConversationStateService
+  ) {
+    super();
+  }
+
   ngOnInit() {
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
+
+    // Check if we have navigation params to apply (e.g., from Collections linking here)
+    this.applyNavigationParams();
 
     // Notify load complete after user is set
     setTimeout(() => {
       this.NotifyLoadComplete();
     }, 100);
+  }
+
+  /**
+   * Apply navigation parameters from configuration.
+   * This handles deep-linking from other resources (e.g., clicking a link in Collections).
+   */
+  private applyNavigationParams(): void {
+    const config = this.Data?.Configuration;
+    if (!config) return;
+
+    // Set pending artifact if provided (must be set before activating conversation)
+    if (config.artifactId) {
+      console.log('📎 Setting pending artifact from navigation:', config.artifactId);
+      this.conversationState.pendingArtifactId = config.artifactId as string;
+      this.conversationState.pendingArtifactVersionNumber = (config.versionNumber as number) || null;
+    }
+
+    // Activate the target conversation if specified
+    if (config.conversationId) {
+      console.log('💬 Setting active conversation from navigation:', config.conversationId);
+      this.conversationState.setActiveConversation(config.conversationId as string);
+    }
   }
 
   /**
@@ -116,5 +151,38 @@ export class ChatConversationsResource extends BaseResourceComponent {
    */
   async GetResourceIconClass(data: ResourceData): Promise<string> {
     return 'fa-solid fa-comments';
+  }
+
+  /**
+   * Handle navigation request from artifact viewer panel within the chat area.
+   * Converts the link event to a generic navigation request and uses NavigationService.
+   */
+  onArtifactLinkClicked(event: {
+    type: 'conversation' | 'collection';
+    id: string;
+    artifactId?: string;
+    versionNumber?: number;
+  }): void {
+    // Map the link type to the nav item name
+    const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
+
+    // Build configuration params to pass to the target resource
+    const params: Record<string, unknown> = {};
+    if (event.type === 'conversation') {
+      params['conversationId'] = event.id;
+    } else {
+      params['collectionId'] = event.id;
+    }
+
+    // Include artifact info so destination can open it
+    if (event.artifactId) {
+      params['artifactId'] = event.artifactId;
+      if (event.versionNumber) {
+        params['versionNumber'] = event.versionNumber;
+      }
+    }
+
+    // Navigate using the generic nav item method
+    this.navigationService.OpenNavItemByName(navItemName, params);
   }
 }

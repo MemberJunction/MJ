@@ -12,7 +12,10 @@ import {
   DataLoadedEvent,
   FilteredCountChangedEvent,
   CardTemplate,
-  GridColumnDef
+  GridColumnDef,
+  SortState,
+  SortChangedEvent,
+  PaginationState
 } from '../types';
 
 /**
@@ -20,11 +23,12 @@ import {
  *
  * This component provides a complete data viewing experience with:
  * - Switchable grid (AG Grid) and card views
- * - Built-in filtering with SQL-style wildcard support
- * - Automatic data loading or pre-loaded data support
+ * - Server-side filtering with UserSearchString
+ * - Server-side pagination with StartRow/MaxRows
+ * - Server-side sorting with OrderBy
  * - Selection handling with configurable behavior
  * - Loading, empty, and error states
- * - Two-way binding support for view mode and filter text
+ * - Beautiful pagination UI with "Load More" pattern
  *
  * @example
  * ```html
@@ -39,17 +43,11 @@ import {
  * <mj-entity-viewer
  *   [entity]="selectedEntity"
  *   [(viewMode)]="state.viewMode"
- *   [(filterText)]="state.filterText"
+ *   [filterText]="state.filterText"
  *   [selectedRecordId]="state.selectedRecordId"
  *   (recordSelected)="onRecordSelected($event)"
- *   (recordOpened)="onRecordOpened($event)">
- * </mj-entity-viewer>
- *
- * <!-- With pre-loaded data -->
- * <mj-entity-viewer
- *   [entity]="selectedEntity"
- *   [records]="myRecords"
- *   [config]="{ showFilter: true, defaultViewMode: 'cards' }">
+ *   (recordOpened)="onRecordOpened($event)"
+ *   (sortChanged)="onSortChanged($event)">
  * </mj-entity-viewer>
  * ```
  */
@@ -99,6 +97,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   @Input() filterText: string | null = null;
 
   /**
+   * External sort state - allows parent to control sorting
+   */
+  @Input() sortState: SortState | null = null;
+
+  /**
    * Custom grid column definitions
    */
   @Input() gridColumns: GridColumnDef[] = [];
@@ -142,6 +145,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Output() filteredCountChanged = new EventEmitter<FilteredCountChangedEvent>();
 
+  /**
+   * Emitted when sort state changes
+   */
+  @Output() sortChanged = new EventEmitter<SortChangedEvent>();
+
   // ========================================
   // INTERNAL STATE
   // ========================================
@@ -158,8 +166,23 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   /** Track which records matched on hidden (non-visible) fields */
   public hiddenFieldMatches = new Map<string, string>();
 
+  /** Current sort state */
+  public internalSortState: SortState | null = null;
+
+  /** Pagination state */
+  public pagination: PaginationState = {
+    currentPage: 0,
+    pageSize: 100,
+    totalRecords: 0,
+    hasMore: false,
+    isLoading: false
+  };
+
   private destroy$ = new Subject<void>();
   private filterInput$ = new Subject<string>();
+
+  /** Track if this is the first load (vs. load more) */
+  private isInitialLoad: boolean = true;
 
   constructor(private cdr: ChangeDetectorRef) {}
 
@@ -182,6 +205,13 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Get the effective sort state (external or internal)
+   */
+  get effectiveSortState(): SortState | null {
+    return this.sortState ?? this.internalSortState;
+  }
+
+  /**
    * Get merged configuration with defaults
    */
   get effectiveConfig(): Required<EntityViewerConfig> {
@@ -196,14 +226,19 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Get filtered records based on debounced filter text
-   * Filters across all visible text fields in the entity, excluding UUIDs and dates
+   * Get filtered records - when using server-side filtering, records are already filtered
+   * When using client-side filtering, apply filter locally
    */
   get filteredRecords(): BaseEntity[] {
     const records = this.displayRecords;
-    const filterText = this.debouncedFilterText?.trim().toLowerCase();
 
-    // Clear hidden field matches before filtering
+    // If server-side filtering is enabled, records are already filtered
+    if (this.effectiveConfig.serverSideFiltering) {
+      return records;
+    }
+
+    // Client-side filtering fallback
+    const filterText = this.debouncedFilterText?.trim().toLowerCase();
     this.hiddenFieldMatches.clear();
 
     if (!filterText || !this.entity) {
@@ -215,7 +250,6 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     return records.filter(record => {
       const matchResult = this.recordMatchesFilter(record, filterText, visibleFields);
       if (matchResult.matches && matchResult.matchedField && !matchResult.matchedInVisibleField) {
-        // Track hidden field match
         const recordKey = record.PrimaryKey.ToConcatenatedString();
         this.hiddenFieldMatches.set(recordKey, matchResult.matchedField);
       }
@@ -224,8 +258,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Check if a record matches the filter text
-   * Searches across all string-compatible fields, excluding UUIDs and dates
+   * Check if a record matches the filter text (client-side)
    */
   private recordMatchesFilter(
     record: BaseEntity,
@@ -238,7 +271,6 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     let matchedInVisibleField = false;
 
     for (const field of this.entity.Fields) {
-      // Skip fields that shouldn't be searched
       if (!this.shouldSearchField(field)) continue;
 
       const value = record.Get(field.Name);
@@ -249,7 +281,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         matchedField = field.Name;
         if (visibleFields.has(field.Name)) {
           matchedInVisibleField = true;
-          break; // Found a visible match, no need to continue
+          break;
         }
       }
     }
@@ -265,15 +297,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Determine if a field should be included in search
    */
   private shouldSearchField(field: EntityFieldInfo): boolean {
-    // Skip internal MJ fields
     if (field.Name.startsWith('__mj_')) return false;
-
-    // Skip date/time fields
     if (field.TSType === 'Date') return false;
-
-    // Skip UUID/GUID fields
     if (field.SQLFullType?.trim().toLowerCase() === 'uniqueidentifier') return false;
-
     return true;
   }
 
@@ -285,7 +311,6 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       return value.includes(searchTerm);
     }
 
-    // Handle SQL-style wildcards
     const fragments = searchTerm.split('%').filter(s => s.length > 0);
     if (fragments.length === 0) return true;
 
@@ -300,20 +325,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
   /**
    * Get set of field names that are visible in the current view
-   * This is used to determine if a match occurred in a hidden field
    */
   private getVisibleFieldNames(): Set<string> {
     const visible = new Set<string>();
     if (!this.entity) return visible;
 
-    // Add fields that are DefaultInView
     for (const field of this.entity.Fields) {
       if (field.DefaultInView === true) {
         visible.add(field.Name);
       }
     }
 
-    // Add the entity's name field if it exists
     if (this.entity.NameField) {
       visible.add(this.entity.NameField.Name);
     }
@@ -335,7 +357,6 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   public getHiddenMatchFieldName(record: BaseEntity): string {
     const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToConcatenatedString());
     if (!fieldName || !this.entity) return '';
-    // Look up the field in entity metadata and use DisplayNameOrName
     const field = this.entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
   }
@@ -353,10 +374,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.debouncedFilterText = this.filterText;
     }
 
-    // Load data if entity is provided and no pre-loaded records
-    if (!this.records && this.entity) {
-      this.loadData();
+    // Initialize sort state from config
+    if (this.effectiveConfig.defaultSortField) {
+      this.internalSortState = {
+        field: this.effectiveConfig.defaultSortField,
+        direction: this.effectiveConfig.defaultSortDirection ?? 'asc'
+      };
     }
+
+    // Note: We don't call loadData() here because ngOnChanges runs before ngOnInit
+    // and already handles the initial entity binding. Calling loadData() here would
+    // result in duplicate data loading (200 records instead of 100).
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -366,11 +394,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
     if (changes['entity']) {
       if (this.entity && !this.records) {
+        // Reset state for new entity - synchronously clear all data and force change detection
+        // before starting the async load to prevent stale data display
+        this.resetPaginationState();
+        this.cdr.detectChanges();
         this.loadData();
       } else if (!this.entity) {
         this.internalRecords = [];
         this.totalRecordCount = 0;
         this.filteredRecordCount = 0;
+        this.resetPaginationState();
+        this.cdr.detectChanges();
       }
     }
 
@@ -382,15 +416,43 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
     // Handle external filter text changes (from parent component)
     if (changes['filterText']) {
-      this.internalFilterText = this.filterText ?? '';
-      this.debouncedFilterText = this.filterText ?? '';
-      this.updateFilteredCount();
+      const newFilter = this.filterText ?? '';
+      const oldFilter = this.debouncedFilterText;
+
+      this.internalFilterText = newFilter;
+      this.debouncedFilterText = newFilter;
+
+      // If server-side filtering and filter changed, reload from page 1
+      if (this.effectiveConfig.serverSideFiltering && newFilter !== oldFilter && !this.records) {
+        this.resetPaginationState();
+        this.loadData();
+      } else {
+        this.updateFilteredCount();
+      }
       this.cdr.detectChanges();
     }
 
-    // Handle external view mode changes (from parent component)
+    // Handle external view mode changes
     if (changes['viewMode'] && this.viewMode !== null) {
       this.internalViewMode = this.viewMode;
+    }
+
+    // Handle external sort state changes
+    if (changes['sortState'] && this.sortState !== null) {
+      const oldSort = this.internalSortState;
+      this.internalSortState = this.sortState;
+
+      // If sort changed and using server-side sorting, reload
+      if (this.effectiveConfig.serverSideSorting && !this.records) {
+        const sortChanged = !oldSort || !this.sortState ||
+          oldSort.field !== this.sortState.field ||
+          oldSort.direction !== this.sortState.direction;
+
+        if (sortChanged) {
+          this.resetPaginationState();
+          this.loadData();
+        }
+      }
     }
   }
 
@@ -405,7 +467,8 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
   private applyConfig(): void {
     const config = this.effectiveConfig;
-    // Only apply default view mode if not externally controlled
+    this.pagination.pageSize = config.pageSize;
+
     if (this.viewMode === null) {
       this.internalViewMode = config.defaultViewMode;
     }
@@ -419,9 +482,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe(filterText => {
+        const oldFilter = this.debouncedFilterText;
         this.debouncedFilterText = filterText;
         this.filterTextChange.emit(filterText);
-        this.updateFilteredCount();
+
+        // If server-side filtering and filter changed, reload from page 1
+        if (this.effectiveConfig.serverSideFiltering && filterText !== oldFilter && !this.records) {
+          this.resetPaginationState();
+          this.loadData();
+        } else {
+          this.updateFilteredCount();
+        }
         this.cdr.detectChanges();
       });
   }
@@ -440,12 +511,30 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
+  /**
+   * Reset pagination state for a fresh load.
+   * Clears all record data and counts to prevent stale data display during entity switches.
+   */
+  private resetPaginationState(): void {
+    this.pagination = {
+      currentPage: 0,
+      pageSize: this.effectiveConfig.pageSize,
+      totalRecords: 0,
+      hasMore: false,
+      isLoading: false
+    };
+    this.internalRecords = [];
+    this.totalRecordCount = 0;
+    this.filteredRecordCount = 0;
+    this.isInitialLoad = true;
+  }
+
   // ========================================
   // DATA LOADING
   // ========================================
 
   /**
-   * Load data for the current entity
+   * Load data for the current entity with server-side filtering/sorting/pagination
    */
   public async loadData(): Promise<void> {
     if (!this.entity) {
@@ -455,53 +544,110 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       return;
     }
 
+    // Prevent concurrent loads which can cause duplicate records
+    if (this.isLoading) {
+      return;
+    }
+
     this.isLoading = true;
-    this.loadingMessage = `Loading ${this.entity.Name}...`;
+    this.pagination.isLoading = true;
+    this.loadingMessage = this.isInitialLoad
+      ? `Loading ${this.entity.Name}...`
+      : 'Loading more records...';
     this.cdr.detectChanges();
 
     const startTime = Date.now();
+    const config = this.effectiveConfig;
 
     try {
       const rv = new RunView();
+
+      // Build OrderBy clause
+      let orderBy: string | undefined;
+      const sortState = this.effectiveSortState;
+      if (config.serverSideSorting && sortState?.field && sortState.direction) {
+        orderBy = `${sortState.field} ${sortState.direction.toUpperCase()}`;
+      }
+
+      // Calculate StartRow for pagination
+      const startRow = this.pagination.currentPage * config.pageSize;
+
       const result = await rv.RunView({
         EntityName: this.entity.Name,
         ResultType: 'entity_object',
-        MaxRows: this.effectiveConfig.pageSize
+        MaxRows: config.pageSize,
+        StartRow: startRow,
+        OrderBy: orderBy,
+        UserSearchString: config.serverSideFiltering ? this.debouncedFilterText || undefined : undefined
       });
 
       if (result.Success) {
-        this.internalRecords = result.Results;
+        // Append or replace records based on whether this is initial load
+        if (this.isInitialLoad) {
+          this.internalRecords = result.Results;
+        } else {
+          this.internalRecords = [...this.internalRecords, ...result.Results];
+        }
+
         this.totalRecordCount = result.TotalRowCount;
-        this.filteredRecordCount = result.Results.length;
+        this.filteredRecordCount = this.internalRecords.length;
+
+        // Update pagination state
+        this.pagination.totalRecords = result.TotalRowCount;
+        this.pagination.hasMore = this.internalRecords.length < result.TotalRowCount;
 
         this.dataLoaded.emit({
           totalRowCount: result.TotalRowCount,
-          loadedRowCount: result.Results.length,
+          loadedRowCount: this.internalRecords.length,
           loadTime: Date.now() - startTime,
-          records: result.Results
+          records: this.internalRecords
+        });
+
+        this.filteredCountChanged.emit({
+          filteredCount: this.internalRecords.length,
+          totalCount: result.TotalRowCount
         });
       } else {
         console.error('Failed to load records:', result.ErrorMessage);
-        this.internalRecords = [];
+        if (this.isInitialLoad) {
+          this.internalRecords = [];
+        }
         this.totalRecordCount = 0;
         this.filteredRecordCount = 0;
       }
     } catch (error) {
       console.error('Error loading records:', error);
-      this.internalRecords = [];
+      if (this.isInitialLoad) {
+        this.internalRecords = [];
+      }
       this.totalRecordCount = 0;
       this.filteredRecordCount = 0;
     } finally {
       this.isLoading = false;
+      this.pagination.isLoading = false;
+      this.isInitialLoad = false;
       this.cdr.detectChanges();
     }
   }
 
   /**
-   * Refresh data (re-load from server)
+   * Load more records (next page)
+   */
+  public loadMore(): void {
+    if (this.pagination.isLoading || !this.pagination.hasMore) {
+      return;
+    }
+
+    this.pagination.currentPage++;
+    this.loadData();
+  }
+
+  /**
+   * Refresh data (re-load from server, starting at page 1)
    */
   public refresh(): void {
     if (!this.records) {
+      this.resetPaginationState();
       this.loadData();
     }
   }
@@ -543,6 +689,31 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   // ========================================
+  // SORTING
+  // ========================================
+
+  /**
+   * Handle sort change from grid component
+   */
+  onSortChanged(event: SortChangedEvent): void {
+    const oldSort = this.internalSortState;
+    this.internalSortState = event.sort;
+    this.sortChanged.emit(event);
+
+    // If server-side sorting, reload from page 1
+    if (this.effectiveConfig.serverSideSorting && !this.records) {
+      const sortChanged = !oldSort || !event.sort ||
+        oldSort.field !== event.sort?.field ||
+        oldSort.direction !== event.sort?.direction;
+
+      if (sortChanged) {
+        this.resetPaginationState();
+        this.loadData();
+      }
+    }
+  }
+
+  // ========================================
   // EVENT HANDLERS
   // ========================================
 
@@ -558,5 +729,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   onRecordOpened(event: RecordOpenedEvent): void {
     this.recordOpened.emit(event);
+  }
+
+  /**
+   * Handle load more from pagination component
+   */
+  onLoadMore(): void {
+    this.loadMore();
   }
 }

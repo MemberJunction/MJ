@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges } from '@angular/core';
-import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import {
   ColDef,
@@ -12,9 +12,10 @@ import {
   RowSelectionOptions,
   GetRowIdParams,
   themeAlpine,
-  ICellRendererParams
+  ICellRendererParams,
+  SortChangedEvent as AgSortChangedEvent
 } from 'ag-grid-community';
-import { GridColumnDef, RecordSelectedEvent, RecordOpenedEvent } from '../types';
+import { GridColumnDef, RecordSelectedEvent, RecordOpenedEvent, SortState, SortChangedEvent, SortDirection } from '../types';
 import { HighlightUtil } from '../utils/highlight.util';
 
 // Register AG Grid modules (required for v34+)
@@ -26,14 +27,21 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * This component provides a lightweight, customizable grid view for displaying
  * entity records. It uses AG Grid Community edition for high-performance rendering.
  *
+ * Supports two modes:
+ * 1. Parent-managed data: Records are passed in via [records] input
+ * 2. Standalone: Component loads its own data with pagination
+ *
  * @example
  * ```html
  * <mj-entity-grid
  *   [entity]="selectedEntity"
  *   [records]="filteredRecords"
  *   [selectedRecordId]="selectedId"
+ *   [sortState]="currentSort"
+ *   [serverSideSorting]="true"
  *   (recordSelected)="onRecordSelected($event)"
- *   (recordOpened)="onRecordOpened($event)">
+ *   (recordOpened)="onRecordOpened($event)"
+ *   (sortChanged)="onSortChanged($event)">
  * </mj-entity-grid>
  * ```
  */
@@ -49,9 +57,9 @@ export class EntityGridComponent implements OnInit, OnChanges {
   @Input() entity: EntityInfo | null = null;
 
   /**
-   * The records to display in the grid
+   * The records to display in the grid (optional - component can load its own)
    */
-  @Input() records: BaseEntity[] = [];
+  @Input() records: BaseEntity[] | null = null;
 
   /**
    * The currently selected record's primary key string
@@ -82,6 +90,24 @@ export class EntityGridComponent implements OnInit, OnChanges {
   @Input() filterText: string = '';
 
   /**
+   * Current sort state (for external control)
+   */
+  @Input() sortState: SortState | null = null;
+
+  /**
+   * Whether sorting is handled server-side
+   * When true, sort changes emit events but don't sort locally
+   * @default true
+   */
+  @Input() serverSideSorting: boolean = true;
+
+  /**
+   * Page size for standalone data loading
+   * @default 100
+   */
+  @Input() pageSize: number = 100;
+
+  /**
    * Emitted when a record is selected (single click)
    */
   @Output() recordSelected = new EventEmitter<RecordSelectedEvent>();
@@ -91,6 +117,11 @@ export class EntityGridComponent implements OnInit, OnChanges {
    */
   @Output() recordOpened = new EventEmitter<RecordOpenedEvent>();
 
+  /**
+   * Emitted when sort state changes
+   */
+  @Output() sortChanged = new EventEmitter<SortChangedEvent>();
+
   /** AG Grid column definitions */
   public columnDefs: ColDef[] = [];
 
@@ -99,6 +130,18 @@ export class EntityGridComponent implements OnInit, OnChanges {
 
   /** AG Grid API reference */
   private gridApi: GridApi | null = null;
+
+  /** Internal records when loading standalone */
+  private internalRecords: BaseEntity[] = [];
+
+  /** Track if we're in standalone mode (no external records provided) */
+  private standaloneMode: boolean = false;
+
+  /** Loading state for standalone mode */
+  public isLoading: boolean = false;
+
+  /** Suppress sort changed events during programmatic sort updates */
+  private suppressSortEvents: boolean = false;
 
   /** Default column settings */
   public defaultColDef: ColDef = {
@@ -120,8 +163,14 @@ export class EntityGridComponent implements OnInit, OnChanges {
   public getRowId = (params: GetRowIdParams<Record<string, unknown>>) => params.data['__pk'] as string;
 
   ngOnInit(): void {
+    this.standaloneMode = this.records === null;
     this.buildColumnDefs();
-    this.buildRowData();
+
+    if (this.standaloneMode && this.entity) {
+      this.loadData();
+    } else {
+      this.buildRowData();
+    }
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -129,8 +178,15 @@ export class EntityGridComponent implements OnInit, OnChanges {
       this.buildColumnDefs();
     }
 
+    if (changes['entity'] && this.standaloneMode && this.entity) {
+      this.loadData();
+    }
+
     if (changes['records']) {
-      this.buildRowData();
+      this.standaloneMode = this.records === null;
+      if (!this.standaloneMode) {
+        this.buildRowData();
+      }
     }
 
     if (changes['selectedRecordId'] && this.gridApi) {
@@ -141,6 +197,53 @@ export class EntityGridComponent implements OnInit, OnChanges {
     if (changes['filterText'] && this.gridApi) {
       this.gridApi.refreshCells({ force: true });
     }
+
+    // Handle external sort state changes
+    if (changes['sortState'] && this.gridApi && this.sortState) {
+      this.applySortStateToGrid();
+    }
+  }
+
+  /**
+   * Get effective records (external or internal)
+   */
+  private get effectiveRecords(): BaseEntity[] {
+    return this.records ?? this.internalRecords;
+  }
+
+  /**
+   * Load data in standalone mode
+   */
+  private async loadData(): Promise<void> {
+    if (!this.entity) return;
+
+    this.isLoading = true;
+
+    try {
+      const rv = new RunView();
+
+      // Build OrderBy from sort state
+      let orderBy: string | undefined;
+      if (this.sortState?.field && this.sortState.direction) {
+        orderBy = `${this.sortState.field} ${this.sortState.direction.toUpperCase()}`;
+      }
+
+      const result = await rv.RunView({
+        EntityName: this.entity.Name,
+        ResultType: 'entity_object',
+        MaxRows: this.pageSize,
+        OrderBy: orderBy
+      });
+
+      if (result.Success) {
+        this.internalRecords = result.Results;
+        this.buildRowData();
+      }
+    } catch (error) {
+      console.error('Error loading grid data:', error);
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   /**
@@ -150,8 +253,59 @@ export class EntityGridComponent implements OnInit, OnChanges {
     this.gridApi = event.api;
     this.updateSelection();
 
+    // Apply initial sort state if provided
+    if (this.sortState) {
+      this.applySortStateToGrid();
+    }
+
     // Auto-size columns to fit content
     event.api.sizeColumnsToFit();
+  }
+
+  /**
+   * Handle AG Grid sort changed event
+   */
+  onGridSortChanged(event: AgSortChangedEvent): void {
+    if (this.suppressSortEvents) return;
+
+    const sortModel = event.api.getColumnState()
+      .filter(col => col.sort)
+      .map(col => ({ field: col.colId, direction: col.sort as SortDirection }));
+
+    if (sortModel.length > 0) {
+      const newSort: SortState = {
+        field: sortModel[0].field,
+        direction: sortModel[0].direction
+      };
+      this.sortChanged.emit({ sort: newSort });
+
+      // If in standalone mode and server-side sorting, reload data
+      if (this.standaloneMode && this.serverSideSorting) {
+        // The parent should handle this, but if standalone, reload
+        this.loadData();
+      }
+    } else {
+      this.sortChanged.emit({ sort: null });
+    }
+  }
+
+  /**
+   * Apply external sort state to the grid
+   */
+  private applySortStateToGrid(): void {
+    if (!this.gridApi || !this.sortState) return;
+
+    this.suppressSortEvents = true;
+    try {
+      const columnState = this.gridApi.getColumnState().map(col => ({
+        ...col,
+        sort: col.colId === this.sortState!.field ? this.sortState!.direction : null,
+        sortIndex: col.colId === this.sortState!.field ? 0 : null
+      }));
+      this.gridApi.applyColumnState({ state: columnState });
+    } finally {
+      this.suppressSortEvents = false;
+    }
   }
 
   /**
@@ -355,7 +509,8 @@ export class EntityGridComponent implements OnInit, OnChanges {
       return;
     }
 
-    this.rowData = this.records.map(record => {
+    const records = this.effectiveRecords;
+    this.rowData = records.map(record => {
       const row: Record<string, unknown> = {
         __pk: record.PrimaryKey.ToConcatenatedString()
       };
@@ -388,7 +543,6 @@ export class EntityGridComponent implements OnInit, OnChanges {
    * Find a record by its primary key string
    */
   private findRecordByPk(pkString: string): BaseEntity | undefined {
-    return this.records.find(r => r.PrimaryKey.ToConcatenatedString() === pkString);
+    return this.effectiveRecords.find(r => r.PrimaryKey.ToConcatenatedString() === pkString);
   }
-
 }

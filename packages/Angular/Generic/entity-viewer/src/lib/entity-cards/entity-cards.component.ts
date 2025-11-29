@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges } from '@angular/core';
-import { EntityInfo, EntityFieldInfo, EntityFieldValueListType } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
 import { PillColorUtil } from '../pill/pill.component';
@@ -10,8 +10,10 @@ import { HighlightUtil } from '../utils/highlight.util';
  *
  * This component provides an auto-generated card layout for displaying
  * entity records. Cards are automatically structured based on entity metadata.
- * Filtering should be done at the parent level - this component displays
- * whatever records are passed in.
+ *
+ * Supports two modes:
+ * 1. Parent-managed data: Records are passed in via [records] input
+ * 2. Standalone: Component loads its own data with pagination
  *
  * @example
  * ```html
@@ -36,9 +38,9 @@ export class EntityCardsComponent implements OnChanges, OnInit {
   @Input() entity: EntityInfo | null = null;
 
   /**
-   * The records to display as cards
+   * The records to display as cards (optional - component can load its own)
    */
-  @Input() records: BaseEntity[] = [];
+  @Input() records: BaseEntity[] | null = null;
 
   /**
    * The currently selected record's primary key string
@@ -63,6 +65,12 @@ export class EntityCardsComponent implements OnChanges, OnInit {
   @Input() filterText: string = '';
 
   /**
+   * Page size for standalone data loading
+   * @default 100
+   */
+  @Input() pageSize: number = 100;
+
+  /**
    * Emitted when a record is selected (single click)
    */
   @Output() recordSelected = new EventEmitter<RecordSelectedEvent>();
@@ -75,9 +83,24 @@ export class EntityCardsComponent implements OnChanges, OnInit {
   /** Auto-generated card template */
   public autoCardTemplate: CardTemplate | null = null;
 
+  /** Internal records when loading standalone */
+  private internalRecords: BaseEntity[] = [];
+
+  /** Track if we're in standalone mode */
+  private standaloneMode: boolean = false;
+
+  /** Loading state for standalone mode */
+  public isLoading: boolean = false;
+
   ngOnInit(): void {
+    this.standaloneMode = this.records === null;
+
     if (this.entity?.Fields && !this.effectiveTemplate) {
       this.autoCardTemplate = this.generateCardTemplate(this.entity);
+    }
+
+    if (this.standaloneMode && this.entity) {
+      this.loadData();
     }
   }
 
@@ -86,6 +109,47 @@ export class EntityCardsComponent implements OnChanges, OnInit {
       this.autoCardTemplate = this.generateCardTemplate(this.entity);
     } else if (changes['entity'] && !this.entity) {
       this.autoCardTemplate = null;
+    }
+
+    if (changes['entity'] && this.standaloneMode && this.entity) {
+      this.loadData();
+    }
+
+    if (changes['records']) {
+      this.standaloneMode = this.records === null;
+    }
+  }
+
+  /**
+   * Get effective records (external or internal)
+   */
+  get effectiveRecords(): BaseEntity[] {
+    return this.records ?? this.internalRecords;
+  }
+
+  /**
+   * Load data in standalone mode
+   */
+  private async loadData(): Promise<void> {
+    if (!this.entity) return;
+
+    this.isLoading = true;
+
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView({
+        EntityName: this.entity.Name,
+        ResultType: 'entity_object',
+        MaxRows: this.pageSize
+      });
+
+      if (result.Success) {
+        this.internalRecords = result.Results;
+      }
+    } catch (error) {
+      console.error('Error loading cards data:', error);
+    } finally {
+      this.isLoading = false;
     }
   }
 

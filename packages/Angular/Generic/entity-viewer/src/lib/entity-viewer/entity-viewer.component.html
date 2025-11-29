@@ -24,7 +24,7 @@
       <!-- Record Count -->
       @if (effectiveConfig.showRecordCount && entity) {
         <div class="record-count">
-          @if (debouncedFilterText && filteredRecordCount !== totalRecordCount) {
+          @if (filteredRecordCount !== totalRecordCount) {
             <span>{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
           } @else {
             <span>{{ totalRecordCount | number }} records</span>
@@ -56,7 +56,8 @@
 
   <!-- Content -->
   <div class="viewer-content">
-    @if (isLoading) {
+    @if (isLoading && filteredRecords.length === 0) {
+      <!-- Initial loading state -->
       <div class="loading-container">
         <mj-loading [text]="loadingMessage" size="medium"></mj-loading>
       </div>
@@ -65,7 +66,7 @@
         <i class="fa-solid fa-database"></i>
         <p>Select an entity to view records</p>
       </div>
-    } @else if (filteredRecords.length === 0) {
+    } @else if (filteredRecords.length === 0 && !isLoading) {
       <div class="empty-state">
         <i class="fa-solid fa-inbox"></i>
         <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
@@ -79,8 +80,11 @@
           [columns]="gridColumns"
           [height]="'100%'"
           [filterText]="debouncedFilterText"
+          [sortState]="effectiveSortState"
+          [serverSideSorting]="effectiveConfig.serverSideSorting"
           (recordSelected)="onRecordSelected($event)"
-          (recordOpened)="onRecordOpened($event)">
+          (recordOpened)="onRecordOpened($event)"
+          (sortChanged)="onSortChanged($event)">
         </mj-entity-grid>
       } @else {
         <mj-entity-cards
@@ -96,4 +100,13 @@
       }
     }
   </div>
+
+  <!-- Pagination - only show when there's more data to load OR we've loaded more than one page -->
+  @if (effectiveConfig.showPagination && entity && (pagination.hasMore || pagination.totalRecords > effectiveConfig.pageSize)) {
+    <mj-pagination
+      [pagination]="pagination"
+      [loadedRecordCount]="filteredRecords.length"
+      (loadMore)="onLoadMore()">
+    </mj-pagination>
+  }
 </div>

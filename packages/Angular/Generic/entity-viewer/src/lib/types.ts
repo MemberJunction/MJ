@@ -134,6 +134,63 @@ export interface FilteredCountChangedEvent {
 }
 
 /**
+ * Sort direction for server-side sorting
+ */
+export type SortDirection = 'asc' | 'desc' | null;
+
+/**
+ * Sort state for a column
+ */
+export interface SortState {
+  /** Field name to sort by */
+  field: string;
+  /** Sort direction */
+  direction: SortDirection;
+}
+
+/**
+ * Event emitted when sort changes in the grid
+ */
+export interface SortChangedEvent {
+  /** The new sort state (null if no sorting) */
+  sort: SortState | null;
+}
+
+/**
+ * Pagination state for server-side paging
+ */
+export interface PaginationState {
+  /** Current page number (0-based) */
+  currentPage: number;
+  /** Number of records per page */
+  pageSize: number;
+  /** Total number of records available (from server) */
+  totalRecords: number;
+  /** Whether there are more records to load */
+  hasMore: boolean;
+  /** Whether data is currently being loaded */
+  isLoading: boolean;
+}
+
+/**
+ * Event emitted when pagination changes
+ */
+export interface PaginationChangedEvent {
+  /** The new pagination state */
+  pagination: PaginationState;
+}
+
+/**
+ * Event emitted when requesting to load more data
+ */
+export interface LoadMoreEvent {
+  /** Current page being requested (0-based) */
+  page: number;
+  /** Page size */
+  pageSize: number;
+}
+
+/**
  * Configuration options for the EntityViewer component
  */
 export interface EntityViewerConfig {
@@ -169,7 +226,7 @@ export interface EntityViewerConfig {
 
   /**
    * Maximum number of records to load per page
-   * @default 1000
+   * @default 100
    */
   pageSize?: number;
 
@@ -206,6 +263,39 @@ export interface EntityViewerConfig {
    * @default '100%'
    */
   height?: string;
+
+  /**
+   * Whether to use server-side filtering via UserSearchString
+   * When true, filter text is sent to the server for SQL-based filtering
+   * When false, filtering is done client-side on loaded records
+   * @default true
+   */
+  serverSideFiltering?: boolean;
+
+  /**
+   * Whether to use server-side sorting via OrderBy
+   * When true, sort changes trigger a new server request
+   * When false, sorting is done client-side by AG Grid
+   * @default true
+   */
+  serverSideSorting?: boolean;
+
+  /**
+   * Whether to show pagination controls
+   * @default true
+   */
+  showPagination?: boolean;
+
+  /**
+   * Default sort field when loading data
+   */
+  defaultSortField?: string;
+
+  /**
+   * Default sort direction when loading data
+   * @default 'asc'
+   */
+  defaultSortDirection?: SortDirection;
 }
 
 /**
@@ -217,7 +307,7 @@ export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   selectionBehavior: 'emit-only',
   defaultViewMode: 'grid',
   enableMultiSelect: false,
-  pageSize: 1000,
+  pageSize: 100,
   showRecordCount: true,
   filterPlaceholder: 'Filter records...',
   filterDebounceMs: 250,
@@ -230,5 +320,10 @@ export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
     thumbnailFields: [],
     badgeField: null
   },
-  height: '100%'
+  height: '100%',
+  serverSideFiltering: true,
+  serverSideSorting: true,
+  showPagination: true,
+  defaultSortField: '',
+  defaultSortDirection: 'asc'
 };
