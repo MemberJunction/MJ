@@ -1,15 +1,11 @@
 import { Component, Input } from '@angular/core';
-
-/**
- * Color categories for status pills based on semantic meaning
- */
-export type PillColorType = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+import { PillColorType } from '../types';
 
 /**
  * Utility class to determine pill colors based on value semantics
  */
 export class PillColorUtil {
-  // Positive/success values - green
+  /** Positive/success values - green */
   private static readonly successPatterns = [
     'active', 'approved', 'complete', 'completed', 'success', 'successful',
     'enabled', 'yes', 'true', 'verified', 'confirmed', 'published',
@@ -17,14 +13,14 @@ export class PillColorUtil {
     'done', 'resolved', 'paid', 'shipped', 'delivered'
   ];
 
-  // Warning/attention values - yellow/amber
+  /** Warning/attention values - yellow/amber */
   private static readonly warningPatterns = [
     'pending', 'waiting', 'review', 'in review', 'in progress', 'processing',
     'draft', 'scheduled', 'queued', 'on hold', 'paused', 'partial',
     'incomplete', 'warning', 'attention', 'moderate', 'medium'
   ];
 
-  // Negative/danger values - red
+  /** Negative/danger values - red */
   private static readonly dangerPatterns = [
     'failed', 'failure', 'error', 'rejected', 'declined', 'denied',
     'expired', 'inactive', 'disabled', 'no', 'false', 'invalid',
@@ -33,7 +29,7 @@ export class PillColorUtil {
     'overdue', 'unpaid', 'refunded', 'returned'
   ];
 
-  // Informational values - blue
+  /** Informational values - blue */
   private static readonly infoPatterns = [
     'new', 'info', 'information', 'note', 'update', 'updated',
     'created', 'modified', 'changed', 'low', 'minor'
@@ -41,6 +37,8 @@ export class PillColorUtil {
 
   /**
    * Determine the appropriate color type for a given value
+   * @param value The value to analyze
+   * @returns The semantic color type
    */
   static getColorType(value: string | null | undefined): PillColorType {
     if (!value) return 'neutral';
@@ -73,19 +71,29 @@ export class PillColorUtil {
 }
 
 /**
- * Pill Component - displays any enumerated/categorical values as colored pills
- * Automatically determines color based on semantic meaning of the value
- * Works for status, type, category, priority, or any enum-like field
+ * PillComponent - displays categorical values as colored pills
+ *
+ * Automatically determines color based on semantic meaning of the value.
+ * Works for status, type, category, priority, or any enum-like field.
+ *
+ * @example
+ * ```html
+ * <!-- Auto-color based on value semantics -->
+ * <mj-pill [value]="record.Status"></mj-pill>
+ *
+ * <!-- Force a specific color -->
+ * <mj-pill [value]="record.Type" color="info"></mj-pill>
+ * ```
  */
 @Component({
-  selector: 'mj-status-pill',  // Keep selector for backward compatibility
+  selector: 'mj-pill',
   template: `
-    <span class="status-pill" [class]="'pill-' + colorType">
+    <span class="pill" [class]="'pill-' + effectiveColorType">
       {{ displayValue }}
     </span>
   `,
   styles: [`
-    .status-pill {
+    .pill {
       display: inline-flex;
       align-items: center;
       padding: 3px 10px;
@@ -123,13 +131,30 @@ export class PillColorUtil {
   `]
 })
 export class PillComponent {
+  /**
+   * The value to display in the pill
+   */
   @Input() value: string | null | undefined = '';
 
+  /**
+   * Optional: Force a specific color instead of auto-detecting
+   */
+  @Input() color: PillColorType | null = null;
+
+  /**
+   * Get the display value
+   */
   get displayValue(): string {
     return this.value || '';
   }
 
-  get colorType(): PillColorType {
+  /**
+   * Get the effective color type (forced or auto-detected)
+   */
+  get effectiveColorType(): PillColorType {
+    if (this.color) {
+      return this.color;
+    }
     return PillColorUtil.getColorType(this.value);
   }
 }

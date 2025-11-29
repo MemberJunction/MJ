@@ -3,8 +3,16 @@ import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
+import {
+  RecordSelectedEvent,
+  RecordOpenedEvent,
+  DataLoadedEvent,
+  FilteredCountChangedEvent,
+  EntityViewerConfig,
+  EntityViewMode
+} from '@memberjunction/ng-entity-viewer';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState } from './models/explorer-state.interface';
 import { NavigateToRelatedEvent } from './components/detail-panel/detail-panel.component';
@@ -13,6 +21,9 @@ import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
  * Combines card-based browsing with grid views and relationship visualization
+ *
+ * Uses mj-entity-viewer composite component for the main content area,
+ * which handles data loading, filtering, and view mode switching.
  */
 @Component({
   selector: 'mj-data-explorer-dashboard',
@@ -26,26 +37,33 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // State
   public state: DataExplorerState;
-  public isLoading = false;
-  public loadingMessage = 'Loading...';
 
   // Entity data
   public entities: EntityInfo[] = [];
   public selectedEntity: EntityInfo | null = null;
 
-  // Current records
-  public records: BaseEntity[] = [];
+  // Record counts (updated by mj-entity-viewer)
   public totalRecordCount = 0;
+  public filteredRecordCount = 0;
 
   // Selected record for detail panel
   public selectedRecord: BaseEntity | null = null;
 
-  // Debounced filter text for cards view (250ms delay)
+  // Debounced filter text (synced with mj-entity-viewer)
   public debouncedFilterText: string = '';
   private filterInput$ = new Subject<string>();
 
-  // Filtered record count (updated by cards view)
-  public filteredRecordCount: number = 0;
+  /**
+   * Configuration for mj-entity-viewer composite component
+   * Hides the built-in header since we have a custom header in the dashboard
+   */
+  public viewerConfig: Partial<EntityViewerConfig> = {
+    showFilter: false,        // We have our own filter in the dashboard header
+    showViewModeToggle: false, // We have our own toggle in the dashboard header
+    showRecordCount: false,   // We show count in the dashboard header
+    pageSize: 1000,           // Load more records for better browsing
+    height: '100%'
+  };
 
   constructor(
     public stateService: ExplorerStateService,
@@ -56,12 +74,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
-    // Initialize debounced filter from persisted state BEFORE loading entities/records
+    // Initialize debounced filter from persisted state
     if (this.state.smartFilterPrompt) {
       this.debouncedFilterText = this.state.smartFilterPrompt;
     }
 
-    // Load available entities (may trigger loadRecords if entity was selected)
+    // Load available entities
     this.loadEntities();
 
     // Subscribe to state changes
@@ -73,7 +91,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.state = state;
 
         // When entity changes, immediately update the debounced filter text
-        // (don't wait for debounce - the restored filter should apply instantly)
         if (entityChanged && state.smartFilterPrompt !== this.debouncedFilterText) {
           this.debouncedFilterText = state.smartFilterPrompt;
         }
@@ -82,7 +99,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.cdr.detectChanges();
       });
 
-    // Setup debounced filter for cards view (250ms delay)
+    // Setup debounced filter
     this.filterInput$
       .pipe(
         debounceTime(250),
@@ -106,14 +123,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   protected loadData(): void {
-    // Data loading handled by loadEntities and loadRecords
+    // Data loading is handled by mj-entity-viewer
   }
+
+  // ========================================
+  // ENTITY MANAGEMENT
+  // ========================================
 
   /**
    * Load all available entities the user can access
    */
   private loadEntities(): void {
-    // Filter entities that user can read and that are included in API
     this.entities = this.metadata.Entities
       .filter(e => {
         const perms = e.GetUserPermisions(this.metadata.CurrentUser);
@@ -121,54 +141,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       })
       .sort((a, b) => a.Name.localeCompare(b.Name));
 
-    // If there's a selected entity in state, load it
+    // If there's a selected entity in state, restore it
     if (this.state.selectedEntityName) {
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
-      if (this.selectedEntity) {
-        this.loadRecords();
-      }
-    }
-  }
-
-  /**
-   * Load records for the selected entity
-   */
-  public async loadRecords(): Promise<void> {
-    if (!this.selectedEntity) {
-      this.records = [];
-      this.totalRecordCount = 0;
-      return;
-    }
-
-    this.isLoading = true;
-    this.loadingMessage = `Loading ${this.selectedEntity.Name}...`;
-
-    try {
-      const { RunView } = await import('@memberjunction/core');
-      const rv = new RunView();
-
-      const result = await rv.RunView({
-        EntityName: this.selectedEntity.Name,
-        ExtraFilter: this.state.smartFilterPrompt ? undefined : '', // Smart filter would generate this
-        ResultType: 'entity_object',
-        MaxRows: 100 // Initial page
-      });
-
-      if (result.Success) {
-        this.records = result.Results;
-        this.totalRecordCount = result.TotalRowCount;
-      } else {
-        console.error('Failed to load records:', result.ErrorMessage);
-        this.records = [];
-        this.totalRecordCount = 0;
-      }
-    } catch (error) {
-      console.error('Error loading records:', error);
-      this.records = [];
-      this.totalRecordCount = 0;
-    } finally {
-      this.isLoading = false;
-      this.cdr.detectChanges();
     }
   }
 
@@ -178,43 +153,96 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public onEntitySelected(entity: EntityInfo): void {
     this.selectedEntity = entity;
     this.stateService.selectEntity(entity.Name);
-    this.loadRecords();
+    // mj-entity-viewer will automatically load data when entity changes
   }
 
   /**
-   * Handle view mode toggle
+   * Handle state changes from external sources
    */
-  public onViewModeChanged(mode: 'cards' | 'grid'): void {
+  private onStateChanged(): void {
+    if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
+      this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
+    }
+  }
+
+  // ========================================
+  // VIEW MODE & FILTERING (Dashboard Header)
+  // ========================================
+
+  /**
+   * Handle view mode toggle from dashboard header
+   */
+  public onViewModeChanged(mode: EntityViewMode): void {
     this.stateService.setViewMode(mode);
   }
 
   /**
-   * Handle record selection (for detail panel)
+   * Handle smart filter change from dashboard header
    */
-  public onRecordSelected(record: BaseEntity): void {
-    this.selectedRecord = record;
-    this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString());
+  public onSmartFilterChanged(prompt: string): void {
+    this.stateService.setSmartFilterPrompt(prompt);
+    this.filterInput$.next(prompt);
+  }
 
-    // Add to recent items using serialized CompositeKey
-    this.stateService.addRecentItem({
-      entityName: this.selectedEntity!.Name,
-      compositeKeyString: record.PrimaryKey.ToConcatenatedString(),
-      displayName: this.getRecordDisplayName(record)
+  /**
+   * Handle filter text change from mj-entity-viewer (two-way binding)
+   */
+  public onFilterTextChanged(filterText: string): void {
+    this.stateService.setSmartFilterPrompt(filterText);
+  }
+
+  // ========================================
+  // ENTITY VIEWER EVENT HANDLERS
+  // ========================================
+
+  /**
+   * Handle record selection from mj-entity-viewer
+   */
+  public onViewerRecordSelected(event: RecordSelectedEvent): void {
+    this.selectedRecord = event.record;
+    this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString());
+
+    // Add to recent items
+    if (this.selectedEntity) {
+      this.stateService.addRecentItem({
+        entityName: this.selectedEntity.Name,
+        compositeKeyString: event.record.PrimaryKey.ToConcatenatedString(),
+        displayName: this.getRecordDisplayName(event.record)
+      });
+    }
+  }
+
+  /**
+   * Handle record opened from mj-entity-viewer (double-click or open button)
+   */
+  public onViewerRecordOpened(event: RecordOpenedEvent): void {
+    this.OpenEntityRecord.emit({
+      EntityName: event.entity.Name,
+      RecordPKey: event.compositeKey
     });
   }
 
   /**
-   * Handle opening a record in full view
+   * Handle data loaded from mj-entity-viewer
    */
-  public onOpenRecord(record: BaseEntity): void {
-    if (!this.selectedEntity) return;
-
-    // Emit for parent handling - uses NavigationService internally
-    this.OpenEntityRecord.emit({
-      EntityName: this.selectedEntity.Name,
-      RecordPKey: record.PrimaryKey
-    });
+  public onDataLoaded(event: DataLoadedEvent): void {
+    this.totalRecordCount = event.totalRowCount;
+    this.filteredRecordCount = event.loadedRowCount;
+    this.cdr.detectChanges();
   }
+
+  /**
+   * Handle filtered count change from mj-entity-viewer
+   */
+  public onFilteredCountChanged(event: FilteredCountChangedEvent): void {
+    this.filteredRecordCount = event.filteredCount;
+    this.totalRecordCount = event.totalCount;
+    this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // DETAIL PANEL
+  // ========================================
 
   /**
    * Handle detail panel close
@@ -225,23 +253,30 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Handle opening a record in full view (from detail panel)
+   */
+  public onOpenRecord(record: BaseEntity): void {
+    if (!this.selectedEntity) return;
+
+    this.OpenEntityRecord.emit({
+      EntityName: this.selectedEntity.Name,
+      RecordPKey: record.PrimaryKey
+    });
+  }
+
+  /**
    * Handle navigation to a related entity from detail panel
    */
   public onNavigateToRelated(event: NavigateToRelatedEvent): void {
-    // Look up the EntityInfo by name
     const entity = this.entities.find(e => e.Name === event.entityName);
     if (!entity) {
       console.warn(`Entity not found: ${event.entityName}`);
       return;
     }
 
-    // Select the entity and apply the filter
     this.selectedEntity = entity;
     this.stateService.selectEntity(entity.Name);
-
-    // TODO: Apply the filter from event.filter
-    // For now, just load all records from the related entity
-    this.loadRecords();
+    // mj-entity-viewer will automatically load data when entity changes
   }
 
   /**
@@ -254,24 +289,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     });
   }
 
+  // ========================================
+  // NAVIGATION PANEL
+  // ========================================
+
   /**
    * Handle opening a record from navigation panel (recent/favorites)
    */
   public onOpenRecordFromNav(event: OpenRecordEvent): void {
-    // The event already contains a properly deserialized CompositeKey
     this.OpenEntityRecord.emit({
       EntityName: event.entityName,
       RecordPKey: event.compositeKey
     });
-  }
-
-  /**
-   * Handle smart filter change
-   */
-  public onSmartFilterChanged(prompt: string): void {
-    this.stateService.setSmartFilterPrompt(prompt);
-    // Push to debounce subject for cards view
-    this.filterInput$.next(prompt);
   }
 
   /**
@@ -281,41 +310,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.stateService.toggleNavigationPanel();
   }
 
+  // ========================================
+  // HELPERS
+  // ========================================
+
   /**
    * Get display name for a record
    */
   private getRecordDisplayName(record: BaseEntity): string {
     if (!this.selectedEntity) return 'Unknown';
 
-    // Try the entity's NameField first
     if (this.selectedEntity.NameField) {
       const nameValue = record.Get(this.selectedEntity.NameField.Name);
       if (nameValue) return String(nameValue);
     }
 
-    // Fall back to primary key
     return record.PrimaryKey.ToString();
-  }
-
-  /**
-   * Handle data loaded event from grid view
-   */
-  public onGridDataLoaded(event: { totalRowCount: number; loadTime: number }): void {
-    this.totalRecordCount = event.totalRowCount;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle state changes
-   */
-  private onStateChanged(): void {
-    // Update selected entity if changed externally
-    if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
-      this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
-      if (this.selectedEntity) {
-        this.loadRecords();
-      }
-    }
   }
 
   /**
@@ -335,27 +345,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (!icon) {
       return 'fa-solid fa-table';
     }
-    // If icon already has fa- prefix, use it as-is
     if (icon.startsWith('fa-') || icon.startsWith('fa ')) {
-      // Ensure it has a style prefix (fa-solid, fa-regular, etc.)
       if (icon.startsWith('fa-solid') || icon.startsWith('fa-regular') ||
           icon.startsWith('fa-light') || icon.startsWith('fa-brands') ||
           icon.startsWith('fa ')) {
         return icon;
       }
-      // It's just "fa-something", add fa-solid prefix
       return `fa-solid ${icon}`;
     }
-    // Check if it's just an icon name like "table" or "users"
     return `fa-solid fa-${icon}`;
-  }
-
-  /**
-   * Update the filtered record count (called when filter changes)
-   */
-  public updateFilteredCount(count: number): void {
-    this.filteredRecordCount = count;
-    this.cdr.detectChanges();
   }
 }
 

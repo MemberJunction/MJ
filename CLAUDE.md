@@ -835,3 +835,24 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Group related components in dedicated directories
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
+
+### Loading Indicators
+- **ALWAYS** use the `<mj-loading>` component from `@memberjunction/ng-shared-generic` for all loading states
+- **NEVER** create custom spinners or loading indicators - use the standard MJ loading component
+- Import `SharedGenericModule` in your module to access `mj-loading`
+- Example usage:
+  ```html
+  <!-- Basic usage -->
+  <mj-loading></mj-loading>
+
+  <!-- With custom text -->
+  <mj-loading text="Loading records..."></mj-loading>
+
+  <!-- With size preset -->
+  <mj-loading text="Please wait..." size="medium"></mj-loading>
+
+  <!-- No text, just the animated logo -->
+  <mj-loading [showText]="false"></mj-loading>
+  ```
+- Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
+- The component displays the animated MJ logo with optional text below

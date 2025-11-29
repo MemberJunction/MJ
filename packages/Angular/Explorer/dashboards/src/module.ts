@@ -86,14 +86,12 @@ import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-r
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 import { TestingModule } from '@memberjunction/ng-testing';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
-import { CardsViewComponent as ExplorerCardsViewComponent } from './DataExplorer/components/content-area/cards-view.component';
-import { GridViewComponent as ExplorerGridViewComponent } from './DataExplorer/components/content-area/grid-view.component';
 import { DetailPanelComponent as ExplorerDetailPanelComponent } from './DataExplorer/components/detail-panel/detail-panel.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
-import { PillComponent } from './DataExplorer/components/shared/status-pill.component';
 // Home Dashboard Components
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
@@ -166,10 +164,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     // Data Explorer Dashboard Components
     DataExplorerDashboardComponent,
     ExplorerNavigationPanelComponent,
-    ExplorerCardsViewComponent,
-    ExplorerGridViewComponent,
     ExplorerDetailPanelComponent,
-    PillComponent,
     // Home Dashboard Components
     HomeDashboardComponent
   ],
@@ -199,6 +194,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     MJNotificationsModule,
     TestingModule,
     UserViewGridModule,
+    EntityViewerModule,
     ExplorerSettingsModule,
     SharedGenericModule
   ],

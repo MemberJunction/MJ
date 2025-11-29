@@ -1,6 +1,6 @@
 <div class="cards-view-wrapper">
   <div class="cards-container">
-    @for (record of filteredRecords; track getRecordTrackId(record, $index)) {
+    @for (record of records; track getRecordTrackId(record, $index)) {
     <div
       class="data-card"
       [class.selected]="isSelected(record)"
@@ -27,10 +27,10 @@
         }
 
         <div class="card-header-content">
-          <h3 class="card-title" [innerHTML]="highlightMatch(getFieldValue(record, cardTemplate?.titleField ?? null))"></h3>
-          @if (cardTemplate?.subtitleField; as subField) {
+          <h3 class="card-title" [innerHTML]="highlightMatch(getFieldValue(record, effectiveTemplate?.titleField ?? null))"></h3>
+          @if (effectiveTemplate?.subtitleField; as subField) {
             @if (subtitleIsPill) {
-              <mj-status-pill [value]="getFieldValue(record, subField)"></mj-status-pill>
+              <mj-pill [value]="getFieldValue(record, subField)"></mj-pill>
             } @else {
               <span class="card-subtitle" [innerHTML]="highlightMatch(getFieldValue(record, subField))"></span>
             }
@@ -44,15 +44,14 @@
 
       <!-- Card Body -->
       <div class="card-body">
-        @if (cardTemplate?.descriptionField; as descField) {
-          <p class="card-description" [innerHTML]="highlightMatch(getFieldValue(record, descField) | slice:0:100) + (getFieldValue(record, descField).length > 100 ? '...' : '')">
-          </p>
+        @if (effectiveTemplate?.descriptionField; as descField) {
+          <p class="card-description" [innerHTML]="highlightMatch(getTextValue(record, descField, 100))"></p>
         }
 
         <!-- Display Fields -->
-        @if (cardTemplate && cardTemplate.displayFields.length > 0) {
+        @if (effectiveTemplate && effectiveTemplate.displayFields.length > 0) {
           <div class="card-fields">
-            @for (field of cardTemplate.displayFields; track field.name) {
+            @for (field of effectiveTemplate.displayFields; track field.name) {
               <div class="field-item" [class.field-boolean]="field.type === 'boolean'" [class.field-text]="field.type === 'text'">
                 @switch (field.type) {
                   @case ('boolean') {
@@ -73,7 +72,7 @@
                   }
                   @default {
                     <span class="field-label">{{ field.label }}</span>
-                    <span class="field-text-value">{{ getTextValue(record, field.name, 40) }}</span>
+                    <span class="field-text-value" [innerHTML]="highlightMatch(getTextValue(record, field.name, 40))"></span>
                   }
                 }
               </div>
@@ -83,9 +82,9 @@
       </div>
 
       <!-- Card Footer with Badge -->
-      @if (cardTemplate?.badgeField; as badgeField) {
+      @if (effectiveTemplate?.badgeField; as badgeField) {
         <div class="card-footer">
-          <mj-status-pill [value]="getFieldValue(record, badgeField)"></mj-status-pill>
+          <mj-pill [value]="getFieldValue(record, badgeField)"></mj-pill>
         </div>
       }
 
@@ -99,10 +98,10 @@
     </div>
     }
 
-    @if (filteredRecords.length === 0 && records.length > 0) {
+    @if (records.length === 0) {
       <div class="no-results">
-        <i class="fa-solid fa-filter"></i>
-        <p>No records match your filter</p>
+        <i class="fa-solid fa-inbox"></i>
+        <p>No records to display</p>
       </div>
     }
   </div>

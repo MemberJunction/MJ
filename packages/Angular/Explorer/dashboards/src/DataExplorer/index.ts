@@ -5,8 +5,6 @@ export { DataExplorerDashboardComponent, LoadDataExplorerDashboard } from './dat
 
 // Child components
 export { NavigationPanelComponent } from './components/navigation-panel/navigation-panel.component';
-export { CardsViewComponent } from './components/content-area/cards-view.component';
-export { GridViewComponent } from './components/content-area/grid-view.component';
 export { DetailPanelComponent, NavigateToRelatedEvent } from './components/detail-panel/detail-panel.component';
 
 // Services

@@ -23,7 +23,7 @@
             <div class="field-row">
               <span class="field-label">{{ field.label }}</span>
               @if (field.isPill) {
-                <mj-status-pill [value]="field.value"></mj-status-pill>
+                <mj-pill [value]="field.value"></mj-pill>
               } @else {
                 <span class="field-value">{{ field.value }}</span>
               }
