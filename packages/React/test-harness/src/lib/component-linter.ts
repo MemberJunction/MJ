@@ -9799,6 +9799,34 @@ const {
   }
 
   /**
+   * Check if a library is directly instantiated in the component code
+   * Returns false if the library is only used indirectly (e.g., by dependency components)
+   */
+  private static isLibraryDirectlyInstantiated(ast: t.File, constructorName: string): boolean {
+    let isDirectlyUsed = false;
+
+    traverse(ast, {
+      // Check for: new Chart(...), new ApexCharts(...), etc.
+      NewExpression(path: NodePath<t.NewExpression>) {
+        if (t.isIdentifier(path.node.callee) && path.node.callee.name === constructorName) {
+          isDirectlyUsed = true;
+        }
+      },
+
+      // Check for: Chart.register(...), Chart.defaults.set(...), etc.
+      CallExpression(path: NodePath<t.CallExpression>) {
+        if (t.isMemberExpression(path.node.callee) &&
+            t.isIdentifier(path.node.callee.object) &&
+            path.node.callee.object.name === constructorName) {
+          isDirectlyUsed = true;
+        }
+      },
+    });
+
+    return isDirectlyUsed;
+  }
+
+  /**
    * Check if a ref is attached to the correct element type
    */
   private static checkRefElementType(ast: t.File, refName: string, expectedType: string, libraryName: string, violations: Violation[]): void {
@@ -9887,6 +9915,16 @@ const {
 
     // Check cleanup in useEffect
     if (rules.cleanupMethods && rules.cleanupMethods.length > 0) {
+      // First, check if the library is directly instantiated in the component
+      // If it's only used by dependency components, skip cleanup check
+      const isLibraryDirectlyUsed = ComponentLinter.isLibraryDirectlyInstantiated(ast, rules.constructorName);
+
+      if (!isLibraryDirectlyUsed) {
+        // Library is only used indirectly (e.g., by dependency components)
+        // No cleanup check needed
+        return violations;
+      }
+
       let hasCleanup = false;
 
       // Track local variables that are instances of the library
