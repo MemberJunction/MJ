@@ -61,6 +61,12 @@ export interface ParameterTypeInfo {
 export function mapSQLTypeToJSType(sqlType: string): string {
   const type = sqlType.toLowerCase();
 
+  // If already a JavaScript type, return it directly
+  // This handles cases where query metadata provides JS types instead of SQL types
+  if (['string', 'number', 'boolean'].includes(type)) {
+    return type;
+  }
+
   // Numeric types
   if (['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney'].includes(type)) {
     return 'number';
