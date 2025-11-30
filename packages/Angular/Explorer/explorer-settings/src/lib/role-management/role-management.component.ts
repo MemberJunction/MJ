@@ -1,13 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Component, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { RoleEntity, UserEntity } from '@memberjunction/core-entities';
-import { SharedSettingsModule } from '../shared/shared-settings.module';
-import { RoleDialogComponent, RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
-import { WindowModule } from '@progress/kendo-angular-dialog';
+import { RoleEntity } from '@memberjunction/core-entities';
+import { BaseDashboard } from '@memberjunction/ng-shared';
+import { RegisterClass } from '@memberjunction/global';
+import { RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
 
 interface RoleStats {
   totalRoles: number;
@@ -23,29 +21,22 @@ interface FilterOptions {
 
 @Component({
   selector: 'mj-role-management',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SharedSettingsModule,
-    RoleDialogComponent,
-    WindowModule
-  ],
   templateUrl: './role-management.component.html',
-  styleUrls: ['./role-management.component.scss']
+  styleUrls: ['./role-management.component.css']
 })
-export class RoleManagementComponent implements OnInit, OnDestroy {
+@RegisterClass(BaseDashboard, 'RoleManagement')
+export class RoleManagementComponent extends BaseDashboard implements OnDestroy {
   // State management
   public roles: RoleEntity[] = [];
   public filteredRoles: RoleEntity[] = [];
   public selectedRole: RoleEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
-  
+
   // Dialog state
   public showRoleDialog = false;
   public roleDialogData: RoleDialogData | null = null;
-  
+
   // Stats
   public stats: RoleStats = {
     totalRoles: 0,
@@ -53,35 +44,41 @@ export class RoleManagementComponent implements OnInit, OnDestroy {
     customRoles: 0,
     activeRoles: 0
   };
-  
+
   // Filters
   public filters$ = new BehaviorSubject<FilterOptions>({
     type: 'all',
     search: ''
   });
-  
+
   // UI State
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
   public expandedRoleId: string | null = null;
-  
+
   // Role permissions (simplified view)
   public rolePermissions: Map<string, string[]> = new Map();
-  
+
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
-  
-  constructor() {}
-  
-  ngOnInit(): void {
-    this.loadInitialData();
+
+  constructor() {
+    super();
+  }
+
+  protected initDashboard(): void {
     this.setupFilterSubscription();
   }
-  
-  ngOnDestroy(): void {
+
+  protected loadData(): void {
+    this.loadInitialData();
+  }
+
+  override ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    super.ngOnDestroy();
   }
   
   public async loadInitialData(): Promise<void> {

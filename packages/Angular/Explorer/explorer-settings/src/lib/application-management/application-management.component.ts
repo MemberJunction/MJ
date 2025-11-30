@@ -1,12 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Component, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { ApplicationEntity, ApplicationEntityEntity } from '@memberjunction/core-entities';
-import { SharedSettingsModule } from '../shared/shared-settings.module';
-import { ApplicationDialogComponent, ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
+import { BaseDashboard } from '@memberjunction/ng-shared';
+import { RegisterClass } from '@memberjunction/global';
+import { ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
 
 interface AppStats {
   totalApplications: number;
@@ -22,27 +21,21 @@ interface FilterOptions {
 
 @Component({
   selector: 'mj-application-management',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SharedSettingsModule,
-    ApplicationDialogComponent
-  ],
   templateUrl: './application-management.component.html',
-  styleUrls: ['./application-management.component.scss']
+  styleUrls: ['./application-management.component.css']
 })
-export class ApplicationManagementComponent implements OnInit, OnDestroy {
+@RegisterClass(BaseDashboard, 'ApplicationManagement')
+export class ApplicationManagementComponent extends BaseDashboard implements OnDestroy {
   // State management
   public applications: ApplicationEntity[] = [];
   public filteredApplications: ApplicationEntity[] = [];
   public selectedApp: ApplicationEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
-  
+
   // Application entities mapping
   public appEntities: Map<string, ApplicationEntityEntity[]> = new Map();
-  
+
   // Stats
   public stats: AppStats = {
     totalApplications: 0,
@@ -50,32 +43,38 @@ export class ApplicationManagementComponent implements OnInit, OnDestroy {
     totalEntities: 0,
     publicEntities: 0
   };
-  
+
   // Filters
   public filters$ = new BehaviorSubject<FilterOptions>({
     status: 'all',
     search: ''
   });
-  
+
   // UI State
   public showApplicationDialog = false;
   public applicationDialogData: ApplicationDialogData | null = null;
   public showDeleteConfirm = false;
   public expandedAppId: string | null = null;
-  
+
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
-  
-  constructor() {}
-  
-  ngOnInit(): void {
-    this.loadInitialData();
+
+  constructor() {
+    super();
+  }
+
+  protected initDashboard(): void {
     this.setupFilterSubscription();
   }
-  
-  ngOnDestroy(): void {
+
+  protected loadData(): void {
+    this.loadInitialData();
+  }
+
+  override ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    super.ngOnDestroy();
   }
   
   public async loadInitialData(): Promise<void> {

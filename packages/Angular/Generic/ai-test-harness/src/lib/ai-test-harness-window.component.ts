@@ -24,8 +24,7 @@ export interface AITestHarnessWindowData {
         <div class="window-content">
             @if (loading) {
                 <div class="loading-container">
-                    <kendo-loader type="converging-spinner" size="large"></kendo-loader>
-                    <p>Loading {{mode === 'agent' ? 'AI Agent' : 'AI Prompt'}}...</p>
+                    <mj-loading [text]="'Loading ' + (mode === 'agent' ? 'AI Agent' : 'AI Prompt') + '...'" size="large"></mj-loading>
                 </div>
             }
             @else if (error) {

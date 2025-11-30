@@ -15,7 +15,7 @@ import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/inter
 @Component({
   selector: 'mj-component-artifact-viewer',
   templateUrl: './component-artifact-viewer.component.html',
-  styleUrls: ['./component-artifact-viewer.component.scss']
+  styleUrls: ['./component-artifact-viewer.component.css']
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ComponentArtifactViewerPlugin')
 export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {

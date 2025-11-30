@@ -1,17 +1,15 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Component, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { 
-  EntityPermissionEntity, 
+import {
+  EntityPermissionEntity,
   EntityEntity,
-  RoleEntity,
-  UserEntity 
+  RoleEntity
 } from '@memberjunction/core-entities';
-import { SharedSettingsModule } from '../shared/shared-settings.module';
-import { PermissionDialogComponent, PermissionDialogData, PermissionDialogResult } from './permission-dialog/permission-dialog.component';
+import { BaseDashboard } from '@memberjunction/ng-shared';
+import { RegisterClass } from '@memberjunction/global';
+import { PermissionDialogData, PermissionDialogResult } from './permission-dialog/permission-dialog.component';
 
 interface PermissionsStats {
   totalEntities: number;
@@ -42,17 +40,11 @@ interface PermissionLevel {
 
 @Component({
   selector: 'mj-entity-permissions',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SharedSettingsModule,
-    PermissionDialogComponent
-  ],
   templateUrl: './entity-permissions.component.html',
-  styleUrls: ['./entity-permissions.component.scss']
+  styleUrls: ['./entity-permissions.component.css']
 })
-export class EntityPermissionsComponent implements OnInit, OnDestroy {
+@RegisterClass(BaseDashboard, 'EntityPermissions')
+export class EntityPermissionsComponent extends BaseDashboard implements OnDestroy {
   // State management
   public entityAccess: EntityAccess[] = [];
   public filteredEntityAccess: EntityAccess[] = [];
@@ -85,17 +77,23 @@ export class EntityPermissionsComponent implements OnInit, OnDestroy {
   
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
-  
-  constructor() {}
-  
-  ngOnInit(): void {
-    this.loadInitialData();
+
+  constructor() {
+    super();
+  }
+
+  protected initDashboard(): void {
     this.setupFilterSubscription();
   }
-  
-  ngOnDestroy(): void {
+
+  protected loadData(): void {
+    this.loadInitialData();
+  }
+
+  override ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    super.ngOnDestroy();
   }
   
   public async loadInitialData(): Promise<void> {

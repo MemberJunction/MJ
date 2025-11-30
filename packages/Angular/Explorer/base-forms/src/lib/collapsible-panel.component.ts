@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList, HostBinding, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectorRef, AfterContentInit, ContentChildren, QueryList, HostBinding, Output, EventEmitter, OnInit } from '@angular/core';
 import { MJFormField } from './base-field-component';
 import { BaseFormContext } from './base-form-context';
 
@@ -240,7 +240,7 @@ export type PanelWidthMode = 'normal' | 'full-width';
         }
     `]
 })
-export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
+export class CollapsiblePanelComponent implements OnChanges, AfterContentInit, OnInit {
     @Input() sectionKey: string = '';
     @Input() sectionName: string = '';
     @Input() icon: string = 'fa fa-folder';
@@ -248,7 +248,7 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
     @Input() formContext?: BaseFormContext; // Contains all form-level state
     @Input() variant: 'default' | 'related-entity' = 'default';
     @Input() badgeCount: number | undefined;
-    @Input() entityName: string = ''; // For localStorage key generation
+    @Input() entityName: string = ''; // For display/reference purposes
 
     @Output() widthModeChange = new EventEmitter<PanelWidthMode>();
 
@@ -276,15 +276,17 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
 
     constructor(private cdr: ChangeDetectorRef) {}
 
+    ngOnInit(): void {
+        // Load width mode from form's state service
+        this.loadWidthMode();
+    }
+
     ngAfterContentInit(): void {
         // Extract field names from projected field components
         this.updateFieldNames();
         this.fieldComponents.changes.subscribe(() => {
             this.updateFieldNames();
         });
-
-        // Load saved width mode from localStorage
-        this.loadWidthMode();
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -330,31 +332,21 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit {
         this.cdr.markForCheck();
     }
 
-    private getStorageKey(): string {
-        // Generate unique key based on entity name and section key
-        const entity = this.entityName || 'unknown';
-        return `mj_panel_width_${entity}_${this.sectionKey}`;
-    }
-
     private saveWidthMode(): void {
-        try {
-            const key = this.getStorageKey();
-            localStorage.setItem(key, this.widthMode);
-        } catch (e) {
-            console.warn('Failed to save panel width mode to localStorage:', e);
+        // Delegate to form's state service for persistence
+        if (this.form && typeof this.form.setSectionWidthMode === 'function') {
+            this.form.setSectionWidthMode(this.sectionKey, this.widthMode);
         }
     }
 
     private loadWidthMode(): void {
-        try {
-            const key = this.getStorageKey();
-            const saved = localStorage.getItem(key);
+        // Load from form's state service
+        if (this.form && typeof this.form.getSectionWidthMode === 'function') {
+            const saved = this.form.getSectionWidthMode(this.sectionKey);
             if (saved && (saved === 'normal' || saved === 'full-width')) {
-                this.widthMode = saved as PanelWidthMode;
+                this.widthMode = saved;
                 this.cdr.markForCheck();
             }
-        } catch (e) {
-            console.warn('Failed to load panel width mode from localStorage:', e);
         }
     }
 

@@ -401,7 +401,7 @@ export class EntityFieldInfo extends BaseInfo {
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Active
     * * Value List Type: List
-    * * Possible Values 
+    * * Possible Values
     *   * Active
     *   * Deprecated
     *   * Disabled
@@ -409,8 +409,63 @@ export class EntityFieldInfo extends BaseInfo {
     */
     Status: 'Active' | 'Deprecated' | 'Disabled' = 'Active';
 
+    /**
+    * * Field Name: CodeType
+    * * Display Name: Code Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: null
+    * * Value List Type: List
+    * * Possible Values: CSS, HTML, JavaScript, Other, SQL, TypeScript
+    * * Description: The type of code associated with this field. Only used when the ExtendedType field is set to 'Code'
+    */
+    CodeType: 'CSS' | 'HTML' | 'JavaScript' | 'Other' | 'SQL' | 'TypeScript' | null = null;
 
-    
+    /**
+    * * Field Name: AutoUpdateIsNameField
+    * * Display Name: Auto Update Is Name Field
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field
+    */
+    AutoUpdateIsNameField: boolean = true;
+
+    /**
+    * * Field Name: AutoUpdateDefaultInView
+    * * Display Name: Auto Update Default In View
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field
+    */
+    AutoUpdateDefaultInView: boolean = true;
+
+    /**
+    * * Field Name: AutoUpdateCategory
+    * * Display Name: Auto Update Category
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field
+    */
+    AutoUpdateCategory: boolean = true;
+
+    /**
+    * * Field Name: AutoUpdateDisplayName
+    * * Display Name: Auto Update Display Name
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field
+    */
+    AutoUpdateDisplayName: boolean = true;
+
+    /**
+    * * Field Name: AutoUpdateIncludeInUserSearchAPI
+    * * Display Name: Auto Update Include In User Search API
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field
+    */
+    AutoUpdateIncludeInUserSearchAPI: boolean = true;
+
+
     // virtual fields - returned by the database VIEW
     FieldCodeName: string =  null
     Entity: string = null 
@@ -827,6 +882,14 @@ export class EntityInfo extends BaseInfo {
      * Detailed description of the entity's purpose and contents
      */
     public Description: string  = null
+    /**
+    * * Field Name: AutoUpdateDescription
+    * * Display Name: Auto Update Description
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
+    */
+    public AutoUpdateDescription: boolean = true
     /**
      * The underlying database table name this entity maps to
      */

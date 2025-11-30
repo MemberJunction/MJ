@@ -79,19 +79,14 @@
       </kendo-splitter-pane>
       
       <!-- Agents List Panel -->
-      <kendo-splitter-pane 
+      <kendo-splitter-pane
         [resizable]="true"
-        [scrollable]="false">
+        [scrollable]="true">
         <div class="agents-content">
           <!-- Loading State -->
           @if (isLoading) {
             <div class="loading-container">
-              <div class="loading-content">
-                <div class="loading-spinner">
-                  <div class="spinner-ring"></div>
-                </div>
-                <div class="loading-text">Loading agents...</div>
-              </div>
+              <mj-loading text="Loading agents..." size="large"></mj-loading>
             </div>
           }
 

@@ -30,7 +30,7 @@ export interface KPICardData {
           {{ formatValue(data.value) }}
         </div>
         <div class="kpi-card__loading" *ngIf="data.loading">
-          <div class="spinner"></div>
+          <mj-loading [showText]="false" size="small"></mj-loading>
         </div>
         
         <div class="kpi-card__subtitle" *ngIf="data.subtitle && !data.loading">
@@ -143,20 +143,6 @@ export interface KPICardData {
       justify-content: center;
       align-items: center;
       height: 60px;
-    }
-
-    .spinner {
-      width: 24px;
-      height: 24px;
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid #2196f3;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
     }
 
     @media (max-width: 768px) {

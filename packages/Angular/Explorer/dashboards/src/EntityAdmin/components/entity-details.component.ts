@@ -5,7 +5,7 @@ import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@me
 @Component({
   selector: 'mj-entity-details',
   templateUrl: './entity-details.component.html',
-  styleUrls: ['./entity-details.component.scss']
+  styleUrls: ['./entity-details.component.css']
 })
 export class EntityDetailsComponent implements OnInit, OnChanges {
   @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;
@@ -103,31 +103,30 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
 
   public getRelatedEntities(entityId: string): EntityInfo[] {
     if (!entityId) return [];
-    
-    const relatedEntityIds = new Array<string>();
-    
+
+    const relatedEntityIds = new Set<string>();
+
     // Get entities that this entity references (foreign keys)
     this.allEntityFields
       .filter(f => f.EntityID === entityId && f.RelatedEntityID)
-      .forEach(f => relatedEntityIds.push(f.RelatedEntityID!));
-    
+      .forEach(f => relatedEntityIds.add(f.RelatedEntityID!));
+
     // Get entities that reference this entity
     this.allEntityFields
       .filter(f => f.RelatedEntityID === entityId)
-      .forEach(f => relatedEntityIds.push(f.EntityID));
-    
-    // Convert to actual EntityInfo objects (would need entities list passed in)
-    // For now, returning empty array as we'd need the full entities list
+      .forEach(f => relatedEntityIds.add(f.EntityID));
+
+    // Remove the current entity from the set (don't return self-references)
+    relatedEntityIds.delete(entityId);
+
+    // Convert to actual EntityInfo objects
     const md = new Metadata();
     const allEntities = md.Entities;
     const retVals: EntityInfo[] = [];
     relatedEntityIds.forEach(id => {
-      if (id !== entityId) {
-        // don't return the current entity itself
-        const entity = allEntities.find(e => e.ID === id);
-        if (entity) {
-          retVals.push(entity);
-        }
+      const entity = allEntities.find(e => e.ID === id);
+      if (entity) {
+        retVals.push(entity);
       }
     });
     return retVals;

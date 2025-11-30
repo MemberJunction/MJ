@@ -19,7 +19,7 @@ interface PromptWithTemplate {
 @Component({
   selector: 'mj-prompt-filter-panel',
   templateUrl: './prompt-filter-panel.component.html',
-  styleUrls: ['./prompt-filter-panel.component.scss']
+  styleUrls: ['./prompt-filter-panel.component.css']
 })
 export class PromptFilterPanelComponent implements OnInit {
   @Input() prompts: PromptWithTemplate[] = [];

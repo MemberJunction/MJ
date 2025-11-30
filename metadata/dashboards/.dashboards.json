@@ -1,0 +1,169 @@
+[
+  {
+    "fields": {
+      "Name": "ERD",
+      "Description": "ERD Dashboard for visualizing and managing entity relationships within the MemberJunction framework",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "EntityAdmin",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "relatedEntities": {
+      "MJ: Dashboard User Preferences": [
+        {
+          "fields": {
+            "DashboardID": "@parent:ID",
+            "UserID": null,
+            "Scope": "App",
+            "ApplicationID": "@lookup:Applications.Name=Admin",
+            "DisplayOrder": 1
+          },
+          "primaryKey": {
+            "ID": "02CC423E-F36B-1410-8DAC-00021F8B792E"
+          },
+          "sync": {
+            "lastModified": "2025-11-28T02:04:46.517Z",
+            "checksum": "bf0278d6ce3d214a1cd3399b295fa1a2577e81c46b4c50c7231adf203a67f2ec"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F4C9433E-F36B-1410-8DAB-00021F8B792E"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:46.479Z",
+      "checksum": "9d05f99394100e6665fa158ab39a6d34ea79e007d163c03d1d78bad7ee77328b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Security",
+      "Description": "Security Dashboard for managing security settings within the MemberJunction framework",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "EntityAdmin",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "primaryKey": {
+      "ID": "C8DD0C2E-C778-4867-B6CA-8229473FAEE9"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:46.390Z",
+      "checksum": "1dff0c44b99d7dfd9faf4bd3e6bc52002b10c897029dc0243768eeb2919f8a88"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Role Management",
+      "Description": "Dashboard for managing roles and role assignments within MemberJunction",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "RoleManagement",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "primaryKey": {
+      "ID": "C36AE500-E119-4A4B-9D86-31A48E800CF8"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:46.403Z",
+      "checksum": "1b64690949959e49207373f2f3316d9cde24194c1420e84d0eb901a08ae44c8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "User Management",
+      "Description": "Dashboard for managing users, user accounts, and user roles within MemberJunction",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "UserManagement",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "primaryKey": {
+      "ID": "3484BBA8-FA3A-44B0-8E16-7C12D341812B"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:46.416Z",
+      "checksum": "673021b441c5130f307cd1de9c590396e22c2599e8eff9276246bb7e5fec646d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Entity Permissions",
+      "Description": "Dashboard for managing entity-level permissions and access control within MemberJunction",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "EntityPermissions",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "primaryKey": {
+      "ID": "536BEF62-0E9B-489E-9130-118BE5642190"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:46.428Z",
+      "checksum": "884a315263e6ae3b2be5f58db41a07698cffe95fcebf050269f1041875352c16"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Application Management",
+      "Description": "Dashboard for managing applications and application entities within MemberJunction",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "ApplicationManagement",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "primaryKey": {
+      "ID": "8419686C-930F-472A-82DD-292FB033A370"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:46.441Z",
+      "checksum": "2c09216863dbf7bbcaf7553a43be37ad56b32c6515c5dabcc841afabec6b388e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SQL Logging",
+      "Description": "Dashboard for managing SQL logging sessions and monitoring SQL activity within MemberJunction",
+      "UserID": "@lookup:Users.Name=System",
+      "CategoryID": null,
+      "Type": "Code",
+      "Scope": "App",
+      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "DriverClass": "SqlLogging",
+      "UIConfigDetails": "{}",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
+    },
+    "primaryKey": {
+      "ID": "F5BB07DF-5EA3-4AB6-B772-568394AB5BF5"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:46.453Z",
+      "checksum": "0acf57f972676556b89f33f1774446660800e8148bba30caf6ba8fbac3cb2183"
+    }
+  }
+]

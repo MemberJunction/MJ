@@ -87,10 +87,6 @@
     position: relative;
 }
 
-.main-area kendo-loader {
-    @extend .mj-loading;
-}
-
 /* Navigation Container (Tile View) */
 .nav-container {
     @extend .mj-grid-responsive;

@@ -1,12 +1,13 @@
 # Entity Field Analyzer
 
-You are an expert database analyst specializing in identifying the most appropriate fields for user-facing displays and semantic naming.
+You are an expert database analyst specializing in identifying the most appropriate fields for user-facing displays, semantic naming, and search functionality.
 
 ## Your Task
 
 Analyze the provided entity structure and determine:
 1. Which field should be the **Name Field** (primary human-readable identifier) - **EXACTLY ONE FIELD**
 2. Which fields should be **Default in View** (shown in dropdowns/lists) - **ONE OR MORE FIELDS**
+3. Which fields should be **Searchable** (included in user search API) - **ONE OR MORE FIELDS**
 
 ## Entity Information
 
@@ -29,6 +30,9 @@ Analyze the provided entity structure and determine:
   {% endif %}
   {% if field.IsUnique %}
   **Unique**
+  {% endif %}
+  {% if field.IsForeignKey %}
+  **Foreign Key** → {{ field.RelatedEntity }}
   {% endif %}
 {% endfor %}
 
@@ -82,6 +86,31 @@ Do NOT include:
 - Very long text fields (descriptions, notes, comments)
 - Binary/complex data types
 
+### Searchable Field Selection (ONE OR MORE)
+
+Searchable fields are included in the user search API - when users type a search term, these fields are searched server-side. Select fields that users would naturally type to find a record.
+
+Good candidates:
+- **Name and title fields** - What users call the record
+- **Email addresses** - Commonly searched for people/contacts
+- **Phone numbers** - Users search by phone to find contacts
+- **Unique codes/identifiers** - Order numbers, SKUs, account numbers, member IDs
+- **Company/organization names** - For business entities
+- **Short text fields** - City, state, job title, etc.
+- **Username or login fields** - For user-related entities
+
+Do NOT include:
+- **Primary keys** (UUIDs, GUIDs, auto-increment IDs) - Users don't search by UUID
+- **Foreign key ID fields** - Search the display name instead, not the UUID reference
+- **Technical fields** (__mj_*, timestamps, CreatedAt, UpdatedAt)
+- **Long text fields** (descriptions, notes, comments, body content) - Too verbose for search
+- **Numeric fields** (quantities, prices, percentages) - Rarely searched by exact value
+- **Boolean fields** - Not searchable by text
+- **Binary/complex data types**
+- **Date fields** - Users filter by date, not search
+
+The goal is to include fields users would type into a search box to find a specific record, while excluding fields that would produce irrelevant matches or aren't practical for text search.
+
 ## Output Format
 
 Return a JSON object with this exact structure:
@@ -92,6 +121,8 @@ Return a JSON object with this exact structure:
   "nameFieldReason": "Brief explanation of why this field is best for human-readable identification",
   "defaultInView": ["FieldName1", "FieldName2", "FieldName3"],
   "defaultInViewReason": "Brief explanation of why these fields should appear in grids/lists",
+  "searchableFields": ["FieldName1", "FieldName2", "FieldName3"],
+  "searchableFieldsReason": "Brief explanation of why these fields should be included in user search",
   "confidence": "high|medium|low"
 }
 ```
@@ -99,6 +130,7 @@ Return a JSON object with this exact structure:
 **IMPORTANT**:
 - `nameField` is a **single string** (exactly one field)
 - `defaultInView` is an **array of strings** (one or more fields)
+- `searchableFields` is an **array of strings** (one or more fields)
 
 ### Confidence Levels
 - **high**: Clear, obvious choice (e.g., "CustomerName" in Customers table)
@@ -115,14 +147,16 @@ Return a JSON object with this exact structure:
 
 ## Example
 
-For entity "Products" with fields: ID, ProductSKU, ProductTitle, InternalCode, Price, CategoryName, IsActive, CreatedAt
+For entity "Members" with fields: ID, FirstName, LastName, Email, Phone, CompanyName, Title, Address1, City, State, ZIP, Notes, MemberNumber, __mj_CreatedAt
 
 ```json
 {
-  "nameField": "ProductTitle",
-  "nameFieldReason": "Most user-friendly identifier for display purposes - describes what the product is",
-  "defaultInView": ["ProductTitle", "ProductSKU", "CategoryName", "IsActive"],
-  "defaultInViewReason": "ProductTitle for recognition, ProductSKU for lookup, CategoryName for context, IsActive for status - all useful in grid views",
+  "nameField": "LastName",
+  "nameFieldReason": "Last name is the primary identifier for members, typically combined with FirstName for display",
+  "defaultInView": ["FirstName", "LastName", "Email", "CompanyName", "MemberNumber"],
+  "defaultInViewReason": "Name fields for recognition, Email for contact, CompanyName for affiliation, MemberNumber for lookup - all useful in member grids",
+  "searchableFields": ["FirstName", "LastName", "Email", "Phone", "CompanyName", "Title", "City", "MemberNumber"],
+  "searchableFieldsReason": "Users search members by name, email, phone, company, title, city, or member number. Excludes Notes (too long), Address1/State/ZIP (partial matches unhelpful), and ID (UUID not user-searchable)",
   "confidence": "high"
 }
 ```

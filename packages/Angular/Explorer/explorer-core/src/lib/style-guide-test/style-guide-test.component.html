@@ -649,35 +649,35 @@
         <kendo-card>
           <kendo-card-body>
             <div class="text-center">
-              <kendo-loader type="converging-spinner" themeColor="primary" size="medium"></kendo-loader>
-              <p class="mt-2 mb-0">Converging</p>
+              <mj-loading [showText]="false" size="small"></mj-loading>
+              <p class="mt-2 mb-0">Small</p>
             </div>
           </kendo-card-body>
         </kendo-card>
-        
+
         <kendo-card>
           <kendo-card-body>
             <div class="text-center">
-              <kendo-loader type="infinite-spinner" themeColor="info" size="medium"></kendo-loader>
-              <p class="mt-2 mb-0">Infinite</p>
+              <mj-loading [showText]="false" size="medium"></mj-loading>
+              <p class="mt-2 mb-0">Medium</p>
             </div>
           </kendo-card-body>
         </kendo-card>
-        
+
         <kendo-card>
           <kendo-card-body>
             <div class="text-center">
-              <kendo-loader type="pulsing" themeColor="success" size="medium"></kendo-loader>
-              <p class="mt-2 mb-0">Pulsing</p>
+              <mj-loading [showText]="false" size="large"></mj-loading>
+              <p class="mt-2 mb-0">Large</p>
             </div>
           </kendo-card-body>
         </kendo-card>
-        
+
         <kendo-card>
           <kendo-card-body>
             <div class="text-center">
-              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--mj-blue);"></i>
-              <p class="mt-2 mb-0">Font Awesome</p>
+              <mj-loading text="Loading..." size="medium"></mj-loading>
+              <p class="mt-2 mb-0">With Text</p>
             </div>
           </kendo-card-body>
         </kendo-card>

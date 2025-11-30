@@ -18,7 +18,7 @@ import { Subject } from 'rxjs';
 @Component({
   selector: 'mj-conversation-chat-area',
   templateUrl: `./conversation-chat-area.component.html`,
-  styleUrls: ['./conversation-chat-area.component.scss']
+  styleUrls: ['./conversation-chat-area.component.css']
 })
 export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck, AfterViewChecked {
   @Input() environmentId!: string;

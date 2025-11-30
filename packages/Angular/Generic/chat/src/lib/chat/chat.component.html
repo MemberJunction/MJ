@@ -52,7 +52,7 @@
 
     <div class = "chat-input-area">
         @if (ShowWaitingIndicator) {
-            <kendo-loader type="converging-spinner" class="loader"></kendo-loader>
+            <mj-loading [showText]="false" size="small" class="loader"></mj-loading>
         }
         <div class="text-area-wrapper">
             <textarea #theInput 

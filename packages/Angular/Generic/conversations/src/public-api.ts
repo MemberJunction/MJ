@@ -10,6 +10,7 @@ export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 export * from './lib/models/lazy-artifact-info';
 export * from './lib/models/conversation-complete-query.model';
+export * from './lib/models/navigation-request.model';
 
 // Services - State
 export * from './lib/services/data-cache.service';
@@ -28,6 +29,7 @@ export * from './lib/services/mention-autocomplete.service';
 export * from './lib/services/collection-permission.service';
 export * from './lib/services/artifact-permission.service';
 export * from './lib/services/artifact-use-tracking.service';
+export * from './lib/services/collection-state.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -45,6 +47,7 @@ export * from './lib/components/mention/mention-dropdown.component';
 export * from './lib/components/mention/mention-editor.component';
 export * from './lib/components/collection/collection-tree.component';
 export * from './lib/components/collection/collection-view.component';
+export * from './lib/components/collection/collections-full-view.component';
 export * from './lib/components/collection/collection-artifact-card.component';
 export * from './lib/components/collection/artifact-collection-picker-modal.component';
 export * from './lib/components/collection/collection-share-modal.component';

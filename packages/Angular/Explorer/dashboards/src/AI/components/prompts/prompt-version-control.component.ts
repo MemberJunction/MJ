@@ -38,7 +38,7 @@ interface FieldDifference {
 @Component({
   selector: 'app-prompt-version-control',
   templateUrl: './prompt-version-control.component.html',
-  styleUrls: ['./prompt-version-control.component.scss']
+  styleUrls: ['./prompt-version-control.component.css']
 })
 export class PromptVersionControlComponent implements OnInit, OnDestroy {
   @Input() prompt: AIPromptEntityExtended | null = null;

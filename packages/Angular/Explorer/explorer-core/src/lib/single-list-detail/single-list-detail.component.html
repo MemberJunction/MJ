@@ -32,7 +32,7 @@
         </div>
     </div>
     @if(showLoader){
-        <kendo-loader type="converging-spinner"></kendo-loader>
+        <mj-loading [showText]="false" size="medium"></mj-loading>
     }
     @else{
         <kendo-grid [data]="filteredGridData">
@@ -78,7 +78,7 @@ title="Select Views to Add"
 [height]="550"
 >
 @if(showAddLoader){
-    <kendo-loader type="converging-spinner"></kendo-loader>
+    <mj-loading [showText]="false" size="small"></mj-loading>
     <kendo-progressbar 
         [min]="0"
         [max]="recordsToSave"
@@ -142,7 +142,7 @@ class="dialog-wrapper"
 [height]="550"
 >
 @if(showDialogLoader){
-    <kendo-loader type="converging-spinner"></kendo-loader>
+    <mj-loading [showText]="false" size="small"></mj-loading>
     <kendo-progressbar 
         [min]="0"
         [max]="recordsToSave"
@@ -163,7 +163,7 @@ class="dialog-wrapper"
     </div>
     <hr>
     @if(fetchingListRecords){
-        <kendo-loader type="converging-spinner"></kendo-loader>
+        <mj-loading [showText]="false" size="small"></mj-loading>
     }
     @else {
         @for(listRecord of listRecords; track listRecord){

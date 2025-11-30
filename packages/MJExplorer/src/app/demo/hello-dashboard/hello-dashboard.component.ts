@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseDashboard } from '@memberjunction/ng-dashboards';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 import { CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';

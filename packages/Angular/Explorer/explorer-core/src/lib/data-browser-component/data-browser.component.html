@@ -30,11 +30,7 @@
 
     <!-- Loading State using global styles -->
     <div class="mj-loading mj-loading-overlay" *ngIf="showLoader">
-        <kendo-loader 
-            type="converging-spinner" 
-            themeColor="primary" 
-            size="large">
-        </kendo-loader>
+        <mj-loading text="Loading applications..." size="large"></mj-loading>
     </div>
 
     <!-- Applications Grid using global grid and icon card styles -->

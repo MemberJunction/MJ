@@ -15,6 +15,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { JoinGridComponent } from './join-grid/join-grid.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @NgModule({
   declarations: [
@@ -30,7 +31,8 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     DropDownsModule,
     DialogsModule,
     IndicatorsModule,
-    ContainerDirectivesModule
+    ContainerDirectivesModule,
+    SharedGenericModule
   ],
   exports: [
     JoinGridComponent

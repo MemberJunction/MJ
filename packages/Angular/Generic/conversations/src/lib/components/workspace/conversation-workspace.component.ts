@@ -232,6 +232,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.isPanelOpen$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isOpen => {
+        console.log('📡 Workspace received isPanelOpen$:', isOpen);
         this.isArtifactPanelOpen = isOpen;
       });
 
@@ -239,6 +240,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.activeArtifactId$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async id => {
+        console.log('📡 Workspace received activeArtifactId$:', id);
         this.activeArtifactId = id;
         // Load permissions when artifact changes
         if (id) {
@@ -253,6 +255,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.activeVersionNumber$
       .pipe(takeUntil(this.destroy$))
       .subscribe(versionNumber => {
+        console.log('📡 Workspace received activeVersionNumber$:', versionNumber);
         this.activeVersionNumber = versionNumber;
       });
 

@@ -32,6 +32,7 @@
     "@memberjunction/core-entities": "2.121.0",
     "@memberjunction/ng-notifications": "2.121.0",
     "@memberjunction/ng-base-types": "2.121.0",
+    "@memberjunction/ng-shared-generic": "2.121.0",
     "@memberjunction/graphql-dataprovider": "2.121.0",
     "@progress/kendo-angular-notification": "16.2.0",
     "tslib": "^2.3.0"

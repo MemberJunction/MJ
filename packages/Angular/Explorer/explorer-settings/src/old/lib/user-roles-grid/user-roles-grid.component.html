@@ -1,4 +1,4 @@
-<div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+<div *ngIf="isLoading"><mj-loading [showText]="false" size="medium"></mj-loading></div>
 <div class="content" *ngIf="!isLoading">
     <button [disabled]="NumDirty === 0" kendoButton (click)="saveUserRoles()">Save</button>
     <button [disabled]="NumDirty === 0" kendoButton (click)="cancelEdit()">Cancel</button>

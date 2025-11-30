@@ -437,7 +437,6 @@ The Explorer Core integrates seamlessly with:
 - **@memberjunction/ng-file-storage**: File upload and management
 - **@memberjunction/ng-record-changes**: Audit trail functionality
 - **@memberjunction/ng-user-view-grid**: Data grid components
-- **@memberjunction/ng-skip-chat**: AI chat integration
 - **@memberjunction/ng-dashboards**: Dashboard creation and management
 - **@memberjunction/ng-resource-permissions**: Resource-level permissions
 

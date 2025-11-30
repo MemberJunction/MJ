@@ -16,6 +16,7 @@ import { DropDownsModule } from "@progress/kendo-angular-dropdowns";
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { FindRecordModule } from '@memberjunction/ng-find-record';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @NgModule({
   declarations: [
@@ -34,7 +35,8 @@ import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissio
     DropDownsModule,
     MJTabStripModule,
     FindRecordModule,
-    ResourcePermissionsModule
+    ResourcePermissionsModule,
+    SharedGenericModule
   ],
   exports: [
     UserViewPropertiesDialogComponent

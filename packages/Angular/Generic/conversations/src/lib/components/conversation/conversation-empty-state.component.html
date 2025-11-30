@@ -1,10 +1,7 @@
 <div class="conversation-empty-state">
   <!-- Loading Overlay -->
   <div class="loading-overlay" *ngIf="disabled">
-    <div class="loading-content">
-      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
-      <p class="loading-message">Creating your conversation...</p>
-    </div>
+    <mj-loading text="Creating your conversation..." size="large"></mj-loading>
   </div>
 
   <div class="empty-state-container" [class.loading]="disabled">

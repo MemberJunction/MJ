@@ -196,6 +196,7 @@ import { TestSuiteTestFormComponent, LoadTestSuiteTestFormComponent } from "./En
 import { TestSuiteFormComponent, LoadTestSuiteFormComponent } from "./Entities/TestSuite/testsuite.form.component";
 import { TestTypeFormComponent, LoadTestTypeFormComponent } from "./Entities/TestType/testtype.form.component";
 import { TestFormComponent, LoadTestFormComponent } from "./Entities/Test/test.form.component";
+import { UserSettingFormComponent, LoadUserSettingFormComponent } from "./Entities/UserSetting/usersetting.form.component";
 import { OutputDeliveryTypeFormComponent, LoadOutputDeliveryTypeFormComponent } from "./Entities/OutputDeliveryType/outputdeliverytype.form.component";
 import { OutputFormatTypeFormComponent, LoadOutputFormatTypeFormComponent } from "./Entities/OutputFormatType/outputformattype.form.component";
 import { OutputTriggerTypeFormComponent, LoadOutputTriggerTypeFormComponent } from "./Entities/OutputTriggerType/outputtriggertype.form.component";
@@ -628,6 +629,7 @@ declarations: [
     TestSuiteFormComponent,
     TestTypeFormComponent,
     TestFormComponent,
+    UserSettingFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
@@ -636,8 +638,7 @@ declarations: [
     QueryEntityFormComponent,
     QueryFieldFormComponent,
     QueryPermissionFormComponent,
-    QueueTaskFormComponent,
-    QueueTypeFormComponent],
+    QueueTaskFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -663,6 +664,7 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
     RecommendationProviderFormComponent,
@@ -681,8 +683,7 @@ declarations: [
     RoleFormComponent,
     RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent,
-    SchemaInfoFormComponent],
+    ScheduledActionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -708,6 +709,7 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
     TagFormComponent,
@@ -726,8 +728,7 @@ declarations: [
     UserViewRunDetailFormComponent,
     UserViewRunFormComponent,
     UserViewFormComponent,
-    UserFormComponent,
-    VectorDatabaseFormComponent],
+    UserFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -753,6 +754,7 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
     WorkflowEngineFormComponent,
@@ -979,6 +981,7 @@ export function LoadCoreGeneratedForms() {
     LoadTestSuiteFormComponent();
     LoadTestTypeFormComponent();
     LoadTestFormComponent();
+    LoadUserSettingFormComponent();
     LoadOutputDeliveryTypeFormComponent();
     LoadOutputFormatTypeFormComponent();
     LoadOutputTriggerTypeFormComponent();

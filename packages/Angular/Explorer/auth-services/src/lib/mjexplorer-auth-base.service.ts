@@ -13,10 +13,27 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
   protected userProfile$ = new BehaviorSubject<any>(null);
   protected userEmail$ = new BehaviorSubject<string>('');
 
+  private _initialPath: string | null = null;
+  private _initialSearch: string | null = null;
+  /**
+   * Contains the initial path from window.location.pathname before any work was done by auth services
+   */
+  get initialPath(): string | null {
+    return this._initialPath;
+  }
+  /**
+   * Contains the initial search/query string from window.location.search before any work was done by auth services
+   */
+  get initialSearch(): string | null {
+    return this._initialSearch;
+  }
+
   abstract type: string;
 
   constructor(config: AngularAuthProviderConfig) {
     this.config = config;
+    this._initialPath = window.location.pathname;
+    this._initialSearch = window.location.search;
   }
 
   /**

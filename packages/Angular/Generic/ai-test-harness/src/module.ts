@@ -16,6 +16,7 @@ import { IconsModule } from '@progress/kendo-angular-icons';
 // MemberJunction imports
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 
 // Components
@@ -60,7 +61,8 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     IconsModule,
     // MemberJunction
     ContainerDirectivesModule,
-    CodeEditorModule
+    CodeEditorModule,
+    SharedGenericModule
   ],
   exports: [
     AITestHarnessComponent,

@@ -14,8 +14,6 @@ interface IconCategory {
 
 @Component({
   selector: 'mj-user-profile-settings',
-  standalone: true,
-  imports: [CommonModule, FormsModule],
   templateUrl: './user-profile-settings.component.html',
   styleUrls: ['./user-profile-settings.component.css']
 })

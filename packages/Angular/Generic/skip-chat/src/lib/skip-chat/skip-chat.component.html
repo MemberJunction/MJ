@@ -94,7 +94,7 @@
                         </div>
                         @if (!_conversationLoadComplete) {
                             <div class="loading-convo-messages-wrapper">
-                                <kendo-loader></kendo-loader>
+                                <mj-loading text="Loading conversation..." size="medium"></mj-loading>
                             </div>
                         }   
                         <div class="messages-container" mjContainer mjSkipResize="true"><!--mjSkipResize results in everything below this level NOT being resized, performance optimization-->

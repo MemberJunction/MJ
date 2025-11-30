@@ -1,7 +1,8 @@
 .conversation-workspace {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 123px); /* Account for parent app header (~60px) */
+  height: 100%; /* Fill parent container - works in any context (tabs, embedded, etc.) */
+  min-height: 0; /* Allow flex shrinking in nested flex containers */
   background-color: #F4F4F4;
   position: relative;
 }

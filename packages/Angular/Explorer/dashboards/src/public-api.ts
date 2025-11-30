@@ -3,31 +3,134 @@
  */
 
 import { LoadEntityAdminDashboard } from './EntityAdmin/entity-admin-dashboard.component';
-import { LoadAIDashboard } from './AI/ai-dashboard.component';
-import { LoadActionsManagementDashboard } from './Actions';
 import { LoadComponentStudioDashboard } from './ComponentStudio/component-studio-dashboard.component';
 import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.component';
 import { LoadTestingDashboard } from './Testing/testing-dashboard.component';
-
-// Base Dashboard
-export * from './generic/base-dashboard';
+import { LoadDataExplorerDashboard } from './DataExplorer/data-explorer-dashboard.component';
+import {
+  LoadActionsOverviewResource,
+  LoadActionsMonitorResource,
+  LoadActionsScheduleResource,
+  LoadActionsCodeResource,
+  LoadActionsEntitiesResource,
+  LoadActionsSecurityResource
+} from './Actions';
+import {
+  LoadTestingOverviewResource,
+  LoadTestingExecutionResource,
+  LoadTestingAnalyticsResource,
+  LoadTestingVersionResource,
+  LoadTestingFeedbackResource
+} from './Testing/components';
+import {
+  LoadSchedulingMonitorResource,
+  LoadSchedulingJobsResource,
+  LoadSchedulingHistoryResource,
+  LoadSchedulingTypesResource,
+  LoadSchedulingHealthResource
+} from './Scheduling/components';
 
 // Dashboards
 export * from './EntityAdmin/entity-admin-dashboard.component';
-export * from './AI/ai-dashboard.component';
-export * from './Actions';
 export * from './ComponentStudio';
 export * from './Scheduling/scheduling-dashboard.component';
 export * from './Testing/testing-dashboard.component';
+export * from './DataExplorer';
 
-export * from './Actions/index';
+// Export AI components as resources (BaseResourceComponent-based)
+export {
+  ExecutionMonitoringComponent,
+  LoadAIMonitorResource,
+  PromptManagementV2Component,
+  LoadAIPromptsResource,
+  AgentConfigurationComponent,
+  LoadAIAgentsResource,
+  ModelManagementV2Component,
+  LoadAIModelsResource,
+  SystemConfigurationComponent,
+  LoadAIConfigResource,
+  KPICardComponent,
+  LiveExecutionWidgetComponent,
+  TimeSeriesChartComponent,
+  PerformanceHeatmapComponent
+} from './AI/index';
+
+// Export Actions components as resources (BaseResourceComponent-based)
+export {
+  ActionsOverviewComponent,
+  LoadActionsOverviewResource,
+  LoadActionsMonitorResource,
+  ScheduledActionsComponent,
+  LoadActionsScheduleResource,
+  CodeManagementComponent,
+  LoadActionsCodeResource,
+  EntityIntegrationComponent,
+  LoadActionsEntitiesResource,
+  SecurityPermissionsComponent,
+  LoadActionsSecurityResource
+} from './Actions';
+
+// Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
+export { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
+
+// Export Scheduling components as resources (BaseResourceComponent-based)
+export {
+  SchedulingMonitorResourceComponent,
+  LoadSchedulingMonitorResource,
+  SchedulingJobsResourceComponent,
+  LoadSchedulingJobsResource,
+  SchedulingHistoryResourceComponent,
+  LoadSchedulingHistoryResource,
+  SchedulingTypesResourceComponent,
+  LoadSchedulingTypesResource,
+  SchedulingHealthResourceComponent,
+  LoadSchedulingHealthResource
+} from './Scheduling/components';
+
+// Export Testing components as resources (BaseResourceComponent-based)
+export {
+  TestingOverviewResourceComponent,
+  LoadTestingOverviewResource,
+  TestingExecutionResourceComponent,
+  LoadTestingExecutionResource,
+  TestingAnalyticsResourceComponent,
+  LoadTestingAnalyticsResource,
+  TestingVersionResourceComponent,
+  LoadTestingVersionResource,
+  TestingFeedbackResourceComponent,
+  LoadTestingFeedbackResource
+} from './Testing/components';
 
 // Module
 export * from './module';
 
-LoadEntityAdminDashboard(); // call tree shaking function to prevent tree shaking
-LoadAIDashboard(); // call tree shaking function to prevent tree shaking
-LoadActionsManagementDashboard(); // call tree shaking function to prevent tree shaking
-LoadComponentStudioDashboard(); // call tree shaking function to prevent tree shaking
-LoadSchedulingDashboard(); // call tree shaking function to prevent tree shaking
-LoadTestingDashboard(); // call tree shaking function to prevent tree shaking
+// Call tree shaking functions to prevent tree shaking
+LoadEntityAdminDashboard();
+LoadComponentStudioDashboard();
+LoadSchedulingDashboard();
+LoadTestingDashboard();
+
+// Actions resource loaders
+LoadActionsOverviewResource();
+LoadActionsMonitorResource();
+LoadActionsScheduleResource();
+LoadActionsCodeResource();
+LoadActionsEntitiesResource();
+LoadActionsSecurityResource();
+
+// Scheduling resource loaders
+LoadSchedulingMonitorResource();
+LoadSchedulingJobsResource();
+LoadSchedulingHistoryResource();
+LoadSchedulingTypesResource();
+LoadSchedulingHealthResource();
+
+// Testing resource loaders
+LoadTestingOverviewResource();
+LoadTestingExecutionResource();
+LoadTestingAnalyticsResource();
+LoadTestingVersionResource();
+LoadTestingFeedbackResource();
+
+// Data Explorer Dashboard loader
+LoadDataExplorerDashboard();

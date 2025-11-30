@@ -44,13 +44,13 @@ import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
 // Local Components
-import { AskSkipModule } from '@memberjunction/ng-ask-skip';
-import { SkipChatModule } from '@memberjunction/ng-skip-chat';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { DashboardsModule } from '@memberjunction/ng-dashboards';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
+import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
 import { ChatWrapperComponent } from './lib/chat-wrapper/chat-wrapper.component';
 import { DashboardBrowserComponent } from './lib/dashboard-browser-component/dashboard-browser.component';
@@ -91,11 +91,16 @@ import { UserProfileComponent } from './lib/user-profile/user-profile.component'
 import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
 import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
-import { ListViewComponent } from './lib/list-view/list-view.component';  
+import { ListViewComponent } from './lib/list-view/list-view.component';
 import { ResourceBrowserComponent } from './lib/resource-browser/resource-browser.component';
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
+import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversations-resource.component';
+import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collections-resource.component';
+import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
+import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
+// AI resource components are now in @memberjunction/ng-dashboards directly (no wrappers needed)
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
@@ -142,6 +147,10 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ResourceBrowserComponent,
     SingleListDetailComponent,
     ListDetailResource,
+    ChatConversationsResource,
+    ChatCollectionsResource,
+    ChatTasksResource,
+    ArtifactResource,
     TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
     StyleGuideTestComponent
@@ -182,10 +191,8 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     FilterModule,
     DropDownsModule,
     MemberJunctionSharedModule,
-    AskSkipModule,
     ConversationsModule,
     DashboardsModule,
-    SkipChatModule,
     EntityPermissionsModule,
     ExplorerSettingsModule,
     FileStorageModule,
@@ -200,7 +207,9 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DragDropModule,
     CardModule,
     AvatarModule,
-    AITestHarnessModule
+    AITestHarnessModule,
+    ArtifactsModule,
+    SharedGenericModule
   ],
   exports: [
     FormToolbarComponent,

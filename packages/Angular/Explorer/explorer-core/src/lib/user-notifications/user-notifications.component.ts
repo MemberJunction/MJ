@@ -88,11 +88,6 @@ export class UserNotificationsComponent implements AfterViewInit {
       const config = SafeJSONParse<any>(notification.ResourceConfiguration);
       if (config) {
         switch (config.type?.trim().toLowerCase()) {
-          case 'askskip':
-            url.push('askskip');
-            if (config.conversationId)
-              url.push(config.conversationId);
-            break;
           case 'conversation':
             url.push('chat');
             // Build query string with conversation and artifact navigation

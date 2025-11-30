@@ -1,7 +1,9 @@
-import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
-import { RunView, Metadata } from '@memberjunction/core';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { Component, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
+import { AIAgentEntityExtended, ResourceData } from '@memberjunction/core-entities';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 interface AgentFilter {
   searchTerm: string;
@@ -12,16 +14,24 @@ interface AgentFilter {
   exposeAsAction: string;
 }
 
+/**
+ * Tree-shaking prevention function - ensures component is included in builds
+ */
+export function LoadAIAgentsResource() {
+  // Force inclusion in production builds
+}
+
+/**
+ * AI Agents Resource - displays AI agent configuration and management
+ * Extends BaseResourceComponent to work with the resource type system
+ */
+@RegisterClass(BaseResourceComponent, 'AIAgentsResource')
 @Component({
   selector: 'app-agent-configuration',
   templateUrl: './agent-configuration.component.html',
-  styleUrls: ['./agent-configuration.component.scss']
+  styleUrls: ['./agent-configuration.component.css']
 })
-export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
-  @Input() initialState: any = null;
-  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
-  @Output() stateChange = new EventEmitter<any>();
-
+export class AgentConfigurationComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
   public isLoading = false;
   public filterPanelVisible = true;
   public viewMode: 'grid' | 'list' = 'grid';
@@ -124,14 +134,21 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
 
   constructor(
     private testHarnessService: AITestHarnessDialogService,
+    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();
+  }
 
   async ngAfterViewInit() {
-    if (this.initialState) {
-      this.applyInitialState(this.initialState);
+    // Apply initial state from resource configuration if provided
+    if (this.Data?.Configuration) {
+      this.applyInitialState(this.Data.Configuration);
     }
     await this.loadAgents();
+
+    // Notify that the resource has finished loading
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
@@ -256,14 +273,8 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   }
 
   private emitStateChange(): void {
-    const state = {
-      filterPanelVisible: this.filterPanelVisible,
-      viewMode: this.viewMode,
-      expandedAgentId: this.expandedAgentId,
-      currentFilters: this.currentFilters,
-      agentCount: this.filteredAgents.length
-    };
-    this.stateChange.emit(state);
+    // State change handling - could be used for persisting user preferences in the future
+    // For now, just a placeholder for tracking state changes
   }
 
   public setViewMode(mode: 'grid' | 'list'): void {
@@ -276,13 +287,14 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   }
 
   public openAgentRecord(agentId: string): void {
-    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: agentId });
+    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agentId }]);
+    this.navigationService.OpenEntityRecord('AI Agents', compositeKey);
   }
 
   public createNewAgent(): void {
     // Use the standard MemberJunction pattern to open a new AI Agent form
-    // null for recordId indicates creating a new record
-    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: null as any });
+    // Empty CompositeKey indicates a new record
+    this.navigationService.OpenEntityRecord('AI Agents', new CompositeKey([]));
   }
 
   public runAgent(agent: AIAgentEntityExtended): void {
@@ -303,7 +315,8 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   }
 
   public onOpenRecord(entityName: string, recordId: string): void {
-    this.openEntityRecord.emit({ entityName: entityName, recordId: recordId });
+    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: recordId }]);
+    this.navigationService.OpenEntityRecord(entityName, compositeKey);
   }
 
   public getExecutionModeColor(mode: string): string {
@@ -341,4 +354,19 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     return !!agent?.LogoURL;
   }
 
+  // === BaseResourceComponent Required Methods ===
+
+  /**
+   * Get the display name for this resource
+   */
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return 'Agents';
+  }
+
+  /**
+   * Get the icon class for this resource
+   */
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return 'fa-solid fa-robot';
+  }
 }

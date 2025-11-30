@@ -2,7 +2,7 @@ import { LoadAIPromptEntityExtendedServerSubClass } from '@memberjunction/core-e
 
 // Core library exports
 export { FileBackupManager } from './lib/file-backup-manager';
-export { SyncEngine } from './lib/sync-engine';
+export { SyncEngine, DeferrableLookupError } from './lib/sync-engine';
 export type { RecordData } from './lib/sync-engine';
 export { ConfigManager, configManager } from './lib/config-manager';
 export { getSyncEngine, resetSyncEngine } from './lib/singleton-manager';

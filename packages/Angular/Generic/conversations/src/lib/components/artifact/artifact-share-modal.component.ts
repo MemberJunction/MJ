@@ -196,7 +196,7 @@ interface PermissionDisplay extends ArtifactPermission {
             </kendo-window>
         }
     `,
-    styleUrls: ['./artifact-share-modal.component.scss']
+    styleUrls: ['./artifact-share-modal.component.css']
 })
 export class ArtifactShareModalComponent implements OnInit, OnChanges {
     @Input() isOpen: boolean = false;

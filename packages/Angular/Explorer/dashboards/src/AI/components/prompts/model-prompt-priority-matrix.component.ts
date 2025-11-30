@@ -27,7 +27,7 @@ interface MatrixCell {
 @Component({
   selector: 'app-model-prompt-priority-matrix',
   templateUrl: './model-prompt-priority-matrix.component.html',
-  styleUrls: ['./model-prompt-priority-matrix.component.scss']
+  styleUrls: ['./model-prompt-priority-matrix.component.css']
 })
 export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   @Input() selectedPrompts: AIPromptEntityExtended[] = [];

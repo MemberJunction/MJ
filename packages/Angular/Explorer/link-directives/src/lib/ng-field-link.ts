@@ -1,6 +1,6 @@
 import { Directive, ElementRef, Renderer2, Input, OnInit, HostListener } from '@angular/core';
-import { ActivatedRoute, NavigationCancel, NavigationEnd, NavigationError, Router } from '@angular/router';
-import { BaseEntity, CompositeKey, EntityField, EntityInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityInfo, LogStatus, Metadata } from '@memberjunction/core';
+import { NavigationService } from '@memberjunction/ng-shared';
 import { BaseLink } from './ng-base-link';
 
 @Directive({
@@ -16,20 +16,12 @@ export class FieldLink extends BaseLink implements OnInit {
   private _targetEntityInfo: EntityInfo | undefined;
   private _targetRecordID: number = 0;
 
-  constructor(private el: ElementRef, private renderer: Renderer2, private route: ActivatedRoute, private router: Router) {
+  constructor(
+    private el: ElementRef,
+    private renderer: Renderer2,
+    private navigationService: NavigationService
+  ) {
     super();
-
-    this.router.events.subscribe(event => {
-      if (event instanceof NavigationEnd) {
-        console.log('NavigationEnd:', event.url);
-      }
-      if (event instanceof NavigationError) {
-        LogError(`NavigationError: ${event.error}`);
-      }
-      if (event instanceof NavigationCancel) {
-        LogError(`NavigationCancel: ${event.reason}`);
-      }
-    });
   }
 
   public get field(): EntityField {
@@ -87,18 +79,16 @@ export class FieldLink extends BaseLink implements OnInit {
   @HostListener('click', ['$event'])
   onClick(event: Event) {
     event.preventDefault();
-    if (!this._targetEntityInfo) 
+    if (!this._targetEntityInfo)
       throw new Error('targetEntityInfo not set');
 
-    // AT THE MOMENT - we only support foreign keys with a single value
-    const keyVals = `${this._targetEntityInfo.FirstPrimaryKey.Name}|${this._targetRecordID}`
-    const newURL: string[] = ['resource', 'record', keyVals];
+    // Create CompositeKey for navigation - we only support foreign keys with a single value at present
+    const compositeKey = new CompositeKey([{
+      FieldName: this._targetEntityInfo.FirstPrimaryKey.Name,
+      Value: this._targetRecordID
+    }]);
 
-    this.router.navigate(newURL, { queryParams: { Entity: this._targetEntity } }).then(params => {
-      console.log('navigated to:', newURL.join('/'));
-    }).catch(err => {
-      const newURLString: string = newURL.join('/');
-      LogError(`Error navigating to ${newURLString}: ${err}`);
-    })
-  }  
+    // Use NavigationService for consistent navigation behavior
+    this.navigationService.OpenEntityRecord(this._targetEntity, compositeKey);
+  }
 }

@@ -4,6 +4,7 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "resource-types",
     "ai-configurations",
     "artifact-types",
     "action-categories",

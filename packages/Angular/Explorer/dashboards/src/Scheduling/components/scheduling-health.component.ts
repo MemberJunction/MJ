@@ -6,7 +6,7 @@ import { SchedulingInstrumentationService, LockInfo } from '../services/scheduli
 @Component({
   selector: 'app-scheduling-health',
   templateUrl: './scheduling-health.component.html',
-  styleUrls: ['./scheduling-health.component.scss']
+  styleUrls: ['./scheduling-health.component.css']
 })
 export class SchedulingHealthComponent implements OnInit, OnDestroy {
   @Input() initialState: any;

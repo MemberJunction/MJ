@@ -1084,17 +1084,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loading = false;
   }
 
-  protected async loadSkip(md: Metadata) {
-    const drawerItem = {
-      id: 'AskSkip',
-      selected: false,
-      text: 'Ask Skip',
-      path: '/askskip',
-      icon: 'fa-solid fa-robot'  // Keep the fallback icon property
-    }
-    this.drawerItems.push(drawerItem);
-  }
-
   protected async loadHome(md: Metadata) {
     const drawerItem = {
       id: 'Home',

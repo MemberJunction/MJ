@@ -143,9 +143,24 @@
     }
   }
 
-  // Show close button on active tab and on hover
+  // Show close button on hover of any tab (except pinned)
+  .lm_tab:hover:not(.pinned) .lm_close_tab {
+    opacity: 0.7 !important;
+  }
+
+  // Pinned tabs never show close button - use right-click menu or unpin first
+  .lm_tab.pinned .lm_close_tab {
+    display: none !important;
+  }
+
+  // Hide close button on active tab by default (only show on hover)
   .lm_active .lm_close_tab {
-    opacity: 0.5 !important;
+    opacity: 0 !important;
+  }
+
+  // Show close button when hovering active tab
+  .lm_active:hover .lm_close_tab {
+    opacity: 0.7 !important;
   }
 
   // Adjust padding when close button is visible

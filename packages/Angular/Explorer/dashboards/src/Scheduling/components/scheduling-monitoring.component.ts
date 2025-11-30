@@ -6,7 +6,7 @@ import { SchedulingInstrumentationService, SchedulingKPIs, JobExecution, Upcomin
 @Component({
   selector: 'app-scheduling-monitoring',
   templateUrl: './scheduling-monitoring.component.html',
-  styleUrls: ['./scheduling-monitoring.component.scss']
+  styleUrls: ['./scheduling-monitoring.component.css']
 })
 export class SchedulingMonitoringComponent implements OnInit, OnDestroy {
   @Input() initialState: any;

@@ -1,0 +1,122 @@
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.toast {
+  min-width: 320px;
+  max-width: 500px;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  border-left: 4px solid;
+  transition: all 0.2s ease;
+}
+.toast:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+.toast.toast-success {
+  border-left-color: #10b981;
+}
+.toast.toast-success .toast-icon {
+  color: #10b981;
+}
+.toast.toast-error {
+  border-left-color: #ef4444;
+}
+.toast.toast-error .toast-icon {
+  color: #ef4444;
+}
+.toast.toast-warning {
+  border-left-color: #f59e0b;
+}
+.toast.toast-warning .toast-icon {
+  color: #f59e0b;
+}
+.toast.toast-info {
+  border-left-color: #3b82f6;
+}
+.toast.toast-info .toast-icon {
+  color: #3b82f6;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.toast-message {
+  flex: 1;
+  color: #1f2937;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+.toast-close i {
+  font-size: 16px;
+}
+.toast-close:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #1f2937;
+}
+.toast-close:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 640px) {
+  .toast-container {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+  }
+  .toast {
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .toast {
+    background-color: rgba(31, 41, 55, 0.95);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  .toast .toast-message {
+    color: #f9fafb;
+  }
+  .toast .toast-close {
+    color: #9ca3af;
+  }
+  .toast .toast-close:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #f9fafb;
+  }
+}

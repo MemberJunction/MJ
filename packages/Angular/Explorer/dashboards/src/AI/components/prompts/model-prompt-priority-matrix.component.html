@@ -174,12 +174,7 @@
   <!-- Loading state -->
   @if (isLoading) {
     <div class="loading-container">
-      <div class="loading-content">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Loading...</span>
-        </div>
-        <p class="loading-message">{{ loadingMessage }}</p>
-      </div>
+      <mj-loading [text]="loadingMessage" size="large"></mj-loading>
     </div>
   } @else {
     <!-- Matrix view -->

@@ -804,12 +804,15 @@ Enable entity relationships using human-readable values:
 - Multi-field syntax: `@lookup:EntityName.Field1=Value1&Field2=Value2`
 - Auto-create syntax: `@lookup:EntityName.FieldName=Value?create`
 - With additional fields: `@lookup:EntityName.FieldName=Value?create&Field2=Value2`
+- Deferred lookup syntax: `@lookup:EntityName.FieldName=Value?allowDefer`
+- Combined flags: `@lookup:EntityName.FieldName=Value?create&allowDefer`
 
 Examples:
 - `@lookup:AI Prompt Types.Name=Chat` - Single field lookup, fails if not found
 - `@lookup:Users.Email=john@example.com&Department=Sales` - Multi-field lookup for precise matching
 - `@lookup:AI Prompt Categories.Name=Examples?create` - Creates if missing
 - `@lookup:AI Prompt Categories.Name=Examples?create&Description=Example prompts` - Creates with description
+- `@lookup:Dashboards.Name=Data Explorer?allowDefer` - Defers lookup if not found, retries at end of push
 
 #### Multi-Field Lookups
 When you need to match records based on multiple criteria, use the multi-field syntax:
@@ -821,6 +824,115 @@ When you need to match records based on multiple criteria, use the multi-field s
 ```
 
 This ensures you get the exact record you want when multiple records might have the same value in a single field.
+
+#### Deferred Lookups (?allowDefer)
+
+The `?allowDefer` flag enables handling of circular dependencies between entities during push operations. Use this when Entity A references Entity B and Entity B references Entity A - or any situation where a lookup target might not exist yet during initial processing.
+
+**How it works:**
+
+The flag is permission-based, not imperative. The lookup is always attempted first, and only deferred if it fails:
+
+```mermaid
+flowchart TD
+    A["@lookup:Entity.Field=Value?allowDefer"] --> B{Try lookup now}
+    B -->|Found| C[Return ID immediately]
+    B -->|Not found| D{Has ?allowDefer?}
+    D -->|Yes| E[Skip this field, continue processing]
+    D -->|No| F[Fatal error - rollback transaction]
+    E --> G[Save record without deferred field]
+    G --> H[Queue record for re-processing]
+    H --> I[Phase 2.5: Re-process entire record]
+    I -->|Success| J[Update record with resolved field]
+    I -->|Failure| F
+```
+
+**When to use `?allowDefer`:**
+- When Entity A references Entity B, and Entity B references Entity A
+- When you're creating related records that need to reference each other
+- When the lookup target might not exist yet during initial processing
+
+**Processing phases:**
+1. During the initial push phase, if a lookup with `?allowDefer` fails (record not found), the **field is skipped** but the record still saves
+2. The record IS saved during the initial pass (without the deferred field value), allowing other records to reference it
+3. The record is queued for re-processing in Phase 2.5
+4. After all other records are processed, deferred records are re-processed using the exact same logic
+5. If retry succeeds, the record is updated with the resolved field; if it fails, an error is reported and the transaction rolls back
+
+**Example: Application ↔ Dashboard circular reference**
+
+The Applications entity can have `DefaultNavItems` (a JSON field) that contains nested references to Dashboards, while Dashboards have an `ApplicationID` that references Applications.
+
+Since Applications are processed before Dashboards (alphabetical order), the Dashboard lookup in `DefaultNavItems` needs `?allowDefer`:
+
+```json
+// .data-explorer-application.json
+{
+  "fields": {
+    "Name": "Data Explorer",
+    "DefaultNavItems": [
+      {
+        "Label": "Explorer",
+        "ResourceType": "Dashboard",
+        "RecordID": "@lookup:Dashboards.Name=Data Explorer?allowDefer"
+      }
+    ]
+  }
+}
+
+// .data-explorer-dashboard.json
+// Note: No ?allowDefer needed - Applications are processed first
+{
+  "fields": {
+    "Name": "Data Explorer",
+    "ApplicationID": "@lookup:Applications.Name=Data Explorer"
+  }
+}
+```
+
+**Processing order:**
+1. Applications are processed first (per `directoryOrder` in `.mj-sync.json`):
+   - The Dashboard lookup fails (Dashboard doesn't exist yet)
+   - Because `?allowDefer` is set, the `DefaultNavItems` field is skipped
+   - Application IS saved (without the `DefaultNavItems` value)
+   - Application record is queued for re-processing
+2. Dashboards are processed:
+   - Dashboard references Application via `ApplicationID` - this lookup succeeds because Application was saved in step 1
+   - Dashboard is created normally
+3. Deferred records are re-processed (Phase 2.5):
+   - The Application record is processed again using the exact same logic
+   - The Dashboard lookup now succeeds since Dashboard exists in the database
+   - Application is updated with the resolved `DefaultNavItems` field
+
+**Console output:**
+```
+Processing Applications...
+   ⏳ Deferring lookup for Applications.DefaultNavItems -> Dashboards
+   📋 Queued Applications for deferred processing (record saved, some fields pending)
+   ✓ Created: 1
+
+Processing Dashboards...
+   ✓ Created: 1
+
+⏳ Processing 1 deferred record...
+   ✓ Applications (ID=867CB743-...) - updated
+   ✓ Resolved 1 deferred record (0 created, 1 updated)
+```
+
+**Important:** The `?allowDefer` flag queues the entire record for re-processing, not just the failed field. This ensures the exact same processing logic is used on retry, including proper handling of nested lookups within JSON structures, `@parent` references, and all other field processing.
+
+**Combining flags:**
+You can combine `?allowDefer` with `?create`:
+```json
+"CategoryID": "@lookup:Categories.Name=New Category?create&allowDefer"
+```
+This means: "Look up the category, create if missing, and if the lookup still fails for some reason, defer it."
+
+**Important notes:**
+- Deferred records are processed before the final commit (Phase 2.5)
+- If any deferred record fails on retry, the entire push transaction is rolled back
+- Use sparingly - only for genuine circular dependencies
+- The record must have a primaryKey defined in the metadata file
 
 ### @parent: References 
 Reference fields from the immediate parent entity in embedded collections:

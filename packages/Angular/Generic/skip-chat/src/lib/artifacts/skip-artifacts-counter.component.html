@@ -17,8 +17,7 @@
         <div class="dropdown-content">
           @if (isLoading) {
             <div class="dropdown-loading">
-              <kendo-loader size="small"></kendo-loader>
-              <span>Loading artifacts...</span>
+              <mj-loading text="Loading artifacts..." size="small"></mj-loading>
             </div>
           } @else if (error) {
             <div class="dropdown-error">

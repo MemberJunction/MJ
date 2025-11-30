@@ -49,18 +49,19 @@ The home component has been updated to follow the MemberJunction design system w
 
 ## Integration Notes
 
-### For Kendo UI Integration
-When ready to integrate Kendo UI components, you can:
-1. Replace the loading spinner with `<kendo-loader>`
+### For UI Components
+When ready to integrate MemberJunction and Kendo UI components, you can:
+1. Use `<mj-loading>` for loading spinners (from `@memberjunction/ng-shared-generic`)
 2. Replace cards with `<kendo-card>` components
 3. Add `<kendo-badge>` for status indicators
 4. Use `<kendo-button>` for actions
 
-Required Kendo modules:
+Required modules:
 ```typescript
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { CardModule } from '@progress/kendo-angular-layout';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 ```
 
 ## Browser Support

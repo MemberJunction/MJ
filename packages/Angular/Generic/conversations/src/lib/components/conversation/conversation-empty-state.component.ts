@@ -4,7 +4,7 @@ import { UserInfo } from '@memberjunction/core';
 @Component({
   selector: 'mj-conversation-empty-state',
   templateUrl: './conversation-empty-state.component.html',
-  styleUrls: ['./conversation-empty-state.component.scss']
+  styleUrls: ['./conversation-empty-state.component.css']
 })
 export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;

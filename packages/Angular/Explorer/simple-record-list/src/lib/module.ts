@@ -12,6 +12,7 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // LOCAL
 import { SimpleRecordListComponent } from './simple-record-list/simple-record-list.component';
@@ -29,7 +30,8 @@ import { SimpleRecordListComponent } from './simple-record-list/simple-record-li
     DropDownsModule,
     DialogsModule,
     EntityFormDialogModule,
-    IndicatorsModule
+    IndicatorsModule,
+    SharedGenericModule
   ],
   exports: [
     SimpleRecordListComponent

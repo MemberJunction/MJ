@@ -1,0 +1,58 @@
+.nav-list {
+  display: flex;
+  gap: 4px;
+}
+.nav-list .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #616161;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.15s;
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+.nav-list .nav-item:hover {
+  background: #f5f5f5;
+  color: #424242;
+}
+.nav-list .nav-item.active {
+  background: color-mix(in srgb, var(--app-color, #1976d2) 12%, white);
+  color: var(--app-color, #1976d2);
+}
+.nav-list .nav-item.active i {
+  color: var(--app-color, #1976d2);
+}
+.nav-list .nav-item i {
+  font-size: 16px;
+}
+.nav-list .nav-item .badge {
+  background: #f44336;
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* Mobile drawer vertical layout */
+:host-context(.mobile-nav-content) .nav-list {
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px;
+}
+:host-context(.mobile-nav-content) .nav-list .nav-item {
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+:host-context(.mobile-nav-content) .nav-list .nav-item i {
+  width: 20px;
+  text-align: center;
+}

@@ -1,0 +1,64 @@
+{
+  "fields": {
+    "Name": "Actions",
+    "Description": "Manage and monitor all system actions and workflows",
+    "Icon": "fa-solid fa-bolt",
+    "DefaultForNewUser": true,
+    "DefaultSequence": 1000,
+    "Color": "#ff9800",
+    "DefaultNavItems": [
+      {
+        "Label": "Overview",
+        "Icon": "fa-solid fa-bolt",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsOverviewResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Monitor",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsMonitorResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Scheduled",
+        "Icon": "fa-solid fa-clock",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsScheduleResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Code",
+        "Icon": "fa-solid fa-code",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsCodeResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Entities",
+        "Icon": "fa-solid fa-sitemap",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsEntitiesResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Security",
+        "Icon": "fa-solid fa-lock",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionsSecurityResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "02D5423E-F36B-1410-8DAC-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2025-11-28T02:04:45.709Z",
+    "checksum": "9980efb6f3699adb647c70e5449830ba87d44d0ce920fd77de4334c0eef79b41"
+  }
+}

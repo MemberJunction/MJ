@@ -8,6 +8,7 @@ import { MarkdownModule } from 'ngx-markdown';
 // LOCAL
 import { ChatComponent } from './chat/chat.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { DialogModule } from '@progress/kendo-angular-dialog';
@@ -20,6 +21,7 @@ import { DialogModule } from '@progress/kendo-angular-dialog';
     CommonModule,
     FormsModule,
     ContainerDirectivesModule,
+    SharedGenericModule,
     IndicatorsModule,
     ButtonsModule,
     DialogModule,

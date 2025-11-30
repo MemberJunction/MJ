@@ -1,0 +1,158 @@
+<div class="navigation-panel-container" [class.collapsed]="collapsed">
+  <!-- Collapse Toggle -->
+  <button class="collapse-toggle" (click)="onToggleCollapse()" [title]="collapsed ? 'Expand' : 'Collapse'">
+    <i class="fa-solid" [class.fa-chevron-right]="collapsed" [class.fa-chevron-left]="!collapsed"></i>
+  </button>
+
+  @if (!collapsed) {
+    <div class="panel-content">
+      <!-- Favorites Section -->
+      <div class="section favorites-section">
+        <div class="section-header" (click)="onSectionToggle('favorites')">
+          <i class="fa-solid fa-star section-icon"></i>
+          <span class="section-title">Favorites</span>
+          @if (favoriteRecords.length + favoriteEntities.length > 0) {
+            <span class="section-count">({{ favoriteRecords.length + favoriteEntities.length }})</span>
+          }
+          <i class="fa-solid expand-icon" [class.fa-chevron-down]="favoritesSectionExpanded" [class.fa-chevron-right]="!favoritesSectionExpanded"></i>
+        </div>
+
+        @if (favoritesSectionExpanded) {
+          <div class="section-content scrollable-section">
+            @if (favoriteRecords.length + favoriteEntities.length === 0) {
+              <div class="empty-section">
+                <span>No favorites yet</span>
+              </div>
+            } @else {
+              <div class="scrollable-list">
+                <div class="scrollable-list-inner">
+                  @for (favorite of favoriteEntities; track favorite.displayName) {
+                    <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
+                      <i [class]="getFavoriteIcon(favorite)"></i>
+                      <span class="nav-item-label">{{ favorite.displayName }}</span>
+                    </div>
+                  }
+                  @for (favorite of favoriteRecords; track favorite.displayName) {
+                    <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
+                      <i [class]="getFavoriteIcon(favorite)"></i>
+                      <span class="nav-item-label">{{ favorite.displayName }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Recent Items Section -->
+      <div class="section recent-section">
+        <div class="section-header" (click)="onSectionToggle('recent')">
+          <i class="fa-solid fa-clock section-icon"></i>
+          <span class="section-title">Recent</span>
+          @if (filteredRecentItems.length > 0) {
+            <span class="section-count">({{ filteredRecentItems.length }})</span>
+          }
+          <i class="fa-solid expand-icon" [class.fa-chevron-down]="recentSectionExpanded" [class.fa-chevron-right]="!recentSectionExpanded"></i>
+        </div>
+
+        @if (recentSectionExpanded) {
+          <div class="section-content scrollable-section">
+            @if (filteredRecentItems.length === 0) {
+              <div class="empty-section">
+                <span>No recent items</span>
+              </div>
+            } @else {
+              <div class="scrollable-list">
+                <div class="scrollable-list-inner">
+                  @for (item of filteredRecentItems; track item.compositeKeyString) {
+                    <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
+                      <i [class]="getRecentItemIcon(item)"></i>
+                      <div class="nav-item-content">
+                        <span class="nav-item-label">{{ item.displayName }}</span>
+                        <span class="nav-item-meta">{{ formatTimestamp(item.timestamp) }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Entities Section -->
+      <div class="section entities-section">
+        <div class="section-header" (click)="onSectionToggle('entities')">
+          <i class="fa-solid fa-database section-icon"></i>
+          <span class="section-title">Entities</span>
+          <span class="section-count">({{ entities.length }})</span>
+          <i class="fa-solid expand-icon" [class.fa-chevron-down]="entitiesSectionExpanded" [class.fa-chevron-right]="!entitiesSectionExpanded"></i>
+        </div>
+
+        @if (entitiesSectionExpanded) {
+          <div class="section-content">
+            <!-- Entity Search -->
+            <div class="entity-search">
+              <i class="fa-solid fa-search search-icon"></i>
+              <input
+                type="text"
+                class="search-input"
+                placeholder="Search entities..."
+                [(ngModel)]="entitySearchTerm"
+              />
+              @if (entitySearchTerm) {
+                <button class="clear-search" (click)="entitySearchTerm = ''">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              }
+            </div>
+
+            <!-- Entity List (scrollable container) -->
+            <div class="entity-list">
+              <!-- Inner content that grows naturally -->
+              <div class="entity-list-inner">
+                @for (entity of filteredEntities; track entity.ID) {
+                  <div
+                    class="nav-item entity-item"
+                    [class.selected]="isEntitySelected(entity)"
+                    (click)="onEntityClick(entity)"
+                    [title]="entity.Description || entity.Name">
+                    <i [class]="getEntityIcon(entity)"></i>
+                    <span class="nav-item-label">{{ entity.Name }}</span>
+                  </div>
+                }
+
+                @if (filteredEntities.length === 0 && entitySearchTerm) {
+                  <div class="empty-section">
+                    <span>No entities match "{{ entitySearchTerm }}"</span>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  } @else {
+    <!-- Collapsed State - Show Icons Only -->
+    <div class="collapsed-icons">
+      <button class="icon-btn" title="Favorites" (click)="onCollapsedIconClick('favorites')">
+        <i class="fa-solid fa-star"></i>
+        @if (favoriteRecords.length + favoriteEntities.length > 0) {
+          <span class="collapsed-badge">{{ favoriteRecords.length + favoriteEntities.length }}</span>
+        }
+      </button>
+      <button class="icon-btn" title="Recent" (click)="onCollapsedIconClick('recent')">
+        <i class="fa-solid fa-clock"></i>
+        @if (filteredRecentItems.length > 0) {
+          <span class="collapsed-badge">{{ filteredRecentItems.length }}</span>
+        }
+      </button>
+      <button class="icon-btn" title="Entities" (click)="onCollapsedIconClick('entities')">
+        <i class="fa-solid fa-database"></i>
+        <span class="collapsed-badge">{{ entities.length }}</span>
+      </button>
+    </div>
+  }
+</div>

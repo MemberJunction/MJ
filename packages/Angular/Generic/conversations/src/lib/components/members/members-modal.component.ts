@@ -77,8 +77,7 @@ interface ConversationMember {
           </div>
 
           <div class="loading-indicator" *ngIf="isLoading">
-            <kendo-loader type="infinite-spinner" size="medium"></kendo-loader>
-            <span>Loading members...</span>
+            <mj-loading text="Loading members..." size="medium"></mj-loading>
           </div>
         </div>
 

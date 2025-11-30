@@ -65,6 +65,7 @@ export class UserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJScheduledJobs', sectionName: 'MJ: Scheduled Jobs', isExpanded: false },
             { sectionKey: 'mJTestRunFeedbacks', sectionName: 'MJ: Test Run Feedbacks', isExpanded: false },
             { sectionKey: 'mJTestSuiteRuns', sectionName: 'MJ: Test Suite Runs', isExpanded: false },
+            { sectionKey: 'mJUserSettings', sectionName: 'MJ: User Settings', isExpanded: false },
             { sectionKey: 'resourceLinks', sectionName: 'Resource Links', isExpanded: false },
             { sectionKey: 'scheduledActions', sectionName: 'Scheduled Actions', isExpanded: false },
             { sectionKey: 'aIAgentRequests1', sectionName: 'AI Agent Requests', isExpanded: false },

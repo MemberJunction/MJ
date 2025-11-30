@@ -1,0 +1,425 @@
+.execution-monitoring {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+}
+.execution-monitoring .monitoring-header .header-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.execution-monitoring .monitoring-header .header-title h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.execution-monitoring .monitoring-header .header-title h3 i {
+  color: var(--kendo-color-primary);
+}
+.execution-monitoring .monitoring-header .header-title .refresh-btn {
+  gap: 0.5rem;
+}
+.execution-monitoring .monitoring-header .filters-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.execution-monitoring .monitoring-header .filters-row .search-container {
+  flex: 1;
+  min-width: 200px;
+}
+.execution-monitoring .monitoring-header .filters-row .search-container kendo-textbox {
+  width: 100%;
+}
+.execution-monitoring .monitoring-header .filters-row .filter-group {
+  display: flex;
+  gap: 0.75rem;
+}
+.execution-monitoring .monitoring-header .filters-row .filter-group kendo-dropdownlist {
+  min-width: 140px;
+}
+.execution-monitoring .metrics-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.execution-monitoring .metrics-summary .metric-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+.execution-monitoring .metrics-summary .metric-card.clickable {
+  cursor: pointer;
+}
+.execution-monitoring .metrics-summary .metric-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+.execution-monitoring .metrics-summary .metric-card .metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+}
+.execution-monitoring .metrics-summary .metric-card .metric-icon i {
+  color: white;
+}
+.execution-monitoring .metrics-summary .metric-card .metric-content {
+  flex: 1;
+}
+.execution-monitoring .metrics-summary .metric-card .metric-content .metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+.execution-monitoring .metrics-summary .metric-card .metric-content .metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--kendo-color-subtle);
+  margin-bottom: 0.125rem;
+}
+.execution-monitoring .metrics-summary .metric-card .metric-content .metric-detail {
+  font-size: 0.625rem;
+  color: var(--kendo-color-subtle);
+}
+.execution-monitoring .metrics-summary .metric-card.total .metric-icon {
+  background: var(--kendo-color-primary);
+}
+.execution-monitoring .metrics-summary .metric-card.success .metric-icon {
+  background: var(--kendo-color-success);
+}
+.execution-monitoring .metrics-summary .metric-card.error .metric-icon {
+  background: var(--kendo-color-error);
+}
+.execution-monitoring .metrics-summary .metric-card.duration .metric-icon {
+  background: var(--kendo-color-info);
+}
+.execution-monitoring .metrics-summary .metric-card.activity .metric-icon {
+  background: var(--kendo-color-warning);
+}
+.execution-monitoring .metrics-summary .metric-card.running .metric-icon {
+  background: var(--kendo-color-secondary);
+}
+.execution-monitoring .trends-section {
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+.execution-monitoring .trends-section .section-header {
+  margin-bottom: 1.5rem;
+}
+.execution-monitoring .trends-section .section-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.execution-monitoring .trends-section .section-header h4 i {
+  color: var(--kendo-color-primary);
+}
+.execution-monitoring .trends-section .trends-chart .trend-bars {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  height: 120px;
+  margin-bottom: 1rem;
+}
+.execution-monitoring .trends-section .trends-chart .trend-bars .trend-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.execution-monitoring .trends-section .trends-chart .trend-bars .trend-bar .bar-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 80px;
+  border-radius: 0.25rem;
+  overflow: hidden;
+  background: var(--kendo-color-border);
+  position: relative;
+}
+.execution-monitoring .trends-section .trends-chart .trend-bars .trend-bar .bar-container .bar-success {
+  background: var(--kendo-color-success);
+  width: 100%;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+.execution-monitoring .trends-section .trends-chart .trend-bars .trend-bar .bar-container .bar-failed {
+  background: var(--kendo-color-error);
+  width: 100%;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+.execution-monitoring .trends-section .trends-chart .trend-bars .trend-bar .bar-label {
+  font-size: 0.625rem;
+  color: var(--kendo-color-subtle);
+  font-weight: 600;
+}
+.execution-monitoring .trends-section .trends-chart .trend-bars .trend-bar .bar-total {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--kendo-color-on-app-surface);
+}
+.execution-monitoring .trends-section .trends-chart .chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+}
+.execution-monitoring .trends-section .trends-chart .chart-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+.execution-monitoring .trends-section .trends-chart .chart-legend .legend-item .legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+.execution-monitoring .trends-section .trends-chart .chart-legend .legend-item .legend-color.success {
+  background: var(--kendo-color-success);
+}
+.execution-monitoring .trends-section .trends-chart .chart-legend .legend-item .legend-color.failed {
+  background: var(--kendo-color-error);
+}
+.execution-monitoring .trends-section .trends-chart .empty-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--kendo-color-subtle);
+}
+.execution-monitoring .trends-section .trends-chart .empty-chart i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+.execution-monitoring .trends-section .trends-chart .empty-chart p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+.execution-monitoring .executions-section {
+  flex: 1;
+  min-height: 0;
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+}
+.execution-monitoring .executions-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 1.5rem 0;
+  margin-bottom: 1rem;
+}
+.execution-monitoring .executions-section .section-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.execution-monitoring .executions-section .section-header h4 i {
+  color: var(--kendo-color-primary);
+}
+.execution-monitoring .executions-section .section-header .results-count {
+  font-size: 0.75rem;
+  color: var(--kendo-color-subtle);
+  font-weight: 600;
+}
+.execution-monitoring .executions-section .executions-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 1.5rem 1.5rem;
+}
+.execution-monitoring .executions-section .executions-list .execution-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.execution-monitoring .executions-section .executions-list .execution-item:hover {
+  background: var(--kendo-color-base-hover);
+  border-color: var(--kendo-color-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-status i {
+  font-size: 1rem;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-status i.fa-check-circle {
+  color: var(--kendo-color-success);
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-status i.fa-exclamation-circle {
+  color: var(--kendo-color-error);
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-status i.fa-spinner {
+  color: var(--kendo-color-warning);
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-status i.fa-info-circle, .execution-monitoring .executions-section .executions-list .execution-item .execution-status i.fa-question {
+  color: var(--kendo-color-info);
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-main {
+  flex: 1;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-main .execution-action {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--kendo-color-primary);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-main .execution-action:hover {
+  color: var(--kendo-color-primary-darker);
+  text-decoration: underline;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-main .execution-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--kendo-color-subtle);
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-main .execution-details .execution-time {
+  font-weight: 600;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-main .execution-details .execution-user {
+  color: var(--kendo-color-info);
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-main .execution-details .execution-duration {
+  font-weight: 600;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-result {
+  flex-shrink: 0;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-actions {
+  flex-shrink: 0;
+}
+.execution-monitoring .executions-section .executions-list .execution-item .execution-actions button {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.execution-monitoring .executions-section .executions-list .execution-item:hover .execution-actions button {
+  opacity: 1;
+}
+.execution-monitoring .executions-section .executions-list .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--kendo-color-subtle);
+}
+.execution-monitoring .executions-section .executions-list .empty-state i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+.execution-monitoring .executions-section .executions-list .empty-state h5 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.execution-monitoring .executions-section .executions-list .empty-state p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+.execution-monitoring .loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+@media (max-width: 1200px) {
+  .execution-monitoring .metrics-summary {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .execution-monitoring .monitoring-header .filters-row .filter-group {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 768px) {
+  .execution-monitoring {
+    padding: 1rem;
+    gap: 1rem;
+  }
+  .execution-monitoring .metrics-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  .execution-monitoring .metrics-summary .metric-card {
+    padding: 1rem;
+  }
+  .execution-monitoring .metrics-summary .metric-card .metric-content .metric-value {
+    font-size: 1.25rem;
+  }
+  .execution-monitoring .monitoring-header .header-title {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  .execution-monitoring .monitoring-header .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .execution-monitoring .monitoring-header .filters-row .search-container,
+  .execution-monitoring .monitoring-header .filters-row .filter-group {
+    min-width: unset;
+  }
+  .execution-monitoring .monitoring-header .filters-row .filter-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.5rem;
+  }
+  .execution-monitoring .trends-section .trends-chart .trend-bars {
+    gap: 0.5rem;
+  }
+}

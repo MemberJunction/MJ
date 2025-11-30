@@ -72,13 +72,6 @@
   display: block;
 }
 
-.navigation-wrap kendo-loader {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%);
-}
-
 .k-drawer-container {
   flex: 1;
   position: relative;

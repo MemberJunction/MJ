@@ -89,8 +89,7 @@
       <!-- Loading State -->
       @if (isLoading$ | async) {
         <div class="loading-state">
-          <kendo-loader size="large"></kendo-loader>
-          <p>Loading actions...</p>
+          <mj-loading text="Loading actions..." size="large"></mj-loading>
         </div>
       }
 

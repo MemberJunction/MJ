@@ -1,7 +1,6 @@
 import { ComponentRef, Injectable, NgModule } from '@angular/core';
 import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
 import {
-  SingleApplicationComponent,
   SingleEntityComponent,
   SingleRecordComponent,
   HomeWrapperComponent,
@@ -18,19 +17,17 @@ import {
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 import { LogError, Metadata } from '@memberjunction/core';
-import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { EventCodes, SharedService, BaseNavigationComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
+import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
-import { SkipChatWrapperComponent } from '@memberjunction/ng-ask-skip';
+import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
   storedRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
 
   // Determines if a route should be detached and stored
   shouldDetach(route: ActivatedRouteSnapshot): boolean {
-    // Store the route if it's an "askskip" route
-    return route.routeConfig && route.routeConfig.path?.includes('askskip') ? true : false;
+    // removed reference to the skip stuff from here - we don't use the skip stuff anymore, using generic conversations/chat now
+    return false;
   }
 
   // Stores the detached route
@@ -138,7 +135,15 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   providedIn: 'root',
 })
 export class ResourceResolver implements Resolve<void> {
-  constructor(private sharedService: SharedService, private router: Router) {
+  private processedUrls = new Map<string, number>();
+  private readonly URL_DEBOUNCE_MS = 100; // Allow same URL after 100ms
+
+  constructor(
+    private sharedService: SharedService,
+    private router: Router,
+    private appManager: ApplicationManager,
+    private tabService: TabService
+  ) {
     // Subscribe to router events
     this.router.events.subscribe(event => {
       // if (event instanceof NavigationEnd) {
@@ -150,81 +155,265 @@ export class ResourceResolver implements Resolve<void> {
       // if (event instanceof NavigationCancel) {
       //   LogError(`NavigationCancel: ${event.reason}`);
       // }
-    });    
+    });
   }
 
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
-    let resourceType = route.params['resourceType'];
-    const resourceRecordId = route.params['resourceRecordId'];
-    if (resourceType !== undefined && resourceRecordId !== undefined) {
-      resourceType = this.sharedService.mapResourceTypeRouteSegmentToName(resourceType);
+    console.log('[ResourceResolver.resolve] Called with URL:', state.url);
 
-      const data: ResourceData = new ResourceData({
-        Name: '',
-        ResourceRecordID: resourceRecordId,
-        ResourceTypeID: this.sharedService.ResourceTypeByName(resourceType)?.ID,
-        Configuration: {},
-      });
+    // Prevent duplicate processing of the same URL within a short time window
+    // This allows legitimate re-navigation to the same URL (like app switching)
+    // while preventing rapid duplicate calls
+    const now = Date.now();
+    const lastProcessed = this.processedUrls.get(state.url);
 
-      let code: EventCodes = EventCodes.AddDashboard;
-      const entityNameDecoded = decodeURIComponent(route.queryParams['Entity'] || route.queryParams['entity']);
-      const md = new Metadata();
-      switch (resourceType.trim().toLowerCase()) {
-        case 'lists':
-          code = EventCodes.ListClicked
-          break;
-        case 'user views':
-          code = EventCodes.ViewClicked;
-          break;
-        case 'dashboards':
-          code = EventCodes.AddDashboard;
-          break;
-        case 'reports':
-          code = EventCodes.AddReport;
-          break;
-        case 'queries':
-          code = EventCodes.AddQuery;
-          break;
-        case 'records':
-          code = EventCodes.EntityRecordClicked;
-          data.Configuration.Entity = entityNameDecoded; // Entity or entity is specified for this resource type since resource record id isn't good enough
-          const newRecordVals = route.queryParams['NewRecordValues'] || route.queryParams['newRecordValues'];
-          if (newRecordVals) {
-            data.Configuration.NewRecordValues = decodeURIComponent(newRecordVals);  
-          }
-          data.Configuration.___rawQueryParams = route.queryParams;
-          if (data.Configuration.Entity === undefined || data.Configuration.Entity === null) {
-            LogError('No Entity provided in the URL, must have Entity as a query parameter for this resource type');
-            return;  
-          }
-          else {
-            const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
-            if (!entityInfo) {
-              LogError(`Entity ${data.Configuration.Entity} not found in metadata`);
-              return;
-            }
-          }
-          break;
-        case 'search results':
-          code = EventCodes.RunSearch;
-          data.Configuration.Entity = entityNameDecoded;
-          data.Configuration.SearchInput = resourceRecordId;
-          data.ResourceRecordID = 0; /*tell nav to create new tab*/
-          break;
-        default:
-          LogError(`Unsupported resource type: ${resourceType}`);
-          // Handle the unsupported resource type error appropriately
-          return;           
-      }
-      MJGlobal.Instance.RaiseEvent({
-        component: this,
-        event: MJEventType.ComponentEvent,
-        eventCode: code,
-        args: data,
-      });
-    } else {
-      LogError(`ResourceType: ${resourceType} or ResourceRecordId: ${resourceRecordId} is undefined in the route parameters`);
+    if (lastProcessed && (now - lastProcessed) < this.URL_DEBOUNCE_MS) {
+      console.log('[ResourceResolver.resolve] Recently processed URL (debounced):', state.url);
+      return;
     }
+
+    this.processedUrls.set(state.url, now);
+    console.log('[ResourceResolver.resolve] Processing URL:', state.url);
+
+    const md = new Metadata();
+
+    // Handle app-level navigation: /app/:appName (no nav item - app default)
+    if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
+      const appName = decodeURIComponent(route.params['appName']);
+      console.log('[ResourceResolver.resolve] App-only URL detected:', appName);
+
+      // Find the app
+      const app = md.Applications.find(a =>
+        a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
+      );
+
+      if (!app) {
+        LogError(`Application ${appName} not found in metadata`);
+        return;
+      }
+
+      console.log('[ResourceResolver.resolve] Found app:', app.Name, 'ID:', app.ID);
+      console.log('[ResourceResolver.resolve] Letting shell handle default tab creation');
+
+      // Let the app create its default tab (will load default dashboard if no nav items)
+      // The shell component will handle this after setting the active app
+      // We don't need to do anything here - just return to allow the app to activate
+      return;
+    }
+
+    // Handle app navigation: /app/:appName/:navItemName
+    if (route.params['appName'] !== undefined && route.params['navItemName'] !== undefined) {
+      const appName = decodeURIComponent(route.params['appName']);
+      const navItemName = decodeURIComponent(route.params['navItemName']);
+
+      console.log('[ResourceResolver.resolve] App nav item URL detected:', appName, '/', navItemName);
+
+      // Find the app
+      const app = md.Applications.find(a =>
+        a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
+      );
+
+      if (!app) {
+        LogError(`Application ${appName} not found in metadata`);
+        return;
+      }
+
+      console.log('[ResourceResolver.resolve] Found app:', app.Name, 'ID:', app.ID);
+
+      // Get nav items from the app's DefaultNavItems JSON
+      let navItems: any[] = [];
+      if (app.DefaultNavItems) {
+        try {
+          navItems = JSON.parse(app.DefaultNavItems);
+        } catch (e) {
+          LogError(`Failed to parse DefaultNavItems for app ${appName}`);
+          console.error(e);
+          return;
+        }
+      }
+
+      console.log('[ResourceResolver.resolve] Nav items count:', navItems.length);
+
+      // Find the nav item by label (case-insensitive)
+      const navItem = navItems.find(item =>
+        item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
+      );
+
+      if (!navItem) {
+        LogError(`Nav item ${navItemName} not found in app ${appName}`);
+        return;
+      }
+
+      console.log('[ResourceResolver.resolve] Found nav item:', navItem.Label, 'ResourceType:', navItem.ResourceType);
+
+      // Get the resource type from the nav item
+      if (!navItem.ResourceType) {
+        LogError(`Nav item ${navItemName} has no ResourceType defined`);
+        return;
+      }
+
+      // NOTE: Don't set active app here - the shell component handles that
+      // based on the URL to avoid navigation loops
+
+      // Queue tab request via TabService
+      console.log('[ResourceResolver.resolve] Queuing tab request via TabService');
+
+      // Build configuration - include DriverClass for Custom resource types
+      const config: any = {
+        route: navItem.Route,
+        resourceType: navItem.ResourceType,
+        recordId: navItem.RecordID,
+        appName: appName,
+        appId: app.ID,
+        navItemName: navItem.Label,
+        ...(navItem.Configuration || {}),
+        queryParams: route.queryParams
+      };
+
+      // For Custom resource types, include the DriverClass
+      if (navItem.ResourceType === 'Custom' && navItem.DriverClass) {
+        config.driverClass = navItem.DriverClass;
+        console.log('[ResourceResolver.resolve] Added DriverClass for Custom resource:', navItem.DriverClass);
+      }
+
+      this.tabService.OpenTab({
+        ApplicationId: app.ID,
+        Title: navItem.Label,
+        Configuration: config,
+        IsPinned: false
+      });
+      console.log('[ResourceResolver.resolve] Tab request queued');
+      return;
+    }
+
+    // Determine resource type and record ID based on the route path
+    if (route.params['recordId'] !== undefined && route.params['entityName'] !== undefined) {
+      // /resource/record/:entityName/:recordId
+      const entityName = decodeURIComponent(route.params['entityName']);
+      const recordId = route.params['recordId'];
+
+      const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+      if (!entityInfo) {
+        LogError(`Entity ${entityName} not found in metadata`);
+        return;
+      }
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `${entityName} - ${recordId}`,
+        Configuration: {
+          resourceType: 'Records',
+          Entity: entityName,
+          recordId: recordId
+        },
+        ResourceRecordId: recordId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['viewId'] !== undefined) {
+      // /resource/view/:viewId (saved views)
+      const viewId = route.params['viewId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `View - ${viewId}`,
+        Configuration: {
+          resourceType: 'User Views',
+          viewId,
+          recordId: viewId
+        },
+        ResourceRecordId: viewId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.url.length >= 3 && route.url[1].path === 'view' && route.url[2].path === 'dynamic') {
+      // /resource/view/dynamic/:entityName
+      const entityName = decodeURIComponent(route.params['entityName']);
+      const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+
+      const filterSuffix = extraFilter ? ' (Filtered)' : '';
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `${entityName}${filterSuffix}`,
+        Configuration: {
+          resourceType: 'User Views',
+          Entity: entityName,
+          ExtraFilter: extraFilter,
+          isDynamic: true,
+          recordId: 'dynamic'
+        },
+        ResourceRecordId: 'dynamic',
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['dashboardId'] !== undefined) {
+      // /resource/dashboard/:dashboardId
+      const dashboardId = route.params['dashboardId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Dashboard - ${dashboardId}`,
+        Configuration: {
+          resourceType: 'Dashboards',
+          dashboardId,
+          recordId: dashboardId
+        },
+        ResourceRecordId: dashboardId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['artifactId'] !== undefined) {
+      // /resource/artifact/:artifactId
+      const artifactId = route.params['artifactId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Artifact - ${artifactId}`,
+        Configuration: {
+          resourceType: 'Artifacts',
+          artifactId,
+          recordId: artifactId
+        },
+        ResourceRecordId: artifactId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    if (route.params['queryId'] !== undefined) {
+      // /resource/query/:queryId
+      const queryId = route.params['queryId'];
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Query - ${queryId}`,
+        Configuration: {
+          resourceType: 'Queries',
+          queryId,
+          recordId: queryId
+        },
+        ResourceRecordId: queryId,
+        IsPinned: false
+      });
+      return;
+    }
+
+    LogError(`Unable to parse resource route parameters from URL: ${state.url}`);
   }
 }
 
@@ -233,8 +422,6 @@ const routes: Routes = [
   { path: 'home', component: HomeWrapperComponent, canActivate: [AuthGuard] },
   { path: 'chat', component: ChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'chat/:conversationId', component: ChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'askskip', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'askskip/:conversationId', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
   { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },
@@ -263,12 +450,51 @@ const routes: Routes = [
   },
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },
   { path: 'style-guide-test', component: StyleGuideTestComponent, canActivate: [AuthGuard] },
-  { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
-  { path: 'app/:appName/:entityName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
-  { path: 'app/:appName/:entityName/:folderID', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },
   {
-    path: 'resource/:resourceType/:resourceRecordId',
+    path: 'app/:appName/:navItemName',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'app/:appName',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/record/:entityName/:recordId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/view/dynamic/:entityName',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/view/:viewId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/dashboard/:dashboardId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/artifact/:artifactId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/query/:queryId',
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
@@ -284,59 +510,12 @@ interface DetachedRouteHandleExt extends DetachedRouteHandle {
 }
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes, { initialNavigation: 'disabled', onSameUrlNavigation: 'reload' })],
+  imports: [RouterModule.forRoot(routes, { onSameUrlNavigation: 'reload' })],
   exports: [RouterModule],
 })
 export class AppRoutingModule {
-  constructor(private router: Router) {
-    this.loadDynamicRoutes();
-  }
-
-  loadDynamicRoutes() {
-    MJGlobal.Instance.GetEventListener(true) // true gets us replay of past events so we can "catch up" as needed
-      .subscribe((event: MJEvent) => {
-          // event handler
-          switch (event.event) {
-            case MJEventType.LoggedIn:
-              this.innerLoadDynamicRoutes();
-          }
-      });
-  }
-
-  protected async innerLoadDynamicRoutes() {
-    // gets called after we're logged in
-    const md = new Metadata();
-    const dynamicRoutes: Routes = md.VisibleExplorerNavigationItems.map(item => {
-      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseNavigationComponent, item.Name)
-      if (registration) {
-        // remove the leading slash from the route if it exists
-        const route = item.Route.startsWith('/') ? item.Route.substring(1) : item.Route;
-        return {
-          path: route,
-          component: registration.SubClass,
-          canActivate: [AuthGuard],  
-        }
-      }
-      else {
-        throw new Error(`No registration found for Explorer Navigation Item: ${item.Name}`);
-      }
-    });
-
-    // Find and remove the wildcard route
-    const wildcardRouteIndex = routes.findIndex(route => route.path?.trim() === '**');
-    const wildcardRoute = routes[wildcardRouteIndex];
-    if (wildcardRouteIndex > -1) {
-      routes.splice(wildcardRouteIndex, 1);
-    }
-
-    // create a combined routes array and make sure that we filter out any dynamic routes that are ALREADY in the router config
-    const newCombinedRoutes = [...routes, ...dynamicRoutes.filter(route => !routes.some(r => r.path?.trim().toLowerCase() === route.path?.trim().toLowerCase()))];
-
-    // Re-add the wildcard route at the end
-    if (wildcardRoute) {
-      newCombinedRoutes.push(wildcardRoute);
-    }
-
-    this.router.resetConfig(newCombinedRoutes);
-  }
+  // NOTE - in MJ Explorer 3.0 and beyond we do NOT use Explorer Navigation Items anymore and
+  // this allows us to remove the dyanmic route stuff entirely here. The NEW paradigm is 
+  // everything beyond resource navigation is an app and apps have the ability to define 
+  // nav items which is a superset of functionality compared to the old Explorer Nav Items.
 }

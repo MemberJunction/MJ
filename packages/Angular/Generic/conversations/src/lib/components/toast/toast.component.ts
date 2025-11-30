@@ -6,7 +6,7 @@ import { ToastService, Toast } from '../../services/toast.service';
 @Component({
   selector: 'mj-toast',
   templateUrl: './toast.component.html',
-  styleUrls: ['./toast.component.scss'],
+  styleUrls: ['./toast.component.css'],
   animations: [
     trigger('slideIn', [
       transition(':enter', [

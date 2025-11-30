@@ -158,12 +158,6 @@
     }
 }
 
-/* Loading State */
-.main-area kendo-loader {
-    @extend .mj-loading;
-    min-height: 200px;
-}
-
 /* Breadcrumb */
 .breadcrumb-wrap {
     @extend .mj-breadcrumb;

@@ -106,8 +106,7 @@
             <div class="artifacts-list">
               @if (isLoading) {
                 <div class="loading-state">
-                  <i class="fa-solid fa-spinner fa-spin"></i>
-                  <p>Loading artifacts...</p>
+                  <mj-loading text="Loading artifacts..." size="small"></mj-loading>
                 </div>
               }
               @else if (artifacts.length === 0) {
@@ -151,8 +150,7 @@
             <div class="collections-list">
               @if (isLoadingCollections) {
                 <div class="loading-state">
-                  <i class="fa-solid fa-spinner fa-spin"></i>
-                  <p>Loading collections...</p>
+                  <mj-loading text="Loading collections..." size="small"></mj-loading>
                 </div>
               }
               @else if (collections.length === 0) {
@@ -230,8 +228,7 @@
         <div class="version-content">
           @if (isLoadingVersions) {
             <div class="loading-state">
-              <i class="fa-solid fa-spinner fa-spin"></i>
-              <p>Loading versions...</p>
+              <mj-loading text="Loading versions..." size="small"></mj-loading>
             </div>
           }
           @else if (artifactVersions.length === 0) {

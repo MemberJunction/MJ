@@ -1,5 +1,6 @@
 import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
 import { LoadActionEntityServer } from './custom/ActionEntity.server';
+import { LoadApplicationEntityServer } from './custom/ApplicationEntity.server';
 import { LoadAIPromptEntityExtendedServerSubClass } from './custom/AIPromptEntityExtended.server';
 import { LoadAIPromptRunEntityServerSubClass } from './custom/AIPromptRunEntity.server';
 import { LoadDuplicateRunEntityServerSubClass } from './custom/DuplicateRunEntity.server';
@@ -21,6 +22,7 @@ export * from './custom/reportEntity.server';
 export * from './custom/TemplateContentEntity.server';
 export * from './custom/userViewEntity.server';
 export * from './custom/ActionEntity.server';
+export * from './custom/ApplicationEntity.server';
 export * from './custom/ComponentEntity.server';
 export * from './custom/ArtifactVersionExtended.server';
 export * from './custom/AIAgentNoteEntity.server';
@@ -37,6 +39,7 @@ export function LoadCoreEntitiesServerSubClasses(): void {
     LoadTemplateContentEntityServerSubClass();
     LoadUserViewEntityServerSubClass();
     LoadActionEntityServer();
+    LoadApplicationEntityServer();
     LoadArtifactVersionExtendedServerSubClass();
     LoadAIAgentNoteEntityServerSubClass();
     LoadAIAgentExampleEntityServerSubClass();

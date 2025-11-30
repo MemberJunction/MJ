@@ -10,6 +10,7 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormsModule } from '@angular/forms';
 import { EntityPermissionsSelectorWithGridComponent } from './entity-selector-with-grid/entity-selector-with-grid.component';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
@@ -30,7 +31,8 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
     ContainerDirectivesModule,
     ButtonsModule,
     DropDownsModule,
-    IndicatorsModule
+    IndicatorsModule,
+    SharedGenericModule
   ],
   exports: [
     EntityPermissionsGridComponent,

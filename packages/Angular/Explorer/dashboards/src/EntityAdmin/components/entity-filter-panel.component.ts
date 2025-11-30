@@ -13,7 +13,7 @@ interface EntityFilter {
 @Component({
   selector: 'mj-entity-filter-panel',
   templateUrl: './entity-filter-panel.component.html',
-  styleUrls: ['./entity-filter-panel.component.scss']
+  styleUrls: ['./entity-filter-panel.component.css']
 })
 export class EntityFilterPanelComponent implements OnInit {
   @Input() entities: EntityInfo[] = [];

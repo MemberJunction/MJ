@@ -6,7 +6,7 @@ import { SchedulingInstrumentationService, JobExecution, ExecutionTrendData } fr
 @Component({
   selector: 'app-scheduling-history',
   templateUrl: './scheduling-history.component.html',
-  styleUrls: ['./scheduling-history.component.scss']
+  styleUrls: ['./scheduling-history.component.css']
 })
 export class SchedulingHistoryComponent implements OnInit, OnDestroy {
   @Input() initialState: any;

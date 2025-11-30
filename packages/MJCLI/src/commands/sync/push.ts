@@ -203,6 +203,7 @@ export default class Push extends Command {
         unchanged: result.unchanged,
         deleted: result.deleted || 0,
         skipped: result.skipped || 0,
+        deferred: result.deferred || 0,
         errors: result.errors,
         duration: endTime - startTime,
       });

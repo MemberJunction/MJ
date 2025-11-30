@@ -1,5 +1,5 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { BaseDashboard } from '../generic/base-dashboard';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
@@ -17,7 +17,7 @@ interface SchedulingDashboardState {
 @Component({
   selector: 'mj-scheduling-dashboard',
   templateUrl: './scheduling-dashboard.component.html',
-  styleUrls: ['./scheduling-dashboard.component.scss'],
+  styleUrls: ['./scheduling-dashboard.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 @RegisterClass(BaseDashboard, 'SchedulingDashboard')

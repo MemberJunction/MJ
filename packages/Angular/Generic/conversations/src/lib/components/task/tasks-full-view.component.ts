@@ -139,6 +139,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   @Input() baseFilter: string = '1=1'; // SQL filter for tasks (default: show all)
   @Input() activeTaskId?: string; // Task ID to auto-select and drill into
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() taskSelected = new EventEmitter<string | null>(); // Emits task ID when drill-down occurs, null when returning to list
 
   public allTasks: TaskEntity[] = [];
   public filteredTasks: TaskEntity[] = [];
@@ -234,6 +235,9 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     console.log('Task clicked:', task);
     this.selectedTask = task;
     this.showDetailAnimation = true;
+
+    // Emit task selection event for URL tracking
+    this.taskSelected.emit(task.ID);
 
     // Load all tasks in the hierarchy using RootParentID
     await this.loadTaskHierarchy(task);
@@ -402,6 +406,9 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     this.taskDependencies = [];
     this.agentRunMap.clear();
     this.showDetailAnimation = false;
+
+    // Emit null to indicate returning to task list (for URL tracking)
+    this.taskSelected.emit(null);
   }
 
   public onSubTaskClick(subTask: TaskEntity): void {

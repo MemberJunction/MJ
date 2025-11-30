@@ -1,5 +1,5 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
-import { BaseDashboard } from '../generic/base-dashboard';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
@@ -21,7 +21,7 @@ interface DashboardState {
 @Component({
   selector: 'mj-entity-admin-dashboard',
   templateUrl: './entity-admin-dashboard.component.html',
-  styleUrls: ['./entity-admin-dashboard.component.scss']
+  styleUrls: ['./entity-admin-dashboard.component.css']
 })
 @RegisterClass(BaseDashboard, 'EntityAdmin')
 export class EntityAdminDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
@@ -50,8 +50,9 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     });
   }
 
-  ngOnDestroy(): void {
+  override ngOnDestroy(): void {
     this.userStateChangeSubject.complete();
+    super.ngOnDestroy();
   }
 
   protected initDashboard(): void {

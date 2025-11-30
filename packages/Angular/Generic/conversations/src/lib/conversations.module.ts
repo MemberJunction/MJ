@@ -19,6 +19,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { TestingModule } from '@memberjunction/ng-testing';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Markdown module
 import { MarkdownModule } from 'ngx-markdown';
@@ -144,6 +145,7 @@ const COMPONENTS = [
     CodeEditorModule,
     ArtifactsModule,
     TestingModule,
+    SharedGenericModule,
     MarkdownModule.forRoot(),
     // Standalone components
     TasksFullViewComponent,

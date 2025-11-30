@@ -43,8 +43,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       </div>
       <div class="collections-content">
         <div *ngIf="isLoading" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading collections...</p>
+          <mj-loading text="Loading collections..." size="large"></mj-loading>
         </div>
         <div *ngIf="!isLoading && filteredCollections.length === 0" class="empty-state">
           <i class="fas fa-folder-open"></i>
@@ -197,13 +196,13 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       color: #9CA3AF;
     }
 
-    .loading-state i, .empty-state i {
+    .empty-state i {
       font-size: 48px;
       margin-bottom: 16px;
       opacity: 0.5;
     }
 
-    .loading-state p, .empty-state p {
+    .empty-state p {
       margin: 0;
       font-size: 14px;
     }

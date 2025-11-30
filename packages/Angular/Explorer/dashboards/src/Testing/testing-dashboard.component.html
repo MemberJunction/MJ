@@ -1,14 +1,7 @@
 <div class="testing-dashboard-container" kendoDialogContainer>
   @if (isLoading) {
     <div class="loading-container">
-      <div class="loading-content">
-        <div class="loading-spinner">
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-        </div>
-        <div class="loading-text">Loading Testing Dashboard...</div>
-      </div>
+      <mj-loading text="Loading Testing Dashboard..." size="large"></mj-loading>
     </div>
   }
 

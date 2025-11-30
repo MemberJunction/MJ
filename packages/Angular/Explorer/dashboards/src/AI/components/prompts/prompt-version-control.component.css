@@ -1,0 +1,664 @@
+.prompt-version-control {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f8f9fa;
+}
+.prompt-version-control .version-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: white;
+  border-bottom: 1px solid #dee2e6;
+  flex-shrink: 0;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.prompt-version-control .version-toolbar .toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.prompt-version-control .version-toolbar .toolbar-section .toolbar-title {
+  margin: 0;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.prompt-version-control .version-toolbar .toolbar-section .toolbar-title i {
+  color: #0d6efd;
+}
+.prompt-version-control .version-toolbar .toolbar-section .toolbar-title .prompt-name {
+  font-weight: 400;
+  color: #6c757d;
+}
+.prompt-version-control .version-toolbar .toolbar-section .filter-controls,
+.prompt-version-control .version-toolbar .toolbar-section .search-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.prompt-version-control .version-toolbar .toolbar-section .filter-controls .form-label,
+.prompt-version-control .version-toolbar .toolbar-section .search-controls .form-label {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6c757d;
+  white-space: nowrap;
+}
+.prompt-version-control .version-toolbar .toolbar-section .filter-controls .form-select,
+.prompt-version-control .version-toolbar .toolbar-section .filter-controls .form-control,
+.prompt-version-control .version-toolbar .toolbar-section .search-controls .form-select,
+.prompt-version-control .version-toolbar .toolbar-section .search-controls .form-control {
+  min-width: 120px;
+}
+.prompt-version-control .version-toolbar .toolbar-section .filter-controls .form-check,
+.prompt-version-control .version-toolbar .toolbar-section .search-controls .form-check {
+  margin: 0;
+}
+.prompt-version-control .version-toolbar .toolbar-section .filter-controls .form-check .form-check-label,
+.prompt-version-control .version-toolbar .toolbar-section .search-controls .form-check .form-check-label {
+  font-size: 0.875rem;
+}
+.prompt-version-control .version-toolbar .toolbar-section .action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+.prompt-version-control .version-toolbar .toolbar-section .action-buttons .btn {
+  font-size: 0.875rem;
+}
+.prompt-version-control .loading-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.prompt-version-control .loading-container .loading-content {
+  text-align: center;
+}
+.prompt-version-control .loading-container .loading-content .loading-message {
+  margin-top: 1rem;
+  color: #6c757d;
+}
+.prompt-version-control .timeline-container {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.prompt-version-control .timeline-container .version-timeline {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item {
+  display: flex;
+  position: relative;
+  margin-bottom: 2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item:hover .timeline-content {
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item.selected .timeline-content {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item.active .timeline-marker .marker-icon {
+  border-color: #28a745;
+  background-color: #28a745;
+  color: white;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 1.5rem;
+  flex-shrink: 0;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker .marker-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid;
+  background: white;
+  font-size: 1rem;
+  z-index: 2;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker .marker-icon.change-create {
+  border-color: #28a745;
+  color: #28a745;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker .marker-icon.change-update {
+  border-color: #0d6efd;
+  color: #0d6efd;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker .marker-icon.change-delete {
+  border-color: #dc3545;
+  color: #dc3545;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker .timeline-line {
+  width: 2px;
+  flex: 1;
+  background: #dee2e6;
+  margin-top: 0.5rem;
+  min-height: 2rem;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content {
+  flex: 1;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header .version-info .version-label {
+  margin: 0 0 0.5rem 0;
+  color: #495057;
+  font-weight: 600;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header .version-info .version-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+  flex-wrap: wrap;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header .version-info .version-meta .change-date {
+  font-weight: 500;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header .version-info .version-meta .badge {
+  font-size: 0.75rem;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header .version-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header .version-actions .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-description {
+  color: #495057;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .changes-summary .changes-list .change-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .changes-summary .changes-list .change-item .field-name {
+  font-weight: 500;
+  color: #495057;
+  margin-right: 0.75rem;
+  min-width: 100px;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .changes-summary .changes-list .change-item .change-arrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .changes-summary .changes-list .change-item .change-arrow .old-value {
+  color: #dc3545;
+  text-decoration: line-through;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .changes-summary .changes-list .change-item .change-arrow .new-value {
+  color: #28a745;
+  font-weight: 500;
+}
+.prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .changes-summary .changes-list .change-item .change-arrow i {
+  color: #6c757d;
+}
+.prompt-version-control .timeline-container .no-versions-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #6c757d;
+}
+.prompt-version-control .timeline-container .no-versions-message i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+  opacity: 0.5;
+}
+.prompt-version-control .timeline-container .no-versions-message p {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.prompt-version-control .comparison-container {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.prompt-version-control .comparison-container .comparison-selectors {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+}
+.prompt-version-control .comparison-container .comparison-selectors .selector-group {
+  flex: 1;
+}
+.prompt-version-control .comparison-container .comparison-selectors .selector-group .form-label {
+  font-weight: 500;
+  color: #495057;
+}
+.prompt-version-control .comparison-container .comparison-selectors .comparison-arrow {
+  padding-bottom: 0.375rem;
+  color: #6c757d;
+  font-size: 1.25rem;
+}
+.prompt-version-control .comparison-container .comparison-results {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.prompt-version-control .comparison-container .comparison-results .comparison-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+.prompt-version-control .comparison-container .comparison-results .comparison-header .comparison-title {
+  margin: 0;
+  color: #495057;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.prompt-version-control .comparison-container .comparison-results .comparison-header .changes-count {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item {
+  border-bottom: 1px solid #f1f3f4;
+  padding: 1.5rem;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item:last-child {
+  border-bottom: none;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item.diff-added {
+  border-left: 4px solid #28a745;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item.diff-modified {
+  border-left: 4px solid #ffc107;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item.diff-removed {
+  border-left: 4px solid #dc3545;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-header {
+  margin-bottom: 1rem;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-header .field-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-header .field-info .field-name {
+  font-size: 1rem;
+  color: #495057;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-header .field-info .badge {
+  font-size: 0.75rem;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-header .field-info .badge.template-badge {
+  background-color: #6f42c1;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-old .diff-label,
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-new .diff-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #6c757d;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-old .diff-value,
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-new .diff-value {
+  padding: 1rem;
+  border-radius: 0.375rem;
+  font-family: "Fira Code", Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-old .diff-value.old-value,
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-new .diff-value.old-value {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  color: #c53030;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-old .diff-value.new-value,
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-new .diff-value.new-value {
+  background: #f0fff4;
+  border: 1px solid #9ae6b4;
+  color: #2f855a;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-old .diff-value .template-content,
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-new .diff-value .template-content {
+  margin: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .diff-added .diff-label,
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .diff-removed .diff-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #6c757d;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .diff-added .diff-value,
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .diff-removed .diff-value {
+  padding: 1rem;
+  border-radius: 0.375rem;
+  font-family: "Fira Code", Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .diff-added .diff-value {
+  background: #f0fff4;
+  border: 1px solid #9ae6b4;
+  color: #2f855a;
+}
+.prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .diff-removed .diff-value {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  color: #c53030;
+}
+.prompt-version-control .comparison-container .comparison-results .no-differences {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+.prompt-version-control .comparison-container .comparison-results .no-differences i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+.prompt-version-control .comparison-container .comparison-results .no-differences p {
+  margin: 0;
+  font-size: 1rem;
+}
+.prompt-version-control .details-container {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.prompt-version-control .details-container .version-details {
+  max-width: 800px;
+  margin: 0 auto;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.prompt-version-control .details-container .version-details .details-header {
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+.prompt-version-control .details-container .version-details .details-header .details-title {
+  margin: 0 0 0.5rem 0;
+  color: #495057;
+  font-weight: 600;
+}
+.prompt-version-control .details-container .version-details .details-header .details-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+  flex-wrap: wrap;
+}
+.prompt-version-control .details-container .version-details .details-content {
+  padding: 1.5rem;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section {
+  margin-bottom: 2rem;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section:last-child {
+  margin-bottom: 0;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section .section-title {
+  margin: 0 0 1rem 0;
+  color: #495057;
+  font-weight: 600;
+  font-size: 1rem;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 0.5rem;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section .detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section .detail-grid .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section .detail-grid .detail-item .detail-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6c757d;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section .detail-grid .detail-item .detail-value {
+  font-size: 0.875rem;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.prompt-version-control .details-container .version-details .details-content .detail-section .json-viewer .json-content,
+.prompt-version-control .details-container .version-details .details-content .detail-section .json-viewer .template-content,
+.prompt-version-control .details-container .version-details .details-content .detail-section .template-viewer .json-content,
+.prompt-version-control .details-container .version-details .details-content .detail-section .template-viewer .template-content {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  margin: 0;
+  font-family: "Fira Code", Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.prompt-version-control .details-container .no-selection-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #6c757d;
+}
+.prompt-version-control .details-container .no-selection-message i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+  opacity: 0.5;
+}
+.prompt-version-control .details-container .no-selection-message p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.prompt-version-control .error-container {
+  padding: 1rem;
+}
+.prompt-version-control .error-container .alert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1200px) {
+  .prompt-version-control .version-toolbar .toolbar-section {
+    min-width: 100%;
+    justify-content: space-between;
+  }
+  .prompt-version-control .comparison-container .comparison-selectors {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .prompt-version-control .comparison-container .comparison-selectors .comparison-arrow {
+    align-self: center;
+    padding: 0.5rem 0;
+  }
+  .prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}
+@media (max-width: 768px) {
+  .prompt-version-control .version-toolbar {
+    padding: 0.75rem;
+  }
+  .prompt-version-control .version-toolbar .toolbar-section {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .prompt-version-control .timeline-container {
+    padding: 0.75rem;
+  }
+  .prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker {
+    margin-right: 1rem;
+  }
+  .prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-marker .marker-icon {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+  }
+  .prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content {
+    padding: 1rem;
+  }
+  .prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .prompt-version-control .timeline-container .version-timeline .timeline-item .timeline-content .version-header .version-actions {
+    align-self: flex-end;
+  }
+  .prompt-version-control .comparison-container,
+  .prompt-version-control .details-container {
+    padding: 0.75rem;
+  }
+  .prompt-selector-section {
+    padding: 2rem;
+    background: white;
+    border-radius: 8px;
+    margin: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  .prompt-selector-section .section-title {
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .prompt-selector-section .section-title i {
+    color: #007bff;
+  }
+  .prompt-selector-section .prompt-selector .search-box .input-group-text {
+    background: #f8f9fa;
+    border-color: #ced4da;
+  }
+  .prompt-selector-section .prompt-selector .search-box .input-group-text i {
+    color: #6c757d;
+  }
+  .prompt-selector-section .prompt-selector .search-box .form-control {
+    border-color: #ced4da;
+  }
+  .prompt-selector-section .prompt-selector .search-box .form-control:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  }
+  .prompt-selector-section .prompt-selector .prompts-list {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .empty-state {
+    text-align: center;
+    padding: 2rem;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .empty-state i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item:last-child {
+    border-bottom: none;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item:hover {
+    background-color: #f8f9fa;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item .prompt-info {
+    flex: 1;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item .prompt-info .prompt-title {
+    margin: 0 0 0.25rem 0;
+    font-weight: 600;
+    color: #495057;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item .prompt-info .prompt-description {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #6c757d;
+    line-height: 1.4;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item .prompt-actions {
+    color: #007bff;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+  .prompt-selector-section .prompt-selector .prompts-list .prompt-item:hover .prompt-actions {
+    opacity: 1;
+  }
+}

@@ -1,10 +1,10 @@
-import { Component, Input, OnInit, ViewContainerRef } from '@angular/core';
+import { Component, Input, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { NotificationService } from '@progress/kendo-angular-notification';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 import { AIAgentEntityExtended, AIModelEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
-import { Router } from '@angular/router';
+import { NavigationService } from '@memberjunction/ng-shared';
 import { BehaviorSubject } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -33,7 +33,7 @@ export class NewAgentDialogComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private dialog: DialogRef,
-    private router: Router,
+    private navigationService: NavigationService,
     private notificationService: NotificationService
   ) {}
   
@@ -123,9 +123,9 @@ export class NewAgentDialogComponent implements OnInit {
         
         // Redirect to form if configured
         if (this.config.redirectToForm && !this.config.parentAgentId) {
-          // Only redirect for top-level agents
+          // Only redirect for top-level agents - use NavigationService to open the record
           setTimeout(() => {
-            this.router.navigate(['/forms', 'AI Agents', agent.ID]);
+            this.navigationService.OpenEntityRecord('AI Agents', agent.PrimaryKey);
           }, 100);
         }
       } else {

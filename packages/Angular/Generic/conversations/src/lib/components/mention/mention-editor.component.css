@@ -1,0 +1,143 @@
+.mention-editor-container {
+  position: relative;
+  width: 100%;
+  display: block;
+}
+
+.mention-editor {
+  display: block;
+  width: 100%;
+  min-height: 100px;
+  max-height: 300px;
+  padding: 7px 3.5rem 7px 12px;
+  outline: none;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-y: auto;
+  overflow-x: hidden;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  cursor: text;
+  user-select: text;
+  box-sizing: border-box;
+}
+.mention-editor:empty:before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary, #999);
+  pointer-events: none;
+  position: absolute;
+}
+.mention-editor:focus {
+  outline: none;
+}
+.mention-editor[contenteditable=false] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: var(--background-disabled, #f5f5f5);
+}
+@media (max-width: 768px) {
+  .mention-editor {
+    font-size: 16px;
+    padding: 5px;
+    padding-right: 3rem;
+  }
+}
+
+::ng-deep .mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  margin: 0 3px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: default;
+  user-select: none;
+  vertical-align: middle;
+  white-space: nowrap;
+  pointer-events: all;
+  -webkit-user-modify: read-only;
+  -moz-user-modify: read-only;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: 2px solid rgba(102, 126, 234, 0.4);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+  animation: chipInsert 0.15s ease-out;
+}
+::ng-deep .mention-chip i {
+  font-size: 12px;
+  opacity: 0.95;
+}
+::ng-deep .mention-chip[data-mention-type=user] {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: 2px solid rgba(240, 147, 251, 0.4);
+}
+::ng-deep .mention-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+::ng-deep .mention-chip:focus, ::ng-deep .mention-chip.selected {
+  outline: 2px solid var(--primary-color, #007bff);
+  outline-offset: 2px;
+}
+@keyframes chipInsert {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .mention-editor {
+    color: black; /*computer preference level not yet supported*/
+    /*color: #e0e0e0;*/ /*Matt - please work on this - for some as it didn't work*/
+  }
+  .mention-editor:empty:before {
+    color: #777;
+  }
+  .mention-editor[contenteditable=false] {
+    background: #2d2d2d;
+  }
+  .mention-chip {
+    background: linear-gradient(135deg, #4a148c 0%, #6a1b9a 100%);
+    color: #ce93d8;
+    border-color: #8e24aa;
+  }
+  .mention-chip[data-mention-type=user] {
+    background: linear-gradient(135deg, #880e4f 0%, #ad1457 100%);
+    color: #f48fb1;
+    border-color: #c2185b;
+  }
+}
+.mention-editor .mention-chip + .mention-chip {
+  margin-left: 4px;
+}
+.mention-editor br {
+  display: block;
+  content: "";
+  margin: 0;
+}
+
+.mention-editor::-webkit-scrollbar {
+  width: 6px;
+}
+.mention-editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+.mention-editor::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+.mention-editor::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}

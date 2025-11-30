@@ -6,7 +6,7 @@ import { SchedulingInstrumentationService, JobTypeStatistics } from '../services
 @Component({
   selector: 'app-scheduling-types',
   templateUrl: './scheduling-types.component.html',
-  styleUrls: ['./scheduling-types.component.scss']
+  styleUrls: ['./scheduling-types.component.css']
 })
 export class SchedulingTypesComponent implements OnInit, OnDestroy {
   @Input() initialState: any;

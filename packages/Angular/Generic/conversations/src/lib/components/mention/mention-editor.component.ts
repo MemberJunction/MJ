@@ -23,7 +23,7 @@ import { AIAgentConfigurationEntity } from '@memberjunction/core-entities';
 @Component({
   selector: 'mj-mention-editor',
   templateUrl: './mention-editor.component.html',
-  styleUrls: ['./mention-editor.component.scss'],
+  styleUrls: ['./mention-editor.component.css'],
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,

@@ -8,7 +8,7 @@ export function LoadViewResource() {
     const test = new UserViewResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.
 }
 
-@RegisterClass(BaseResourceComponent, 'User Views')
+@RegisterClass(BaseResourceComponent, 'ViewResource')
 @Component({
     selector: 'mj-userview-resource',
     template: `<mj-single-view [viewId]="Data.ResourceRecordID" 

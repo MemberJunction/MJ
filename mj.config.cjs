@@ -120,7 +120,7 @@ const codegenConfig = {
       {
         name: 'SmartFieldIdentification',
         description: 'Use AI to identify the best name field and default field to show in views for each entity',
-        enabled: true,
+        enabled: true, 
       },
       {
         name: 'TransitiveJoinIntelligence',
@@ -239,8 +239,7 @@ const mjServerConfig = {
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
     contextUserForNewUserCreation: 'not.set@nowhere.com',
-    CreateUserApplicationRecords: true,
-    UserApplications: ['Admin'],
+    CreateUserApplicationRecords: true 
   },
   databaseSettings: {
     connectionTimeout: 45000,

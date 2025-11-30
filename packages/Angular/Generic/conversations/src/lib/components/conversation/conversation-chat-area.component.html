@@ -65,10 +65,7 @@
         } @else if (isLoadingConversation) {
           <!-- Loading State - Show centered spinner while conversation loads -->
           <div class="conversation-loading-state">
-            <div class="loading-content">
-              <i class="fas fa-spinner fa-spin"></i>
-              <span>Loading conversation...</span>
-            </div>
+            <mj-loading text="Loading conversation..." size="large"></mj-loading>
           </div>
         } @else {
           <!-- Normal Message View -->
@@ -106,10 +103,7 @@
               @if (isLoadingPeripheralData) {
                 <!-- Loading State -->
                 <div class="loading-peripheral-placeholder">
-                  <div class="loading-peripheral-content">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <span>Loading conversation data...</span>
-                  </div>
+                  <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
                 </div>
               } @else {
                 <!-- Input Component - Multiple instances cached, only one visible -->

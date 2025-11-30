@@ -2,8 +2,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
-import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { loadEntityConfig, loadSyncConfig } from '../config';
+import { SyncEngine, RecordData, DeferrableLookupError } from '../lib/sync-engine';
+import { loadEntityConfig, loadSyncConfig, EntityConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
@@ -45,6 +45,7 @@ export interface PushResult {
   unchanged: number;
   deleted: number;
   skipped: number;
+  deferred: number;
   errors: number;
   warnings: string[];
   sqlLogPath?: string;
@@ -56,6 +57,7 @@ export interface EntityPushResult {
   unchanged: number;
   deleted: number;
   skipped: number;
+  deferred: number;
   errors: number;
 }
 
@@ -68,13 +70,28 @@ interface DeferredFileWrite {
   isArray: boolean;
 }
 
+/**
+ * Tracks records that had deferred lookups and need to be re-processed.
+ * Used with `?allowDefer` flag in @lookup syntax for handling circular dependencies.
+ * Stores the full context needed to re-run processFlattenedRecord identically.
+ */
+interface DeferredRecord {
+  /** The full flattened record to re-process */
+  flattenedRecord: FlattenedRecord;
+  /** The entity directory for resolving paths */
+  entityDir: string;
+  /** The entity configuration */
+  entityConfig: EntityConfig;
+}
+
 export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
   private syncConfig: any;
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
-  
+  private deferredRecords: DeferredRecord[] = [];
+
   constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
@@ -88,7 +105,9 @@ export class PushService {
       throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
     }
 
-    this.deferredFileWrites.clear(); // Reset deferred writes for this push operation
+    // Reset deferred tracking for this push operation
+    this.deferredFileWrites.clear();
+    this.deferredRecords = [];
     
     const fileBackupManager = new FileBackupManager();
     
@@ -202,6 +221,7 @@ export class PushService {
       let totalUnchanged = 0;
       let totalDeleted = 0;
       let totalSkipped = 0;
+      let totalDeferred = 0;
       let totalErrors = 0;
       
       // PHASE 0: Audit all deletions across all entities (if any exist)
@@ -242,6 +262,7 @@ export class PushService {
             unchanged: 0,
             deleted: 0,
             skipped: 0,
+            deferred: 0,
             errors: 0,
             warnings: this.warnings
           };
@@ -308,6 +329,9 @@ export class PushService {
             if (result.deleted > 0) {
               callbacks?.onLog?.(`   ✓ Deleted: ${result.deleted}`);
             }
+            if (result.deferred > 0) {
+              callbacks?.onLog?.(`   ⏳ Deferred: ${result.deferred}`);
+            }
             if (result.unchanged > 0) {
               callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
             }
@@ -318,12 +342,13 @@ export class PushService {
               callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
             }
           }
-          
+
           totalCreated += result.created;
           totalUpdated += result.updated;
           totalUnchanged += result.unchanged;
           totalDeleted += result.deleted;
           totalSkipped += result.skipped;
+          totalDeferred += result.deferred;
           totalErrors += result.errors;
         }
 
@@ -332,6 +357,14 @@ export class PushService {
           const deletionResult = await this.processDeletionsFromAudit(deletionAudit, options, callbacks);
           totalDeleted += deletionResult.deleted;
           totalErrors += deletionResult.errors;
+        }
+
+        // PHASE 2.5: Process deferred records (for circular dependencies)
+        if (this.deferredRecords.length > 0 && totalErrors === 0) {
+          const deferredResult = await this.processDeferredRecords(options, callbacks);
+          totalCreated += deferredResult.created;
+          totalUpdated += deferredResult.updated;
+          totalErrors += deferredResult.errors;
         }
 
         // Commit transaction if successful
@@ -377,11 +410,12 @@ export class PushService {
         unchanged: totalUnchanged,
         deleted: totalDeleted,
         skipped: totalSkipped,
+        deferred: totalDeferred,
         errors: totalErrors,
         warnings: this.warnings,
         sqlLogPath
       };
-      
+
     } catch (error) {
       // Rollback file backups on error
       if (!options.dryRun) {
@@ -418,6 +452,7 @@ export class PushService {
     let unchanged = 0;
     let deleted = 0;
     let skipped = 0;
+    let deferred = 0;
     let errors = 0;
     
     // Find all JSON files in the directory
@@ -545,6 +580,10 @@ export class PushService {
                   else if (result.status === 'deleted') deleted++;
                   else if (result.status === 'skipped') skipped++;
                   else if (result.status === 'error') errors++;
+                  else if (result.status === 'deferred') {
+                    created++; // Deferred records were saved (count as created)
+                    deferred++; // Also track separately for reporting
+                  }
                 }
               }
             }
@@ -574,6 +613,10 @@ export class PushService {
                   else if (result.status === 'deleted') deleted++;
                   else if (result.status === 'skipped') skipped++;
                   else if (result.status === 'error') errors++;
+                  else if (result.status === 'deferred') {
+                    created++; // Deferred records were saved (count as created)
+                    deferred++; // Also track separately for reporting
+                  }
                 }
               }
             } catch (recordError) {
@@ -612,17 +655,18 @@ export class PushService {
       }
     }
     
-    return { created, updated, unchanged, deleted, skipped, errors };
+    return { created, updated, unchanged, deleted, skipped, deferred, errors };
   }
-  
+
   private async processFlattenedRecord(
     flattenedRecord: FlattenedRecord,
     entityDir: string,
     options: PushOptions,
     batchContext: Map<string, BaseEntity>,
     callbacks?: PushCallbacks,
-    entityConfig?: any
-  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped'; isDuplicate?: boolean; isDeletedRecord?: boolean }> {
+    entityConfig?: EntityConfig,
+    allowDefer: boolean = true
+  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped' | 'deferred'; isDuplicate?: boolean; isDeletedRecord?: boolean }> {
     const metadata = new Metadata();
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
 
@@ -730,6 +774,9 @@ export class PushService {
     
     // Process field values with parent context and batch context
     // Process each field with better error reporting
+    // Track if we hit any deferrable lookup errors
+    let hasDeferrableLookupError = false;
+
     for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
       try {
         const processedValue = await this.syncEngine.processFieldValue(
@@ -741,8 +788,29 @@ export class PushService {
           batchContext // Pass batch context for lookups
         );
         entity.Set(fieldName, processedValue);
-      } catch (fieldError: any) {
-        // Enhanced error reporting for field processing failures
+      } catch (fieldError: unknown) {
+        // Check if this is a deferrable lookup error first
+        if (fieldError instanceof DeferrableLookupError) {
+          // If allowDefer is false, we're in deferred processing mode - can't defer again
+          if (!allowDefer) {
+            const err = fieldError as DeferrableLookupError;
+            throw new Error(`Deferred lookup still failed: ${err.message}`);
+          }
+
+          // Mark that we need to defer this entire record
+          hasDeferrableLookupError = true;
+
+          // Log that we're deferring this lookup
+          if (options.verbose) {
+            callbacks?.onLog?.(`   ⏳ Deferring lookup for ${entityName}.${fieldName} -> ${fieldError.entityName}`);
+          }
+          // Don't set this field - continue to try other fields
+          // We'll re-process the entire record later
+          continue;
+        }
+
+        // For other errors, use enhanced error reporting
+        const err = fieldError as Error;
         const primaryKeyInfo = record.primaryKey ? JSON.stringify(record.primaryKey) : 'NEW';
 
         // Helper to log to both console and callbacks
@@ -752,42 +820,46 @@ export class PushService {
         };
 
         // Check if this is a lookup failure
-        if (fieldError.message?.includes('Lookup failed:')) {
+        if (err.message?.includes('Lookup failed:')) {
           logError(`\n❌ LOOKUP FAILURE in ${entityName} (${primaryKeyInfo})`);
           logError(`   Field: ${fieldName}`);
           logError(`   Value: ${fieldValue}`);
-          logError(`   Error: ${fieldError.message}`);
+          logError(`   Error: ${err.message}`);
           logError(`   Tip: Check if the referenced record exists in the target entity\n`);
-        } else if (fieldError.message?.includes('Entity not found:')) {
+        } else if (err.message?.includes('Entity not found:')) {
           logError(`\n❌ ENTITY NOT FOUND in ${entityName} (${primaryKeyInfo})`);
           logError(`   Field: ${fieldName}`);
           logError(`   Value: ${fieldValue}`);
-          logError(`   Error: ${fieldError.message}`);
+          logError(`   Error: ${err.message}`);
           logError(`   Tip: Check if the entity name is spelled correctly\n`);
-        } else if (fieldError.message?.includes('Field') && fieldError.message?.includes('not found')) {
+        } else if (err.message?.includes('Field') && err.message?.includes('not found')) {
           logError(`\n❌ FIELD NOT FOUND in ${entityName} (${primaryKeyInfo})`);
           logError(`   Field: ${fieldName}`);
           logError(`   Value: ${fieldValue}`);
-          logError(`   Error: ${fieldError.message}`);
+          logError(`   Error: ${err.message}`);
           logError(`   Tip: Check if the field name exists in the target entity\n`);
-        } else if (fieldError.message?.includes('File not found:')) {
+        } else if (err.message?.includes('File not found:')) {
           logError(`\n❌ FILE NOT FOUND in ${entityName} (${primaryKeyInfo})`);
           logError(`   Field: ${fieldName}`);
           logError(`   Value: ${fieldValue}`);
-          logError(`   Error: ${fieldError.message}`);
+          logError(`   Error: ${err.message}`);
           logError(`   Tip: Check if the file path is correct relative to ${entityDir}\n`);
         } else {
           logError(`\n❌ FIELD PROCESSING ERROR in ${entityName} (${primaryKeyInfo})`);
           logError(`   Field: ${fieldName}`);
           logError(`   Value: ${fieldValue}`);
-          logError(`   Error: ${fieldError.message}\n`);
+          logError(`   Error: ${err.message}\n`);
         }
 
         // Re-throw with enhanced context
-        throw new Error(`Failed to process field '${fieldName}' in ${entityName}: ${fieldError.message}`);
+        throw new Error(`Failed to process field '${fieldName}' in ${entityName}: ${err.message}`);
       }
     }
-    
+
+    // Note: If we had deferred fields, we still continue to save the record
+    // The deferred fields are not set, but other fields are. We'll queue for
+    // re-processing after save succeeds.
+
     // Check if the record is actually dirty before considering it changed
     let isDirty = entity.Dirty;
     
@@ -993,7 +1065,25 @@ export class PushService {
     // Add to batch context AFTER save so it has an ID for child @parent:ID references
     // Use the recordId (lookupKey) as the key so child records can find this parent
     batchContext.set(lookupKey, entity);
-    
+
+    // If we had deferred lookup errors, queue the entire record for re-processing
+    // The record has been saved (without the deferred fields), so it exists in the DB.
+    // In Phase 2.5, we'll re-run processFlattenedRecord with allowDefer=false to fill in the gaps.
+    if (hasDeferrableLookupError && allowDefer && entityConfig) {
+      this.deferredRecords.push({
+        flattenedRecord,
+        entityDir,
+        entityConfig
+      });
+
+      if (options.verbose) {
+        callbacks?.onLog?.(`   📋 Queued ${entityName} for deferred processing (record saved, some fields pending)`);
+      }
+
+      // Return 'deferred' status - it's saved but incomplete
+      // We don't return early here because we still want to update primaryKey and sync metadata
+    }
+
     // Update primaryKey for new records
     if (isNew) {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
@@ -1021,13 +1111,23 @@ export class PushService {
     
     // Restore original field values to preserve @ references
     record.fields = originalFields;
-    
-    return { 
+
+    // Return appropriate status
+    // If we had deferred lookups, return 'deferred' to indicate partial save
+    // The record is saved but will be re-processed in Phase 2.5
+    if (hasDeferrableLookupError && allowDefer) {
+      return {
+        status: 'deferred',
+        isDuplicate: false
+      };
+    }
+
+    return {
       status: isNew ? 'created' : (isDirty ? 'updated' : 'unchanged'),
       isDuplicate: false
     };
   }
-  
+
   private formatFieldValue(value: any): string {
     if (value === null || value === undefined) return 'null';
     if (typeof value === 'string') {
@@ -1459,6 +1559,98 @@ export class PushService {
     }
 
     return false;
+  }
+
+  /**
+   * Process deferred records that had lookup failures during initial processing.
+   * Called in Phase 2.5 after all records are created/updated but before commit.
+   * This handles circular dependencies where records reference each other.
+   *
+   * Re-runs processFlattenedRecord with allowDefer=false, which processes the
+   * entire record exactly as in the initial pass. Now that all records exist,
+   * the lookups should succeed.
+   *
+   * @param options - Push options
+   * @param callbacks - Callbacks for progress/error reporting
+   * @returns Object with created, updated, and errors counts
+   */
+  private async processDeferredRecords(
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<{ created: number; updated: number; errors: number }> {
+    if (this.deferredRecords.length === 0) {
+      return { created: 0, updated: 0, errors: 0 };
+    }
+
+    callbacks?.onLog?.(`\n⏳ Processing ${this.deferredRecords.length} deferred record${this.deferredRecords.length > 1 ? 's' : ''}...`);
+
+    let created = 0;
+    let updated = 0;
+    let errors = 0;
+
+    // Create a fresh batch context for deferred processing
+    // Records are in DB now, so this is mainly for tracking within this phase
+    const batchContext = new Map<string, BaseEntity>();
+
+    for (const deferred of this.deferredRecords) {
+      const { flattenedRecord, entityDir, entityConfig } = deferred;
+      const entityName = flattenedRecord.entityName;
+      const recordId = flattenedRecord.record.primaryKey
+        ? Object.entries(flattenedRecord.record.primaryKey).map(([k, v]) => `${k}=${v}`).join(', ')
+        : (flattenedRecord.record.fields.Name || 'NEW');
+
+      try {
+        // Re-run processFlattenedRecord with allowDefer=false
+        // This ensures we use the exact same processing logic
+        const result = await this.processFlattenedRecord(
+          flattenedRecord,
+          entityDir,
+          options,
+          batchContext,
+          callbacks,
+          entityConfig,
+          false // allowDefer=false - must succeed or fail, no re-deferring
+        );
+
+        if (result.status === 'created') {
+          created++;
+          callbacks?.onLog?.(`   ✓ ${entityName} (${recordId}) - created`);
+        } else if (result.status === 'updated') {
+          updated++;
+          callbacks?.onLog?.(`   ✓ ${entityName} (${recordId}) - updated`);
+        } else if (result.status === 'unchanged') {
+          callbacks?.onLog?.(`   - ${entityName} (${recordId}) - unchanged`);
+        }
+
+      } catch (error) {
+        const err = error as Error;
+
+        callbacks?.onError?.(
+          `   ✗ Failed to process deferred record: ${entityName} (${recordId})`
+        );
+        callbacks?.onError?.(
+          `     Error: ${err.message}`
+        );
+        callbacks?.onError?.(
+          `     Tip: Ensure all referenced records exist or remove the ?allowDefer flag`
+        );
+
+        errors++;
+      }
+    }
+
+    // Summary
+    callbacks?.onLog?.('');
+    const total = created + updated;
+    if (total > 0) {
+      callbacks?.onLog?.(`   ✓ Resolved ${total} deferred record${total > 1 ? 's' : ''} (${created} created, ${updated} updated)`);
+    }
+    if (errors > 0) {
+      callbacks?.onLog?.(`   ✗ Failed to resolve ${errors} deferred record${errors > 1 ? 's' : ''}`);
+    }
+    callbacks?.onLog?.('');
+
+    return { created, updated, errors };
   }
 
   /**

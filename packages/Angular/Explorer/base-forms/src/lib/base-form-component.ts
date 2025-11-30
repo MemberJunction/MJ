@@ -1,4 +1,4 @@
-import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild, ChangeDetectorRef, ContentChildren } from '@angular/core';
+import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild, ChangeDetectorRef, ContentChildren, inject } from '@angular/core';
 
 import { Subject, Subscription, debounceTime, fromEvent } from 'rxjs';
 import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
@@ -18,6 +18,7 @@ import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
 import { ListEntity } from '@memberjunction/core-entities';
+import { FormStateService } from './form-state.service';
 
 @Directive() // this isn't really a directive, BUT we are doing this to avoid Angular compile errors that require a decorator in order to implement the lifecycle interfaces
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
@@ -41,6 +42,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   private _updatingBrowserUrl: boolean = false;
 
   private __debug: boolean = false;
+
+  /** Form state service for persisting section states to User Settings */
+  protected formStateService = inject(FormStateService);
+
+  /** Subscription to form state changes */
+  private formStateSubscription?: Subscription;
 
   constructor(protected elementRef: ElementRef, protected sharedService: SharedService, protected router: Router, protected route: ActivatedRoute, protected cdr: ChangeDetectorRef) {
     super();
@@ -73,6 +80,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
+
+      // Initialize form state from User Settings
+      const entityName = this.getEntityName();
+      if (entityName) {
+        await this.formStateService.initializeState(entityName);
+
+        // Subscribe to state changes for reactive updates
+        this.formStateSubscription = this.formStateService.getState$(entityName).subscribe(state => {
+          this.showEmptyFields = state.showEmptyFields;
+          this.cdr.markForCheck();
+        });
+      }
 
       // DEBUG ONLY output to console our full record info for debugging
       if (this.__debug) {
@@ -155,6 +174,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     }
     if (this.filterSubscription) {
       this.filterSubscription.unsubscribe();
+    }
+    if (this.formStateSubscription) {
+      this.formStateSubscription.unsubscribe();
     }
   }
 
@@ -694,20 +716,32 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Checks if a section is expanded.
+   * Uses FormStateService for persisted state.
    * @param sectionKey The section key
    * @returns True if expanded, false otherwise
    */
   public IsSectionExpanded(sectionKey: string): boolean {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      return this.formStateService.isSectionExpanded(entityName, sectionKey);
+    }
+    // Fallback to in-memory state if no entity name
     const section = this.sectionMap.get(sectionKey);
-    return section ? section.isExpanded : false;
+    return section ? section.isExpanded : true;
   }
 
   /**
    * Sets the expanded state of a section.
+   * Persists to User Settings via FormStateService.
    * @param sectionKey The section key
    * @param isExpanded The new expanded state
    */
   public SetSectionExpanded(sectionKey: string, isExpanded: boolean): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setSectionExpanded(entityName, sectionKey, isExpanded);
+    }
+    // Also update in-memory state for immediate UI response
     const section = this.sectionMap.get(sectionKey);
     if (section) {
       section.isExpanded = isExpanded;
@@ -738,9 +772,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Toggles the expanded state of a section.
+   * Persists to User Settings via FormStateService.
    * @param sectionKey The section key to toggle
    */
   public toggleSection(sectionKey: string): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.toggleSection(entityName, sectionKey);
+    }
+    // Also update in-memory state
     const section = this.sectionMap.get(sectionKey);
     if (section) {
       section.isExpanded = !section.isExpanded;
@@ -749,8 +789,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Expands all sections.
+   * Persists to User Settings via FormStateService.
    */
   public expandAllSections(): void {
+    const entityName = this.getEntityName();
+    const sectionKeys = this.sections.map(s => s.sectionKey);
+    if (entityName && sectionKeys.length > 0) {
+      this.formStateService.expandAllSections(entityName, sectionKeys);
+    }
+    // Also update in-memory state
     this.sections.forEach(section => {
       section.isExpanded = true;
     });
@@ -758,8 +805,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Collapses all sections.
+   * Persists to User Settings via FormStateService.
    */
   public collapseAllSections(): void {
+    const entityName = this.getEntityName();
+    const sectionKeys = this.sections.map(s => s.sectionKey);
+    if (entityName && sectionKeys.length > 0) {
+      this.formStateService.collapseAllSections(entityName, sectionKeys);
+    }
+    // Also update in-memory state
     this.sections.forEach(section => {
       section.isExpanded = false;
     });
@@ -770,6 +824,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * @returns Number of expanded sections
    */
   public getExpandedCount(): number {
+    const entityName = this.getEntityName();
+    const sectionKeys = this.sections.map(s => s.sectionKey);
+    if (entityName && sectionKeys.length > 0) {
+      return this.formStateService.getExpandedCount(entityName, sectionKeys);
+    }
     return this.sections.filter(section => section.isExpanded).length;
   }
 
@@ -802,7 +861,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   /**
-   * Gets the entity name for the current record (used for localStorage keys).
+   * Gets the entity name for the current record (used for state persistence keys).
    * @returns Entity name or empty string
    */
   public getEntityName(): string {
@@ -810,35 +869,47 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   /**
+   * Gets the width mode for a section from persisted state.
+   * @param sectionKey The section key
+   * @returns Width mode ('normal' or 'full-width')
+   */
+  public getSectionWidthMode(sectionKey: string): 'normal' | 'full-width' {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      return this.formStateService.getSectionWidthMode(entityName, sectionKey);
+    }
+    return 'normal';
+  }
+
+  /**
+   * Sets the width mode for a section.
+   * Persists to User Settings via FormStateService.
+   * @param sectionKey The section key
+   * @param widthMode The width mode
+   */
+  public setSectionWidthMode(sectionKey: string, widthMode: 'normal' | 'full-width'): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setSectionWidthMode(entityName, sectionKey, widthMode);
+    }
+  }
+
+  /**
    * Resets all panel width modes to normal for the current entity.
-   * Clears localStorage for all panels associated with this entity.
+   * Persists to User Settings via FormStateService.
    */
   public resetAllPanelWidths(): void {
     const entityName = this.getEntityName();
     if (!entityName) return;
 
-    try {
-      // Find all localStorage keys for this entity's panels
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(`mj_panel_width_${entityName}_`)) {
-          keysToRemove.push(key);
-        }
-      }
+    this.formStateService.resetAllPanelWidths(entityName);
 
-      // Remove all found keys
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
-      // Trigger re-render if we have collapsible panels
-      if (this.collapsiblePanels) {
-        this.collapsiblePanels.forEach(panel => {
-          panel.widthMode = 'normal';
-          panel['cdr'].markForCheck();
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to reset panel widths:', e);
+    // Trigger re-render if we have collapsible panels
+    if (this.collapsiblePanels) {
+      this.collapsiblePanels.forEach(panel => {
+        panel.widthMode = 'normal';
+        panel['cdr'].markForCheck();
+      });
     }
   }
 

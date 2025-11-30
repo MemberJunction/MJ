@@ -28,7 +28,7 @@ interface EntityLink {
 @Component({
   selector: 'mj-erd-diagram',
   templateUrl: './erd-diagram.component.html',
-  styleUrls: ['./erd-diagram.component.scss']
+  styleUrls: ['./erd-diagram.component.css']
 })
 export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges {
   @ViewChild('erdContainer', { static: false }) erdContainer!: ElementRef;

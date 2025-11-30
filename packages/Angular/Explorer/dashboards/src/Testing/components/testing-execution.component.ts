@@ -31,7 +31,7 @@ interface ExecutionFilters {
   selector: 'app-testing-execution',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="testing-execution">
+    <div class="testing-execution" kendoDialogContainer>
       <div class="execution-header">
         <div class="header-left">
           <h2>
