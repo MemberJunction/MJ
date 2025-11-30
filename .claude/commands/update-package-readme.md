@@ -75,6 +75,10 @@ npm install @memberjunction/{package-name}
 - **Feature 2**: Description
 - ...
 
+## Diagram
+
+When appropriate, populate this with a Mermaid sequence or other diagram to illustate the flow of a complex component. This is not required for simple packages but can be very helpful to illustrate how larger more complex systems fit together.
+
 ## Usage
 
 ### Basic Example
