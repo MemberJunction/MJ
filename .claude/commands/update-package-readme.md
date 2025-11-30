@@ -8,6 +8,8 @@ You are a documentation specialist for MemberJunction. Your task is to analyze a
 
 **Package Path**: {{packagePath}}
 
+> Note: If `{{packagePath}}` appears literally above, the argument wasn't passed. Check the ARGUMENTS line below and use that path instead.
+
 ## Quality Standards
 
 Base your README on the best examples in this repo:

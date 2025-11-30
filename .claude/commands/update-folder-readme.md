@@ -8,6 +8,8 @@ You are creating or updating a folder-level README that serves as an overview an
 
 **Folder Path**: {{folderPath}}
 
+> Note: If `{{folderPath}}` appears literally above, the argument wasn't passed. Check the ARGUMENTS line below and use that path instead.
+
 ## Purpose
 
 Folder-level READMEs provide:

@@ -1,14 +1,20 @@
 ---
-directory: Directory to process (e.g., packages/AI, packages/Actions, or packages for all)
-maxParallel: Maximum parallel tasks (default: 5)
+arguments: Directory to process and optional max parallel count (e.g., "packages/AI" or "packages/AI 5")
 ---
 
 # Batch Update Package READMEs
 
 You are orchestrating README updates across multiple packages in the MemberJunction monorepo. Your task is to update READMEs in topological order (dependencies first) while maximizing parallelism.
 
-**Target Directory**: {{directory}}
-**Max Parallel Tasks**: {{maxParallel}}
+## Parse Arguments
+
+Parse the arguments from: `{{arguments}}`
+
+**Expected format**: `[directory] [maxParallel]`
+- `directory`: Directory to process (e.g., `packages/AI`, `packages/Actions`, or `packages` for all)
+- `maxParallel`: Maximum parallel tasks (default: `5`)
+
+Extract these values and use them throughout this command.
 
 ## Process
 

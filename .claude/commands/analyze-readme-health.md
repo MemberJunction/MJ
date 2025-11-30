@@ -1,14 +1,20 @@
 ---
-directory: Directory to analyze (default: packages)
-outputFormat: Report format - summary, detailed, or json (default: summary)
+arguments: The directory to analyze and optional format (e.g., "packages/AI summary" or "packages/AI detailed")
 ---
 
 # Analyze README Health
 
 You are auditing the documentation health of the MemberJunction monorepo. Your task is to analyze README coverage, quality, and freshness across all packages.
 
-**Target Directory**: {{directory}}
-**Output Format**: {{outputFormat}}
+## Parse Arguments
+
+First, parse the arguments from: `{{arguments}}`
+
+**Expected format**: `[directory] [outputFormat]`
+- `directory`: Path to analyze (default: `packages`)
+- `outputFormat`: `summary` (default), `detailed`, or `json`
+
+Extract these values and use them throughout this command. If arguments is empty, use defaults.
 
 ## Purpose
 
