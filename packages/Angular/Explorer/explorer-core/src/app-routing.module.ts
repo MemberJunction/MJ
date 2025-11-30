@@ -1,7 +1,6 @@
 import { ComponentRef, Injectable, NgModule } from '@angular/core';
 import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
 import {
-  SingleApplicationComponent,
   SingleEntityComponent,
   SingleRecordComponent,
   HomeWrapperComponent,
@@ -17,12 +16,9 @@ import {
 } from './public-api';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
-import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
-import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { EventCodes, SharedService, BaseNavigationComponent, NavigationService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
+import { LogError, Metadata } from '@memberjunction/core';
+import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
-import { SkipChatWrapperComponent } from '@memberjunction/ng-ask-skip';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
@@ -30,8 +26,8 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
 
   // Determines if a route should be detached and stored
   shouldDetach(route: ActivatedRouteSnapshot): boolean {
-    // Store the route if it's an "askskip" route
-    return route.routeConfig && route.routeConfig.path?.includes('askskip') ? true : false;
+    // removed reference to the skip stuff from here - we don't use the skip stuff anymore, using generic conversations/chat now
+    return false;
   }
 
   // Stores the detached route
@@ -426,8 +422,6 @@ const routes: Routes = [
   { path: 'home', component: HomeWrapperComponent, canActivate: [AuthGuard] },
   { path: 'chat', component: ChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'chat/:conversationId', component: ChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'askskip', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'askskip/:conversationId', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
   { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },

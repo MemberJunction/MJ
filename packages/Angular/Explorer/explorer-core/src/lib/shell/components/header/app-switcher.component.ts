@@ -13,6 +13,7 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 })
 export class AppSwitcherComponent {
   @Input() activeApp: BaseApplication | null = null;
+  @Input() isViewingSystemTab = false;
   @Output() appSelected = new EventEmitter<string>();
 
   @ViewChild('appConfigDialog') appConfigDialog!: UserAppConfigComponent;
@@ -39,10 +40,11 @@ export class AppSwitcherComponent {
 
   /**
    * Select an application
+   * When viewing a system tab, always emit to allow returning to the app
    */
   selectApp(app: BaseApplication): void {
     this.showDropdown = false;
-    if (app.ID !== this.activeApp?.ID) {
+    if (app.ID !== this.activeApp?.ID || this.isViewingSystemTab) {
       this.appSelected.emit(app.ID);
     }
   }

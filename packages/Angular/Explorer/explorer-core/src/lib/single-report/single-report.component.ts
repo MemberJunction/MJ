@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { LogError, Metadata, RunReport } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
-import { SkipDynamicTabbedReportComponent } from '@memberjunction/ng-ask-skip';
+//import { SkipDynamicTabbedReportComponent } from '@memberjunction/ng-ask-skip';
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types'; 
 
 @Component({
@@ -14,7 +14,7 @@ export class SingleReportComponent implements OnInit {
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 
-  @ViewChild('theReport', { static: true }) theReport!: SkipDynamicTabbedReportComponent;
+  //@ViewChild('theReport', { static: true }) theReport!: SkipDynamicTabbedReportComponent;
 
   public ReportEntity: ReportEntity | undefined;
 
@@ -22,18 +22,18 @@ export class SingleReportComponent implements OnInit {
 
   public Configuration: SkipAPIAnalysisCompleteResponse | undefined;
 
-  public get IsChart(): boolean {
-    return this.theReport.IsChart
-  }
-  public get IsTable(): boolean {
-    return this.theReport.IsTable
-  }
-  public get Columns(): SkipColumnInfo[] {
-    return this.theReport.Columns;
-  }
-  public get Report(): SkipDynamicTabbedReportComponent {
-    return this.theReport;
-  }
+  // public get IsChart(): boolean {
+  //   return this.theReport.IsChart
+  // }
+  // public get IsTable(): boolean {
+  //   return this.theReport.IsTable
+  // }
+  // public get Columns(): SkipColumnInfo[] {
+  //   return this.theReport.Columns;
+  // }
+  // public get Report(): SkipDynamicTabbedReportComponent {
+  //   return this.theReport;
+  // }
 
  
   async ngOnInit() {

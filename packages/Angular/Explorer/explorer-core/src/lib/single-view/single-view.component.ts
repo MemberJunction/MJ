@@ -1,6 +1,6 @@
 import { Component, ViewChild, Input, Output, EventEmitter, AfterViewInit, OnInit } from '@angular/core';
 import { GridRowClickedEvent } from '@memberjunction/ng-user-view-grid';
-import { UserViewGridWithAnalysisComponent } from '@memberjunction/ng-ask-skip';
+//import { UserViewGridWithAnalysisComponent } from '@memberjunction/ng-ask-skip';
 import { Metadata, EntityInfo, LogError, BaseEntity, EntityPermissionType } from '@memberjunction/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
@@ -14,7 +14,7 @@ import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
   styleUrls: ['./single-view.component.css']
 })
 export class SingleViewComponent implements AfterViewInit, OnInit  {
-  @ViewChild(UserViewGridWithAnalysisComponent, {static: true}) viewGridWithAnalysis!: UserViewGridWithAnalysisComponent;
+  //@ViewChild(UserViewGridWithAnalysisComponent, {static: true}) viewGridWithAnalysis!: UserViewGridWithAnalysisComponent;
 
   @Input() public viewId: string | null = null;
   @Input() public viewName: string| null = null;
@@ -94,30 +94,30 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async LoadView(viewInfo: UserViewEntity) {
     // load up the view
-    if (this.viewGridWithAnalysis &&
-        viewInfo && viewInfo.ID && viewInfo.ID.length > 0) {
-      this.selectedView = <UserViewEntityExtended>viewInfo; // didn't change the param type of this variable because we didn't want a breaking change in the 2.x era of the system, when we go to 3.0 we can change this to UserViewEntityExtended
-      await this.viewGridWithAnalysis.Refresh({
-        ViewEntity: viewInfo,
-        ViewID: viewInfo.ID,
-        UserSearchString: this.searchText
-      });
-      // Log access to view (fire-and-forget, don't await)
-      this.recentAccessService.logAccess('User Views', viewInfo.ID, 'view');
-      this.loadComplete.emit();
-    }
+    // if (this.viewGridWithAnalysis &&
+    //     viewInfo && viewInfo.ID && viewInfo.ID.length > 0) {
+    //   this.selectedView = <UserViewEntityExtended>viewInfo; // didn't change the param type of this variable because we didn't want a breaking change in the 2.x era of the system, when we go to 3.0 we can change this to UserViewEntityExtended
+    //   await this.viewGridWithAnalysis.Refresh({
+    //     ViewEntity: viewInfo,
+    //     ViewID: viewInfo.ID,
+    //     UserSearchString: this.searchText
+    //   });
+    //   // Log access to view (fire-and-forget, don't await)
+    //   this.recentAccessService.logAccess('User Views', viewInfo.ID, 'view');
+    //   this.loadComplete.emit();
+    // }
   }
 
   public async LoadDynamicView() {
-    if (this.viewGridWithAnalysis) {
-      this.selectedView = null;
-      await this.viewGridWithAnalysis.Refresh({
-        EntityName: this.entityName!,
-        ExtraFilter: this.extraFilter!,
-        UserSearchString: this.searchText
-      })
-      this.loadComplete.emit();  
-    }
+    // if (this.viewGridWithAnalysis) {
+    //   this.selectedView = null;
+    //   await this.viewGridWithAnalysis.Refresh({
+    //     EntityName: this.entityName!,
+    //     ExtraFilter: this.extraFilter!,
+    //     UserSearchString: this.searchText
+    //   })
+    //   this.loadComplete.emit();  
+    // }
   }
 
   async Refresh() {

@@ -44,8 +44,6 @@ import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
 // Local Components
-import { AskSkipModule } from '@memberjunction/ng-ask-skip';
-import { SkipChatModule } from '@memberjunction/ng-skip-chat';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { DashboardsModule } from '@memberjunction/ng-dashboards';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
@@ -193,10 +191,8 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     FilterModule,
     DropDownsModule,
     MemberJunctionSharedModule,
-    AskSkipModule,
     ConversationsModule,
     DashboardsModule,
-    SkipChatModule,
     EntityPermissionsModule,
     ExplorerSettingsModule,
     FileStorageModule,

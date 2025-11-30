@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild } from '@angular/core';
-import { Location } from '@angular/common';
+import { Router, NavigationEnd } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
@@ -112,6 +112,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Flag to skip URL updates during initialization (when applying deep link)
   private skipUrlUpdates: boolean = true;
+
+  // Track the last URL we navigated to, to avoid reacting to our own navigation
+  private lastNavigatedUrl: string = '';
 
   // Recent records from User Record Logs
   public recentRecords: RecentRecordAccess[] = [];
@@ -304,7 +307,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
-    private location: Location,
+    private router: Router,
     private recentAccessService: RecentAccessService
   ) {
     super();
@@ -337,9 +340,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // No URL state but @Input deepLink provided - use that
       await this.applyDeepLink(this.deepLink);
     }
-
-    // Setup browser back/forward navigation listener
-    this.setupPopStateListener();
 
     // Subscribe to state changes
     this.stateService.State
@@ -401,6 +401,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.cdr.detectChanges();
       });
 
+    // Subscribe to router NavigationEnd events for back/forward button support
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(event => {
+        // Only react to navigation events that weren't triggered by us
+        const currentUrl = event.urlAfterRedirects || event.url;
+        if (currentUrl !== this.lastNavigatedUrl) {
+          this.onExternalNavigation(currentUrl);
+        }
+      });
+
     // Enable URL updates now that initialization is complete
     this.skipUrlUpdates = false;
 
@@ -448,7 +462,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   override ngOnDestroy(): void {
-    this.cleanupPopStateListener();
     this.destroy$.next();
     this.destroy$.complete();
     super.ngOnDestroy();
@@ -1037,38 +1050,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // URL DEEP LINKING
   // ========================================
 
-  /** Bound handler for popstate events (needed for removeEventListener) */
-  private boundPopStateHandler = this.onPopState.bind(this);
-
-  /**
-   * Setup listener for browser back/forward navigation.
-   * Called during ngOnInit.
-   */
-  private setupPopStateListener(): void {
-    window.addEventListener('popstate', this.boundPopStateHandler);
-  }
-
-  /**
-   * Clean up popstate listener.
-   * Called during ngOnDestroy.
-   */
-  private cleanupPopStateListener(): void {
-    window.removeEventListener('popstate', this.boundPopStateHandler);
-  }
-
-  /**
-   * Handle browser back/forward navigation.
-   * Parses URL and applies state without triggering URL update.
-   */
-  private onPopState(): void {
-    const urlState = this.parseUrlState();
-    if (urlState) {
-      this.skipUrlUpdates = true;
-      this.applyUrlState(urlState);
-      this.skipUrlUpdates = false;
-    }
-  }
-
   /**
    * Parse URL query string and return a deep link object.
    * Returns null if no relevant params found.
@@ -1080,11 +1061,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * - view: View mode (grid or cards)
    */
   private parseUrlState(): DataExplorerDeepLink | null {
-    const queryString = window.location.search;
-    if (!queryString) {
+    const url = this.router.url;
+    const queryIndex = url.indexOf('?');
+    if (queryIndex === -1) {
       return null;
     }
 
+    const queryString = url.substring(queryIndex + 1);
     const params = new URLSearchParams(queryString);
     const entity = params.get('entity');
     const record = params.get('record');
@@ -1164,6 +1147,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Update the URL query string to reflect current navigation state.
    * This enables deep linking - users can bookmark or share URLs to specific views.
    * Called immediately on state changes (not debounced).
+   * Uses Angular Router for proper browser history integration.
    */
   private updateUrl(): void {
     const params = new URLSearchParams();
@@ -1191,14 +1175,85 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     // Get the current path without query string
-    const currentPath = this.location.path().split('?')[0];
+    const currentUrl = this.router.url;
+    const currentPath = currentUrl.split('?')[0];
 
     // Build the new URL
     const queryString = params.toString();
     const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
 
-    // Update the URL without triggering navigation
-    this.location.replaceState(newUrl);
+    // Track this URL so we don't react to our own navigation
+    this.lastNavigatedUrl = newUrl;
+
+    // Use Angular Router for proper browser history integration
+    // This allows back/forward buttons to work correctly
+    this.router.navigateByUrl(newUrl, { replaceUrl: false });
+  }
+
+  /**
+   * Handle external navigation (back/forward buttons).
+   * Parses the URL and applies the state without triggering a new navigation.
+   */
+  private onExternalNavigation(url: string): void {
+    // Check if this URL is for our component (contains our base path)
+    const currentPath = this.router.url.split('?')[0];
+    const newPath = url.split('?')[0];
+
+    // Only handle if we're still on the same base path (same dashboard instance)
+    if (currentPath !== newPath) {
+      return; // Different route entirely, shell will handle it
+    }
+
+    // Parse the new URL state
+    const urlState = this.parseUrlFromString(url);
+
+    // Apply the state without triggering URL updates
+    this.skipUrlUpdates = true;
+    if (urlState) {
+      this.applyUrlState(urlState);
+    } else {
+      // No params means go to home view
+      this.selectedEntity = null;
+      this.selectedRecord = null;
+      this.detailPanelEntity = null;
+      this.stateService.selectEntity(null as unknown as string);
+      this.stateService.closeDetailPanel();
+    }
+    this.skipUrlUpdates = false;
+
+    // Update the tracked URL
+    this.lastNavigatedUrl = url;
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Parse URL state from a URL string (used for external navigation).
+   */
+  private parseUrlFromString(url: string): DataExplorerDeepLink | null {
+    const queryIndex = url.indexOf('?');
+    if (queryIndex === -1) {
+      return null;
+    }
+
+    const queryString = url.substring(queryIndex + 1);
+    const params = new URLSearchParams(queryString);
+    const entity = params.get('entity');
+    const record = params.get('record');
+    const filterParam = params.get('filter');
+    const view = params.get('view') as 'grid' | 'cards' | null;
+
+    // If no params, return null
+    if (!entity && !record && !filterParam && !view) {
+      return null;
+    }
+
+    return {
+      entity: entity || undefined,
+      record: record || undefined,
+      filter: filterParam || undefined,
+      viewMode: view || undefined
+    };
   }
 
   // ========================================

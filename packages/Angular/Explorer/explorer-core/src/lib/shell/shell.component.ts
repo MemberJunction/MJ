@@ -13,7 +13,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
-import { EventCodes, NavigationService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -46,6 +46,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
+  isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
 
   // User avatar state
   userImageURL = '';
@@ -82,7 +83,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
     private settingsDialogService: SettingsDialogService,
-    private viewContainerRef: ViewContainerRef
+    private viewContainerRef: ViewContainerRef,
+    private titleService: TitleService
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -249,6 +251,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           // Sync active app with active tab's application
           await this.syncActiveAppWithTab(config);
           this.syncUrlWithWorkspace(config);
+          // Update browser tab title
+          this.updateBrowserTitle(config);
+        }
+      })
+    );
+
+    // Subscribe to router navigation events (for browser back/forward)
+    this.subscriptions.push(
+      this.router.events.pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd)
+      ).subscribe(event => {
+        if (this.initialized) {
+          this.syncWorkspaceWithUrl(event.urlAfterRedirects || event.url);
         }
       })
     );
@@ -335,20 +350,35 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async syncActiveAppWithTab(config: WorkspaceConfiguration): Promise<void> {
     if (!config.activeTabId) {
+      this.titleService.reset();
       return;
     }
 
     // Find the active tab
     const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
     if (!activeTab) {
+      this.titleService.reset();
       return;
     }
 
     // Get the tab's application ID
     const tabAppId = activeTab.applicationId;
     if (!tabAppId) {
+      this.titleService.setResourceName(activeTab.title || null);
       return;
     }
+
+    // Check if this is a system tab (not associated with a registered app)
+    if (tabAppId === SYSTEM_APP_ID) {
+      this.isViewingSystemTab = true;
+      // Don't try to set active app - SYSTEM_APP_ID has no registered app
+      // Update browser title with just the tab title (no app context)
+      this.titleService.setContext(null, activeTab.title || 'Explorer');
+      return;
+    }
+
+    // Not a system tab - clear the flag
+    this.isViewingSystemTab = false;
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
@@ -356,6 +386,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       // Update the active app to match the tab's application
       await this.appManager.SetActiveApp(tabAppId);
     }
+
+    // Update browser title with app and tab context
+    const app = this.appManager.GetAppById(tabAppId);
+    const appName = app?.Name || null;
+    const tabTitle = activeTab.title || null;
+    this.titleService.setContext(appName, tabTitle);
   }
 
   /**
@@ -391,6 +427,204 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         this.router.navigateByUrl(resourceUrl, { replaceUrl });
       }
     }
+  }
+
+  /**
+   * Sync workspace state with the current URL (for browser back/forward navigation).
+   * Finds and activates the tab that matches the URL.
+   */
+  private async syncWorkspaceWithUrl(url: string): Promise<void> {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config?.tabs?.length) {
+      return;
+    }
+
+    // Find the tab that matches this URL
+    const matchingTab = this.findTabForUrl(url, config.tabs);
+
+    if (matchingTab && matchingTab.id !== config.activeTabId) {
+      // Activate the matching tab
+      this.workspaceManager.SetActiveTab(matchingTab.id);
+    } else if (!matchingTab) {
+      // No matching tab found - check if this is an app-only URL for an app with zero nav items
+      // If so, we need to create a new tab for it (the old one was replaced when navigating away)
+      await this.handleMissingTabForUrl(url);
+    }
+  }
+
+  /**
+   * Handle the case where no tab matches the URL during back/forward navigation.
+   * For apps with zero nav items, creates a new default tab.
+   */
+  private async handleMissingTabForUrl(url: string): Promise<void> {
+    const urlPath = url.split('?')[0];
+
+    // Check for app-only URL: /app/:appName
+    const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
+    if (appOnlyMatch) {
+      const appPath = decodeURIComponent(appOnlyMatch[1]);
+      const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+
+      if (app) {
+        const navItems = app.GetNavItems();
+        // Only auto-create tabs for apps with zero nav items
+        // Apps with nav items should have had their tabs preserved
+        if (navItems.length === 0) {
+          // Set the app as active and create its default tab
+          // Use urlBasedNavigation flag to prevent syncUrlWithWorkspace from navigating again
+          this.urlBasedNavigation = true;
+          try {
+            await this.appManager.SetActiveApp(app.ID);
+            const defaultTab = await app.CreateDefaultTab();
+            if (defaultTab) {
+              this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+            }
+          } finally {
+            this.urlBasedNavigation = false;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Find the tab that matches a given URL
+   */
+  private findTabForUrl(url: string, tabs: WorkspaceTab[]): WorkspaceTab | null {
+    // Parse the URL to extract resource info
+    const urlPath = url.split('?')[0];
+
+    // Check for app nav item URL: /app/:appName/:navItemName
+    const appNavMatch = urlPath.match(/^\/app\/([^\/]+)\/([^\/]+)$/);
+    if (appNavMatch) {
+      const appPath = decodeURIComponent(appNavMatch[1]);
+      const navItemName = decodeURIComponent(appNavMatch[2]);
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const tabAppName = tabConfig['appName'] as string | undefined;
+        const tabNavItemName = tabConfig['navItemName'] as string | undefined;
+
+        if (!tabAppName || !tabNavItemName) return false;
+
+        // Match by app path/name and nav item name (case-insensitive)
+        const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+        if (!app) return false;
+
+        const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() ||
+                          tab.applicationId === app.ID;
+        const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
+
+        return appMatches && navMatches;
+      }) || null;
+    }
+
+    // Check for app-only URL: /app/:appName
+    const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
+    if (appOnlyMatch) {
+      const appPath = decodeURIComponent(appOnlyMatch[1]);
+      const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+
+      if (app) {
+        // First, try to find a tab with isAppDefault for this app
+        const defaultTab = tabs.find(tab => {
+          const tabConfig = tab.configuration || {};
+          return tab.applicationId === app.ID && tabConfig['isAppDefault'] === true;
+        });
+        if (defaultTab) {
+          return defaultTab;
+        }
+
+        // Fallback for apps with zero nav items: match ANY tab belonging to this app
+        // This handles the case where the default tab was replaced when navigating away
+        const navItems = app.GetNavItems();
+        if (navItems.length === 0) {
+          return tabs.find(tab => tab.applicationId === app.ID) || null;
+        }
+
+        return null;
+      }
+    }
+
+    // Check for resource record URL: /resource/record/:entityName/:recordId
+    const recordMatch = urlPath.match(/^\/resource\/record\/([^\/]+)\/(.+)$/);
+    if (recordMatch) {
+      const entityName = decodeURIComponent(recordMatch[1]);
+      const recordId = recordMatch[2];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
+               tabRecordId === recordId;
+      }) || null;
+    }
+
+    // Check for view URL: /resource/view/:viewId
+    const viewMatch = urlPath.match(/^\/resource\/view\/([^\/]+)$/);
+    if (viewMatch) {
+      const viewId = viewMatch[1];
+
+      // Check if it's a dynamic view
+      if (viewId === 'dynamic') {
+        // Dynamic views include entity name in a different path
+        return null; // Let the resolver handle dynamic views
+      }
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabViewId = (tabConfig['viewId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'user views' && tabViewId === viewId;
+      }) || null;
+    }
+
+    // Check for dashboard URL: /resource/dashboard/:dashboardId
+    const dashboardMatch = urlPath.match(/^\/resource\/dashboard\/(.+)$/);
+    if (dashboardMatch) {
+      const dashboardId = dashboardMatch[1];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
+      }) || null;
+    }
+
+    // Check for artifact URL: /resource/artifact/:artifactId
+    const artifactMatch = urlPath.match(/^\/resource\/artifact\/(.+)$/);
+    if (artifactMatch) {
+      const artifactId = artifactMatch[1];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabArtifactId = (tabConfig['artifactId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'artifacts' && tabArtifactId === artifactId;
+      }) || null;
+    }
+
+    // Check for query URL: /resource/query/:queryId
+    const queryMatch = urlPath.match(/^\/resource\/query\/(.+)$/);
+    if (queryMatch) {
+      const queryId = queryMatch[1];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabQueryId = (tabConfig['queryId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'queries' && tabQueryId === queryId;
+      }) || null;
+    }
+
+    return null;
   }
 
   /**
@@ -545,6 +779,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Handle app switch from app switcher
    */
   async onAppSwitch(appId: string): Promise<void> {
+    // Clear the system tab flag since we're switching to a real app
+    this.isViewingSystemTab = false;
+
     await this.appManager.SetActiveApp(appId);
 
     // Check if app has any tabs
@@ -812,5 +1049,26 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.userIconClass = null;
     }
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Update browser tab title based on current app and active tab.
+   * Format: "Resource Name - App Name - MemberJunction"
+   */
+  private updateBrowserTitle(config: WorkspaceConfiguration): void {
+    // Find the active tab
+    const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
+
+    // Get app name
+    const appName = this.activeApp?.Name || null;
+
+    // Get resource name from active tab
+    let resourceName: string | null = null;
+    if (activeTab) {
+      resourceName = activeTab.title || null;
+    }
+
+    // Update title via TitleService
+    this.titleService.setContext(appName, resourceName);
   }
 }
