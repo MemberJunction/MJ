@@ -22,6 +22,7 @@
         (toggleCollapse)="toggleNavigationPanel()"
         (sectionToggled)="stateService.toggleSection($event)"
         (openRecord)="onOpenRecordFromNav($event)"
+        (selectRecord)="onSelectRecordFromNav($event)"
         (expandAndFocus)="onExpandAndFocus($event)">
       </mj-explorer-navigation-panel>
     </div>
@@ -63,7 +64,10 @@
             <span class="record-count">{{ totalRecordCount | number }} records</span>
           }
         } @else {
-          <h2 class="entity-title">{{ entityFilter?.applicationName || 'Data Explorer' }}</h2>
+          @if (displayIcon) {
+            <i [class]="displayIcon" class="entity-icon"></i>
+          }
+          <h2 class="entity-title">{{ displayTitle }}</h2>
           <span class="record-count">{{ entities.length }} entities available</span>
         }
       </div>
@@ -125,143 +129,202 @@
               <i class="fa-solid fa-grip"></i>
             </button>
           </div>
-        } @else if (showCommonAllToggle) {
-          <!-- Common/All Toggle for home screen -->
-          <div class="view-mode-toggle">
-            <button
-              class="toggle-btn"
-              [class.active]="!state.showAllEntities"
-              (click)="toggleShowAllEntities()"
-              title="Show common entities ({{ commonEntitiesCount }})">
-              <i class="fa-solid fa-star"></i>
-              <span class="toggle-label">Common</span>
-            </button>
-            <button
-              class="toggle-btn"
-              [class.active]="state.showAllEntities"
-              (click)="toggleShowAllEntities()"
-              title="Show all entities ({{ allEntitiesCount }})">
-              <i class="fa-solid fa-th"></i>
-              <span class="toggle-label">All</span>
-            </button>
-          </div>
         }
+        <!-- Common/All toggle moved to inline with All Entities section header -->
       </div>
     </div>
 
     <!-- Content Body - Using mj-entity-viewer composite -->
     <div class="content-body" [class.home-content]="isAtHomeLevel">
       @if (!selectedEntity) {
-        <!-- Entity Home View - Sectioned Layout -->
+        <!-- Entity Home View - Two-Column Layout -->
         <div class="entity-home-view">
           @if (isLoadingEntities) {
             <div class="loading-state">
               <mj-loading text="Loading entities..." size="medium"></mj-loading>
             </div>
           } @else {
-            <!-- Recent Entities Section -->
-            @if (recentEntities.length > 0) {
-              <div class="home-section">
-                <div class="section-header">
-                  <i class="fa-solid fa-clock section-icon"></i>
-                  <h3 class="section-title">Recent</h3>
+            <!-- Two-Column Layout: Entities (left) | Records (right) -->
+            @if (hasTopSectionContent) {
+              <div class="home-two-column-layout">
+                <!-- Left Column: Recent & Favorite Entities -->
+                <div class="home-column">
+                  <!-- Recent Entities Section -->
+                  @if (recentEntities.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-clock section-icon"></i>
+                        <h3 class="section-title">Recent Entities</h3>
+                      </div>
+                      <div class="entity-card-row">
+                        @for (entity of recentEntities; track entity.ID) {
+                          <div
+                            class="entity-card compact"
+                            (click)="onEntitySelected(entity)"
+                            [title]="entity.Description || entity.Name">
+                            <div class="entity-card-icon">
+                              <i [class]="getEntityIcon(entity)"></i>
+                            </div>
+                            <div class="entity-card-content">
+                              <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                            </div>
+                            <button
+                              class="favorite-btn"
+                              [class.favorited]="isEntityFavorited(entity)"
+                              (click)="toggleEntityFavorite(entity, $event)"
+                              [title]="isEntityFavorited(entity) ? 'Remove from favorites' : 'Add to favorites'">
+                              <i [class]="isEntityFavorited(entity) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Favorite Entities Section -->
+                  @if (favoriteEntities.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-star section-icon"></i>
+                        <h3 class="section-title">Favorite Entities</h3>
+                      </div>
+                      <div class="entity-card-row">
+                        @for (entity of favoriteEntities; track entity.ID) {
+                          <div
+                            class="entity-card compact"
+                            (click)="onEntitySelected(entity)"
+                            [title]="entity.Description || entity.Name">
+                            <div class="entity-card-icon">
+                              <i [class]="getEntityIcon(entity)"></i>
+                            </div>
+                            <div class="entity-card-content">
+                              <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                            </div>
+                            <button
+                              class="favorite-btn favorited"
+                              (click)="toggleEntityFavorite(entity, $event)"
+                              title="Remove from favorites">
+                              <i class="fa-solid fa-star"></i>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
                 </div>
-                <div class="entity-card-row">
-                  @for (entity of recentEntities; track entity.ID) {
-                    <div
-                      class="entity-card compact"
-                      (click)="onEntitySelected(entity)"
-                      [title]="entity.Description || entity.Name">
-                      <div class="entity-card-icon">
-                        <i [class]="getEntityIcon(entity)"></i>
+
+                <!-- Right Column: Recent & Favorite Records -->
+                <div class="home-column">
+                  <!-- Recent Records Section -->
+                  @if (recentRecords.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-history section-icon"></i>
+                        <h3 class="section-title">Recent Records</h3>
+                        <!-- Entity filter strip - only show with 2+ entities -->
+                        @if (showRecentRecordsEntityFilter) {
+                          <div class="entity-filter-strip">
+                            <button
+                              class="entity-filter-btn"
+                              [class.active]="recentRecordsEntityFilter === null"
+                              (click)="setRecentRecordsEntityFilter(null)"
+                              title="Show all entities">
+                              <i class="fa-solid fa-layer-group"></i>
+                            </button>
+                            @for (entity of uniqueRecentRecordEntities; track entity.entityId) {
+                              <button
+                                class="entity-filter-btn"
+                                [class.active]="recentRecordsEntityFilter === entity.entityId"
+                                (click)="setRecentRecordsEntityFilter(entity.entityId)"
+                                [title]="entity.entityName">
+                                <i [class]="entity.icon"></i>
+                              </button>
+                            }
+                          </div>
+                        }
                       </div>
-                      <div class="entity-card-content">
-                        <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                      <div class="recent-records-list">
+                        @for (record of filteredRecentRecords; track record.entityId + '|' + record.recordId) {
+                          <div
+                            class="recent-record-item"
+                            (click)="onRecentRecordClick(record)"
+                            [title]="record.entityName + ' - ' + record.recordId">
+                            <div class="recent-record-icon">
+                              <i [class]="getEntityIconById(record.entityId)"></i>
+                            </div>
+                            <div class="recent-record-content">
+                              <span class="recent-record-name">{{ record.recordName || record.recordId }}</span>
+                              <span class="recent-record-entity">{{ record.entityName }}</span>
+                            </div>
+                            <span class="recent-record-time">{{ formatRelativeTime(record.latestAt) }}</span>
+                          </div>
+                        }
                       </div>
-                      <button
-                        class="favorite-btn"
-                        [class.favorited]="isEntityFavorited(entity)"
-                        (click)="toggleEntityFavorite(entity, $event)"
-                        [title]="isEntityFavorited(entity) ? 'Remove from favorites' : 'Add to favorites'">
-                        <i [class]="isEntityFavorited(entity) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
-                      </button>
+                    </div>
+                  }
+
+                  <!-- Favorite Records Section -->
+                  @if (favoriteRecords.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-star section-icon"></i>
+                        <h3 class="section-title">Favorite Records</h3>
+                      </div>
+                      <div class="recent-records-list">
+                        @for (record of favoriteRecords; track record.userFavoriteId) {
+                          <div
+                            class="recent-record-item"
+                            (click)="onFavoriteRecordClick(record)"
+                            [title]="record.entityName + ' - ' + record.recordId">
+                            <div class="recent-record-icon">
+                              <i [class]="getEntityIconById(record.entityId)"></i>
+                            </div>
+                            <div class="recent-record-content">
+                              <span class="recent-record-name">{{ record.recordName || record.recordId }}</span>
+                              <span class="recent-record-entity">{{ record.entityName }}</span>
+                            </div>
+                          </div>
+                        }
+                      </div>
                     </div>
                   }
                 </div>
               </div>
             }
 
-            <!-- Favorite Entities Section -->
-            @if (favoriteEntities.length > 0) {
-              <div class="home-section">
-                <div class="section-header">
-                  <i class="fa-solid fa-star section-icon"></i>
-                  <h3 class="section-title">Favorites</h3>
-                </div>
-                <div class="entity-card-row">
-                  @for (entity of favoriteEntities; track entity.ID) {
-                    <div
-                      class="entity-card compact"
-                      (click)="onEntitySelected(entity)"
-                      [title]="entity.Description || entity.Name">
-                      <div class="entity-card-icon">
-                        <i [class]="getEntityIcon(entity)"></i>
-                      </div>
-                      <div class="entity-card-content">
-                        <h4 class="entity-card-title">{{ entity.Name }}</h4>
-                      </div>
-                      <button
-                        class="favorite-btn favorited"
-                        (click)="toggleEntityFavorite(entity, $event)"
-                        title="Remove from favorites">
-                        <i class="fa-solid fa-star"></i>
-                      </button>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-
-            <!-- Recent Records Section -->
-            @if (recentRecords.length > 0) {
-              <div class="home-section">
-                <div class="section-header">
-                  <i class="fa-solid fa-history section-icon"></i>
-                  <h3 class="section-title">Recent Records</h3>
-                </div>
-                <div class="recent-records-list">
-                  @for (record of recentRecords; track record.recordId) {
-                    <div
-                      class="recent-record-item"
-                      (click)="onRecentRecordClick(record)"
-                      [title]="record.entityName + ' - ' + record.recordId">
-                      <div class="recent-record-icon">
-                        <i [class]="getEntityIconById(record.entityId)"></i>
-                      </div>
-                      <div class="recent-record-content">
-                        <span class="recent-record-name">{{ record.recordName || record.recordId }}</span>
-                        <span class="recent-record-entity">{{ record.entityName }}</span>
-                      </div>
-                      <span class="recent-record-time">{{ formatRelativeTime(record.latestAt) }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-
-            <!-- All/Common Entities Section -->
+            <!-- All/Common Entities Section - Full Width -->
             <div class="home-section">
-              <div class="section-header">
-                <i class="fa-solid fa-database section-icon"></i>
-                <h3 class="section-title">
-                  @if (state.showAllEntities || !showCommonAllToggle) {
-                    All Entities
-                  } @else {
-                    Common Entities
+              <div class="section-header-with-toggle">
+                <div class="section-header-left">
+                  <i class="fa-solid fa-database section-icon"></i>
+                  <h3 class="section-title">
+                    @if (state.showAllEntities || !showCommonAllToggle) {
+                      All Entities
+                    } @else {
+                      Common Entities
+                    }
+                  </h3>
+                  @if (entityFilterText && filteredEntities.length !== entities.length) {
+                    <span class="section-count">{{ filteredEntities.length }} matching</span>
                   }
-                </h3>
-                @if (entityFilterText && filteredEntities.length !== entities.length) {
-                  <span class="section-count">{{ filteredEntities.length }} matching</span>
+                </div>
+                @if (showCommonAllToggle) {
+                  <div class="inline-toggle">
+                    <button
+                      class="toggle-btn"
+                      [class.active]="!state.showAllEntities"
+                      (click)="toggleShowAllEntities()"
+                      title="Show common entities ({{ commonEntitiesCount }})">
+                      Common
+                    </button>
+                    <button
+                      class="toggle-btn"
+                      [class.active]="state.showAllEntities"
+                      (click)="toggleShowAllEntities()"
+                      title="Show all entities ({{ allEntitiesCount }})">
+                      All
+                    </button>
+                  </div>
                 }
               </div>
               <div class="entity-card-grid">

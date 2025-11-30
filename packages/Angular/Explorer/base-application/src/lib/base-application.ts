@@ -233,6 +233,7 @@ export class BaseApplication {
         resourceType: 'Dashboards',
         dashboardType: 'DataExplorer',
         appName: this.Name,
+        appIcon: this.Icon,
         isAppDefault: true,
         // Pass filter configuration for Data Explorer
         entityFilter: {

@@ -4,6 +4,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard } from '@memberjunction/ng-shared';
+import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, CompositeKey } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
@@ -18,8 +19,8 @@ import {
   NavigateToRelatedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess } from './models/explorer-state.interface';
-import { OpenRecordEvent } from './components/navigation-panel/navigation-panel.component';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
+import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -64,6 +65,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   @Input() deepLink: DataExplorerDeepLink | null = null;
 
+  /**
+   * Optional context name to display in the header instead of "Data Explorer".
+   * Use this to customize the explorer for specific applications (e.g., "CRM", "Association Demo").
+   */
+  @Input() contextName: string | null = null;
+
+  /**
+   * Optional context icon (Font Awesome class) to display in the header.
+   * Use this alongside contextName for a fully customized header (e.g., "fa-solid fa-users" for CRM).
+   */
+  @Input() contextIcon: string | null = null;
+
   // State
   public state: DataExplorerState;
 
@@ -103,8 +116,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Recent records from User Record Logs
   public recentRecords: RecentRecordAccess[] = [];
 
+  // Favorite records from User Favorites (non-entity favorites)
+  public favoriteRecords: FavoriteRecord[] = [];
+
   // Loading state for home screen sections
   public isLoadingRecentRecords: boolean = true;
+
+  // Entity filter for recent records (null = show all, string = filter by entityId)
+  public recentRecordsEntityFilter: string | null = null;
 
   /**
    * Filtered entities based on entityFilterText (for home screen)
@@ -186,6 +205,88 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Check if we have any content for the top two-column section
+   * (recent/favorite entities OR recent/favorite records)
+   */
+  get hasTopSectionContent(): boolean {
+    return this.recentEntities.length > 0 ||
+           this.favoriteEntities.length > 0 ||
+           this.recentRecords.length > 0 ||
+           this.favoriteRecords.length > 0;
+  }
+
+  /**
+   * Get unique entities from recent records for the filter strip.
+   * Returns up to 5 entities, sorted by frequency in the recent records.
+   */
+  get uniqueRecentRecordEntities(): { entityId: string; entityName: string; icon: string; count: number }[] {
+    const entityCounts = new Map<string, { entityId: string; entityName: string; count: number }>();
+
+    for (const record of this.recentRecords) {
+      const existing = entityCounts.get(record.entityId);
+      if (existing) {
+        existing.count++;
+      } else {
+        entityCounts.set(record.entityId, {
+          entityId: record.entityId,
+          entityName: record.entityName,
+          count: 1
+        });
+      }
+    }
+
+    // Convert to array, sort by count (descending), take first 5
+    return Array.from(entityCounts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+      .map(e => ({
+        ...e,
+        icon: this.getEntityIconById(e.entityId)
+      }));
+  }
+
+  /**
+   * Check if we should show the entity filter strip for recent records.
+   * Only show when there are 2+ unique entities.
+   */
+  get showRecentRecordsEntityFilter(): boolean {
+    return this.uniqueRecentRecordEntities.length >= 2;
+  }
+
+  /**
+   * Get filtered recent records based on entity filter.
+   */
+  get filteredRecentRecords(): RecentRecordAccess[] {
+    if (!this.recentRecordsEntityFilter) {
+      return this.recentRecords;
+    }
+    return this.recentRecords.filter(r => r.entityId === this.recentRecordsEntityFilter);
+  }
+
+  /**
+   * Set the entity filter for recent records
+   */
+  public setRecentRecordsEntityFilter(entityId: string | null): void {
+    this.recentRecordsEntityFilter = entityId;
+  }
+
+  /**
+   * Get the display title for the header.
+   * Priority: contextName > entityFilter.applicationName > "Data Explorer"
+   */
+  get displayTitle(): string {
+    return this.contextName || this.entityFilter?.applicationName || 'Data Explorer';
+  }
+
+  /**
+   * Get the display icon for the header (when at home level).
+   * Returns contextIcon if provided, otherwise null.
+   */
+  get displayIcon(): string | null {
+    return this.contextIcon;
+  }
+
+  /**
    * Configuration for mj-entity-viewer composite component
    * Hides the built-in header since we have a custom header in the dashboard
    * Uses server-side pagination with 100 records per page (default)
@@ -203,7 +304,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
-    private location: Location
+    private location: Location,
+    private recentAccessService: RecentAccessService
   ) {
     super();
     this.state = this.stateService.CurrentState;
@@ -288,6 +390,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       .subscribe(records => {
         this.recentRecords = records;
         this.isLoadingRecentRecords = false;
+        this.cdr.detectChanges();
+      });
+
+    // Subscribe to favorite records changes
+    this.stateService.FavoriteRecords
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(records => {
+        this.favoriteRecords = records;
         this.cdr.detectChanges();
       });
 
@@ -542,13 +652,29 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const recordName = this.getRecordDisplayName(event.record);
     this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString(), recordName);
 
-    // Add to recent items
+    // Add to recent items (local state for navigation panel)
     if (this.selectedEntity) {
       this.stateService.addRecentItem({
         entityName: this.selectedEntity.Name,
         compositeKeyString: event.record.PrimaryKey.ToConcatenatedString(),
         displayName: recordName
       });
+
+      // Update local recent records immediately for instant home screen updates
+      const recordId = event.record.PrimaryKey.KeyValuePairs[0]?.Value?.toString() || '';
+      this.stateService.addLocalRecentRecord(
+        this.selectedEntity.Name,
+        this.selectedEntity.ID,
+        recordId,
+        recordName
+      );
+
+      // Log to User Record Logs for persistence (fire-and-forget)
+      this.recentAccessService.logAccess(
+        this.selectedEntity.Name,
+        event.record.PrimaryKey.Values(),
+        'record'
+      );
     }
   }
 
@@ -752,6 +878,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       EntityName: event.entityName,
       RecordPKey: event.compositeKey
     });
+  }
+
+  /**
+   * Handle selecting a record from navigation panel (recent/favorites).
+   * Navigates to the entity within Data Explorer and selects the record
+   * in the detail panel (instead of opening full record view).
+   */
+  public onSelectRecordFromNav(event: SelectRecordEvent): void {
+    const entity = this.entities.find(e => e.Name === event.entityName);
+    if (entity) {
+      // Set pending record selection - will be resolved in onDataLoaded
+      this.pendingRecordSelection = event.recordId;
+      this.onEntitySelected(entity);
+    }
   }
 
   /**
@@ -1093,15 +1233,30 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Handle clicking on a recent record from home screen
+   * Handle clicking on a recent record from home screen.
+   * Navigates to the entity and sets up pending selection to select the record
+   * and open the detail panel once data loads.
    */
   public onRecentRecordClick(record: RecentRecordAccess): void {
-    // Navigate to the entity first
     const entity = this.entities.find(e => e.ID === record.entityId);
     if (entity) {
+      // Set pending record selection - will be resolved in onDataLoaded
+      this.pendingRecordSelection = record.recordId;
       this.onEntitySelected(entity);
-      // After entity loads, we could try to select the record
-      // For now, just navigate to the entity
+    }
+  }
+
+  /**
+   * Handle clicking on a favorite record from home screen.
+   * Navigates to the entity and sets up pending selection to select the record
+   * and open the detail panel once data loads.
+   */
+  public onFavoriteRecordClick(record: FavoriteRecord): void {
+    const entity = this.entities.find(e => e.ID === record.entityId);
+    if (entity) {
+      // Set pending record selection - will be resolved in onDataLoaded
+      this.pendingRecordSelection = record.recordId;
+      this.onEntitySelected(entity);
     }
   }
 

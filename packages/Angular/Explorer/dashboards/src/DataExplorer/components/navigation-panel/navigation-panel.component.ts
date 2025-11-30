@@ -10,6 +10,14 @@ export interface OpenRecordEvent {
   compositeKey: CompositeKey;
 }
 
+/**
+ * Event emitted when a record should be selected within Data Explorer (not full tab)
+ */
+export interface SelectRecordEvent {
+  entityName: string;
+  recordId: string;
+}
+
 @Component({
   selector: 'mj-explorer-navigation-panel',
   templateUrl: './navigation-panel.component.html',
@@ -37,6 +45,8 @@ export class NavigationPanelComponent {
   @Output() toggleCollapse = new EventEmitter<void>();
   @Output() sectionToggled = new EventEmitter<'favorites' | 'recent' | 'entities' | 'views'>();
   @Output() openRecord = new EventEmitter<OpenRecordEvent>();
+  /** Emitted when a record should be selected within Data Explorer (navigate to entity + select record) */
+  @Output() selectRecord = new EventEmitter<SelectRecordEvent>();
   /** Emitted when a collapsed icon is clicked - expands panel and focuses section */
   @Output() expandAndFocus = new EventEmitter<'favorites' | 'recent' | 'entities'>();
 
@@ -99,7 +109,7 @@ export class NavigationPanelComponent {
   }
 
   /**
-   * Handle favorite click - opens record in full tab
+   * Handle favorite click - navigates to entity and selects record within Data Explorer
    */
   onFavoriteClick(favorite: FavoriteItem): void {
     if (favorite.type === 'entity' && favorite.entityName) {
@@ -108,26 +118,33 @@ export class NavigationPanelComponent {
         this.entitySelected.emit(entity);
       }
     } else if (favorite.type === 'record' && favorite.entityName && favorite.compositeKeyString) {
-      // Deserialize the CompositeKey and open record in full tab
+      // Extract record ID from the composite key string
+      // Format is "FieldName|Value" or "FieldName|Value||FieldName2|Value2"
       const compositeKey = new CompositeKey();
       compositeKey.LoadFromConcatenatedString(favorite.compositeKeyString);
-      this.openRecord.emit({
+      const recordId = compositeKey.KeyValuePairs[0]?.Value?.toString() || '';
+
+      // Navigate to entity and select record within Data Explorer (not full tab)
+      this.selectRecord.emit({
         entityName: favorite.entityName,
-        compositeKey
+        recordId
       });
     }
   }
 
   /**
-   * Handle recent item click - opens record in full tab
+   * Handle recent item click - navigates to entity and selects record within Data Explorer
    */
   onRecentClick(item: RecentItem): void {
-    // Deserialize the CompositeKey and open the record in a full tab
+    // Extract record ID from the composite key string
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromConcatenatedString(item.compositeKeyString);
-    this.openRecord.emit({
+    const recordId = compositeKey.KeyValuePairs[0]?.Value?.toString() || '';
+
+    // Navigate to entity and select record within Data Explorer (not full tab)
+    this.selectRecord.emit({
       entityName: item.entityName,
-      compositeKey
+      recordId
     });
   }
 

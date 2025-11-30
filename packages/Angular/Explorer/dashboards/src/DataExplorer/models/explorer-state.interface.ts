@@ -103,6 +103,17 @@ export interface RecentRecordAccess {
 }
 
 /**
+ * Favorite record for home screen (from User Favorites, excluding entity favorites)
+ */
+export interface FavoriteRecord {
+  userFavoriteId: string;  // ID from User Favorites entity
+  entityName: string;
+  entityId: string;
+  recordId: string;
+  recordName?: string;
+}
+
+/**
  * State interface for the Data Explorer dashboard
  */
 export interface DataExplorerState {
@@ -150,6 +161,8 @@ export interface DataExplorerState {
   recentEntityAccesses: RecentEntityAccess[];
   /** Favorite entities for home screen */
   favoriteEntities: FavoriteEntity[];
+  /** Favorite records for home screen (non-entity favorites) */
+  favoriteRecords: FavoriteRecord[];
 }
 
 export interface RecentItem {
@@ -221,5 +234,6 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   // Home screen state
   showAllEntities: false,  // Default to showing only common entities
   recentEntityAccesses: [],
-  favoriteEntities: []
+  favoriteEntities: [],
+  favoriteRecords: []
 };

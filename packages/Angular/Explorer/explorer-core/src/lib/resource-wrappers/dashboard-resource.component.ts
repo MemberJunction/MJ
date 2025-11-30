@@ -92,7 +92,11 @@ export class DashboardResource extends BaseResourceComponent {
             if (config['dashboardType'] === 'DataExplorer' || data.ResourceRecordID === 'DataExplorer') {
                 console.log('[DashboardResource] Loading DataExplorer with filter:', config['entityFilter']);
                 // Special case: Data Explorer dashboard with optional entity filter
-                await this.loadDataExplorer(config['entityFilter']);
+                await this.loadDataExplorer(
+                    config['entityFilter'],
+                    config['appName'] as string | undefined,
+                    config['appIcon'] as string | undefined
+                );
                 return;
             }
 
@@ -117,9 +121,16 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     /**
-     * Load the Data Explorer dashboard component with optional entity filter
+     * Load the Data Explorer dashboard component with optional entity filter and context info
+     * @param entityFilter Optional filter to constrain which entities are shown
+     * @param contextName Optional name to display in the header (e.g., "CRM", "Association Demo")
+     * @param contextIcon Optional Font Awesome icon class for the header
      */
-    private async loadDataExplorer(entityFilter?: DataExplorerFilter): Promise<void> {
+    private async loadDataExplorer(
+        entityFilter?: DataExplorerFilter,
+        contextName?: string,
+        contextIcon?: string
+    ): Promise<void> {
         try {
             // Create the Data Explorer component directly (it's already registered)
             this.containerElement.nativeElement.innerHTML = '';
@@ -130,6 +141,14 @@ export class DashboardResource extends BaseResourceComponent {
             // Set the entity filter - ngOnInit will use this when it runs
             if (entityFilter) {
                 instance.entityFilter = entityFilter;
+            }
+
+            // Set context name and icon for customized header display
+            if (contextName) {
+                instance.contextName = contextName;
+            }
+            if (contextIcon) {
+                instance.contextIcon = contextIcon;
             }
 
             // Manually append the component's native element inside the div

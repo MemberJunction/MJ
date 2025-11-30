@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
@@ -31,7 +31,11 @@ import { HighlightUtil } from '../utils/highlight.util';
   templateUrl: './entity-cards.component.html',
   styleUrls: ['./entity-cards.component.css']
 })
-export class EntityCardsComponent implements OnChanges, OnInit {
+export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked {
+  constructor(
+    private elementRef: ElementRef,
+    private cdr: ChangeDetectorRef
+  ) {}
   /**
    * The entity metadata for the records being displayed
    */
@@ -92,6 +96,9 @@ export class EntityCardsComponent implements OnChanges, OnInit {
   /** Loading state for standalone mode */
   public isLoading: boolean = false;
 
+  /** Flag to trigger scroll to selected card after view renders */
+  private pendingScrollToSelected: boolean = false;
+
   ngOnInit(): void {
     this.standaloneMode = this.records === null;
 
@@ -117,6 +124,37 @@ export class EntityCardsComponent implements OnChanges, OnInit {
 
     if (changes['records']) {
       this.standaloneMode = this.records === null;
+      // When records change and we have a selection, scroll to it
+      if (this.selectedRecordId) {
+        this.pendingScrollToSelected = true;
+      }
+    }
+
+    // When selectedRecordId changes programmatically, scroll to the selected card
+    if (changes['selectedRecordId'] && this.selectedRecordId) {
+      this.pendingScrollToSelected = true;
+    }
+  }
+
+  ngAfterViewChecked(): void {
+    if (this.pendingScrollToSelected && this.selectedRecordId) {
+      this.pendingScrollToSelected = false;
+      // Delay scroll to allow detail panel animation to complete and layout to stabilize
+      // This ensures the scroll happens after the viewport width has adjusted
+      setTimeout(() => this.scrollToSelectedCard(), 350);
+    }
+  }
+
+  /**
+   * Scroll the selected card into view
+   */
+  private scrollToSelectedCard(): void {
+    if (!this.selectedRecordId) return;
+
+    // Find the selected card element using the CSS class
+    const selectedCard = this.elementRef.nativeElement.querySelector('.data-card.selected') as HTMLElement;
+    if (selectedCard) {
+      selectedCard.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     }
   }
 

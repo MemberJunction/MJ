@@ -525,7 +525,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Update grid selection to match selectedRecordId
+   * Update grid selection to match selectedRecordId and scroll to the selected row
    */
   private updateSelection(): void {
     if (!this.gridApi || !this.selectedRecordId) {
@@ -536,6 +536,8 @@ export class EntityGridComponent implements OnInit, OnChanges {
     const node = this.gridApi.getRowNode(this.selectedRecordId);
     if (node) {
       node.setSelected(true);
+      // Scroll the selected row into view (middle of viewport if possible)
+      this.gridApi.ensureNodeVisible(node, 'middle');
     }
   }
 

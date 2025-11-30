@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
 import { UserSettingEntity, UserFavoriteEntity, UserRecordLogEntity, ApplicationEntityEntity } from '@memberjunction/core-entities';
-import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, RecentEntityAccess, FavoriteEntity, RecentRecordAccess } from '../models/explorer-state.interface';
+import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, RecentEntityAccess, FavoriteEntity, RecentRecordAccess, FavoriteRecord } from '../models/explorer-state.interface';
 
 const BASE_SETTING_KEY = 'DataExplorer.State';
 const MAX_RECENT_ITEMS = 20;
@@ -27,6 +27,9 @@ export class ExplorerStateService {
   /** Recent records loaded from User Record Logs */
   private recentRecords$ = new BehaviorSubject<RecentRecordAccess[]>([]);
 
+  /** Favorite records loaded from User Favorites (non-entity favorites) */
+  private favoriteRecords$ = new BehaviorSubject<FavoriteRecord[]>([]);
+
   /** Application entities with DefaultForNewUser info (loaded once per context) */
   private applicationEntities: ApplicationEntityEntity[] = [];
 
@@ -44,10 +47,12 @@ export class ExplorerStateService {
   async setContext(filter: DataExplorerFilter | null): Promise<void> {
     this.currentFilter = filter;
     await this.loadState();
-    // Load additional data in parallel
+    // Load application entities first (needed for filtering recent/favorite records)
+    await this.loadApplicationEntities();
+    // Then load the rest in parallel
     await Promise.all([
-      this.loadApplicationEntities(),
       this.loadFavoriteEntities(),
+      this.loadFavoriteRecords(),
       this.loadRecentRecords()
     ]);
     this.updateBreadcrumbs();
@@ -111,6 +116,20 @@ export class ExplorerStateService {
    */
   get CurrentRecentRecords(): RecentRecordAccess[] {
     return this.recentRecords$.value;
+  }
+
+  /**
+   * Observable of favorite records (from User Favorites, non-entity)
+   */
+  get FavoriteRecords(): Observable<FavoriteRecord[]> {
+    return this.favoriteRecords$.asObservable();
+  }
+
+  /**
+   * Get current favorite records value
+   */
+  get CurrentFavoriteRecords(): FavoriteRecord[] {
+    return this.favoriteRecords$.value;
   }
 
   /**
@@ -712,7 +731,7 @@ export class ExplorerStateService {
   }
 
   /**
-   * Load recent records from User Record Logs
+   * Load recent records from User Record Logs with batch record name lookup
    */
   private async loadRecentRecords(): Promise<void> {
     try {
@@ -730,6 +749,9 @@ export class ExplorerStateService {
 
       if (result.Success && result.Results) {
         const recentRecords: RecentRecordAccess[] = [];
+        const recordNameInputs: EntityRecordNameInput[] = [];
+        const recordIndexMap: Map<string, number> = new Map(); // Map composite key to array index
+
         for (const log of result.Results) {
           // Look up entity name from EntityID
           const entity = this.metadata.Entities.find(e => e.ID === log.EntityID);
@@ -738,15 +760,46 @@ export class ExplorerStateService {
             if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === log.EntityID)) {
               continue; // Skip records from entities not in this application
             }
-            recentRecords.push({
+
+            const recordAccess: RecentRecordAccess = {
               entityName: entity.Name,
               entityId: log.EntityID,
               recordId: log.RecordID,
               latestAt: log.LatestAt,
               totalCount: log.TotalCount
-            });
+            };
+            const index = recentRecords.length;
+            recentRecords.push(recordAccess);
+
+            // Build composite key for batch name lookup
+            const compositeKey = this.buildCompositeKeyForEntity(entity, log.RecordID);
+            if (compositeKey) {
+              recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
+              recordIndexMap.set(`${entity.Name}|${log.RecordID}`, index);
+            }
           }
         }
+
+        // Batch fetch record names
+        if (recordNameInputs.length > 0) {
+          try {
+            const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
+            for (const nameResult of nameResults) {
+              if (nameResult.Success && nameResult.RecordName) {
+                const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
+                const key = `${nameResult.EntityName}|${pkValue}`;
+                const index = recordIndexMap.get(key);
+                if (index !== undefined) {
+                  recentRecords[index].recordName = nameResult.RecordName;
+                }
+              }
+            }
+          } catch (nameError) {
+            console.warn('Failed to load record names:', nameError);
+            // Continue without names - they'll show record IDs
+          }
+        }
+
         this.recentRecords$.next(recentRecords);
       }
     } catch (error) {
@@ -755,9 +808,171 @@ export class ExplorerStateService {
   }
 
   /**
+   * Build a CompositeKey for a given entity and record ID.
+   * Assumes single primary key field named ID for most entities.
+   */
+  private buildCompositeKeyForEntity(entity: { Name: string; ID: string }, recordId: string): CompositeKey | null {
+    try {
+      const entityInfo = this.metadata.Entities.find(e => e.Name === entity.Name);
+      if (!entityInfo) return null;
+
+      const pkFields = entityInfo.PrimaryKeys;
+      if (pkFields.length === 0) return null;
+
+      const compositeKey = new CompositeKey();
+      // For single PK, use the recordId directly
+      if (pkFields.length === 1) {
+        compositeKey.KeyValuePairs = [{
+          FieldName: pkFields[0].Name,
+          Value: recordId
+        }];
+      } else {
+        // For composite keys, we'd need to parse the recordId
+        // For now, assume the recordId is already in the correct format
+        // This is a simplified approach - composite keys would need more handling
+        compositeKey.KeyValuePairs = [{
+          FieldName: pkFields[0].Name,
+          Value: recordId
+        }];
+      }
+      return compositeKey;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Refresh recent records (call after navigating to a record)
    */
   async refreshRecentRecords(): Promise<void> {
     await this.loadRecentRecords();
+  }
+
+  /**
+   * Add or update a recent record locally (without DB refresh).
+   * Call this when a record is selected to provide instant UI feedback.
+   * The DB write happens separately via RecentAccessService.logAccess().
+   *
+   * @param entityName The entity name
+   * @param entityId The entity ID
+   * @param recordId The record ID (primary key value)
+   * @param recordName Optional display name for the record
+   */
+  addLocalRecentRecord(entityName: string, entityId: string, recordId: string, recordName?: string): void {
+    // Filter by application context if applicable
+    if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === entityId)) {
+      return; // Don't add records from entities not in this application
+    }
+
+    const currentRecords = [...this.recentRecords$.value];
+
+    // Find existing entry
+    const existingIndex = currentRecords.findIndex(
+      r => r.entityId === entityId && r.recordId === recordId
+    );
+
+    const newRecord: RecentRecordAccess = {
+      entityName,
+      entityId,
+      recordId,
+      recordName,
+      latestAt: new Date(),
+      totalCount: existingIndex >= 0 ? currentRecords[existingIndex].totalCount + 1 : 1
+    };
+
+    if (existingIndex >= 0) {
+      // Remove existing entry (will be re-added at front)
+      currentRecords.splice(existingIndex, 1);
+    }
+
+    // Add to front
+    currentRecords.unshift(newRecord);
+
+    // Trim to max size
+    if (currentRecords.length > MAX_RECENT_RECORDS) {
+      currentRecords.length = MAX_RECENT_RECORDS;
+    }
+
+    this.recentRecords$.next(currentRecords);
+  }
+
+  /**
+   * Load favorite records from User Favorites (non-entity favorites) with batch record name lookup.
+   * Filters to only include records from entities in the current application context.
+   */
+  private async loadFavoriteRecords(): Promise<void> {
+    try {
+      const userId = this.metadata.CurrentUser?.ID;
+      if (!userId) return;
+
+      // Get the Entities entity to exclude entity favorites
+      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
+      const entitiesEntityId = entitiesEntity?.ID || '';
+
+      const rv = new RunView();
+      const result = await rv.RunView<UserFavoriteEntity>({
+        EntityName: 'User Favorites',
+        ExtraFilter: `UserID='${userId}' AND EntityID <> '${entitiesEntityId}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results) {
+        const favoriteRecords: FavoriteRecord[] = [];
+        const recordNameInputs: EntityRecordNameInput[] = [];
+        const recordIndexMap: Map<string, number> = new Map();
+
+        for (const fav of result.Results) {
+          // Look up entity info from the EntityID
+          const entity = this.metadata.Entities.find(e => e.ID === fav.EntityID);
+          if (entity) {
+            // Filter by application context if applicable
+            if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === fav.EntityID)) {
+              continue; // Skip records from entities not in this application
+            }
+
+            const favoriteRecord: FavoriteRecord = {
+              userFavoriteId: fav.ID,
+              entityName: entity.Name,
+              entityId: fav.EntityID,
+              recordId: fav.RecordID
+            };
+            const index = favoriteRecords.length;
+            favoriteRecords.push(favoriteRecord);
+
+            // Build composite key for batch name lookup
+            const compositeKey = this.buildCompositeKeyForEntity(entity, fav.RecordID);
+            if (compositeKey) {
+              recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
+              recordIndexMap.set(`${entity.Name}|${fav.RecordID}`, index);
+            }
+          }
+        }
+
+        // Batch fetch record names
+        if (recordNameInputs.length > 0) {
+          try {
+            const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
+            for (const nameResult of nameResults) {
+              if (nameResult.Success && nameResult.RecordName) {
+                const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
+                const key = `${nameResult.EntityName}|${pkValue}`;
+                const index = recordIndexMap.get(key);
+                if (index !== undefined) {
+                  favoriteRecords[index].recordName = nameResult.RecordName;
+                }
+              }
+            }
+          } catch (nameError) {
+            console.warn('Failed to load record names for favorites:', nameError);
+            // Continue without names - they'll show record IDs
+          }
+        }
+
+        this.favoriteRecords$.next(favoriteRecords);
+        this.updateState({ favoriteRecords });
+      }
+    } catch (error) {
+      console.warn('Failed to load favorite records:', error);
+    }
   }
 }
