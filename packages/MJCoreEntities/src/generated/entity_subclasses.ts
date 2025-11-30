@@ -17038,38 +17038,41 @@ export type UserViewRunEntityType = z.infer<typeof UserViewRunSchema>;
 export const UserViewSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)`),
     IsShared: z.boolean().describe(`
         * * Field Name: IsShared
-        * * Display Name: Is Shared
+        * * Display Name: Shared
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this view is shared with other users.`),
     IsDefault: z.boolean().describe(`
         * * Field Name: IsDefault
-        * * Display Name: Is Default
+        * * Display Name: Default
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this is the user's default view for the entity.`),
@@ -17085,7 +17088,7 @@ export const UserViewSchema = z.object({
         * * Description: JSON storing the view's filter configuration.`),
     CustomFilterState: z.boolean().describe(`
         * * Field Name: CustomFilterState
-        * * Display Name: Custom Filter State
+        * * Display Name: Custom Filter
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if custom filters beyond standard options are applied.`),
@@ -17128,12 +17131,12 @@ export const UserViewSchema = z.object({
         * * Description: JSON storing the view's sort configuration.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     Thumbnail: z.string().nullable().describe(`
@@ -17141,6 +17144,11 @@ export const UserViewSchema = z.object({
         * * Display Name: Thumbnail
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
+    CardState: z.string().nullable().describe(`
+        * * Field Name: CardState
+        * * Display Name: Card State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
         * * Display Name: User Name
@@ -62106,6 +62114,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -62118,7 +62127,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -62131,7 +62140,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -62144,6 +62153,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -62155,6 +62165,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string | null {
@@ -62166,7 +62177,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
     */
@@ -62179,7 +62190,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: IsShared
-    * * Display Name: Is Shared
+    * * Display Name: Shared
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this view is shared with other users.
@@ -62193,7 +62204,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: IsDefault
-    * * Display Name: Is Default
+    * * Display Name: Default
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this is the user's default view for the entity.
@@ -62233,7 +62244,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: CustomFilterState
-    * * Display Name: Custom Filter State
+    * * Display Name: Custom Filter
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if custom filters beyond standard options are applied.
@@ -62340,7 +62351,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -62350,7 +62361,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -62369,6 +62380,19 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     }
     set Thumbnail(value: string | null) {
         this.Set('Thumbnail', value);
+    }
+
+    /**
+    * * Field Name: CardState
+    * * Display Name: Card State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.
+    */
+    get CardState(): string | null {
+        return this.Get('CardState');
+    }
+    set CardState(value: string | null) {
+        this.Set('CardState', value);
     }
 
     /**

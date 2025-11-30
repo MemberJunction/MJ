@@ -15657,6 +15657,9 @@ export class MJUserView_ {
     @Field({nullable: true, description: `Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`}) 
     Thumbnail?: string;
         
+    @Field({nullable: true, description: `JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.`}) 
+    CardState?: string;
+        
     @Field() 
     @MaxLength(200)
     UserName: string;
@@ -15753,6 +15756,9 @@ export class CreateMJUserViewInput {
 
     @Field({ nullable: true })
     Thumbnail: string | null;
+
+    @Field({ nullable: true })
+    CardState: string | null;
 }
     
 
@@ -15817,6 +15823,9 @@ export class UpdateMJUserViewInput {
 
     @Field({ nullable: true })
     Thumbnail?: string | null;
+
+    @Field({ nullable: true })
+    CardState?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
