@@ -144,76 +144,10 @@
               <mj-loading text="Loading entities..." size="medium"></mj-loading>
             </div>
           } @else {
-            <!-- Two-Column Layout: Entities (left) | Records (right) -->
+            <!-- Two-Column Layout: Records (left) | Entities (right) -->
             @if (hasTopSectionContent) {
               <div class="home-two-column-layout">
-                <!-- Left Column: Recent & Favorite Entities -->
-                <div class="home-column">
-                  <!-- Recent Entities Section -->
-                  @if (recentEntities.length > 0) {
-                    <div class="home-section">
-                      <div class="section-header">
-                        <i class="fa-solid fa-clock section-icon"></i>
-                        <h3 class="section-title">Recent Entities</h3>
-                      </div>
-                      <div class="entity-card-row">
-                        @for (entity of recentEntities; track entity.ID) {
-                          <div
-                            class="entity-card compact"
-                            (click)="onEntitySelected(entity)"
-                            [title]="entity.Description || entity.Name">
-                            <div class="entity-card-icon">
-                              <i [class]="getEntityIcon(entity)"></i>
-                            </div>
-                            <div class="entity-card-content">
-                              <h4 class="entity-card-title">{{ entity.Name }}</h4>
-                            </div>
-                            <button
-                              class="favorite-btn"
-                              [class.favorited]="isEntityFavorited(entity)"
-                              (click)="toggleEntityFavorite(entity, $event)"
-                              [title]="isEntityFavorited(entity) ? 'Remove from favorites' : 'Add to favorites'">
-                              <i [class]="isEntityFavorited(entity) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
-                            </button>
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
-
-                  <!-- Favorite Entities Section -->
-                  @if (favoriteEntities.length > 0) {
-                    <div class="home-section">
-                      <div class="section-header">
-                        <i class="fa-solid fa-star section-icon"></i>
-                        <h3 class="section-title">Favorite Entities</h3>
-                      </div>
-                      <div class="entity-card-row">
-                        @for (entity of favoriteEntities; track entity.ID) {
-                          <div
-                            class="entity-card compact"
-                            (click)="onEntitySelected(entity)"
-                            [title]="entity.Description || entity.Name">
-                            <div class="entity-card-icon">
-                              <i [class]="getEntityIcon(entity)"></i>
-                            </div>
-                            <div class="entity-card-content">
-                              <h4 class="entity-card-title">{{ entity.Name }}</h4>
-                            </div>
-                            <button
-                              class="favorite-btn favorited"
-                              (click)="toggleEntityFavorite(entity, $event)"
-                              title="Remove from favorites">
-                              <i class="fa-solid fa-star"></i>
-                            </button>
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
-                </div>
-
-                <!-- Right Column: Recent & Favorite Records -->
+                <!-- Left Column: Recent & Favorite Records (most actionable) -->
                 <div class="home-column">
                   <!-- Recent Records Section -->
                   @if (recentRecords.length > 0) {
@@ -283,6 +217,72 @@
                               <span class="recent-record-name">{{ record.recordName || record.recordId }}</span>
                               <span class="recent-record-entity">{{ record.entityName }}</span>
                             </div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+
+                <!-- Right Column: Recent & Favorite Entities -->
+                <div class="home-column">
+                  <!-- Recent Entities Section (list format) -->
+                  @if (recentEntities.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-clock section-icon"></i>
+                        <h3 class="section-title">Recent Entities</h3>
+                      </div>
+                      <div class="entity-list">
+                        @for (entity of recentEntities; track entity.ID) {
+                          <div
+                            class="entity-list-item"
+                            (click)="onEntitySelected(entity)"
+                            [title]="entity.Description || entity.Name">
+                            <div class="entity-list-icon">
+                              <i [class]="getEntityIcon(entity)"></i>
+                            </div>
+                            <div class="entity-list-content">
+                              <span class="entity-list-name">{{ entity.Name }}</span>
+                            </div>
+                            <button
+                              class="favorite-btn"
+                              [class.favorited]="isEntityFavorited(entity)"
+                              (click)="toggleEntityFavorite(entity, $event)"
+                              [title]="isEntityFavorited(entity) ? 'Remove from favorites' : 'Add to favorites'">
+                              <i [class]="isEntityFavorited(entity) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Favorite Entities Section (list format) -->
+                  @if (favoriteEntities.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-star section-icon"></i>
+                        <h3 class="section-title">Favorite Entities</h3>
+                      </div>
+                      <div class="entity-list">
+                        @for (entity of favoriteEntities; track entity.ID) {
+                          <div
+                            class="entity-list-item"
+                            (click)="onEntitySelected(entity)"
+                            [title]="entity.Description || entity.Name">
+                            <div class="entity-list-icon">
+                              <i [class]="getEntityIcon(entity)"></i>
+                            </div>
+                            <div class="entity-list-content">
+                              <span class="entity-list-name">{{ entity.Name }}</span>
+                            </div>
+                            <button
+                              class="favorite-btn favorited"
+                              (click)="toggleEntityFavorite(entity, $event)"
+                              title="Remove from favorites">
+                              <i class="fa-solid fa-star"></i>
+                            </button>
                           </div>
                         }
                       </div>
