@@ -346,6 +346,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       .pipe(takeUntil(this.destroy$))
       .subscribe(state => {
         const entityChanged = state.selectedEntityName !== this.state.selectedEntityName;
+        const recordChanged = state.selectedRecordId !== this.state.selectedRecordId;
+        const panelChanged = state.detailPanelOpen !== this.state.detailPanelOpen;
+
+        if (recordChanged || panelChanged) {
+          console.log('[DataExplorer] State subscription received change:', {
+            selectedRecordId: state.selectedRecordId,
+            detailPanelOpen: state.detailPanelOpen,
+            selectedEntityName: state.selectedEntityName,
+            skipUrlUpdates: this.skipUrlUpdates
+          });
+        }
 
         this.state = state;
 
@@ -409,8 +420,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       )
       .subscribe(event => {
         // Only react to navigation events that weren't triggered by us
+        // Normalize URLs by decoding to handle + vs %20 encoding differences
+        // Note: decodeURIComponent doesn't decode +, so we also replace + with space
         const currentUrl = event.urlAfterRedirects || event.url;
-        if (currentUrl !== this.lastNavigatedUrl) {
+        const normalizedCurrentUrl = decodeURIComponent(currentUrl).replace(/\+/g, ' ');
+        const normalizedLastUrl = decodeURIComponent(this.lastNavigatedUrl).replace(/\+/g, ' ');
+        const isExternal = normalizedCurrentUrl !== normalizedLastUrl;
+        console.log('[DataExplorer] NavigationEnd:', {
+          currentUrl,
+          lastNavigatedUrl: this.lastNavigatedUrl,
+          normalizedCurrentUrl,
+          normalizedLastUrl,
+          isExternal
+        });
+        if (isExternal) {
           this.onExternalNavigation(currentUrl);
         }
       });
@@ -659,10 +682,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle record selection from mj-entity-viewer
    */
   public onViewerRecordSelected(event: RecordSelectedEvent): void {
+    console.log('[DataExplorer] onViewerRecordSelected:', {
+      entityName: this.selectedEntity?.Name,
+      recordPK: event.record.PrimaryKey.ToConcatenatedString(),
+      currentState: {
+        detailPanelOpen: this.state.detailPanelOpen,
+        selectedRecordId: this.state.selectedRecordId
+      }
+    });
     this.selectedRecord = event.record;
     // When selecting from grid, detail panel entity matches the grid entity
     this.detailPanelEntity = this.selectedEntity;
     const recordName = this.getRecordDisplayName(event.record);
+    console.log('[DataExplorer] Calling stateService.selectRecord with:', {
+      recordId: event.record.PrimaryKey.ToConcatenatedString(),
+      recordName
+    });
     this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString(), recordName);
 
     // Add to recent items (local state for navigation panel)
@@ -1092,6 +1127,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Used both during init and for popstate handling.
    */
   private applyUrlState(urlState: DataExplorerDeepLink): void {
+    console.log('[DataExplorer] applyUrlState called with:', urlState);
     // Apply view mode if specified
     if (urlState.viewMode) {
       this.stateService.setViewMode(urlState.viewMode);
@@ -1104,6 +1140,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       );
 
       if (entity) {
+        console.log('[DataExplorer] applyUrlState: found entity:', entity.Name);
         // Reset counts before setting entity to prevent stale data display
         this.resetRecordCounts();
         this.selectedEntity = entity;
@@ -1121,9 +1158,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         // Handle record selection after data loads
         if (urlState.record) {
+          console.log('[DataExplorer] applyUrlState: setting pendingRecordSelection:', urlState.record);
           this.pendingRecordSelection = urlState.record;
         } else {
           // Clear record selection if not in URL
+          console.log('[DataExplorer] applyUrlState: clearing record selection (no record in URL)');
           this.selectedRecord = null;
           this.detailPanelEntity = null;
           this.stateService.closeDetailPanel();
@@ -1133,6 +1172,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       }
     } else {
       // No entity in URL - go to home view
+      console.log('[DataExplorer] applyUrlState: no entity, going to home view');
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
@@ -1182,6 +1222,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const queryString = params.toString();
     const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
 
+    console.log('[DataExplorer] updateUrl:', {
+      entityName: this.state.selectedEntityName,
+      recordId: this.state.selectedRecordId,
+      queryString,
+      newUrl,
+      lastNavigatedUrl: this.lastNavigatedUrl
+    });
+
     // Track this URL so we don't react to our own navigation
     this.lastNavigatedUrl = newUrl;
 
@@ -1195,17 +1243,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Parses the URL and applies the state without triggering a new navigation.
    */
   private onExternalNavigation(url: string): void {
+    console.log('[DataExplorer] onExternalNavigation called with:', url);
     // Check if this URL is for our component (contains our base path)
     const currentPath = this.router.url.split('?')[0];
     const newPath = url.split('?')[0];
 
     // Only handle if we're still on the same base path (same dashboard instance)
     if (currentPath !== newPath) {
+      console.log('[DataExplorer] onExternalNavigation: different route, skipping');
       return; // Different route entirely, shell will handle it
     }
 
     // Parse the new URL state
     const urlState = this.parseUrlFromString(url);
+    console.log('[DataExplorer] onExternalNavigation parsed state:', urlState);
 
     // Apply the state without triggering URL updates
     this.skipUrlUpdates = true;
@@ -1213,6 +1264,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.applyUrlState(urlState);
     } else {
       // No params means go to home view
+      console.log('[DataExplorer] onExternalNavigation: no params, going to home view');
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
