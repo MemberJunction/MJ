@@ -79,6 +79,11 @@ export type ComponentQueryParameterValue = {
     name: string;
 
     /**
+     * Whether this parameter must be provided when executing the query.
+     */
+    isRequired: boolean;
+
+    /**
      * Value of the parameter. If the value is '@runtime', it indicates that the component will determine the value at runtime.
      * If anything other than '@runtime' is specified, it is a hardcoded value that the component will use.
      */
