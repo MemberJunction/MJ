@@ -1,7 +1,9 @@
-<div class="app-switcher-container">
+<div class="app-switcher-container" [class.loading]="isLoading">
   <div class="app-switcher-button"
        (click)="toggleDropdown()">
-    <i class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
+    <!-- Show spinner when loading, otherwise show app icon -->
+    <i *ngIf="isLoading" class="app-icon loading-spinner fa-solid fa-spinner fa-spin"></i>
+    <i *ngIf="!isLoading" class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
        [style.color]="activeApp?.GetColor()"
        [style.--active-color]="activeApp?.GetColor()"></i>
     <i class="dropdown-arrow fa-solid fa-chevron-down"></i>
@@ -12,9 +14,11 @@
       *ngFor="let app of apps"
       class="app-switcher-item"
       [class.active]="app.ID === activeApp?.ID"
+      [class.loading]="app.ID === loadingAppId"
       [style.--item-color]="app.GetColor()"
       (click)="selectApp(app)">
-      <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
+      <i *ngIf="app.ID === loadingAppId" class="fa-solid fa-spinner fa-spin"></i>
+      <i *ngIf="app.ID !== loadingAppId" [class]="app.Icon || 'fa-solid fa-cube'"></i>
       <span>{{ app.Name }}</span>
     </div>
 

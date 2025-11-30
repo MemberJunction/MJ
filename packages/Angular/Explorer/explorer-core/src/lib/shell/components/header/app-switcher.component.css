@@ -121,3 +121,21 @@
   background: #e0e0e0;
   margin: 4px 12px;
 }
+
+/* Loading state for app switcher button */
+.app-switcher-button .loading-spinner {
+  color: #757575;
+}
+.app-switcher-button .loading-spinner::after {
+  /* Hide the underline when showing spinner */
+  display: none;
+}
+
+/* Loading state for dropdown items */
+.app-switcher-dropdown .app-switcher-item.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+.app-switcher-dropdown .app-switcher-item.loading i {
+  color: var(--item-color, #757575);
+}

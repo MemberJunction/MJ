@@ -14,6 +14,8 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 export class AppSwitcherComponent {
   @Input() activeApp: BaseApplication | null = null;
   @Input() isViewingSystemTab = false;
+  /** ID of the app currently being loaded (shows loading indicator) */
+  @Input() loadingAppId: string | null = null;
   @Output() appSelected = new EventEmitter<string>();
 
   @ViewChild('appConfigDialog') appConfigDialog!: UserAppConfigComponent;
@@ -22,6 +24,13 @@ export class AppSwitcherComponent {
   showConfigDialog = false;
 
   constructor(private appManager: ApplicationManager) {}
+
+  /**
+   * Check if the app switcher should show loading state
+   */
+  get isLoading(): boolean {
+    return this.loadingAppId !== null;
+  }
 
   /**
    * Get applications that should appear in the app switcher dropdown

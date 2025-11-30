@@ -47,6 +47,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
+  loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
   // User avatar state
   userImageURL = '';
@@ -782,30 +783,40 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Clear the system tab flag since we're switching to a real app
     this.isViewingSystemTab = false;
 
-    await this.appManager.SetActiveApp(appId);
+    // Show loading indicator in app switcher
+    this.loadingAppId = appId;
+    this.cdr.detectChanges();
 
-    // Check if app has any tabs
-    const appTabs = this.workspaceManager.GetAppTabs(appId);
-    if (appTabs.length === 0) {
-      // No tabs - create default tab (will trigger URL sync via workspace config subscription)
-      const app = this.appManager.GetAppById(appId);
-      if (app) {
-        const defaultTab = await app.CreateDefaultTab();
-        if (defaultTab) {
-          this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+    try {
+      await this.appManager.SetActiveApp(appId);
+
+      // Check if app has any tabs
+      const appTabs = this.workspaceManager.GetAppTabs(appId);
+      if (appTabs.length === 0) {
+        // No tabs - create default tab (will trigger URL sync via workspace config subscription)
+        const app = this.appManager.GetAppById(appId);
+        if (app) {
+          const defaultTab = await app.CreateDefaultTab();
+          if (defaultTab) {
+            this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+          }
+        }
+      } else {
+        // App has existing tabs - activate the first one and sync URL
+        const firstTab = appTabs[0];
+        this.workspaceManager.SetActiveTab(firstTab.id);
+
+        // The workspace configuration subscription will trigger URL sync
+        // but we can also manually trigger it here to ensure immediate update
+        const resourceUrl = this.buildResourceUrl(firstTab);
+        if (resourceUrl) {
+          this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
         }
       }
-    } else {
-      // App has existing tabs - activate the first one and sync URL
-      const firstTab = appTabs[0];
-      this.workspaceManager.SetActiveTab(firstTab.id);
-
-      // The workspace configuration subscription will trigger URL sync
-      // but we can also manually trigger it here to ensure immediate update
-      const resourceUrl = this.buildResourceUrl(firstTab);
-      if (resourceUrl) {
-        this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
-      }
+    } finally {
+      // Clear loading indicator
+      this.loadingAppId = null;
+      this.cdr.detectChanges();
     }
   }
 
