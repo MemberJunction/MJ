@@ -96,6 +96,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public selectedRecord: BaseEntity | null = null;
   // Entity info for the detail panel (may differ from selectedEntity when viewing FK/related records)
   public detailPanelEntity: EntityInfo | null = null;
+  // Currently loaded records from mj-entity-viewer (for back/forward navigation lookup)
+  private loadedRecords: BaseEntity[] = [];
 
   // Debounced filter text (synced with mj-entity-viewer)
   public debouncedFilterText: string = '';
@@ -346,17 +348,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       .pipe(takeUntil(this.destroy$))
       .subscribe(state => {
         const entityChanged = state.selectedEntityName !== this.state.selectedEntityName;
-        const recordChanged = state.selectedRecordId !== this.state.selectedRecordId;
-        const panelChanged = state.detailPanelOpen !== this.state.detailPanelOpen;
-
-        if (recordChanged || panelChanged) {
-          console.log('[DataExplorer] State subscription received change:', {
-            selectedRecordId: state.selectedRecordId,
-            detailPanelOpen: state.detailPanelOpen,
-            selectedEntityName: state.selectedEntityName,
-            skipUrlUpdates: this.skipUrlUpdates
-          });
-        }
 
         this.state = state;
 
@@ -426,13 +417,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         const normalizedCurrentUrl = decodeURIComponent(currentUrl).replace(/\+/g, ' ');
         const normalizedLastUrl = decodeURIComponent(this.lastNavigatedUrl).replace(/\+/g, ' ');
         const isExternal = normalizedCurrentUrl !== normalizedLastUrl;
-        console.log('[DataExplorer] NavigationEnd:', {
-          currentUrl,
-          lastNavigatedUrl: this.lastNavigatedUrl,
-          normalizedCurrentUrl,
-          normalizedLastUrl,
-          isExternal
-        });
         if (isExternal) {
           this.onExternalNavigation(currentUrl);
         }
@@ -682,22 +666,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle record selection from mj-entity-viewer
    */
   public onViewerRecordSelected(event: RecordSelectedEvent): void {
-    console.log('[DataExplorer] onViewerRecordSelected:', {
-      entityName: this.selectedEntity?.Name,
-      recordPK: event.record.PrimaryKey.ToConcatenatedString(),
-      currentState: {
-        detailPanelOpen: this.state.detailPanelOpen,
-        selectedRecordId: this.state.selectedRecordId
-      }
-    });
     this.selectedRecord = event.record;
     // When selecting from grid, detail panel entity matches the grid entity
     this.detailPanelEntity = this.selectedEntity;
     const recordName = this.getRecordDisplayName(event.record);
-    console.log('[DataExplorer] Calling stateService.selectRecord with:', {
-      recordId: event.record.PrimaryKey.ToConcatenatedString(),
-      recordName
-    });
     this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString(), recordName);
 
     // Add to recent items (local state for navigation panel)
@@ -742,6 +714,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public onDataLoaded(event: DataLoadedEvent): void {
     this.totalRecordCount = event.totalRowCount;
     this.filteredRecordCount = event.loadedRowCount;
+    // Store loaded records for back/forward navigation lookup
+    this.loadedRecords = event.records;
 
     // Handle pending record selection from deep link
     if (this.pendingRecordSelection) {
@@ -1127,7 +1101,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Used both during init and for popstate handling.
    */
   private applyUrlState(urlState: DataExplorerDeepLink): void {
-    console.log('[DataExplorer] applyUrlState called with:', urlState);
     // Apply view mode if specified
     if (urlState.viewMode) {
       this.stateService.setViewMode(urlState.viewMode);
@@ -1140,39 +1113,57 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       );
 
       if (entity) {
-        console.log('[DataExplorer] applyUrlState: found entity:', entity.Name);
-        // Reset counts before setting entity to prevent stale data display
-        this.resetRecordCounts();
-        this.selectedEntity = entity;
-        this.stateService.selectEntity(entity.Name);
+        const entityChanged = this.selectedEntity?.Name !== entity.Name;
+
+        if (entityChanged) {
+          // Entity changed - reset counts and select new entity
+          this.resetRecordCounts();
+          this.selectedEntity = entity;
+          this.stateService.selectEntity(entity.Name);
+        }
 
         // Apply filter if specified
         if (urlState.filter) {
           this.stateService.setSmartFilterPrompt(urlState.filter);
           this.debouncedFilterText = urlState.filter;
-        } else {
-          // Clear filter if not in URL
+        } else if (entityChanged) {
+          // Only clear filter if entity changed (selectEntity already handles this)
           this.stateService.setSmartFilterPrompt('');
           this.debouncedFilterText = '';
         }
 
-        // Handle record selection after data loads
+        // Handle record selection
         if (urlState.record) {
-          console.log('[DataExplorer] applyUrlState: setting pendingRecordSelection:', urlState.record);
-          this.pendingRecordSelection = urlState.record;
+          if (entityChanged) {
+            // Entity changed - need to wait for data to load
+            this.pendingRecordSelection = urlState.record;
+          } else {
+            // Entity is the same - find record from already-loaded data
+            const record = this.loadedRecords.find(r => {
+              const pkString = r.PrimaryKey.ToConcatenatedString();
+              const pkValue = r.PrimaryKey.KeyValuePairs[0]?.Value?.toString();
+              return pkString === urlState.record || pkValue === urlState.record;
+            });
+
+            if (record) {
+              this.selectedRecord = record;
+              this.detailPanelEntity = this.selectedEntity;
+              const recordName = this.getRecordDisplayName(record);
+              this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString(), recordName);
+            } else {
+              // Record not in current page - update state but panel won't show
+              this.stateService.selectRecord(urlState.record, this.state.selectedRecordName || undefined);
+            }
+          }
         } else {
           // Clear record selection if not in URL
-          console.log('[DataExplorer] applyUrlState: clearing record selection (no record in URL)');
           this.selectedRecord = null;
           this.detailPanelEntity = null;
           this.stateService.closeDetailPanel();
         }
-      } else {
-        console.warn(`[DataExplorer] URL entity not found: ${urlState.entity}`);
       }
     } else {
       // No entity in URL - go to home view
-      console.log('[DataExplorer] applyUrlState: no entity, going to home view');
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
@@ -1222,14 +1213,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const queryString = params.toString();
     const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
 
-    console.log('[DataExplorer] updateUrl:', {
-      entityName: this.state.selectedEntityName,
-      recordId: this.state.selectedRecordId,
-      queryString,
-      newUrl,
-      lastNavigatedUrl: this.lastNavigatedUrl
-    });
-
     // Track this URL so we don't react to our own navigation
     this.lastNavigatedUrl = newUrl;
 
@@ -1243,20 +1226,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Parses the URL and applies the state without triggering a new navigation.
    */
   private onExternalNavigation(url: string): void {
-    console.log('[DataExplorer] onExternalNavigation called with:', url);
     // Check if this URL is for our component (contains our base path)
     const currentPath = this.router.url.split('?')[0];
     const newPath = url.split('?')[0];
 
     // Only handle if we're still on the same base path (same dashboard instance)
     if (currentPath !== newPath) {
-      console.log('[DataExplorer] onExternalNavigation: different route, skipping');
       return; // Different route entirely, shell will handle it
     }
 
     // Parse the new URL state
     const urlState = this.parseUrlFromString(url);
-    console.log('[DataExplorer] onExternalNavigation parsed state:', urlState);
 
     // Apply the state without triggering URL updates
     this.skipUrlUpdates = true;
@@ -1264,7 +1244,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.applyUrlState(urlState);
     } else {
       // No params means go to home view
-      console.log('[DataExplorer] onExternalNavigation: no params, going to home view');
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
