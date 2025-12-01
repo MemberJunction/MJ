@@ -1,12 +1,11 @@
 /**
- * Shared base interfaces for query information used by both MJCore and SkipTypes.
+ * Shared base interfaces for core query information.
  * These interfaces define the contract for query metadata that flows between
- * MemberJunction and the Skip API system.
+ * MemberJunction and external systems.
  *
  * Key design decisions:
  * - PascalCase property names for consistency with MJ conventions
- * - Minimal set of properties needed for Skip operations
- * - No timestamps or internal metadata that Skip doesn't need
+ * - No timestamps or internal metadata that external systems typically don't need
  */
 
 /**
@@ -162,7 +161,7 @@ export interface IQueryPermissionInfoBase {
 }
 
 /**
- * Base interface for query information shared between MJCore and SkipTypes.
+ * Base interface for query information shared between MJCore and external systems.
  * Contains the core metadata needed to understand and execute stored queries.
  */
 export interface IQueryInfoBase {
