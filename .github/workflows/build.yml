@@ -33,8 +33,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
+      - name: Upgrade npm to fix workspace CI bug
+        run: npm install -g npm@11.6.4
+
       - name: Install dependencies
-        run: npm ci --install-links
+        run: npm ci
 
       - name: Build packages
         run: npm run build
