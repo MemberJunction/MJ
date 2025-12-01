@@ -16,6 +16,7 @@ import { IconsModule } from '@progress/kendo-angular-icons';
 
 // MemberJunction
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Components
 import { ActionGalleryComponent } from './lib/action-gallery.component';
@@ -43,7 +44,8 @@ import { ActionGalleryDialogService } from './lib/action-gallery-dialog.service'
     TreeViewModule,
     IconsModule,
     // MemberJunction
-    AITestHarnessModule
+    AITestHarnessModule,
+    SharedGenericModule
   ],
   exports: [
     ActionGalleryComponent

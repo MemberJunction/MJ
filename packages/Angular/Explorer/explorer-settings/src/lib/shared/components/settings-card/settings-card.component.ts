@@ -45,7 +45,7 @@ import { CommonModule } from '@angular/common';
       }
     </div>
   `,
-  styleUrls: ['./settings-card.component.scss']
+  styleUrls: ['./settings-card.component.css']
 })
 export class SettingsCardComponent {
   /** Card title displayed in the header */

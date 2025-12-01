@@ -1,4 +1,4 @@
-import { ElementRef, Injectable } from '@angular/core';
+import { ElementRef, Injectable, Injector } from '@angular/core';
 import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
@@ -7,7 +7,7 @@ import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
 import { NotificationService } from "@progress/kendo-angular-notification";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { Router } from '@angular/router';
+import { NavigationService } from './navigation.service';
 
 @Injectable({
   providedIn: 'root'
@@ -19,8 +19,13 @@ export class SharedService {
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
+  private _navigationService: NavigationService | null = null;
 
-  constructor(private notificationService: NotificationService, private mjNotificationsService: MJNotificationService, private router: Router) {
+  constructor(
+    private notificationService: NotificationService,
+    private mjNotificationsService: MJNotificationService,
+    private injector: Injector
+  ) {
     if (SharedService._instance) {
       // return existing instance which will short circuit the creation of a new instance
       return SharedService._instance;
@@ -43,6 +48,24 @@ export class SharedService {
 
   public static get Instance(): SharedService {
     return SharedService._instance;
+  }
+
+  /**
+   * Get the NavigationService singleton instance
+   * Lazy-loaded to avoid circular dependency issues
+   */
+  private get navigationService(): NavigationService {
+    if (!this._navigationService) {
+      this._navigationService = this.injector.get(NavigationService);
+    }
+    return this._navigationService;
+  }
+
+  /**
+   * Get the neutral color used for system-wide resources
+   */
+  public get ExplorerAppColor(): string {
+    return this.navigationService.ExplorerAppColor;
   }
 
   /**
@@ -266,13 +289,19 @@ export class SharedService {
       return null 
   }
 
+  /**
+   * Opens an entity record in a new or existing tab
+   * Uses the modern NavigationService for tab-based navigation
+   */
   public OpenEntityRecord(entityName: string, recordPkey: CompositeKey) {
     try {
-      this.router.navigate(['resource', 'record', recordPkey.ToURLSegment()], 
-                            { queryParams: { Entity: entityName } })        
+      console.log('SharedService.OpenEntityRecord called:', entityName, recordPkey.ToURLSegment());
+      // Use NavigationService to open in new tab-based UX
+      this.navigationService.OpenEntityRecord(entityName, recordPkey);
     }
     catch (e) {
-      LogError(e);    
+      console.error('Error in OpenEntityRecord:', e);
+      LogError(e);
     }
   }
 }

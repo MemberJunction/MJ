@@ -14,10 +14,7 @@
   <!-- Loading spinner while initializing agents -->
   @if (!isWorkspaceReady) {
     <div class="workspace-loading">
-      <div class="loading-spinner">
-        <i class="fa-solid fa-spinner fa-spin"></i>
-      </div>
-      <p>Loading agents...</p>
+      <mj-loading text="Loading agents..." size="large"></mj-loading>
     </div>
   }
 

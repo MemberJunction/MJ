@@ -8,7 +8,7 @@ export function LoadSearchResultsResource() {
     const test = new SearchResultsResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.
 }
 
-@RegisterClass(BaseResourceComponent, 'Search Results')
+@RegisterClass(BaseResourceComponent, 'SearchResultsResource')
 @Component({
     selector: 'mj-search-results-resource',
     template: `<mj-single-search-result [entity]="Data.Configuration.Entity" [searchInput]="Data.Configuration.SearchInput" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-search-result>`

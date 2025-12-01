@@ -82,7 +82,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
 
       @if (isLoading) {
         <div class="loading-overlay">
-          <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
+          <mj-loading [showText]="false" size="large"></mj-loading>
         </div>
       }
     </div>

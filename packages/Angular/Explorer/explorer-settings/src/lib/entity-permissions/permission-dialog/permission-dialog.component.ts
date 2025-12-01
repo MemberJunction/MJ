@@ -25,8 +25,6 @@ interface RolePermissions {
 
 @Component({
   selector: 'mj-permission-dialog',
-  standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './permission-dialog.component.html',
   styleUrls: ['./permission-dialog.component.css']

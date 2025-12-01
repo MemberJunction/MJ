@@ -1,5 +1,5 @@
 <div>
-    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+    <div *ngIf="isLoading"><mj-loading [showText]="false" size="medium"></mj-loading></div>
     <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="savePermissions()">Save</button>
     <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="cancelEdit()">Cancel</button>
     <table *ngIf="!isLoading" class="grid">

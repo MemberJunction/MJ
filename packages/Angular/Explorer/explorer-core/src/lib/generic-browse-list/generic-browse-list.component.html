@@ -27,7 +27,7 @@
     <div class="main-area">
       <!-- Loading State -->
       <div class="mj-loading" *ngIf="showLoader">
-        <kendo-loader type="converging-spinner"></kendo-loader>
+        <mj-loading [showText]="false" size="large"></mj-loading>
       </div>
 
       <!-- Items Grid -->

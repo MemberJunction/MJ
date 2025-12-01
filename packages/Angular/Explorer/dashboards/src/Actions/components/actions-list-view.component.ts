@@ -13,7 +13,7 @@ interface CategoryTreeNode {
 @Component({
   selector: 'mj-actions-list-view',
   templateUrl: './actions-list-view.component.html',
-  styleUrls: ['./actions-list-view.component.scss']
+  styleUrls: ['./actions-list-view.component.css']
 })
 export class ActionsListViewComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();

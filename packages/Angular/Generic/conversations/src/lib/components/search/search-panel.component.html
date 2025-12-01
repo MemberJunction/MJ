@@ -127,8 +127,7 @@
     <div class="search-results">
       @if (isSearching) {
         <div class="search-loading">
-          <kendo-loader type="converging-spinner" size="medium"></kendo-loader>
-          <span>Searching...</span>
+          <mj-loading text="Searching..." size="medium"></mj-loading>
         </div>
       } @else if (!searchQuery) {
         <!-- Recent Searches -->

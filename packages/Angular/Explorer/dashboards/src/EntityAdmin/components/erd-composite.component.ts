@@ -30,7 +30,7 @@ interface DashboardState {
 @Component({
   selector: 'mj-erd-composite',
   templateUrl: './erd-composite.component.html',
-  styleUrls: ['./erd-composite.component.scss']
+  styleUrls: ['./erd-composite.component.css']
 })
 export class ERDCompositeComponent implements OnInit, OnDestroy {
   @ViewChild(ERDDiagramComponent) erdDiagram!: ERDDiagramComponent;

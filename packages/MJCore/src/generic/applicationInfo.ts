@@ -160,6 +160,78 @@ export class ApplicationInfo extends BaseInfo {
      */
     SchemaAutoAddNewEntities: string = null
 
+    /**
+     * Timestamp when the record was created
+     */
+    __mj_CreatedAt: Date = null; 
+
+    /**
+     * Timestamp when the record was last updated
+     */
+    __mj_UpdatedAt: Date = null; 
+    
+    /**
+    * Hex color code for visual theming (e.g., #4caf50)
+    */
+    Color: string = null;
+
+    /**
+    * JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
+    */
+    DefaultNavItems: string = null;
+
+    /**
+    * TypeScript class name for ClassFactory registration (e.g., CRMApplication)
+    */
+    ClassName: string = null;
+
+    /**
+    * Default sequence position when adding this application to a new user's User Applications.
+    * Lower values appear first. Used when DefaultForNewUser is true.
+    */
+    DefaultSequence: number = 100;
+
+    /**
+    * Application lifecycle status. Pending = not yet ready, Active = available for use,
+    * Disabled = temporarily unavailable, Deprecated = being phased out.
+    * Only Active applications are shown to users.
+    */
+    Status: 'Pending' | 'Active' | 'Disabled' | 'Deprecated' = 'Active';
+
+    /**
+    * How the application appears in navigation.
+    * App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.
+    */
+    NavigationStyle: 'App Switcher' | 'Nav Bar' | 'Both' = 'App Switcher';
+
+    /**
+    * Position of the permanent nav icon when NavigationStyle is Nav Bar or Both.
+    * Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar.
+    * Ignored when NavigationStyle is App Switcher.
+    */
+    TopNavLocation: 'Left of App Switcher' | 'Left of User Menu' | null = null;
+
+    /**
+    * When true, the Nav Bar icon for this application is hidden when the application is active.
+    * Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app.
+    * Only applies when NavigationStyle is Nav Bar or Both.
+    */
+    HideNavBarIconWhenActive: boolean = false;
+
+    /**
+    * URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer").
+    * Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true.
+    * Must be unique across all applications.
+    */
+    Path: string = null;
+
+    /**
+    * When true, Path is automatically generated from Name on save.
+    * Set to false to manually control the Path value. Defaults to true for new applications.
+    */
+    AutoUpdatePath: boolean = true;
+
+
     private _ApplicationEntities: ApplicationEntityInfo[] = []
     /**
      * Gets the list of entities that belong to this application with their display sequence.
@@ -202,6 +274,5 @@ export class ApplicationInfo extends BaseInfo {
                 this._ApplicationSettings = as.map(s => new ApplicationSettingInfo(s));
         }
     }
-
 }
  

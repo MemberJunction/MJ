@@ -1,8 +1,17 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
-import { RunView, LogError } from '@memberjunction/core';
-import { ActionEntity, ActionCategoryEntity, ActionExecutionLogEntity } from '@memberjunction/core-entities';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CompositeKey, RunView, LogError } from '@memberjunction/core';
+import { ActionEntity, ActionCategoryEntity, ActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+
+/**
+ * Tree-shaking prevention function
+ */
+export function LoadActionsOverviewResource() {
+  // Force inclusion in production builds
+}
 
 interface ActionMetrics {
   totalActions: number;
@@ -30,18 +39,16 @@ interface ExecutionWithExpanded extends ActionExecutionLogEntity {
 }
 
 
+/**
+ * Actions Overview Resource - displays action management dashboard
+ */
+@RegisterClass(BaseResourceComponent, 'ActionsOverviewResource')
 @Component({
   selector: 'mj-actions-overview',
   templateUrl: './actions-overview.component.html',
-  styleUrls: ['./actions-overview.component.scss']
+  styleUrls: ['./actions-overview.component.css']
 })
-export class ActionsOverviewComponent implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
-  @Output() showActionsListView = new EventEmitter<void>();
-  @Output() showExecutionsListView = new EventEmitter<void>();
-  @Output() showCategoriesListView = new EventEmitter<void>();
-  @Output() showActionGalleryView = new EventEmitter<void>();
-
+export class ActionsOverviewComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;
   public metrics: ActionMetrics = {
     totalActions: 0,
@@ -67,7 +74,9 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor() {}
+  constructor(private navigationService: NavigationService) {
+    super();
+  }
 
   ngOnInit(): void {
     this.setupFilters();
@@ -136,6 +145,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       LogError('Failed to load actions overview data', undefined, error);
     } finally {
       this.isLoading = false;
+      this.NotifyLoadComplete();
     }
   }
 
@@ -246,24 +256,18 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   }
 
   public openAction(action: ActionEntity): void {
-    this.openEntityRecord.emit({
-      entityName: 'Actions',
-      recordId: action.ID
-    });
+    const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
+    this.navigationService.OpenEntityRecord('Actions', key);
   }
 
   public openCategory(categoryId: string): void {
-    this.openEntityRecord.emit({
-      entityName: 'Action Categories',
-      recordId: categoryId
-    });
+    const key = new CompositeKey([{ FieldName: 'ID', Value: categoryId }]);
+    this.navigationService.OpenEntityRecord('Action Categories', key);
   }
 
   public openExecution(execution: ActionExecutionLogEntity): void {
-    this.openEntityRecord.emit({
-      entityName: 'Action Execution Logs',
-      recordId: execution.ID
-    });
+    const key = new CompositeKey([{ FieldName: 'ID', Value: execution.ID }]);
+    this.navigationService.OpenEntityRecord('Action Execution Logs', key);
   }
 
   public isExecutionSuccess(execution: ActionExecutionLogEntity): boolean {
@@ -288,26 +292,28 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Metric card click handlers
+  // Metric card click handlers - these now filter the current view
   public onTotalActionsClick(): void {
-    this.showActionsListView.emit();
+    // Reset filters to show all actions
+    this.selectedStatus$.next('all');
+    this.selectedType$.next('all');
   }
 
   public onExecutionsClick(): void {
-    this.showExecutionsListView.emit();
+    // This would navigate to execution monitoring resource
   }
 
   public onCategoriesClick(): void {
-    this.showCategoriesListView.emit();
+    // This would navigate to categories view
   }
 
   public onAIGeneratedClick(): void {
     // Filter to show AI generated actions in the current view
     this.selectedType$.next('Generated');
   }
-  
+
   public onActionGalleryClick(): void {
-    this.showActionGalleryView.emit();
+    // This would navigate to action gallery view
   }
 
   public toggleExecutionExpanded(execution: ExecutionWithExpanded): void {
@@ -333,5 +339,13 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
    */
   public getActionIcon(action: ActionEntity): string {
     return action?.IconClass || this.getTypeIcon(action.Type);
+  }
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return 'Actions Overview';
+  }
+
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return 'fa-solid fa-bolt';
   }
 }

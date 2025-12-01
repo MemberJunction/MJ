@@ -85,10 +85,6 @@
   font-size: 13px;
 }
 
-.dropdown-loading kendo-loader {
-  margin-right: 10px;
-}
-
 .dropdown-error {
   color: #e33d3d;
 }

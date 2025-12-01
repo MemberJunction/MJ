@@ -75,6 +75,10 @@ npm install @memberjunction/{package-name}
 - **Feature 2**: Description
 - ...
 
+## Diagram
+
+When appropriate, populate this with a Mermaid sequence or other diagram to illustate the flow of a complex component. This is not required for simple packages but can be very helpful to illustrate how larger more complex systems fit together.
+
 ## Usage
 
 ### Basic Example
@@ -174,6 +178,7 @@ Main README should have:
 4. **Keep It Current**: Reflect the actual current state, not aspirations
 5. **No Emojis**: Unless the existing README uses them
 6. **Consistent Formatting**: Use consistent header levels and code block languages
+7. **No "NEW" Annotations**: Don't use "New" or similar tags for various features/abilities in readme docs as those quickly get out of date. If you see them in packages you're updating, remove New/similar tag.
 
 ## What NOT to Include
 

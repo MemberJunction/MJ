@@ -1,0 +1,182 @@
+[
+  {
+    "fields": {
+      "Name": "Dashboards",
+      "DisplayName": "Dashboards",
+      "Description": "Dashboards contain collections of resources a user can browse",
+      "Icon": "fa-solid fa-table-columns",
+      "DriverClass": "DashboardResource",
+      "EntityID": "@lookup:Entities.Name=Dashboards",
+      "CategoryEntityID": "@lookup:Entities.Name=Dashboard Categories"
+    },
+    "primaryKey": {
+      "ID": "D8AFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.807Z",
+      "checksum": "94fa21dbe6febbb77961d81b9d55f23108a95b5f81ae1f2c132cadae8c91d0c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Queries",
+      "DisplayName": "Queries",
+      "Description": "Queries contain stored queries that can be used as building blocks for analysis",
+      "Icon": "fa-regular fa-file-code",
+      "DriverClass": "QueryResource",
+      "EntityID": "@lookup:Entities.Name=Queries",
+      "CategoryEntityID": "@lookup:Entities.Name=Query Categories"
+    },
+    "primaryKey": {
+      "ID": "D9AFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.820Z",
+      "checksum": "9942faa8a2cdf24e23c93d737479659869c86c32c5c70a1ef42c3ff57d902e7c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Records",
+      "DisplayName": "Records",
+      "Description": "Records are links to a specific row of data from a designated entity",
+      "Icon": "fa-solid fa-rectangle-list",
+      "DriverClass": "RecordResource",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "DAAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.769Z",
+      "checksum": "826be6cc740b44a35e59d662780c2bef29c57232d1023cfa54da5b25ef6738dd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reports",
+      "DisplayName": "Reports",
+      "Description": "Reports are generated outputs from conversations a user has with the interface",
+      "Icon": "fa-solid fa-chart-simple",
+      "DriverClass": "ReportResource",
+      "EntityID": "@lookup:Entities.Name=Reports",
+      "CategoryEntityID": "@lookup:Entities.Name=Report Categories"
+    },
+    "primaryKey": {
+      "ID": "DBAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.833Z",
+      "checksum": "2c9cf215c74cbe2f9ed71d1b520c3b25ef8ae015faf3e0d1b251f5e81c9270d8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Search Results",
+      "DisplayName": "Search Results",
+      "Description": "Display the results of a user search",
+      "Icon": "fa-solid fa-magnifying-glass",
+      "DriverClass": "SearchResultsResource",
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "DCAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.782Z",
+      "checksum": "62eaba704ce4958d9375af0ac02b0b97521713af1f4f4eee43738e17d2c6300a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "User Views",
+      "DisplayName": "Views",
+      "Description": "User Views contain the metadata for the user viewing system of entity data",
+      "Icon": "fa-solid fa-table",
+      "DriverClass": "ViewResource",
+      "EntityID": "@lookup:Entities.Name=User Views",
+      "CategoryEntityID": "@lookup:Entities.Name=User View Categories"
+    },
+    "primaryKey": {
+      "ID": "DDAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.845Z",
+      "checksum": "e95b3f27625ec20c88c5e4f11ca74c10bcc3664c80c25788713408e4876cd5c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lists",
+      "DisplayName": "Lists",
+      "Description": "Lists contains sets of records from an Entity",
+      "Icon": "fa-solid fa-rectangle-list",
+      "DriverClass": "ListDetailResource",
+      "EntityID": "@lookup:Entities.Name=Lists",
+      "CategoryEntityID": "@lookup:Entities.Name=List Categories"
+    },
+    "primaryKey": {
+      "ID": "E64D433E-F36B-1410-8560-0041FA62858A"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.855Z",
+      "checksum": "a7a3ebb63c6c95054250a3bbd9e6ead96b7c50c33f95c8efcfb3867e5eb6bad6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Conversations",
+      "DisplayName": "Conversations",
+      "Description": "Conversations include those with AI systems as well as other users",
+      "Icon": "fa-regular fa-comments",
+      "DriverClass": "ConversationResource",
+      "EntityID": "@lookup:Entities.Name=Conversations",
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "81D4BC3D-9FEB-EF11-B01A-286B35C04427"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.795Z",
+      "checksum": "45a6d96179f323fea7546fb86d21560fb7afb47db9780decc347e8abcde51547"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifacts",
+      "DisplayName": "Artifacts",
+      "Description": "Versioned content artifacts including reports, dashboards, and forms",
+      "Icon": "fa-solid fa-file-code",
+      "DriverClass": "ArtifactResource",
+      "EntityID": "@lookup:Entities.Name=MJ: Conversation Artifacts",
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "6BA617C4-0CBA-4C79-B037-456DF4B03D3D"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.743Z",
+      "checksum": "26b2b310722df672b13b53e4321bcb0812891a67005bb0eab20e05fc4697d4c3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Custom",
+      "DisplayName": "Custom Resource",
+      "Description": "Application-specific custom resource component (DriverClass specified in NavItem)",
+      "Icon": "fa-solid fa-cube",
+      "DriverClass": null,
+      "EntityID": null,
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "DB542786-AA10-431B-85B0-7B08CFD5B968"
+    },
+    "sync": {
+      "lastModified": "2025-11-28T02:04:36.730Z",
+      "checksum": "f3a88509031b1f56600fa512a0ce12a25d709004e35fb28b2f6fcc66aecb54fd"
+    }
+  }
+]

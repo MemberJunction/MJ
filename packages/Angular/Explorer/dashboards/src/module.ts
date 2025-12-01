@@ -12,7 +12,6 @@ import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.co
 import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
 import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
 import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
-import { AIDashboardComponent } from './AI/ai-dashboard.component';
 import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
 import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
@@ -22,7 +21,6 @@ import { AgentEditorComponent } from './AI/components/agents/agent-editor.compon
 import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
 import { SystemConfigurationComponent } from './AI/components/system/system-configuration.component';
 import { SystemConfigFilterPanelComponent } from './AI/components/system/system-config-filter-panel.component';
-import { ActionsManagementDashboardComponent } from './Actions/actions-management-dashboard.component';
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
 import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
@@ -64,6 +62,11 @@ import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs
 import { SchedulingHistoryComponent } from './Scheduling/components/scheduling-history.component';
 import { SchedulingTypesComponent } from './Scheduling/components/scheduling-types.component';
 import { SchedulingHealthComponent } from './Scheduling/components/scheduling-health.component';
+import { SchedulingMonitorResourceComponent } from './Scheduling/components/scheduling-monitor-resource.component';
+import { SchedulingJobsResourceComponent } from './Scheduling/components/scheduling-jobs-resource.component';
+import { SchedulingHistoryResourceComponent } from './Scheduling/components/scheduling-history-resource.component';
+import { SchedulingTypesResourceComponent } from './Scheduling/components/scheduling-types-resource.component';
+import { SchedulingHealthResourceComponent } from './Scheduling/components/scheduling-health-resource.component';
 import { SchedulingInstrumentationService } from './Scheduling/services/scheduling-instrumentation.service';
 // Testing Dashboard Components
 import { TestingDashboardComponent } from './Testing/testing-dashboard.component';
@@ -72,11 +75,28 @@ import { TestingExecutionComponent } from './Testing/components/testing-executio
 import { TestingAnalyticsComponent } from './Testing/components/testing-analytics.component';
 import { TestingVersionComparisonComponent } from './Testing/components/testing-version-comparison.component';
 import { TestingFeedbackComponent } from './Testing/components/testing-feedback.component';
+import { TestingOverviewResourceComponent } from './Testing/components/testing-overview-resource.component';
+import { TestingExecutionResourceComponent } from './Testing/components/testing-execution-resource.component';
+import { TestingAnalyticsResourceComponent } from './Testing/components/testing-analytics-resource.component';
+import { TestingVersionResourceComponent } from './Testing/components/testing-version-resource.component';
+import { TestingFeedbackResourceComponent } from './Testing/components/testing-feedback-resource.component';
 import { SuiteTreeComponent, SuiteTreeNodeComponent } from './Testing/components/widgets/suite-tree.component';
 import { OracleBreakdownTableComponent } from './Testing/components/widgets/oracle-breakdown-table.component';
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 import { TestingModule } from '@memberjunction/ng-testing';
+import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
+// Data Explorer Dashboard Components
+import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
+import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
+import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
+import { ViewConfigPanelComponent } from './DataExplorer/components/view-config-panel/view-config-panel.component';
+import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
+// Home Dashboard Components
+import { HomeDashboardComponent } from './Home/home-dashboard.component';
+import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -84,7 +104,6 @@ import { TestingModule } from '@memberjunction/ng-testing';
     EntityFilterPanelComponent,
     EntityDetailsComponent,
     ERDDiagramComponent,
-    AIDashboardComponent,
     ModelManagementV2Component,
     PromptManagementV2Component,
     PromptFilterPanelComponent,
@@ -94,7 +113,6 @@ import { TestingModule } from '@memberjunction/ng-testing';
     ExecutionMonitoringComponent,
     SystemConfigurationComponent,
     SystemConfigFilterPanelComponent,
-    ActionsManagementDashboardComponent,
     ActionsOverviewComponent,
     ActionsExecutionMonitoringComponent,
     ScheduledActionsComponent,
@@ -123,6 +141,11 @@ import { TestingModule } from '@memberjunction/ng-testing';
     SchedulingHistoryComponent,
     SchedulingTypesComponent,
     SchedulingHealthComponent,
+    SchedulingMonitorResourceComponent,
+    SchedulingJobsResourceComponent,
+    SchedulingHistoryResourceComponent,
+    SchedulingTypesResourceComponent,
+    SchedulingHealthResourceComponent,
     // Testing Dashboard Components
     TestingDashboardComponent,
     TestingOverviewComponent,
@@ -130,10 +153,22 @@ import { TestingModule } from '@memberjunction/ng-testing';
     TestingAnalyticsComponent,
     TestingVersionComparisonComponent,
     TestingFeedbackComponent,
+    TestingOverviewResourceComponent,
+    TestingExecutionResourceComponent,
+    TestingAnalyticsResourceComponent,
+    TestingVersionResourceComponent,
+    TestingFeedbackResourceComponent,
     SuiteTreeComponent,
     SuiteTreeNodeComponent,
     OracleBreakdownTableComponent,
-    TestRunDetailPanelComponent
+    TestRunDetailPanelComponent,
+    // Data Explorer Dashboard Components
+    DataExplorerDashboardComponent,
+    ExplorerNavigationPanelComponent,
+    ViewSelectorComponent,
+    ViewConfigPanelComponent,
+    // Home Dashboard Components
+    HomeDashboardComponent
   ],
   imports: [
     CommonModule,
@@ -159,20 +194,52 @@ import { TestingModule } from '@memberjunction/ng-testing';
     TabStripModule,
     PanelBarModule,
     MJNotificationsModule,
-    TestingModule
+    TestingModule,
+    UserViewGridModule,
+    EntityViewerModule,
+    ExplorerSettingsModule,
+    SharedGenericModule
   ],
   providers: [
     AIInstrumentationService,
     SchedulingInstrumentationService,
-    TestingInstrumentationService
+    TestingInstrumentationService,
+    ExplorerStateService
   ],
   exports: [
     EntityAdminDashboardComponent,
-    AIDashboardComponent,
-    ActionsManagementDashboardComponent,
     ComponentStudioDashboardComponent,
     SchedulingDashboardComponent,
-    TestingDashboardComponent
+    TestingDashboardComponent,
+    // Export AI components (now BaseResourceComponent-based)
+    ExecutionMonitoringComponent,
+    PromptManagementV2Component,
+    AgentConfigurationComponent,
+    ModelManagementV2Component,
+    SystemConfigurationComponent,
+    // Export Actions components (now BaseResourceComponent-based)
+    ActionsOverviewComponent,
+    ActionsExecutionMonitoringComponent,
+    ScheduledActionsComponent,
+    CodeManagementComponent,
+    EntityIntegrationComponent,
+    SecurityPermissionsComponent,
+    // Export Scheduling resource components
+    SchedulingMonitorResourceComponent,
+    SchedulingJobsResourceComponent,
+    SchedulingHistoryResourceComponent,
+    SchedulingTypesResourceComponent,
+    SchedulingHealthResourceComponent,
+    // Export Testing resource components
+    TestingOverviewResourceComponent,
+    TestingExecutionResourceComponent,
+    TestingAnalyticsResourceComponent,
+    TestingVersionResourceComponent,
+    TestingFeedbackResourceComponent,
+    // Export Data Explorer Dashboard
+    DataExplorerDashboardComponent,
+    // Export Home Dashboard
+    HomeDashboardComponent
   ]
 })
 export class DashboardsModule { }

@@ -244,6 +244,7 @@ For folders with both packages and non-package directories:
 4. **Keep Current**: Only document what exists
 5. **Use ASCII Diagrams**: For architecture visualization
 6. **Link Generously**: Every package should link to its README
+7. **No "NEW" Annotations**: Don't use "New" or similar tags for various features/abilities in readme docs as those quickly get out of date. If you see them in packages you're updating, remove New/similar tag.
 
 ## Output
 

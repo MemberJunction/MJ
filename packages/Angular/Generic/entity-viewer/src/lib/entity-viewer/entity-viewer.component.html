@@ -1,0 +1,114 @@
+<div class="entity-viewer-container" [style.height]="effectiveConfig.height">
+  <!-- Header -->
+  @if (effectiveConfig.showFilter || effectiveConfig.showViewModeToggle || effectiveConfig.showRecordCount) {
+    <div class="viewer-header">
+      <!-- Filter Input -->
+      @if (effectiveConfig.showFilter) {
+        <div class="filter-container">
+          <i class="fa-solid fa-search filter-icon"></i>
+          <input
+            type="text"
+            class="filter-input"
+            [placeholder]="effectiveConfig.filterPlaceholder"
+            [value]="effectiveFilterText"
+            (input)="onFilterChange($any($event.target).value)"
+          />
+          @if (effectiveFilterText) {
+            <button class="clear-filter-btn" (click)="clearFilter()" title="Clear filter">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          }
+        </div>
+      }
+
+      <!-- Record Count -->
+      @if (effectiveConfig.showRecordCount && entity) {
+        <div class="record-count">
+          @if (filteredRecordCount !== totalRecordCount) {
+            <span>{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
+          } @else {
+            <span>{{ totalRecordCount | number }} records</span>
+          }
+        </div>
+      }
+
+      <!-- View Mode Toggle -->
+      @if (effectiveConfig.showViewModeToggle) {
+        <div class="view-mode-toggle">
+          <button
+            class="toggle-btn"
+            [class.active]="effectiveViewMode === 'grid'"
+            (click)="setViewMode('grid')"
+            title="Grid View">
+            <i class="fa-solid fa-list"></i>
+          </button>
+          <button
+            class="toggle-btn"
+            [class.active]="effectiveViewMode === 'cards'"
+            (click)="setViewMode('cards')"
+            title="Cards View">
+            <i class="fa-solid fa-grip"></i>
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Content -->
+  <div class="viewer-content">
+    @if (isLoading && filteredRecords.length === 0) {
+      <!-- Initial loading state -->
+      <div class="loading-container">
+        <mj-loading [text]="loadingMessage" size="medium"></mj-loading>
+      </div>
+    } @else if (!entity) {
+      <div class="empty-state">
+        <i class="fa-solid fa-database"></i>
+        <p>Select an entity to view records</p>
+      </div>
+    } @else if (filteredRecords.length === 0 && !isLoading) {
+      <div class="empty-state">
+        <i class="fa-solid fa-inbox"></i>
+        <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
+      </div>
+    } @else {
+      @if (effectiveViewMode === 'grid') {
+        <mj-entity-grid
+          [entity]="entity"
+          [records]="filteredRecords"
+          [selectedRecordId]="selectedRecordId"
+          [columns]="gridColumns"
+          [height]="'100%'"
+          [filterText]="debouncedFilterText"
+          [sortState]="effectiveSortState"
+          [serverSideSorting]="effectiveConfig.serverSideSorting"
+          [gridState]="gridState"
+          (recordSelected)="onRecordSelected($event)"
+          (recordOpened)="onRecordOpened($event)"
+          (sortChanged)="onSortChanged($event)"
+          (gridStateChanged)="onGridStateChanged($event)">
+        </mj-entity-grid>
+      } @else {
+        <mj-entity-cards
+          [entity]="entity"
+          [records]="filteredRecords"
+          [selectedRecordId]="selectedRecordId"
+          [cardTemplate]="cardTemplate"
+          [hiddenFieldMatches]="hiddenFieldMatches"
+          [filterText]="debouncedFilterText"
+          (recordSelected)="onRecordSelected($event)"
+          (recordOpened)="onRecordOpened($event)">
+        </mj-entity-cards>
+      }
+    }
+  </div>
+
+  <!-- Pagination - only show when there's more data to load OR we've loaded more than one page -->
+  @if (effectiveConfig.showPagination && entity && (pagination.hasMore || pagination.totalRecords > effectiveConfig.pageSize)) {
+    <mj-pagination
+      [pagination]="pagination"
+      [loadedRecordCount]="filteredRecords.length"
+      (loadMore)="onLoadMore()">
+    </mj-pagination>
+  }
+</div>

@@ -1,5 +1,5 @@
 import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, ViewContainerRef, HostListener } from '@angular/core';
-import { BaseDashboard } from '../generic/base-dashboard';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
 import {
