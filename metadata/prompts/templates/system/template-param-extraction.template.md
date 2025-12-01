@@ -18,7 +18,7 @@ Do NOT include variables that are shown within {% raw %}{% raw %}{% endraw %}{% 
 
 For nested object references (like user.email), extract only the TOP-LEVEL variable name (user).
 
-## Output Format: 
+## Output Format:
 Return a JSON array of parameter objects with this structure:
 
 ```json
@@ -40,16 +40,21 @@ Return a JSON array of parameter objects with this structure:
 1. Only include each variable ONCE (deduplicate)
 2. Ignore Nunjucks built-in variables (loop, super, etc.)
 3. Ignore {% raw %}single curly braces like { and } --- only look for double curly braces {{ and }} for true nunjucks params {% endraw %}
-4. Ignore System Placholders. These are populated by the system, and are not considered template parameters. These 
+4. Ignore System Placholders. These are populated by the system, and are not considered template parameters. These
 system placholders start with a single _ character, for example in the below, you would ignore _OUTPUT_EXAMPLE
   {% raw %}My Template: {{ _OUTPUT_EXAMPLE }}{% endraw %}
-5. For type detection:
+5. **CRITICAL**: For the "type" field, you MUST use EXACTLY these capitalized values (case-sensitive):
+   - "Scalar" (capitalized S) - for simple values like strings, numbers, booleans
+   - "Array" (capitalized A) - for lists/arrays
+   - "Object" (capitalized O) - for objects/dictionaries
+   - **NEVER** use lowercase ("scalar", "array", "object") or other variations ("string", "list", etc.)
+6. For type detection:
    - If used in {% raw %}{% for x in variable %}{% endraw %} → type is "Array"
    - If properties are accessed (variable.property) → type is "Object"
    - Otherwise → type is "Scalar"
-6. **MOST VARIABLES ARE OPTIONAL**: Generally speaking consider variables to **NOT** be required unless it is clear the template will be dramatically negatively affected due to the absence of the variable.
-7. Include meaningful descriptions based on usage context
-8. When in doubt, do NOT provide variables back, only pass back what you are SURE are true Nunjucks variables.
+7. **MOST VARIABLES ARE OPTIONAL**: Generally speaking consider variables to **NOT** be required unless it is clear the template will be dramatically negatively affected due to the absence of the variable.
+8. Include meaningful descriptions based on usage context
+9. When in doubt, do NOT provide variables back, only pass back what you are SURE are true Nunjucks variables.
 
 ## Example:
 Template:

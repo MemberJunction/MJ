@@ -327,6 +327,285 @@ EXEC [${flyway:defaultSchema}].spUpdateResourceType @Name = @Name_69322a5f,
   @DriverClass = @DriverClass_69322a5f,
   @ID = @ID_69322a5f;
 
+
+-- Save Template Contents (core SP call only)
+DECLARE @TemplateID_c438adf6 UNIQUEIDENTIFIER,
+@TypeID_c438adf6 UNIQUEIDENTIFIER,
+@TemplateText_c438adf6 NVARCHAR(MAX),
+@Priority_c438adf6 INT,
+@IsActive_c438adf6 BIT,
+@ID_c438adf6 UNIQUEIDENTIFIER
+SET
+  @TemplateID_c438adf6 = '33AF5671-077E-46A9-94AB-340783733024'
+SET
+  @TypeID_c438adf6 = 'E7AFCCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @TemplateText_c438adf6 = N'You are an expert at parsing Nunjucks templates. Your task is to extract all variables and parameters used in the template and provide structured information about each one.
+
+## Template to Analyze: 
+{{ templateText }}
+
+## Instructions:
+Identify ALL variables used in the template, including:
+1. Simple variables: {% raw %}{{ variableName }}{% endraw %}
+2. Object properties: {% raw %}{{ user.email }}{% endraw %}, {% raw %}{{ data.items[0].name }}{% endraw %}
+3. Variables in conditionals: {% raw %}{% if isActive %}{% endraw %}, {% raw %}{% if user.role == "admin" %}{% endraw %}
+4. Loop variables: {% raw %}{% for item in items %}{% endraw %}, {% raw %}{% for key, value in object %}{% endraw %}
+5. Variables in filters: {% raw %}{{ name | default(userName) }}{% endraw %}
+6. Variables in function calls: {% raw %}{{ formatDate(createdAt) }}{% endraw %}
+7. Variables in assignments: {% raw %}{% set total = price * quantity %}{% endraw %}
+
+## **IMPORTANT** 
+Do NOT include variables that are shown within {% raw %}{% raw %}{% endraw %}{% endraw %} blocks, those are for illustrative purposes and part of an illustration of what another template might have. Only consider variables that are **NOT** part of raw blocks to be valid for the purpose of this request.
+
+For nested object references (like user.email), extract only the TOP-LEVEL variable name (user).
+
+## Output Format:
+Return a JSON array of parameter objects with this structure:
+
+```json
+{
+  "parameters": [
+    {
+      "name": "variableName",
+      "type": "Scalar|Array|Object",
+      "isRequired": true|false,
+      "description": "Brief description of what this parameter is used for based on context",
+      "usage": ["List of locations where this variable is used in the template"],
+      "defaultValue": "Default value if found in template (e.g., from default filter)"
+    }
+  ]
+}
+```
+
+## Rules:
+1. Only include each variable ONCE (deduplicate)
+2. Ignore Nunjucks built-in variables (loop, super, etc.)
+3. Ignore {% raw %}single curly braces like { and } --- only look for double curly braces {{ and }} for true nunjucks params {% endraw %}
+4. Ignore System Placholders. These are populated by the system, and are not considered template parameters. These
+system placholders start with a single _ character, for example in the below, you would ignore _OUTPUT_EXAMPLE
+  {% raw %}My Template: {{ _OUTPUT_EXAMPLE }}{% endraw %}
+5. **CRITICAL**: For the "type" field, you MUST use EXACTLY these capitalized values (case-sensitive):
+   - "Scalar" (capitalized S) - for simple values like strings, numbers, booleans
+   - "Array" (capitalized A) - for lists/arrays
+   - "Object" (capitalized O) - for objects/dictionaries
+   - **NEVER** use lowercase ("scalar", "array", "object") or other variations ("string", "list", etc.)
+6. For type detection:
+   - If used in {% raw %}{% for x in variable %}{% endraw %} → type is "Array"
+   - If properties are accessed (variable.property) → type is "Object"
+   - Otherwise → type is "Scalar"
+7. **MOST VARIABLES ARE OPTIONAL**: Generally speaking consider variables to **NOT** be required unless it is clear the template will be dramatically negatively affected due to the absence of the variable.
+8. Include meaningful descriptions based on usage context
+9. When in doubt, do NOT provide variables back, only pass back what you are SURE are true Nunjucks variables.
+
+## Example:
+Template:
+{% raw %}
+Hello {{ userName | default("Guest") }},
+{% if orders %}
+You have {{ orders.length }} orders.
+{% for order in orders %}
+- Order #{{ order.id }}: {{ order.total }}
+{% endfor %}
+{% endif %}
+{% endraw %}
+
+Output:
+```json
+{
+  "parameters": [
+    {
+      "name": "orders",
+      "type": "Array",
+      "isRequired": false,
+      "description": "List of user orders with id and total properties",
+      "usage": ["if condition line 2", "for loop line 4", "length property line 3"],
+      "defaultValue": null
+    },
+    {
+      "name": "userName",
+      "type": "Scalar",
+      "isRequired": false,
+      "description": "Name of the user to greet",
+      "usage": ["greeting line 1"],
+      "defaultValue": "Guest"
+    }
+  ]
+}
+```'
+SET
+  @Priority_c438adf6 = 1
+SET
+  @IsActive_c438adf6 = 1
+SET
+  @ID_c438adf6 = '87E7401E-1AB6-4A41-A257-20ED3AE2CDA5'
+EXEC [${flyway:defaultSchema}].spUpdateTemplateContent @TemplateID = @TemplateID_c438adf6,
+  @TypeID = @TypeID_c438adf6,
+  @TemplateText = @TemplateText_c438adf6,
+  @Priority = @Priority_c438adf6,
+  @IsActive = @IsActive_c438adf6,
+  @ID = @ID_c438adf6;
+
+-- Save AI Prompts (core SP call only)
+DECLARE @Name_762087d8 NVARCHAR(255),
+@Description_762087d8 NVARCHAR(MAX),
+@TemplateID_762087d8 UNIQUEIDENTIFIER,
+@CategoryID_762087d8 UNIQUEIDENTIFIER,
+@TypeID_762087d8 UNIQUEIDENTIFIER,
+@Status_762087d8 NVARCHAR(50),
+@ResponseFormat_762087d8 NVARCHAR(20),
+@ModelSpecificResponseFormat_762087d8 NVARCHAR(MAX),
+@AIModelTypeID_762087d8 UNIQUEIDENTIFIER,
+@MinPowerRank_762087d8 INT,
+@SelectionStrategy_762087d8 NVARCHAR(20),
+@PowerPreference_762087d8 NVARCHAR(20),
+@ParallelizationMode_762087d8 NVARCHAR(20),
+@ParallelCount_762087d8 INT,
+@ParallelConfigParam_762087d8 NVARCHAR(100),
+@OutputType_762087d8 NVARCHAR(50),
+@OutputExample_762087d8 NVARCHAR(MAX),
+@ValidationBehavior_762087d8 NVARCHAR(50),
+@MaxRetries_762087d8 INT,
+@RetryDelayMS_762087d8 INT,
+@RetryStrategy_762087d8 NVARCHAR(20),
+@ResultSelectorPromptID_762087d8 UNIQUEIDENTIFIER,
+@EnableCaching_762087d8 BIT,
+@CacheTTLSeconds_762087d8 INT,
+@CacheMatchType_762087d8 NVARCHAR(20),
+@CacheSimilarityThreshold_762087d8 FLOAT(53),
+@CacheMustMatchModel_762087d8 BIT,
+@CacheMustMatchVendor_762087d8 BIT,
+@CacheMustMatchAgent_762087d8 BIT,
+@CacheMustMatchConfig_762087d8 BIT,
+@PromptRole_762087d8 NVARCHAR(20),
+@PromptPosition_762087d8 NVARCHAR(20),
+@Temperature_762087d8 DECIMAL(3, 2),
+@TopP_762087d8 DECIMAL(3, 2),
+@TopK_762087d8 INT,
+@MinP_762087d8 DECIMAL(3, 2),
+@FrequencyPenalty_762087d8 DECIMAL(3, 2),
+@PresencePenalty_762087d8 DECIMAL(3, 2),
+@Seed_762087d8 INT,
+@StopSequences_762087d8 NVARCHAR(1000),
+@IncludeLogProbs_762087d8 BIT,
+@TopLogProbs_762087d8 INT,
+@FailoverStrategy_762087d8 NVARCHAR(50),
+@FailoverMaxAttempts_762087d8 INT,
+@FailoverDelaySeconds_762087d8 INT,
+@FailoverModelStrategy_762087d8 NVARCHAR(50),
+@FailoverErrorScope_762087d8 NVARCHAR(50),
+@EffortLevel_762087d8 INT,
+@ID_762087d8 UNIQUEIDENTIFIER
+SET
+  @Name_762087d8 = N'Template Parameter Extraction'
+SET
+  @Description_762087d8 = N'Extracts Nunjucks variables and their types from template strings. Analyzes template content to identify all parameters used and infers their expected data types.'
+SET
+  @TemplateID_762087d8 = '33AF5671-077E-46A9-94AB-340783733024'
+SET
+  @CategoryID_762087d8 = '7D2DEF7F-138F-4620-8309-33964A97A997'
+SET
+  @TypeID_762087d8 = 'A6DA423E-F36B-1410-8DAC-00021F8B792E'
+SET
+  @Status_762087d8 = N'Active'
+SET
+  @ResponseFormat_762087d8 = N'JSON'
+SET
+  @MinPowerRank_762087d8 = 0
+SET
+  @SelectionStrategy_762087d8 = N'Specific'
+SET
+  @PowerPreference_762087d8 = N'Highest'
+SET
+  @ParallelizationMode_762087d8 = N'None'
+SET
+  @OutputType_762087d8 = N'object'
+SET
+  @OutputExample_762087d8 = N'{"parameters":[{"name":"customerName","type":"Scalar","isRequired":true,"description":"The name of the customer","usage":["greeting header","personalization"],"defaultValue":null},{"name":"orderItems","type":"Array","isRequired":false,"description":"List of items in the customer''s order","usage":["order details section","item iteration"],"defaultValue":null},{"name":"companyInfo","type":"Object","isRequired":true,"description":"Company information object containing name, address, and contact details","usage":["footer section","contact information"],"defaultValue":null}]}'
+SET
+  @ValidationBehavior_762087d8 = N'Strict'
+SET
+  @MaxRetries_762087d8 = 2
+SET
+  @RetryDelayMS_762087d8 = 1000
+SET
+  @RetryStrategy_762087d8 = N'Fixed'
+SET
+  @EnableCaching_762087d8 = 0
+SET
+  @CacheMatchType_762087d8 = N'Exact'
+SET
+  @CacheMustMatchModel_762087d8 = 1
+SET
+  @CacheMustMatchVendor_762087d8 = 1
+SET
+  @CacheMustMatchAgent_762087d8 = 0
+SET
+  @CacheMustMatchConfig_762087d8 = 0
+SET
+  @PromptRole_762087d8 = N'System'
+SET
+  @PromptPosition_762087d8 = N'First'
+SET
+  @IncludeLogProbs_762087d8 = 0
+SET
+  @FailoverStrategy_762087d8 = N'SameModelDifferentVendor'
+SET
+  @FailoverModelStrategy_762087d8 = N'PreferSameModel'
+SET
+  @FailoverErrorScope_762087d8 = N'All'
+SET
+  @ID_762087d8 = 'C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB'
+EXEC [${flyway:defaultSchema}].spUpdateAIPrompt @Name = @Name_762087d8,
+  @Description = @Description_762087d8,
+  @TemplateID = @TemplateID_762087d8,
+  @CategoryID = @CategoryID_762087d8,
+  @TypeID = @TypeID_762087d8,
+  @Status = @Status_762087d8,
+  @ResponseFormat = @ResponseFormat_762087d8,
+  @ModelSpecificResponseFormat = @ModelSpecificResponseFormat_762087d8,
+  @AIModelTypeID = @AIModelTypeID_762087d8,
+  @MinPowerRank = @MinPowerRank_762087d8,
+  @SelectionStrategy = @SelectionStrategy_762087d8,
+  @PowerPreference = @PowerPreference_762087d8,
+  @ParallelizationMode = @ParallelizationMode_762087d8,
+  @ParallelCount = @ParallelCount_762087d8,
+  @ParallelConfigParam = @ParallelConfigParam_762087d8,
+  @OutputType = @OutputType_762087d8,
+  @OutputExample = @OutputExample_762087d8,
+  @ValidationBehavior = @ValidationBehavior_762087d8,
+  @MaxRetries = @MaxRetries_762087d8,
+  @RetryDelayMS = @RetryDelayMS_762087d8,
+  @RetryStrategy = @RetryStrategy_762087d8,
+  @ResultSelectorPromptID = @ResultSelectorPromptID_762087d8,
+  @EnableCaching = @EnableCaching_762087d8,
+  @CacheTTLSeconds = @CacheTTLSeconds_762087d8,
+  @CacheMatchType = @CacheMatchType_762087d8,
+  @CacheSimilarityThreshold = @CacheSimilarityThreshold_762087d8,
+  @CacheMustMatchModel = @CacheMustMatchModel_762087d8,
+  @CacheMustMatchVendor = @CacheMustMatchVendor_762087d8,
+  @CacheMustMatchAgent = @CacheMustMatchAgent_762087d8,
+  @CacheMustMatchConfig = @CacheMustMatchConfig_762087d8,
+  @PromptRole = @PromptRole_762087d8,
+  @PromptPosition = @PromptPosition_762087d8,
+  @Temperature = @Temperature_762087d8,
+  @TopP = @TopP_762087d8,
+  @TopK = @TopK_762087d8,
+  @MinP = @MinP_762087d8,
+  @FrequencyPenalty = @FrequencyPenalty_762087d8,
+  @PresencePenalty = @PresencePenalty_762087d8,
+  @Seed = @Seed_762087d8,
+  @StopSequences = @StopSequences_762087d8,
+  @IncludeLogProbs = @IncludeLogProbs_762087d8,
+  @TopLogProbs = @TopLogProbs_762087d8,
+  @FailoverStrategy = @FailoverStrategy_762087d8,
+  @FailoverMaxAttempts = @FailoverMaxAttempts_762087d8,
+  @FailoverDelaySeconds = @FailoverDelaySeconds_762087d8,
+  @FailoverModelStrategy = @FailoverModelStrategy_762087d8,
+  @FailoverErrorScope = @FailoverErrorScope_762087d8,
+  @EffortLevel = @EffortLevel_762087d8,
+  @ID = @ID_762087d8;
+
 -- Save Template Contents (core SP call only)
 DECLARE @TemplateID_f56c9b41 UNIQUEIDENTIFIER,
 @TypeID_f56c9b41 UNIQUEIDENTIFIER,
@@ -2543,7 +2822,7 @@ SET
 SET
   @Description_22e7dfb8 = N'Array of entity metadata objects containing schema, view, and field information'
 SET
-  @Type_22e7dfb8 = N'array'
+  @Type_22e7dfb8 = N'Array'
 SET
   @IsRequired_22e7dfb8 = 0
 EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_22e7dfb8,
@@ -2583,7 +2862,7 @@ SET
 SET
   @Description_56db0b23 = N'The raw SQL query template text to be parsed'
 SET
-  @Type_56db0b23 = N'string'
+  @Type_56db0b23 = N'Scalar'
 SET
   @IsRequired_56db0b23 = 0
 SET
