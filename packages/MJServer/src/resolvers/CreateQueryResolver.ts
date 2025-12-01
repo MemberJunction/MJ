@@ -160,9 +160,6 @@ export class QueryFieldType {
     @Field(() => String, { nullable: true })
     Description?: string;
 
-    @Field(() => String, { nullable: true })
-    Type?: string;
-
     @Field(() => Number)
     Sequence!: number;
 
@@ -172,11 +169,26 @@ export class QueryFieldType {
     @Field(() => String, { nullable: true })
     SQLFullType?: string;
 
+    @Field(() => String, { nullable: true })
+    SourceEntityID?: string;
+
+    @Field(() => String, { nullable: true })
+    SourceEntity?: string;
+
+    @Field(() => String, { nullable: true })
+    SourceFieldName?: string;
+
     @Field(() => Boolean)
     IsComputed!: boolean;
 
     @Field(() => String, { nullable: true })
     ComputationDescription?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSummary?: boolean;
+
+    @Field(() => String, { nullable: true })
+    SummaryDescription?: string;
 }
 
 @ObjectType()
@@ -190,17 +202,23 @@ export class QueryParameterType {
     @Field(() => String)
     Name!: string;
 
+    @Field(() => String, { nullable: true })
+    Description?: string;
+
     @Field(() => String)
     Type!: string;
+
+    @Field(() => Boolean)
+    IsRequired!: boolean;
 
     @Field(() => String, { nullable: true })
     DefaultValue?: string;
 
     @Field(() => String, { nullable: true })
-    Comments?: string;
+    SampleValue?: string;
 
-    @Field(() => Boolean)
-    IsRequired!: boolean;
+    @Field(() => String, { nullable: true })
+    ValidationFilters?: string;
 }
 
 @ObjectType()
@@ -215,7 +233,7 @@ export class QueryEntityType {
     EntityID!: string;
 
     @Field(() => String, { nullable: true })
-    EntityName?: string;
+    Entity?: string;
 }
 
 @ObjectType()
@@ -230,7 +248,7 @@ export class QueryPermissionType {
     RoleID!: string;
 
     @Field(() => String, { nullable: true })
-    RoleName?: string;
+    Role?: string;
 }
 
 @ObjectType()
@@ -241,9 +259,41 @@ export class CreateQueryResultType {
     @Field(() => String, { nullable: true })
     ErrorMessage?: string;
 
+    // Core query properties
     @Field(() => String, { nullable: true })
-    QueryData?: string;
+    ID?: string;
 
+    @Field(() => String, { nullable: true })
+    Name?: string;
+
+    @Field(() => String, { nullable: true })
+    Description?: string;
+
+    @Field(() => String, { nullable: true })
+    CategoryID?: string;
+
+    @Field(() => String, { nullable: true })
+    Category?: string;
+
+    @Field(() => String, { nullable: true })
+    SQL?: string;
+
+    @Field(() => String, { nullable: true })
+    Status?: string;
+
+    @Field(() => Number, { nullable: true })
+    QualityRank?: number;
+
+    @Field(() => String, { nullable: true })
+    EmbeddingVector?: string;
+
+    @Field(() => String, { nullable: true })
+    EmbeddingModelID?: string;
+
+    @Field(() => String, { nullable: true })
+    EmbeddingModelName?: string;
+
+    // Related collections
     @Field(() => [QueryFieldType], { nullable: true })
     Fields?: QueryFieldType[];
 
@@ -265,9 +315,41 @@ export class UpdateQueryResultType {
     @Field(() => String, { nullable: true })
     ErrorMessage?: string;
 
+    // Core query properties
     @Field(() => String, { nullable: true })
-    QueryData?: string;
+    ID?: string;
 
+    @Field(() => String, { nullable: true })
+    Name?: string;
+
+    @Field(() => String, { nullable: true })
+    Description?: string;
+
+    @Field(() => String, { nullable: true })
+    CategoryID?: string;
+
+    @Field(() => String, { nullable: true })
+    Category?: string;
+
+    @Field(() => String, { nullable: true })
+    SQL?: string;
+
+    @Field(() => String, { nullable: true })
+    Status?: string;
+
+    @Field(() => Number, { nullable: true })
+    QualityRank?: number;
+
+    @Field(() => String, { nullable: true })
+    EmbeddingVector?: string;
+
+    @Field(() => String, { nullable: true })
+    EmbeddingModelID?: string;
+
+    @Field(() => String, { nullable: true })
+    EmbeddingModelName?: string;
+
+    // Related collections
     @Field(() => [QueryFieldType], { nullable: true })
     Fields?: QueryFieldType[];
 
@@ -289,8 +371,24 @@ export class DeleteQueryResultType {
     @Field(() => String, { nullable: true })
     ErrorMessage?: string;
 
+    // Core query properties of deleted query
     @Field(() => String, { nullable: true })
-    QueryData?: string;
+    ID?: string;
+
+    @Field(() => String, { nullable: true })
+    Name?: string;
+
+    @Field(() => String, { nullable: true })
+    Description?: string;
+
+    @Field(() => String, { nullable: true })
+    CategoryID?: string;
+
+    @Field(() => String, { nullable: true })
+    SQL?: string;
+
+    @Field(() => String, { nullable: true })
+    Status?: string;
 }
 
 @Resolver()
@@ -368,16 +466,56 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
                 return {
                     Success: true,
-                    QueryData: JSON.stringify(record.GetAll()),
-                    Fields: record.QueryFields,
-                    Parameters: record.QueryParameters,
-                    Entities: record.QueryEntities.map(e => {
-                        return {
-                            ...e,
-                            EntityName: e.Entity // alias this to fix variable name mismatch
-                        }
-                    }),
-                    Permissions: record.QueryPermissions
+                    ID: record.ID,
+                    Name: record.Name,
+                    Description: record.Description,
+                    CategoryID: record.CategoryID,
+                    Category: record.Category,
+                    SQL: record.SQL,
+                    Status: record.Status,
+                    QualityRank: record.QualityRank,
+                    EmbeddingVector: record.EmbeddingVector,
+                    EmbeddingModelID: record.EmbeddingModelID,
+                    EmbeddingModelName: record.EmbeddingModel,
+                    Fields: record.QueryFields.map(f => ({
+                        ID: f.ID,
+                        QueryID: f.QueryID,
+                        Name: f.Name,
+                        Description: f.Description,
+                        Sequence: f.Sequence,
+                        SQLBaseType: f.SQLBaseType,
+                        SQLFullType: f.SQLFullType,
+                        SourceEntityID: f.SourceEntityID,
+                        SourceEntity: f.SourceEntity,
+                        SourceFieldName: f.SourceFieldName,
+                        IsComputed: f.IsComputed,
+                        ComputationDescription: f.ComputationDescription,
+                        IsSummary: f.IsSummary,
+                        SummaryDescription: f.SummaryDescription
+                    })),
+                    Parameters: record.QueryParameters.map(p => ({
+                        ID: p.ID,
+                        QueryID: p.QueryID,
+                        Name: p.Name,
+                        Description: p.Description,
+                        Type: p.Type,
+                        IsRequired: p.IsRequired,
+                        DefaultValue: p.DefaultValue,
+                        SampleValue: p.SampleValue,
+                        ValidationFilters: p.ValidationFilters
+                    })),
+                    Entities: record.QueryEntities.map(e => ({
+                        ID: e.ID,
+                        QueryID: e.QueryID,
+                        EntityID: e.EntityID,
+                        Entity: e.Entity
+                    })),
+                    Permissions: record.QueryPermissions.map(p => ({
+                        ID: p.ID,
+                        QueryID: p.QueryID,
+                        RoleID: p.RoleID,
+                        Role: p.Role
+                    }))
                 };
             }
             else {
@@ -391,16 +529,56 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                     LogStatus(`[CreateQuery] Unique constraint detected for query '${input.Name}'. Using existing query (ID: ${existingQuery.ID}) created by concurrent request.`);
                     return {
                         Success: true,
-                        QueryData: JSON.stringify(existingQuery),
-                        Fields: existingQuery.Fields || [],
-                        Parameters: existingQuery.Parameters || [],
-                        Entities: existingQuery.Entities?.map(e => ({
+                        ID: existingQuery.ID,
+                        Name: existingQuery.Name,
+                        Description: existingQuery.Description,
+                        CategoryID: existingQuery.CategoryID,
+                        Category: existingQuery.Category,
+                        SQL: existingQuery.SQL,
+                        Status: existingQuery.Status,
+                        QualityRank: existingQuery.QualityRank,
+                        EmbeddingVector: existingQuery.EmbeddingVector,
+                        EmbeddingModelID: existingQuery.EmbeddingModelID,
+                        EmbeddingModelName: existingQuery.EmbeddingModel,
+                        Fields: existingQuery.Fields?.map((f: any) => ({
+                            ID: f.ID,
+                            QueryID: f.QueryID,
+                            Name: f.Name,
+                            Description: f.Description,
+                            Sequence: f.Sequence,
+                            SQLBaseType: f.SQLBaseType,
+                            SQLFullType: f.SQLFullType,
+                            SourceEntityID: f.SourceEntityID,
+                            SourceEntity: f.SourceEntity,
+                            SourceFieldName: f.SourceFieldName,
+                            IsComputed: f.IsComputed,
+                            ComputationDescription: f.ComputationDescription,
+                            IsSummary: f.IsSummary,
+                            SummaryDescription: f.SummaryDescription
+                        })) || [],
+                        Parameters: existingQuery.Parameters?.map((p: any) => ({
+                            ID: p.ID,
+                            QueryID: p.QueryID,
+                            Name: p.Name,
+                            Description: p.Description,
+                            Type: p.Type,
+                            IsRequired: p.IsRequired,
+                            DefaultValue: p.DefaultValue,
+                            SampleValue: p.SampleValue,
+                            ValidationFilters: p.ValidationFilters
+                        })) || [],
+                        Entities: existingQuery.Entities?.map((e: any) => ({
                             ID: e.ID,
                             QueryID: e.QueryID,
                             EntityID: e.EntityID,
-                            EntityName: e.Entity
+                            Entity: e.Entity
                         })) || [],
-                        Permissions: existingQuery.Permissions || []
+                        Permissions: existingQuery.Permissions?.map((p: any) => ({
+                            ID: p.ID,
+                            QueryID: p.QueryID,
+                            RoleID: p.RoleID,
+                            Role: p.Role
+                        })) || []
                     };
                 }
 
@@ -437,7 +615,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                             ID: permissionEntity.ID,
                             QueryID: permissionEntity.QueryID,
                             RoleID: permissionEntity.RoleID,
-                            RoleName: permissionEntity.Role // The view includes the Role name
+                            Role: permissionEntity.Role
                         });
                     }
                 }
@@ -545,51 +723,58 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 await queryEntity.RefreshRelatedMetadata(true);
             }
 
-            // Use the properties from QueryEntityExtended instead of manual loading
-            const fields: QueryFieldType[] = queryEntity.QueryFields.map(f => ({
-                ID: f.ID,
-                QueryID: f.QueryID,
-                Name: f.Name,
-                Description: f.Description || undefined,
-                Type: f.SQLBaseType || undefined,
-                Sequence: f.Sequence,
-                SQLBaseType: f.SQLBaseType || undefined,
-                SQLFullType: f.SQLFullType || undefined,
-                IsComputed: f.IsComputed,
-                ComputationDescription: f.ComputationDescription || undefined
-            }));
-            
-            const parameters: QueryParameterType[] = queryEntity.QueryParameters.map(p => ({
-                ID: p.ID,
-                QueryID: p.QueryID,
-                Name: p.Name,
-                Type: p.Type,
-                DefaultValue: p.DefaultValue || undefined,
-                Comments: '', // Not available in QueryParameterInfo
-                IsRequired: p.IsRequired
-            }));
-            
-            const entities: QueryEntityType[] = queryEntity.QueryEntities.map(e => ({
-                ID: e.ID,
-                QueryID: e.QueryID,
-                EntityID: e.EntityID,
-                EntityName: e.Entity || undefined // Property is called Entity, not EntityName
-            }));
-            
-            const permissions: QueryPermissionType[] = queryEntity.QueryPermissions.map(p => ({
-                ID: p.ID,
-                QueryID: p.QueryID,
-                RoleID: p.RoleID,
-                RoleName: p.Role || undefined // Property is called Role, not RoleName
-            }));
-
             return {
                 Success: true,
-                QueryData: JSON.stringify(queryEntity.GetAll()),
-                Fields: fields,
-                Parameters: parameters,
-                Entities: entities,
-                Permissions: permissions
+                ID: queryEntity.ID,
+                Name: queryEntity.Name,
+                Description: queryEntity.Description,
+                CategoryID: queryEntity.CategoryID,
+                Category: queryEntity.Category,
+                SQL: queryEntity.SQL,
+                Status: queryEntity.Status,
+                QualityRank: queryEntity.QualityRank,
+                EmbeddingVector: queryEntity.EmbeddingVector,
+                EmbeddingModelID: queryEntity.EmbeddingModelID,
+                EmbeddingModelName: queryEntity.EmbeddingModel,
+                Fields: queryEntity.QueryFields.map(f => ({
+                    ID: f.ID,
+                    QueryID: f.QueryID,
+                    Name: f.Name,
+                    Description: f.Description,
+                    Sequence: f.Sequence,
+                    SQLBaseType: f.SQLBaseType,
+                    SQLFullType: f.SQLFullType,
+                    SourceEntityID: f.SourceEntityID,
+                    SourceEntity: f.SourceEntity,
+                    SourceFieldName: f.SourceFieldName,
+                    IsComputed: f.IsComputed,
+                    ComputationDescription: f.ComputationDescription,
+                    IsSummary: f.IsSummary,
+                    SummaryDescription: f.SummaryDescription
+                })),
+                Parameters: queryEntity.QueryParameters.map(p => ({
+                    ID: p.ID,
+                    QueryID: p.QueryID,
+                    Name: p.Name,
+                    Description: p.Description,
+                    Type: p.Type,
+                    IsRequired: p.IsRequired,
+                    DefaultValue: p.DefaultValue,
+                    SampleValue: p.SampleValue,
+                    ValidationFilters: p.ValidationFilters
+                })),
+                Entities: queryEntity.QueryEntities.map(e => ({
+                    ID: e.ID,
+                    QueryID: e.QueryID,
+                    EntityID: e.EntityID,
+                    Entity: e.Entity
+                })),
+                Permissions: queryEntity.QueryPermissions.map(p => ({
+                    ID: p.ID,
+                    QueryID: p.QueryID,
+                    RoleID: p.RoleID,
+                    Role: p.Role
+                }))
             };
 
         } catch (err) {
@@ -640,7 +825,12 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             if (deletedQuery) {
                 return {
                     Success: true,
-                    QueryData: JSON.stringify(deletedQuery)
+                    ID: deletedQuery.ID,
+                    Name: deletedQuery.Name,
+                    Description: deletedQuery.Description,
+                    CategoryID: deletedQuery.CategoryID,
+                    SQL: deletedQuery.SQL,
+                    Status: deletedQuery.Status
                 };
             } else {
                 return {

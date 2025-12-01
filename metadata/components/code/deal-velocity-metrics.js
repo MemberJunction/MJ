@@ -1,8 +1,6 @@
 function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   // Load sub-components from registry
-  const DealVelocityTrendChart = components['DealVelocityTrendChart'];
-  const DealVelocityDistributionChart = components['DealVelocityDistributionChart'];
-  const DataExportPanel = components['DataExportPanel'];
+  const { DealVelocityTrendChart, DealVelocityDistributionChart, DataExportPanel, VelocityHeatmap, DealsTable } = components;
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -643,7 +641,7 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
               {summaryMetrics.bottleneckStage?.stage || 'N/A'}
             </div>
             <div style={{ fontSize: '12px', color: '#6B7280' }}>
-              {summaryMetrics.bottleneckStage ? `${summaryMetrics.bottleneckStage.days.toFixed(0)} days avg` : ''}
+              {summaryMetrics.bottleneckStage ? `${summaryMetrics.bottleneckStage.days?.toFixed(0) || '0'} days avg` : ''}
             </div>
           </div>
           <div 
@@ -775,27 +773,33 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
           </div>
           
           {viewMode === 'heatmap' && (
-            <VelocityHeatmap 
+            <VelocityHeatmap
               deals={deals}
               stages={stages}
               onDrillDown={(stageDeals, title) => {
                 setDrillDownDeals(stageDeals);
                 setDrillDownTitle(title);
               }}
+              styles={styles}
+              utilities={utilities}
+              components={components}
             />
           )}
           {viewMode === 'trend' && DealVelocityTrendChart && (
             <DealVelocityTrendChart
               deals={deals}
               stages={stages}
-              timeRange={useCustomDates ? 
-                Math.floor((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) : 
+              timeRange={useCustomDates ?
+                Math.floor((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) :
                 parseInt(timeRange === 'allTime' ? '365' : timeRange === 'thisYear' || timeRange === 'lastYear' ? '365' : timeRange)
               }
               onDrillDown={(stageDeals, title) => {
                 setDrillDownDeals(stageDeals);
                 setDrillDownTitle(title);
               }}
+              styles={styles}
+              utilities={utilities}
+              components={components}
             />
           )}
           {viewMode === 'distribution' && DealVelocityDistributionChart && (
@@ -806,453 +810,27 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
                 setDrillDownDeals(stageDeals);
                 setDrillDownTitle(title);
               }}
+              styles={styles}
+              utilities={utilities}
+              components={components}
             />
           )}
       </div>
       
       {/* Drill-down Deals Table */}
       {drillDownDeals && (
-        <DealsTable 
+        <DealsTable
           deals={drillDownDeals}
           title={drillDownTitle}
           onClose={() => setDrillDownDeals(null)}
           sortConfig={sortConfig}
           setSortConfig={setSortConfig}
           callbacks={callbacks}
+          styles={styles}
+          utilities={utilities}
+          components={components}
         />
       )}
-    </div>
-  );
-}
-
-// VelocityHeatmap Sub-component
-function VelocityHeatmap({ deals, stages, onDrillDown }) {
-  const chartRef = useRef(null);
-  
-  useEffect(() => {
-    if (!chartRef.current || !deals.length) return;
-    
-    const velocityData = calculateVelocityData(deals, stages);
-    const data = [];
-    
-    stages.forEach((stage, stageIndex) => {
-      if (velocityData[stage] && velocityData[stage]['Average Duration']) {
-        const stageData = velocityData[stage]['Average Duration'];
-        data.push({
-          value: [stageIndex, 0, Math.round(stageData.mean)],
-          itemStyle: {
-            borderColor: '#fff',
-            borderWidth: 2
-          }
-        });
-      }
-    });
-    
-    const maxValue = Math.max(...data.map(d => d.value[2]));
-    
-    const option = {
-      title: {
-        text: 'Deal Velocity by Stage',
-        left: 'center',
-        top: '5%',
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold'
-        }
-      },
-      tooltip: {
-        position: 'top',
-        formatter: (params) => {
-          const stage = stages[params.data.value[0]];
-          const value = params.data.value[2];
-          const stageData = velocityData[stage]?.['Average Duration'];
-          return `
-            <div style="padding: 8px;">
-              <strong>${stage}</strong><br/>
-              <div style="margin-top: 8px;">
-                Average: <strong>${value} days</strong><br/>
-                Min: ${stageData?.min || 0} days<br/>
-                Max: ${stageData?.max || 0} days<br/>
-                Count: ${stageData?.count || 0} deals
-              </div>
-              <div style="margin-top: 8px; font-size: 11px; color: #666;">
-                Click to view deals
-              </div>
-            </div>
-          `;
-        }
-      },
-      grid: {
-        left: '5%',
-        right: '15%',
-        bottom: '20%',
-        top: '15%',
-        containLabel: true
-      },
-      xAxis: {
-        type: 'category',
-        data: stages,
-        splitArea: { 
-          show: true,
-          areaStyle: {
-            color: ['rgba(250,250,250,0.3)', 'rgba(240,240,240,0.3)']
-          }
-        },
-        axisLabel: {
-          rotate: 30,
-          interval: 0,
-          fontSize: 12
-        }
-      },
-      yAxis: {
-        type: 'category',
-        data: ['Avg Days in Stage'],
-        axisLabel: {
-          fontSize: 12
-        }
-      },
-      visualMap: {
-        min: 0,
-        max: maxValue || 120,
-        calculable: true,
-        orient: 'horizontal',
-        left: 'center',
-        bottom: '5%',
-        inRange: {
-          color: ['#10B981', '#34D399', '#FCD34D', '#F59E0B', '#EF4444']
-        },
-        text: ['Slow', 'Fast'],
-        textStyle: {
-          fontSize: 12
-        }
-      },
-      series: [{
-        name: 'Velocity',
-        type: 'heatmap',
-        data: data,
-        label: {
-          show: true,
-          formatter: (params) => params.data.value[2] + 'd',
-          fontSize: 14,
-          fontWeight: 'bold'
-        },
-        emphasis: {
-          itemStyle: {
-            shadowBlur: 10,
-            shadowColor: 'rgba(0, 0, 0, 0.5)',
-            borderColor: '#4F46E5',
-            borderWidth: 3
-          }
-        }
-      }]
-    };
-    
-    if (chartRef.current._chart) {
-      chartRef.current._chart.dispose();
-    }
-    chartRef.current._chart = echarts.init(chartRef.current);
-    chartRef.current._chart.setOption(option);
-    
-    chartRef.current._chart.on('click', (params) => {
-      const stage = stages[params.data.value[0]];
-      const stageDeals = deals.filter(d => d.Stage === stage);
-      onDrillDown(stageDeals, `${stage} Stage Deals`);
-    });
-    
-    return () => {
-      if (chartRef.current?._chart) {
-        chartRef.current._chart.dispose();
-      }
-    };
-  }, [deals, stages, onDrillDown]);
-  
-  // Helper function moved here
-  function calculateVelocityData(deals, stages) {
-    const velocityData = {};
-    const stageGroups = {};
-    
-    stages.forEach(stage => {
-      stageGroups[stage] = deals.filter(d => d.Stage === stage);
-    });
-    
-    Object.keys(stageGroups).forEach(stage => {
-      if (!velocityData[stage]) {
-        velocityData[stage] = {};
-      }
-      
-      const stageDeals = stageGroups[stage];
-      const durations = stageDeals.map(deal => {
-        const closeDate = deal.ActualCloseDate ? new Date(deal.ActualCloseDate) : 
-                         deal.CloseDate ? new Date(deal.CloseDate) : new Date();
-        
-        let daysInPipeline;
-        switch(deal.Stage) {
-          case 'Prospecting':
-            daysInPipeline = 90 + Math.random() * 30;
-            break;
-          case 'Qualification':
-            daysInPipeline = 60 + Math.random() * 30;
-            break;
-          case 'Proposal':
-            daysInPipeline = 30 + Math.random() * 30;
-            break;
-          case 'Negotiation':
-            daysInPipeline = 15 + Math.random() * 15;
-            break;
-          case 'Closed Won':
-          case 'Closed Lost':
-            const now = new Date();
-            const daysSinceClosed = Math.floor((now - closeDate) / (1000 * 60 * 60 * 24));
-            daysInPipeline = Math.max(5, Math.min(120, daysSinceClosed));
-            break;
-          default:
-            daysInPipeline = 30;
-        }
-        
-        return Math.floor(daysInPipeline);
-      });
-      
-      if (durations.length > 0) {
-        velocityData[stage] = {
-          'Average Duration': {
-            mean: ss.mean(durations),
-            median: ss.median(durations),
-            min: ss.min(durations),
-            max: ss.max(durations),
-            count: durations.length,
-            stdev: durations.length > 1 ? ss.standardDeviation(durations) : 0
-          }
-        };
-      }
-    });
-    
-    return velocityData;
-  }
-  
-  return <div ref={chartRef} style={{ height: '500px', width: '100%' }} />;
-}
-
-// DealsTable Component for drill-down display
-function DealsTable({ deals, title, onClose, sortConfig, setSortConfig, callbacks }) {
-  const formatCurrency = (value) => {
-    if (!value) return '$0';
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
-  };
-
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    return dayjs(date).format('MMM D, YYYY');
-  };
-
-  const getStageColor = (stage) => {
-    const colors = {
-      'Prospecting': '#9CA3AF',
-      'Qualification': '#3B82F6',
-      'Proposal': '#8B5CF6',
-      'Negotiation': '#F59E0B',
-      'Closed Won': '#10B981',
-      'Closed Lost': '#EF4444'
-    };
-    return colors[stage] || '#6B7280';
-  };
-
-  // Sort deals
-  const sortedDeals = [...deals].sort((a, b) => {
-    const aValue = a[sortConfig.key];
-    const bValue = b[sortConfig.key];
-    
-    if (aValue === null || aValue === undefined) return 1;
-    if (bValue === null || bValue === undefined) return -1;
-    
-    if (sortConfig.direction === 'asc') {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
-  });
-
-  const handleSort = (key) => {
-    setSortConfig({
-      key,
-      direction: sortConfig.key === key && sortConfig.direction === 'desc' ? 'asc' : 'desc'
-    });
-  };
-
-  return (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '8px',
-      padding: '20px',
-      marginTop: '20px',
-      border: '1px solid #E5E7EB'
-    }}>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '16px'
-      }}>
-        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
-          {title} ({deals.length})
-        </h3>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '24px',
-            cursor: 'pointer',
-            color: '#6B7280'
-          }}
-        >
-          ×
-        </button>
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-              <th 
-                onClick={() => handleSort('DealName')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'left', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Deal Name {sortConfig.key === 'DealName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('Stage')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'left', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Stage {sortConfig.key === 'Stage' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('Amount')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'right', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Amount {sortConfig.key === 'Amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('Probability')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'center', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Prob % {sortConfig.key === 'Probability' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('CloseDate')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'left', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Close Date {sortConfig.key === 'CloseDate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th style={{ 
-                padding: '12px 8px', 
-                textAlign: 'center',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#374151',
-                textTransform: 'uppercase'
-              }}>
-                Action
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedDeals.map((deal, index) => (
-              <tr 
-                key={deal.ID || index}
-                style={{ 
-                  borderBottom: '1px solid #F3F4F6',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '500' }}>
-                  {deal.DealName}
-                </td>
-                <td style={{ padding: '12px 8px' }}>
-                  <span style={{
-                    padding: '4px 8px',
-                    backgroundColor: getStageColor(deal.Stage) + '20',
-                    color: getStageColor(deal.Stage),
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}>
-                    {deal.Stage}
-                  </span>
-                </td>
-                <td style={{ padding: '12px 8px', textAlign: 'right', fontSize: '14px' }}>
-                  {formatCurrency(deal.Amount)}
-                </td>
-                <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '14px' }}>
-                  {deal.Probability || 0}%
-                </td>
-                <td style={{ padding: '12px 8px', fontSize: '14px', color: '#6B7280' }}>
-                  {formatDate(deal.CloseDate)}
-                </td>
-                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                  <button
-                    onClick={() => callbacks.OpenEntityRecord('Deals', [{ FieldName: 'ID', Value: deal.ID }])}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#4F46E5',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      padding: '4px'
-                    }}
-                    title="Open Deal"
-                  >
-                    <i className="fa-solid fa-arrow-up-right-from-square"></i>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

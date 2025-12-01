@@ -1,0 +1,27 @@
+{
+  "name": "QueryFieldTypoComponent",
+  "description": "Component with common typos in query field names (violates query-field-validation rule)",
+  "code": "function QueryFieldTypoComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [reportData, setReportData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadReport() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'QuarterlyReport',\n          CategoryPath: 'Reports/Financial',\n          Parameters: {\n            fiscalYear: 2024,\n            department: 'Sales'\n          }\n        });\n\n        if (result.Success) {\n          // Common typos and case sensitivity issues\n          const data = result.Results.map(row => ({\n            // ❌ TYPO: \"Revenu\" instead of \"Revenue\" (missing 'e')\n            revenue: row.Revenu,\n            \n            // ❌ TYPO: \"Acccount\" instead of \"AccountName\" (double 'c')\n            account: row.Acccount,\n            \n            // ❌ TYPO: \"Qarter\" instead of \"Quarter\" (missing 'u')\n            quarter: row.Qarter,\n            \n            // ❌ CASE ERROR: \"accountname\" instead of \"AccountName\"\n            name: row.accountname,\n            \n            // ❌ TYPO: \"Revanue\" instead of \"Revenue\" (transposed letters)\n            total: row.Revanue,\n            \n            // ❌ TYPO: \"Departmant\" instead of \"Department\" (wrong vowel)\n            dept: row.Departmant,\n            \n            // ❌ TYPO: \"Employeee\" instead of \"EmployeeCount\" (extra 'e')\n            employees: row.Employeee\n          }));\n          setReportData(data);\n        }\n      } catch (err) {\n        console.error('Failed to load report:', err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadReport();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div className=\"quarterly-report\">\n      <h2>Quarterly Report</h2>\n      <ul>\n        {reportData.map((item, idx) => (\n          <li key={idx}>\n            {/* Using typo'd field values */}\n            {item.account} - Q{item.quarter}: ${item.revenue}\n            <br />\n            Dept: {item.dept} ({item.employees} employees)\n          </li>\n        ))}\n      </ul>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "QuarterlyReport",
+        "categoryPath": "Reports/Financial",
+        "fields": [
+          { "name": "AccountName", "type": "nvarchar" },
+          { "name": "Revenue", "type": "decimal" },
+          { "name": "Quarter", "type": "int" },
+          { "name": "Department", "type": "nvarchar" },
+          { "name": "EmployeeCount", "type": "int" }
+        ],
+        "parameters": [
+          { "name": "fiscalYear", "type": "int", "isRequired": true },
+          { "name": "department", "type": "nvarchar", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

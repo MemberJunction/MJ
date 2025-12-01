@@ -1,20 +1,24 @@
 // ForecastModel Sub-component
-function ForecastModel ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  const [activeTab, setActiveTab] = useState('details');
+function ForecastModel ({ forecastData, scenarios, onScenarioChange, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  const [activeTab, setActiveTab] = useState('forecast');
+  const [selectedScenario, setSelectedScenario] = useState(scenarios?.[0]?.id || '');
+
+  const handleScenarioChange = (scenarioId) => {
+    setSelectedScenario(scenarioId);
+    if (onScenarioChange) {
+      onScenarioChange(scenarioId);
+    }
+  };
 
   return (
-    <div 
+    <div
       className="forecastmodel-panel"
       style={{
-        position: 'fixed',
-        top: 0,
-        right: isOpen ? 0 : '-400px',
-        width: '400px',
-        height: '100%',
+        width: '100%',
+        height: '400px',
         backgroundColor: '#fff',
-        boxShadow: '-2px 0 10px rgba(0,0,0,0.1)',
-        transition: 'right 0.3s ease',
-        zIndex: 1000,
+        border: '1px solid #e0e0e0',
+        borderRadius: '8px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden'
@@ -28,69 +32,81 @@ function ForecastModel ({ data, isOpen, onClose, utilities, styles, components, 
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <h3 style={{ margin: 0 }}>{data?.title || 'ForecastModel'}</h3>
-        <button 
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '24px',
-            cursor: 'pointer',
-            padding: '0',
-            width: '30px',
-            height: '30px'
-          }}
-        >×</button>
-      </div>
-
-      <div style={{ padding: '15px', borderBottom: '1px solid #e0e0e0' }}>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={() => setActiveTab('details')}
+        <h3 style={{ margin: 0 }}>Forecast Model</h3>
+        {scenarios && scenarios.length > 1 && (
+          <select
+            value={selectedScenario}
+            onChange={(e) => handleScenarioChange(e.target.value)}
             style={{
-              padding: '8px 15px',
+              padding: '5px 10px',
               border: '1px solid #ddd',
               borderRadius: '4px',
-              background: activeTab === 'details' ? '#007bff' : '#fff',
-              color: activeTab === 'details' ? '#fff' : '#333',
-              cursor: 'pointer'
+              backgroundColor: '#fff'
             }}
           >
-            Details
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            style={{
-              padding: '8px 15px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              background: activeTab === 'history' ? '#007bff' : '#fff',
-              color: activeTab === 'history' ? '#fff' : '#333',
-              cursor: 'pointer'
-            }}
-          >
-            History
-          </button>
-        </div>
+            {scenarios.map(scenario => (
+              <option key={scenario.id} value={scenario.id}>
+                {scenario.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-        {activeTab === 'details' && (
-          <div>
-            {data && Object.entries(data).map(([key, value]) => (
-              <div key={key} style={{ marginBottom: '15px' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '3px' }}>{key}</div>
-                <div style={{ fontSize: '14px', color: '#333' }}>{String(value)}</div>
-              </div>
-            ))}
+        {!forecastData || forecastData.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+            No forecast data available
           </div>
-        )}
-        {activeTab === 'history' && (
+        ) : (
           <div>
-            <p style={{ color: '#666' }}>History information would be displayed here.</p>
+            <div style={{ marginBottom: '20px' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#333' }}>Forecast Periods</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {forecastData.map((item, index) => (
+                  <div key={index} style={{
+                    padding: '12px',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '4px',
+                    backgroundColor: '#f9f9f9'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                        {item.period}
+                      </span>
+                      <span style={{ fontSize: '16px', fontWeight: '700', color: '#007bff' }}>
+                        ${item.value?.toLocaleString() || '0'}
+                      </span>
+                    </div>
+                    {item.confidence && (
+                      <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+                        Confidence Range: ${item.confidence.low?.toLocaleString() || '0'} - ${item.confidence.high?.toLocaleString() || '0'}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {scenarios && selectedScenario && (
+              <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f0f7ff', borderRadius: '4px' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#0066cc' }}>Selected Scenario</h4>
+                {scenarios.find(s => s.id === selectedScenario) && (
+                  <div>
+                    <div style={{ fontSize: '14px', color: '#333', marginBottom: '5px' }}>
+                      <strong>{scenarios.find(s => s.id === selectedScenario).name}</strong>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      Growth Rate: {scenarios.find(s => s.id === selectedScenario).parameters.growth * 100}%
+                      {scenarios.find(s => s.id === selectedScenario).parameters.seasonality && ' (with seasonality)'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   );
-};
+}

@@ -1,0 +1,16 @@
+{
+  "name": "EntityFieldInvalidComponent",
+  "description": "Component accessing non-existent entity field (violates entity-field-validation rule)",
+  "code": "function EntityFieldInvalidComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [users, setUsers] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    async function loadUsers() {\n      try {\n        const result = await utilities.rv.RunView({\n          EntityName: 'Users',\n          MaxRows: 100\n        });\n\n        if (result.Success) {\n          // VIOLATION: Accessing 'InvalidFieldName' which doesn't exist on Users entity\n          // Valid fields would be: ID, Name, Email, Status, CreatedAt, etc.\n          const userData = result.Results.map(user => ({\n            id: user.ID,\n            name: user.Name,\n            email: user.Email,\n            // This field doesn't exist on Users entity\n            invalidField: user.InvalidFieldName,\n            // Another invalid field\n            fakeProperty: user.NonExistentProperty\n          }));\n          setUsers(userData);\n        } else {\n          setError(result.ErrorMessage);\n        }\n      } catch (err) {\n        setError(err.message);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadUsers();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n  if (error) return <div>Error: {error}</div>;\n\n  return (\n    <div>\n      <h1>Users</h1>\n      <ul>\n        {users.map(user => (\n          <li key={user.id}>\n            {user.name} - {user.email} - {user.invalidField}\n          </li>\n        ))}\n      </ul>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Users",
+        "type": "view",
+        "maxRows": 100
+      }
+    ]
+  }
+}

@@ -38,11 +38,24 @@
     }
   ],
   "dependencies": [
-    "@include:sales-pipeline-dashboard-pipeline-metrics-cards.spec.json",
-    "@include:sales-pipeline-dashboard-pipeline-kanban.spec.json",
-    "@include:sales-pipeline-dashboard-deal-cards.spec.json",
-    "@include:sales-pipeline-dashboard-deal-list.spec.json",
-    "@include:sales-pipeline-dashboard-drill-down-panel.spec.json",
+    {
+      "name": "PipelineMetricsCards",
+      "location": "registry",
+      "namespace": "CRM/Dashboard",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "PipelineKanban",
+      "location": "registry",
+      "namespace": "CRM/Dashboard",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "DrillDownPanel",
+      "location": "registry",
+      "namespace": "CRM/Dashboard",
+      "version": "^1.0.0"
+    },
     {
       "name": "AIInsightsPanel",
       "location": "registry",
@@ -67,16 +80,16 @@
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Probability", "Owner", "CreatedAt"],
+        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Probability", "Owner", "__mj_CreatedAt"],
         "filterFields": ["CloseDate", "Stage", "Owner"],
         "sortFields": ["CloseDate", "Amount", "Probability"],
         "permissions": ["read"]
       },
       {
         "name": "Activities",
-        "displayFields": ["ID", "type", "Subject", "Owner", "CreatedAt"],
-        "filterFields": ["CreatedAt", "Owner"],
-        "sortFields": ["CreatedAt"],
+        "displayFields": ["ID", "type", "Subject", "Owner", "__mj_CreatedAt"],
+        "filterFields": ["__mj_CreatedAt", "Owner"],
+        "sortFields": ["__mj_CreatedAt"],
         "permissions": ["read"]
       }
     ]

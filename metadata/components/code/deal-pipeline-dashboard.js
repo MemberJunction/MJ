@@ -251,10 +251,10 @@ function DealPipelineDashboard({
               Total Pipeline Value
             </div>
             <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1890ff' }}>
-              ${metrics.totalPipelineValue.toLocaleString(undefined, {
+              ${metrics.totalPipelineValue?.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
-              })}
+              }) || '0.00'}
             </div>
           </div>
 
@@ -268,10 +268,10 @@ function DealPipelineDashboard({
               Expected Revenue
             </div>
             <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#52c41a' }}>
-              ${metrics.expectedRevenue.toLocaleString(undefined, {
+              ${metrics.expectedRevenue?.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
-              })}
+              }) || '0.00'}
             </div>
           </div>
 
@@ -285,10 +285,10 @@ function DealPipelineDashboard({
               Average Deal Size
             </div>
             <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#722ed1' }}>
-              ${metrics.averageDealSize.toLocaleString(undefined, {
+              ${metrics.averageDealSize?.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
-              })}
+              }) || '0.00'}
             </div>
           </div>
 
@@ -303,7 +303,7 @@ function DealPipelineDashboard({
             </div>
             <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fa8c16' }}>
               {includeClosedDeals
-                ? `${metrics.winRate.toFixed(1)}%`
+                ? `${metrics.winRate?.toFixed(1) || '0'}%`
                 : metrics.dealCount}
             </div>
           </div>

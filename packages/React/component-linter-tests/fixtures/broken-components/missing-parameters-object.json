@@ -1,0 +1,22 @@
+{
+  "name": "TestComponent",
+  "description": "Component passing parameters not as object to RunQuery (violates missing-parameters-object rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      // Wrong: passing parameters as positional arguments\n      const result = await utilities.rq.RunQuery(\n        'SalesReport',\n        'Reports/Sales',\n        2024,\n        'Q1'\n      );\n      \n      // Wrong: parameters as array instead of object\n      const result2 = await utilities.rq.RunQuery({\n        QueryName: 'InventoryReport',\n        CategoryPath: 'Reports/Inventory',\n        Parameters: ['warehouse1', 100]\n      });\n      \n      // Wrong: missing Parameters wrapper\n      const result3 = await utilities.rq.RunQuery({\n        QueryName: 'CustomerReport',\n        CategoryPath: 'Reports/Customers',\n        customerId: '12345',\n        includeOrders: true\n      });\n      \n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Reports</h1>\n      <p>Records: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "SalesReport",
+        "categoryPath": "Reports/Sales",
+        "fields": ["ID", "Amount"],
+        "entityNames": ["Sales"],
+        "parameters": [
+          { "name": "year", "type": "number", "required": true },
+          { "name": "quarter", "type": "string", "required": true }
+        ]
+      }
+    ]
+  }
+}
