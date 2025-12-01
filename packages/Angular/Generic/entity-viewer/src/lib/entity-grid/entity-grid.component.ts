@@ -13,9 +13,12 @@ import {
   GetRowIdParams,
   themeAlpine,
   ICellRendererParams,
-  SortChangedEvent as AgSortChangedEvent
+  SortChangedEvent as AgSortChangedEvent,
+  ColumnResizedEvent,
+  ColumnMovedEvent,
+  ColumnState
 } from 'ag-grid-community';
-import { GridColumnDef, RecordSelectedEvent, RecordOpenedEvent, SortState, SortChangedEvent, SortDirection } from '../types';
+import { GridColumnDef, RecordSelectedEvent, RecordOpenedEvent, SortState, SortChangedEvent, SortDirection, ViewGridStateConfig, ViewColumnConfig, ViewSortConfig, GridStateChangedEvent } from '../types';
 import { HighlightUtil } from '../utils/highlight.util';
 
 // Register AG Grid modules (required for v34+)
@@ -108,6 +111,12 @@ export class EntityGridComponent implements OnInit, OnChanges {
   @Input() pageSize: number = 100;
 
   /**
+   * Grid state from a User View - controls columns, widths, order, sort
+   * When provided, this takes precedence over auto-generated columns
+   */
+  @Input() gridState: ViewGridStateConfig | null = null;
+
+  /**
    * Emitted when a record is selected (single click)
    */
   @Output() recordSelected = new EventEmitter<RecordSelectedEvent>();
@@ -121,6 +130,11 @@ export class EntityGridComponent implements OnInit, OnChanges {
    * Emitted when sort state changes
    */
   @Output() sortChanged = new EventEmitter<SortChangedEvent>();
+
+  /**
+   * Emitted when grid state changes (column resize, reorder, etc.)
+   */
+  @Output() gridStateChanged = new EventEmitter<GridStateChangedEvent>();
 
   /** AG Grid column definitions */
   public columnDefs: ColDef[] = [];
@@ -174,7 +188,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entity'] || changes['columns']) {
+    if (changes['entity'] || changes['columns'] || changes['gridState']) {
       this.buildColumnDefs();
     }
 
@@ -200,6 +214,16 @@ export class EntityGridComponent implements OnInit, OnChanges {
 
     // Handle external sort state changes
     if (changes['sortState'] && this.gridApi && this.sortState) {
+      this.applySortStateToGrid();
+    }
+
+    // Handle gridState changes - apply sort if present
+    if (changes['gridState'] && this.gridApi && this.gridState?.sortSettings?.length) {
+      const sortSetting = this.gridState.sortSettings[0];
+      this.sortState = {
+        field: sortSetting.field,
+        direction: sortSetting.dir
+      };
       this.applySortStateToGrid();
     }
   }
@@ -279,6 +303,9 @@ export class EntityGridComponent implements OnInit, OnChanges {
       };
       this.sortChanged.emit({ sort: newSort });
 
+      // Also emit as grid state change
+      this.emitGridStateChanged('sort');
+
       // If in standalone mode and server-side sorting, reload data
       if (this.standaloneMode && this.serverSideSorting) {
         // The parent should handle this, but if standalone, reload
@@ -287,6 +314,78 @@ export class EntityGridComponent implements OnInit, OnChanges {
     } else {
       this.sortChanged.emit({ sort: null });
     }
+  }
+
+  /**
+   * Handle column resized event
+   */
+  onColumnResized(event: ColumnResizedEvent): void {
+    // Only emit on finished (not during drag)
+    if (event.finished && event.source !== 'api') {
+      this.emitGridStateChanged('columns');
+    }
+  }
+
+  /**
+   * Handle column moved event
+   */
+  onColumnMoved(event: ColumnMovedEvent): void {
+    // Only emit when the drag is finished
+    if (event.finished && event.source !== 'api') {
+      this.emitGridStateChanged('columns');
+    }
+  }
+
+  /**
+   * Emit grid state changed event with current column/sort state
+   */
+  private emitGridStateChanged(changeType: 'columns' | 'sort' | 'filter'): void {
+    if (!this.gridApi || !this.entity) return;
+
+    const currentState = this.buildCurrentGridState();
+    this.gridStateChanged.emit({
+      gridState: currentState,
+      changeType
+    });
+  }
+
+  /**
+   * Build current grid state from AG Grid's column state
+   */
+  private buildCurrentGridState(): ViewGridStateConfig {
+    if (!this.gridApi || !this.entity) {
+      return { columnSettings: [], sortSettings: [] };
+    }
+
+    const columnState = this.gridApi.getColumnState();
+    const columnSettings: ViewColumnConfig[] = [];
+    const sortSettings: ViewSortConfig[] = [];
+
+    for (let i = 0; i < columnState.length; i++) {
+      const col = columnState[i];
+      const field = this.entity.Fields.find(f => f.Name === col.colId);
+
+      if (field) {
+        columnSettings.push({
+          ID: field.ID,
+          Name: field.Name,
+          DisplayName: field.DisplayNameOrName,
+          hidden: col.hide ?? false,
+          width: col.width ?? undefined,
+          orderIndex: i
+        });
+      }
+
+      // Capture sort settings
+      if (col.sort) {
+        sortSettings.push({
+          field: col.colId,
+          dir: col.sort as 'asc' | 'desc'
+        });
+      }
+    }
+
+    return { columnSettings, sortSettings };
   }
 
   /**
@@ -341,10 +440,14 @@ export class EntityGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Build AG Grid column definitions from entity metadata or custom columns
+   * Build AG Grid column definitions from gridState, custom columns, or entity metadata
+   * Priority: gridState > custom columns > auto-generated
    */
   private buildColumnDefs(): void {
-    if (this.columns.length > 0) {
+    if (this.gridState?.columnSettings && this.gridState.columnSettings.length > 0 && this.entity) {
+      // Use gridState column configuration (from User View)
+      this.columnDefs = this.buildColumnDefsFromGridState(this.gridState.columnSettings);
+    } else if (this.columns.length > 0) {
       // Use custom column definitions
       this.columnDefs = this.columns.map(col => this.mapCustomColumnDef(col));
     } else if (this.entity) {
@@ -353,6 +456,52 @@ export class EntityGridComponent implements OnInit, OnChanges {
     } else {
       this.columnDefs = [];
     }
+  }
+
+  /**
+   * Build column definitions from gridState column settings
+   */
+  private buildColumnDefsFromGridState(columnSettings: ViewColumnConfig[]): ColDef[] {
+    if (!this.entity) return [];
+
+    // Sort by orderIndex
+    const sortedColumns = [...columnSettings].sort((a, b) =>
+      (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
+    );
+
+    const cols: ColDef[] = [];
+
+    for (const colConfig of sortedColumns) {
+      // Skip hidden columns
+      if (colConfig.hidden) continue;
+
+      // Find the corresponding entity field
+      const field = this.entity.Fields.find(f =>
+        f.Name.toLowerCase() === colConfig.Name.toLowerCase()
+      );
+
+      if (!field) continue;
+
+      const colDef: ColDef = {
+        field: field.Name,
+        headerName: colConfig.DisplayName || field.DisplayNameOrName,
+        width: colConfig.width || this.estimateColumnWidth(field),
+        sortable: true,
+        resizable: true
+      };
+
+      // For string fields, use a cell renderer that supports highlighting
+      if (field.TSType === 'string') {
+        colDef.cellRenderer = (params: ICellRendererParams) => this.highlightCellRenderer(params);
+      } else {
+        // For non-string fields, use value formatter
+        colDef.valueFormatter = this.getValueFormatter(field);
+      }
+
+      cols.push(colDef);
+    }
+
+    return cols;
   }
 
   /**

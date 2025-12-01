@@ -16,7 +16,9 @@
       (gridReady)="onGridReady($event)"
       (rowClicked)="onRowClicked($event)"
       (rowDoubleClicked)="onRowDoubleClicked($event)"
-      (sortChanged)="onGridSortChanged($event)">
+      (sortChanged)="onGridSortChanged($event)"
+      (columnResized)="onColumnResized($event)"
+      (columnMoved)="onColumnMoved($event)">
     </ag-grid-angular>
   } @else if (entity && rowData.length === 0) {
     <div class="no-data">

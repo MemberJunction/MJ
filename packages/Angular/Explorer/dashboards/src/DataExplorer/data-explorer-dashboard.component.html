@@ -389,12 +389,14 @@
           [filterText]="debouncedFilterText"
           [selectedRecordId]="state.selectedRecordId"
           [config]="viewerConfig"
+          [gridState]="currentGridState"
           (viewModeChange)="onViewModeChanged($event)"
           (filterTextChange)="onFilterTextChanged($event)"
           (recordSelected)="onViewerRecordSelected($event)"
           (recordOpened)="onViewerRecordOpened($event)"
           (dataLoaded)="onDataLoaded($event)"
-          (filteredCountChanged)="onFilteredCountChanged($event)">
+          (filteredCountChanged)="onFilteredCountChanged($event)"
+          (gridStateChanged)="onGridStateChanged($event)">
         </mj-entity-viewer>
       }
     </div>
@@ -420,6 +422,7 @@
     [entity]="selectedEntity"
     [viewEntity]="selectedViewEntity"
     [isOpen]="state.viewConfigPanelOpen"
+    [currentGridState]="currentGridState"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
     (delete)="onDeleteView()">

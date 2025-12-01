@@ -16,7 +16,9 @@ import {
   GridColumnDef,
   SortState,
   SortChangedEvent,
-  PaginationState
+  PaginationState,
+  ViewGridStateConfig,
+  GridStateChangedEvent
 } from '../types';
 
 /**
@@ -119,6 +121,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Input() viewEntity: UserViewEntityExtended | null = null;
 
+  /**
+   * Grid state configuration from a User View
+   * Controls column visibility, widths, order, and sort settings
+   */
+  @Input() gridState: ViewGridStateConfig | null = null;
+
   // ========================================
   // OUTPUTS
   // ========================================
@@ -157,6 +165,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Emitted when sort state changes
    */
   @Output() sortChanged = new EventEmitter<SortChangedEvent>();
+
+  /**
+   * Emitted when grid state changes (column resize, reorder, etc.)
+   */
+  @Output() gridStateChanged = new EventEmitter<GridStateChangedEvent>();
 
   // ========================================
   // INTERNAL STATE
@@ -763,6 +776,13 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   onRecordOpened(event: RecordOpenedEvent): void {
     this.recordOpened.emit(event);
+  }
+
+  /**
+   * Handle grid state changes (column resize, reorder, etc.)
+   */
+  onGridStateChanged(event: GridStateChangedEvent): void {
+    this.gridStateChanged.emit(event);
   }
 
   /**

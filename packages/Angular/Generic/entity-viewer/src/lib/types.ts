@@ -191,6 +191,59 @@ export interface LoadMoreEvent {
 }
 
 /**
+ * Column configuration from a User View's GridState
+ * Matches the format stored in UserView.GridState JSON
+ */
+export interface ViewColumnConfig {
+  /** Entity field ID */
+  ID?: string;
+  /** Field name */
+  Name: string;
+  /** Display name for column header */
+  DisplayName?: string;
+  /** Whether the column is hidden */
+  hidden?: boolean;
+  /** Column width in pixels */
+  width?: number;
+  /** Column order index */
+  orderIndex?: number;
+}
+
+/**
+ * Sort configuration from a User View's GridState
+ * Matches the format stored in UserView.GridState.sortSettings
+ */
+export interface ViewSortConfig {
+  /** Field name to sort by */
+  field: string;
+  /** Sort direction - 'asc' or 'desc' */
+  dir: 'asc' | 'desc';
+}
+
+/**
+ * Grid state configuration from a User View
+ * Matches the JSON structure stored in UserView.GridState
+ */
+export interface ViewGridStateConfig {
+  /** Column visibility, width, and order settings */
+  columnSettings?: ViewColumnConfig[];
+  /** Sort settings */
+  sortSettings?: ViewSortConfig[];
+  /** Filter settings (Kendo format) */
+  filter?: object;
+}
+
+/**
+ * Event emitted when grid state changes (column resize, reorder, etc.)
+ */
+export interface GridStateChangedEvent {
+  /** The updated grid state */
+  gridState: ViewGridStateConfig;
+  /** What changed: 'columns', 'sort', 'filter' */
+  changeType: 'columns' | 'sort' | 'filter';
+}
+
+/**
  * Configuration options for the EntityViewer component
  */
 export interface EntityViewerConfig {

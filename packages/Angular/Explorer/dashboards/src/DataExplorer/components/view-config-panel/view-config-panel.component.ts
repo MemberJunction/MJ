@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
 import { UserViewEntityExtended, ViewColumnInfo, ViewGridState } from '@memberjunction/core-entities';
+import { ViewGridStateConfig, ViewColumnConfig } from '@memberjunction/ng-entity-viewer';
 
 /**
  * Column configuration for the view
@@ -62,6 +63,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   @Input() isOpen: boolean = false;
 
   /**
+   * Current grid state from the grid (includes live column widths/order from user interaction)
+   * This takes precedence over viewEntity.Columns for showing current state
+   */
+  @Input() currentGridState: ViewGridStateConfig | null = null;
+
+  /**
    * Emitted when the panel should close
    */
   @Output() close = new EventEmitter<void>();
@@ -117,13 +124,14 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entity'] || changes['viewEntity']) {
+    if (changes['entity'] || changes['viewEntity'] || changes['currentGridState']) {
       this.initializeFromEntity();
     }
   }
 
   /**
    * Initialize form state from entity and view
+   * Priority for column state: currentGridState > viewEntity.Columns > entity defaults
    */
   private initializeFromEntity(): void {
     if (!this.entity) {
@@ -144,13 +152,18 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         field
       }));
 
-    // If we have a view, apply its column configuration
-    if (this.viewEntity) {
-      this.viewName = this.viewEntity.Name;
-      this.viewDescription = this.viewEntity.Description || '';
-      this.isShared = this.viewEntity.IsShared;
+    // Priority 1: Use currentGridState if available (reflects live grid state including resizes)
+    if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
+      this.applyGridStateToColumns(this.currentGridState.columnSettings);
 
-      // Apply view's column configuration
+      // Also apply sort from currentGridState
+      if (this.currentGridState.sortSettings && this.currentGridState.sortSettings.length > 0) {
+        this.sortField = this.currentGridState.sortSettings[0].field;
+        this.sortDirection = this.currentGridState.sortSettings[0].dir;
+      }
+    }
+    // Priority 2: If we have a view, apply its column configuration
+    else if (this.viewEntity) {
       const viewColumns = this.viewEntity.Columns;
       if (viewColumns && viewColumns.length > 0) {
         // Mark all columns as hidden initially
@@ -176,6 +189,13 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         this.sortField = sortInfo[0].field;
         this.sortDirection = sortInfo[0].direction === 'Desc' ? 'desc' : 'asc';
       }
+    }
+
+    // Apply view entity metadata (name, description, etc.) if available
+    if (this.viewEntity) {
+      this.viewName = this.viewEntity.Name;
+      this.viewDescription = this.viewEntity.Description || '';
+      this.isShared = this.viewEntity.IsShared;
 
       // Apply view's smart filter configuration
       this.smartFilterEnabled = this.viewEntity.SmartFilterEnabled || false;
@@ -186,14 +206,40 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.viewName = '';
       this.viewDescription = '';
       this.isShared = false;
-      this.sortField = null;
-      this.sortDirection = 'asc';
+      if (!this.currentGridState?.sortSettings?.length) {
+        this.sortField = null;
+        this.sortDirection = 'asc';
+      }
       this.smartFilterEnabled = false;
       this.smartFilterPrompt = '';
       this.smartFilterExplanation = '';
     }
 
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Apply grid state column settings to the columns array
+   */
+  private applyGridStateToColumns(gridColumns: ViewColumnConfig[]): void {
+    // Mark all columns as hidden initially
+    this.columns.forEach(c => c.visible = false);
+
+    // Apply grid state column settings
+    gridColumns.forEach((gc, idx) => {
+      const column = this.columns.find(c => c.fieldName.toLowerCase() === gc.Name.toLowerCase());
+      if (column) {
+        column.visible = !gc.hidden;
+        column.width = gc.width || null;
+        column.orderIndex = gc.orderIndex ?? idx;
+        if (gc.DisplayName) {
+          column.displayName = gc.DisplayName;
+        }
+      }
+    });
+
+    // Sort by orderIndex
+    this.columns.sort((a, b) => a.orderIndex - b.orderIndex);
   }
 
   /**

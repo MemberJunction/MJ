@@ -17,7 +17,9 @@ import {
   EntityViewerConfig,
   EntityViewMode,
   NavigateToRelatedEvent,
-  EntityViewerComponent
+  EntityViewerComponent,
+  ViewGridStateConfig,
+  GridStateChangedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
 import { ViewSaveEvent } from './components/view-config-panel/view-config-panel.component';
@@ -318,6 +320,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     serverSideSorting: true,  // Use RunView's OrderBy for sorting
     height: '100%'
   };
+
+  /**
+   * Current grid state (built from view entity or local state changes)
+   * This is passed to mj-entity-viewer to control column display
+   */
+  public currentGridState: ViewGridStateConfig | null = null;
 
   constructor(
     public stateService: ExplorerStateService,
@@ -658,6 +666,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // When a view is selected, apply its configuration
     if (event.view) {
+      // Parse and apply the view's grid state
+      this.currentGridState = this.parseViewGridState(event.view);
+
       // Apply the view's filter - for Smart Filter views, use SmartFilterPrompt
       // For regular filter views, the WhereClause is applied in the entity-viewer
       if (event.view.SmartFilterEnabled && event.view.SmartFilterPrompt) {
@@ -669,9 +680,50 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.debouncedFilterText = '';
       }
     } else {
-      // Switching to default view - clear any filters
+      // Switching to default view - clear grid state and filters
+      this.currentGridState = null;
       this.stateService.setSmartFilterPrompt('');
       this.debouncedFilterText = '';
+    }
+  }
+
+  /**
+   * Parse GridState JSON from a UserView entity
+   * Returns null if no valid GridState is present
+   */
+  private parseViewGridState(view: UserViewEntityExtended): ViewGridStateConfig | null {
+    if (!view.GridState) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(view.GridState);
+
+      // Validate structure - expect columnSettings array
+      if (parsed && Array.isArray(parsed.columnSettings)) {
+        return {
+          columnSettings: parsed.columnSettings,
+          sortSettings: parsed.sortSettings || []
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.warn('[DataExplorer] Failed to parse GridState:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Handle grid state changes from entity-viewer (column resize, reorder, etc.)
+   * Updates the local currentGridState and marks view as modified
+   */
+  public onGridStateChanged(event: GridStateChangedEvent): void {
+    this.currentGridState = event.gridState;
+
+    // Mark view as modified if we have a selected view
+    if (this.state.selectedViewId) {
+      this.stateService.setViewModified(true);
     }
   }
 
@@ -763,6 +815,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.selectedViewEntity = newView;
           this.stateService.selectView(newView.ID);
           this.stateService.setViewModified(false);
+          // Update currentGridState from the saved view to refresh the grid
+          this.currentGridState = this.parseViewGridState(newView);
           // Refresh the view selector dropdown
           await this.viewSelectorRef?.loadViews();
           // Note: For new views, ngOnChanges will trigger refresh automatically
@@ -789,10 +843,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         const saved = await this.selectedViewEntity.Save();
         if (saved) {
           this.stateService.setViewModified(false);
+          // Update currentGridState from the saved view to refresh the grid columns
+          this.currentGridState = this.parseViewGridState(this.selectedViewEntity);
+          // Force change detection to ensure grid picks up the new gridState
+          this.cdr.detectChanges();
           // Refresh the view selector dropdown
           await this.viewSelectorRef?.loadViews();
-          // Refresh the entity viewer to reflect the updated view settings
-          this.entityViewerRef?.refresh();
+          // Note: Grid will rebuild columns via ngOnChanges when currentGridState changes
         }
       }
 
@@ -806,24 +863,45 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Build GridState in Kendo-compatible format
    * Format: { columnSettings: [{ID, Name, DisplayName, hidden, width, orderIndex}], sortSettings: [{field, dir}] }
+   *
+   * Priority for column settings:
+   * 1. If event.columns provided (from config panel) - use those
+   * 2. If currentGridState exists (from grid interactions) - use that
+   * 3. Otherwise return null
    */
   private buildGridState(event: ViewSaveEvent): { columnSettings: object[]; sortSettings?: object[] } | null {
-    if (event.columns.length === 0) return null;
+    let columnSettings: object[];
 
-    const columnSettings = event.columns.map((col, idx) => ({
-      ID: col.fieldId,
-      Name: col.fieldName,
-      DisplayName: col.displayName,
-      hidden: false, // Visible columns only
-      width: col.width || null,
-      orderIndex: idx
-    }));
+    // First check if the event has columns configured (from config panel)
+    if (event.columns.length > 0) {
+      columnSettings = event.columns.map((col, idx) => ({
+        ID: col.fieldId,
+        Name: col.fieldName,
+        DisplayName: col.displayName,
+        hidden: false, // Visible columns only
+        width: col.width || null,
+        orderIndex: idx
+      }));
+    }
+    // Otherwise, use the current grid state if available (from grid interactions)
+    else if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
+      columnSettings = this.currentGridState.columnSettings;
+    }
+    // No columns to save
+    else {
+      return null;
+    }
 
-    // Also include sort in GridState for Kendo compatibility
-    const sortSettings = event.sortField ? [{
-      field: event.sortField,
-      dir: event.sortDirection // 'asc' or 'desc'
-    }] : undefined;
+    // Build sort settings - prefer event.sortField, fall back to currentGridState
+    let sortSettings: object[] | undefined;
+    if (event.sortField) {
+      sortSettings = [{
+        field: event.sortField,
+        dir: event.sortDirection // 'asc' or 'desc'
+      }];
+    } else if (this.currentGridState?.sortSettings && this.currentGridState.sortSettings.length > 0) {
+      sortSettings = this.currentGridState.sortSettings;
+    }
 
     return { columnSettings, sortSettings };
   }

@@ -82,9 +82,11 @@
           [filterText]="debouncedFilterText"
           [sortState]="effectiveSortState"
           [serverSideSorting]="effectiveConfig.serverSideSorting"
+          [gridState]="gridState"
           (recordSelected)="onRecordSelected($event)"
           (recordOpened)="onRecordOpened($event)"
-          (sortChanged)="onSortChanged($event)">
+          (sortChanged)="onSortChanged($event)"
+          (gridStateChanged)="onGridStateChanged($event)">
         </mj-entity-grid>
       } @else {
         <mj-entity-cards
