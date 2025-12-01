@@ -1,9 +1,8 @@
-import { AfterViewInit, Component, ElementRef, Input, ViewChild, ChangeDetectorRef, OnChanges, SimpleChanges } from "@angular/core";
+import { AfterViewInit, Component, ElementRef, Input, ViewChild, ChangeDetectorRef } from "@angular/core";
 import { BaseRecordComponent } from "./base-record-component";
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView } from "@memberjunction/core";
 import { debounceTime, fromEvent } from 'rxjs';
-import { SharedService } from "@memberjunction/ng-shared";
-import { Router } from "@angular/router";
+import { SharedService, NavigationService } from "@memberjunction/ng-shared";
 
 /**
  * This component is used to automatically generate a UI for any field in a given BaseEntity object. The CodeGen tool will generate forms and form sections that
@@ -17,7 +16,7 @@ import { Router } from "@angular/router";
     templateUrl: './link-field.component.html'
 })
 export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
-    constructor(private cdr: ChangeDetectorRef, private router: Router) {
+    constructor(private cdr: ChangeDetectorRef, private navigationService: NavigationService) {
         super();
     }
     /**
@@ -128,16 +127,8 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
     public onNewClicked() {
         // user wants to create a new record, double check to make sure we can create a record
         if (this.UserCanCreateNewLinkedRecord && this.RelatedEntityInfo) {
-            // AT THE MOMENT - we only support foreign keys with a single value
-            const keyVals = '' // leave blank so that we invoke the new record functionality
-            const newURL: string[] = ['resource', 'record', keyVals];
-
-            this.router.navigate(newURL, { queryParams: { Entity: this.RelatedEntityInfo.Name } }).then(params => {
-                console.log('navigated to:', newURL.join('/'));
-            }).catch(err => {
-                const newURLString: string = newURL.join('/');
-                LogError(`Error navigating to ${newURLString}: ${err}`);
-            })
+            // Use NavigationService to open a new record form
+            this.navigationService.OpenNewEntityRecord(this.RelatedEntityInfo.Name);
         }
         else {
             // user can't create a new record, so let's tell them

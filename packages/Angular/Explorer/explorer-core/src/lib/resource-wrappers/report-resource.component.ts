@@ -8,7 +8,7 @@ export function LoadReportResource() {
     const test = new ReportResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.
 }
 
-@RegisterClass(BaseResourceComponent, 'Reports')
+@RegisterClass(BaseResourceComponent, 'ReportResource')
 @Component({
     selector: 'mj-report-resource',
     template: `<mj-single-report [reportId]="Data.ResourceRecordID" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-report>`

@@ -19,6 +19,7 @@ import { UserViewGridComponent } from './lib/ng-user-view-grid.component';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { EntityCommunicationsModule } from '@memberjunction/ng-entity-communications';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @NgModule({
   declarations: [
@@ -40,7 +41,8 @@ import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissio
     EntityFormDialogModule,
     IndicatorsModule,
     EntityCommunicationsModule,
-    ResourcePermissionsModule
+    ResourcePermissionsModule,
+    SharedGenericModule
   ],
   exports: [
     UserViewGridComponent

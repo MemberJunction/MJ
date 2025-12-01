@@ -1,0 +1,114 @@
+<div class="cards-view-wrapper">
+  @if (isLoading && effectiveRecords.length === 0) {
+    <div class="loading-container">
+      <mj-loading text="Loading records..."></mj-loading>
+    </div>
+  } @else {
+    <div class="cards-container">
+      @for (record of effectiveRecords; track getRecordTrackId(record, $index)) {
+    <div
+      class="data-card"
+      [class.selected]="isSelected(record)"
+      (click)="onCardClick(record)">
+
+      <!-- Card Header with Avatar/Icon -->
+      <div class="card-header">
+        @switch (getThumbnailType(record)) {
+          @case ('image') {
+            <div class="card-thumbnail">
+              <img [src]="getThumbnailUrl(record)" alt="" />
+            </div>
+          }
+          @case ('icon') {
+            <div class="card-avatar" [style.background-color]="getRecordColor(record)">
+              <i [class]="getThumbnailUrl(record)"></i>
+            </div>
+          }
+          @default {
+            <div class="card-avatar" [style.background-color]="getRecordColor(record)">
+              {{ getInitials(record) }}
+            </div>
+          }
+        }
+
+        <div class="card-header-content">
+          <h3 class="card-title" [innerHTML]="highlightMatch(getFieldValue(record, effectiveTemplate?.titleField ?? null))"></h3>
+          @if (effectiveTemplate?.subtitleField; as subField) {
+            @if (subtitleIsPill) {
+              <mj-pill [value]="getFieldValue(record, subField)"></mj-pill>
+            } @else {
+              <span class="card-subtitle" [innerHTML]="highlightMatch(getFieldValue(record, subField))"></span>
+            }
+          }
+        </div>
+
+        <button class="card-open-btn" (click)="onOpenClick($event, record)" title="Open Record">
+          <i class="fa-solid fa-external-link-alt"></i>
+        </button>
+      </div>
+
+      <!-- Card Body -->
+      <div class="card-body">
+        @if (effectiveTemplate?.descriptionField; as descField) {
+          <p class="card-description" [innerHTML]="highlightMatch(getTextValue(record, descField, 100))"></p>
+        }
+
+        <!-- Display Fields -->
+        @if (effectiveTemplate && effectiveTemplate.displayFields.length > 0) {
+          <div class="card-fields">
+            @for (field of effectiveTemplate.displayFields; track field.name) {
+              <div class="field-item" [class.field-boolean]="field.type === 'boolean'" [class.field-text]="field.type === 'text'">
+                @switch (field.type) {
+                  @case ('boolean') {
+                    <i class="field-icon" [class.fa-solid]="true"
+                       [class.fa-check]="getBooleanValue(record, field.name)"
+                       [class.fa-minus]="!getBooleanValue(record, field.name)"
+                       [class.bool-true]="getBooleanValue(record, field.name)"
+                       [class.bool-false]="!getBooleanValue(record, field.name)"></i>
+                    <span class="field-label">{{ field.label }}</span>
+                  }
+                  @case ('number') {
+                    <span class="field-value">{{ getNumericValue(record, field.name) }}</span>
+                    <span class="field-label">{{ field.label }}</span>
+                  }
+                  @case ('date') {
+                    <span class="field-value field-date">{{ getDateValue(record, field.name) }}</span>
+                    <span class="field-label">{{ field.label }}</span>
+                  }
+                  @default {
+                    <span class="field-label">{{ field.label }}</span>
+                    <span class="field-text-value" [innerHTML]="highlightMatch(getTextValue(record, field.name, 40))"></span>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Card Footer with Badge -->
+      @if (effectiveTemplate?.badgeField; as badgeField) {
+        <div class="card-footer">
+          <mj-pill [value]="getFieldValue(record, badgeField)"></mj-pill>
+        </div>
+      }
+
+      <!-- Hidden field match indicator -->
+      @if (hasHiddenFieldMatch(record)) {
+        <div class="hidden-match-indicator" [title]="'Matched in: ' + getHiddenMatchFieldName(record)">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>{{ getHiddenMatchFieldName(record) }}</span>
+        </div>
+      }
+    </div>
+    }
+
+    @if (effectiveRecords.length === 0) {
+      <div class="no-results">
+        <i class="fa-solid fa-inbox"></i>
+        <p>No records to display</p>
+      </div>
+    }
+    </div>
+  }
+</div>

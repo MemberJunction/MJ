@@ -10,7 +10,7 @@ interface SystemConfigFilter {
 @Component({
   selector: 'mj-system-config-filter-panel',
   templateUrl: './system-config-filter-panel.component.html',
-  styleUrls: ['./system-config-filter-panel.component.scss']
+  styleUrls: ['./system-config-filter-panel.component.css']
 })
 export class SystemConfigFilterPanelComponent implements OnInit {
   @Input() configurations: AIConfigurationEntity[] = [];

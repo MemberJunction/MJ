@@ -1,22 +1,357 @@
-import { Component } from '@angular/core';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef } from '@angular/core';
+import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
+import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity } from '@memberjunction/core-entities';
+import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
+import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
+import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
+import { DataExplorerDashboardComponent, DataExplorerFilter } from '@memberjunction/ng-dashboards';
 
 export function LoadDashboardResource() {
-    const test = new DashboardResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.
 }
 
-@RegisterClass(BaseResourceComponent, 'Dashboards')
+/**
+ * Dashboard Resource Wrapper - displays a single dashboard in a tab
+ * Extends BaseResourceComponent to work with the resource type system
+ * Dynamically routes between code-based and config-based dashboards based on dashboard type
+ */
+@RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
-    selector: 'mj-single-dashboard-resource',
-    template: `<mj-single-dashboard [ResourceData]="Data" (dashboardSaved)="ResourceRecordSaved($event)" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()" ></mj-single-dashboard>`
+    selector: 'mj-dashboard-resource',
+    template: `<div #container class="dashboard-resource-container"></div>`,
+    styles: [`
+        :host {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        .dashboard-resource-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: auto;
+        }
+    `]
 })
 export class DashboardResource extends BaseResourceComponent {
-    override async GetResourceDisplayName(data: ResourceData): Promise<string> {
-        return data.Name ? data.Name : 'Dashboard ID: ' + data.ResourceRecordID;
+    private componentRef: ComponentRef<unknown> | null = null;
+    private dataLoaded = false;
+    @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
+
+    constructor(
+        private viewContainer: ViewContainerRef,
+        private navigationService: NavigationService
+    ) {
+        super();
     }
+
+    override set Data(value: ResourceData) {
+        super.Data = value;
+        if (!this.dataLoaded) {
+            this.dataLoaded = true;
+            this.loadDashboard();
+        }
+    }
+
+    // Need to override the getter too in TS otherwise the override to the setter alone above would break things
+    override get Data(): ResourceData {
+        return super.Data;
+    }
+
+    ngOnDestroy(): void {
+        if (this.componentRef) {
+            this.componentRef.destroy();
+        }
+    }
+
+    /**
+     * Load the appropriate dashboard component based on dashboard type
+     * Routes between code-based dashboards (registered classes) and config-based dashboards
+     */
+    private async loadDashboard(): Promise<void> {
+        const data = this.Data;
+        console.log('[DashboardResource] loadDashboard called with:', data);
+
+        if (!data?.ResourceRecordID) {
+            console.log('[DashboardResource] No ResourceRecordID, exiting');
+            this.NotifyLoadStarted();
+            this.NotifyLoadComplete();
+            return;
+        }
+
+        this.NotifyLoadStarted();
+
+        try {
+            // Check if this is a special dashboard type (not a database record)
+            const config = data.Configuration || {};
+            console.log('[DashboardResource] Config:', config, 'ResourceRecordID:', data.ResourceRecordID);
+
+            if (config['dashboardType'] === 'DataExplorer' || data.ResourceRecordID === 'DataExplorer') {
+                console.log('[DashboardResource] Loading DataExplorer with filter:', config['entityFilter']);
+                // Special case: Data Explorer dashboard with optional entity filter
+                await this.loadDataExplorer(
+                    config['entityFilter'],
+                    config['appName'] as string | undefined,
+                    config['appIcon'] as string | undefined
+                );
+                return;
+            }
+
+            await DashboardEngine.Instance.Config(false); // make sure it is configured, if already configured does nothing
+            const dashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === data.ResourceRecordID);
+            if (!dashboard) {
+                throw new Error(`Dashboard with ID ${data.ResourceRecordID} not found.`);
+            }
+
+            // Determine which dashboard component to load based on dashboard type
+            if (dashboard.Type === 'Code') {
+                // CODE-BASED DASHBOARD: Use registered class via DriverClass
+                await this.loadCodeBasedDashboard(dashboard);
+            } else {
+                // CONFIG-BASED DASHBOARD: Use the generic metadata-driven renderer
+                await this.loadConfigBasedDashboard(dashboard);
+            }
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
+    /**
+     * Load the Data Explorer dashboard component with optional entity filter and context info
+     * @param entityFilter Optional filter to constrain which entities are shown
+     * @param contextName Optional name to display in the header (e.g., "CRM", "Association Demo")
+     * @param contextIcon Optional Font Awesome icon class for the header
+     */
+    private async loadDataExplorer(
+        entityFilter?: DataExplorerFilter,
+        contextName?: string,
+        contextIcon?: string
+    ): Promise<void> {
+        try {
+            // Create the Data Explorer component directly (it's already registered)
+            this.containerElement.nativeElement.innerHTML = '';
+            const componentRef = this.viewContainer.createComponent(DataExplorerDashboardComponent);
+            this.componentRef = componentRef;
+            const instance = componentRef.instance;
+
+            // Set the entity filter - ngOnInit will use this when it runs
+            if (entityFilter) {
+                instance.entityFilter = entityFilter;
+            }
+
+            // Set context name and icon for customized header display
+            if (contextName) {
+                instance.contextName = contextName;
+            }
+            if (contextIcon) {
+                instance.contextIcon = contextIcon;
+            }
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
+            this.containerElement.nativeElement.appendChild(nativeElement);
+
+            // Handle open entity record events
+            instance.OpenEntityRecord.subscribe((eventData: { EntityName: string; RecordPKey: CompositeKey }) => {
+                if (eventData && eventData.EntityName && eventData.RecordPKey) {
+                    this.navigationService.OpenEntityRecord(eventData.EntityName, eventData.RecordPKey);
+                }
+            });
+
+            // Initialize dashboard (no database config needed for DataExplorer)
+            const config: DashboardConfig = {
+                dashboard: null as unknown as DashboardEntity, // No database record
+                userState: {}
+            };
+            instance.Config = config;
+            instance.Refresh();
+
+            // Trigger change detection to ensure the component updates
+            componentRef.changeDetectorRef.detectChanges();
+
+            this.NotifyLoadComplete();
+        } catch (error) {
+            console.error('Error loading Data Explorer:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
+    /**
+     * Load a code-based dashboard by looking up the registered class
+     */
+    private async loadCodeBasedDashboard(dashboard: DashboardEntity): Promise<void> {
+        try {
+            if (!dashboard.DriverClass) {
+                throw new Error(`Dashboard '${dashboard.Name}' is marked as Code type but has no DriverClass specified`);
+            }
+
+            // Look up the registered class using the DriverClass name
+            const classReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+                BaseDashboard,
+                dashboard.DriverClass
+            );
+
+            if (!classReg?.SubClass) {
+                throw new Error(`Dashboard class '${dashboard.DriverClass}' is not registered. Please check the class registration.`);
+            }
+
+            // Create the component instance
+            this.containerElement.nativeElement.innerHTML = '';
+            this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
+            const instance = this.componentRef.instance as BaseDashboard;
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
+            this.containerElement.nativeElement.appendChild(nativeElement);
+
+            // Initialize with dashboard data
+            const baseData = this.Data;
+            const userStateEntity = await this.loadDashboardUserState(dashboard.ID);
+            const config: DashboardConfig = {
+                dashboard,
+                userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
+            };
+
+            // handle open entity record events in MJ Explorer with routing
+            instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
+                console.log('DashboardResource OpenEntityRecord event received:', data);
+                // check to see if the data has entityname/pkey
+                if (data && data.EntityName && data.RecordPKey) {
+                    console.log('DashboardResource calling NavigationService.OpenEntityRecord:', data.EntityName, data.RecordPKey);
+                    // Use NavigationService to open entity record in new tab
+                    this.navigationService.OpenEntityRecord(data.EntityName, data.RecordPKey);
+                } else {
+                    console.log('DashboardResource - invalid data, missing EntityName or RecordPKey:', data);
+                }
+            });
+
+            instance.UserStateChanged.subscribe(async (userState: any) => {
+                if (!userState) {
+                    // if the user state is null, we need to remove it from the user state
+                    userState = {};
+                }
+                // save the user state to the dashboard user state entity
+                userStateEntity.UserState = JSON.stringify(userState);
+                if (!await userStateEntity.Save()) {
+                    LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
+                }
+            });
+            
+
+            instance.Config = config;
+            instance.Refresh();
+
+            this.NotifyLoadComplete();
+        } catch (error) {
+            console.error('Error loading code-based dashboard:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
+
+
+    protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
+        // handle user state changes for the dashboard
+        const rv = new RunView();
+        const md = new Metadata();
+        const stateResult = await rv.RunView({
+            EntityName: 'MJ: Dashboard User States',
+            ExtraFilter: `DashboardID='${dashboardId}' AND UserID='${md.CurrentUser.ID}'`,
+            ResultType: 'entity_object',
+        });
+        let stateObject: DashboardUserStateEntity;
+        if (stateResult && stateResult.Success && stateResult.Results.length > 0) {
+            stateObject = stateResult.Results[0];
+        }
+        else {
+            stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');
+            stateObject.DashboardID = dashboardId;
+            stateObject.UserID = md.CurrentUser.ID;
+            // don't save becuase we don't care about the state until something changes
+        }
+        return stateObject;
+    }
+
+    /**
+     * Load a config-based dashboard using the generic SingleDashboardComponent
+     */
+    private async loadConfigBasedDashboard(dashboard: DashboardEntity): Promise<void> {
+        try {
+            this.containerElement.nativeElement.innerHTML = '';
+            this.componentRef = this.viewContainer.createComponent(SingleDashboardComponent);
+            const instance = this.componentRef.instance as any;
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
+            this.containerElement.nativeElement.appendChild(nativeElement);
+
+            // Initialize with dashboard data
+            const baseData = this.Data;
+            const resourceData = new ResourceData({
+                ResourceRecordID: baseData.ResourceRecordID,
+                Configuration: baseData.Configuration || {}
+            });
+
+            instance.ResourceData = resourceData;
+
+            // Wire up events if they exist
+            if (instance.loadComplete) {
+                instance.loadComplete.subscribe(() => {
+                    this.NotifyLoadComplete();
+                });
+            } else {
+                // Fallback if event emitter not available
+                setTimeout(() => this.NotifyLoadComplete(), 100);
+            }
+
+            if (instance.dashboardSaved) {
+                instance.dashboardSaved.subscribe((entity: any) => {
+                    this.ResourceRecordSaved(entity);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading config-based dashboard:', error);
+            this.NotifyLoadComplete();
+        }
+    }
+
+    /**
+     * Get the display name for a dashboard resource
+     * Loads the actual dashboard name from the database if available
+     */
+    override async GetResourceDisplayName(data: ResourceData): Promise<string> {
+        try {
+            // Try to load dashboard metadata if we have the record ID
+            if (data.ResourceRecordID && data.ResourceRecordID.length > 0) {
+                const md = new Metadata();
+                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
+                const name = await md.GetEntityRecordName('Dashboards', compositeKey);
+                if (name) {
+                    return name;
+                }
+            }
+        } catch (error) {
+            // Silently fail and use fallback
+        }
+
+        // Fallback: use provided name or generic label
+        return data.Name || 'Dashboard';
+    }
+
+    /**
+     * Get the icon class for dashboard resources
+     */
     async GetResourceIconClass(data: ResourceData): Promise<string> {
-        return '';
+        return 'fa-solid fa-table-columns';
     }
 }

@@ -8,7 +8,7 @@ export function LoadRecordResource() {
     const test = new EntityRecordResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.
 }
 
-@RegisterClass(BaseResourceComponent, 'Records')
+@RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
     selector: 'mj-record-resource',
     template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" ></mj-single-record>`
@@ -31,25 +31,44 @@ export class EntityRecordResource extends BaseResourceComponent {
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
+        console.log('[RecordResource.GetResourceDisplayName] Called with data:', {
+            entity: data.Configuration?.Entity,
+            resourceRecordID: data.ResourceRecordID,
+            configuration: data.Configuration
+        });
+
         if (!data.Configuration.Entity){
+            console.log('[RecordResource.GetResourceDisplayName] No entity in configuration, returning empty string');
             return ''
         }
         else {
             const md = new Metadata();
             const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
             if (!e) {
-                console.warn(`Entity ${data.Configuration.Entity} not found in metadata`);
+                console.warn(`[RecordResource.GetResourceDisplayName] Entity ${data.Configuration.Entity} not found in metadata`);
                 return '';
             }
-           
+
             let pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data);
+            console.log('[RecordResource.GetResourceDisplayName] Got primary key:', {
+                hasValue: pk.HasValue,
+                keyValuePairs: pk.KeyValuePairs
+            });
+
             if (pk.HasValue) {
                 const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
-                //const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);         
-                return (name ? name : e.DisplayNameOrName);// + ` (${displayId})`;    
+                console.log('[RecordResource.GetResourceDisplayName] Got record name from metadata:', {
+                    name,
+                    entityDisplayName: e.DisplayNameOrName,
+                    willReturn: name ? name : e.DisplayNameOrName
+                });
+                //const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);
+                return (name ? name : e.DisplayNameOrName);// + ` (${displayId})`;
             }
-            else 
+            else {
+                console.log('[RecordResource.GetResourceDisplayName] No primary key value, returning new record label');
                 return `New ${e.DisplayNameOrName} Record`;
+            }
         }
     }
 

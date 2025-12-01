@@ -7,6 +7,7 @@
   "scripts": {
     "test": "ts-node run-tests.ts",
     "test:fixtures": "ts-node run-fixture-tests.ts",
+    "test:fixture": "ts-node lint-fixture.ts",
     "test:all": "npm test && npm run test:fixtures",
     "export:valid": "ts-node scripts/export-valid-components.ts",
     "build": "tsc"
@@ -24,6 +25,7 @@
     "@memberjunction/global": "2.121.0",
     "@memberjunction/sqlserver-dataprovider": "2.121.0",
     "@memberjunction/interactive-component-types": "2.121.0",
+    "@memberjunction/metadata-sync": "2.121.0",
     "@memberjunction/react-test-harness": "2.121.0",
     "dotenv": "^16.0.0"
   }

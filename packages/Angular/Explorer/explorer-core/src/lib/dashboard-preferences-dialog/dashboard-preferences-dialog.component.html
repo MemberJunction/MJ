@@ -39,7 +39,7 @@
   <div class="dialog-content">
     @if (loading) {
       <div class="loading-overlay">
-        <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
+        <mj-loading text="Loading preferences..." size="large"></mj-loading>
       </div>
     }
 
@@ -149,7 +149,7 @@
             [disabled]="!hasChanges || saving"
             (click)="onSave()">
       @if (saving) {
-        <kendo-loader size="small"></kendo-loader>
+        <mj-loading [showText]="false" size="small"></mj-loading>
         Saving...
       } @else {
         <i class="fa-solid fa-check"></i> Save Changes

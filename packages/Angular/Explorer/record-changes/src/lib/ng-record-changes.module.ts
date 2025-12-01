@@ -13,6 +13,7 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @NgModule({
   declarations: [
@@ -29,7 +30,8 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     ButtonsModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
-    IndicatorsModule
+    IndicatorsModule,
+    SharedGenericModule
   ],
   exports: [
     RecordChangesComponent

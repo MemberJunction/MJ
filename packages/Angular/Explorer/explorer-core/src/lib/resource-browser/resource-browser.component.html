@@ -85,7 +85,7 @@
       <!-- Loading State -->
       @if (IsLoading) {
         <div class="mj-loading">
-          <kendo-loader type="converging-spinner" themeColor="primary" size="large"></kendo-loader>
+          <mj-loading [showText]="false" size="large"></mj-loading>
         </div>
       }
       @else {

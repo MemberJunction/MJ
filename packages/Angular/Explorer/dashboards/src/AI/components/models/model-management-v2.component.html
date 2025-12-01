@@ -1,24 +1,17 @@
 <div class="model-management-v2">
   @if (isLoading) {
     <div class="loading-container">
-      <div class="loading-content">
-        <div class="loading-spinner">
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-        </div>
-        <div class="loading-text">{{ currentLoadingMessage }}</div>
-      </div>
+      <mj-loading [text]="currentLoadingMessage" size="large"></mj-loading>
     </div>
   } @else {
-    <div class="dashboard-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 16px 24px !important; background: white !important;">
-      <div class="header-info" style="display: flex !important; align-items: center !important; gap: 16px !important; flex: 1 !important;">
-        <h2 class="dashboard-title" style="margin: 0 !important; display: flex !important; align-items: center !important; gap: 8px !important;">
+    <div class="dashboard-header">
+      <div class="header-info">
+        <h2 class="dashboard-title">
           <i class="fa-solid fa-microchip"></i>
           AI Models
         </h2>
-        <button 
-          type="button" 
+        <button
+          type="button"
           class="filter-toggle-btn"
           (click)="toggleFilters()"
           title="Toggle Filters">
@@ -31,19 +24,19 @@
         </button>
         <span class="item-count">{{ filteredModels.length }} models</span>
       </div>
-      
-      <div class="header-controls" style="display: flex !important; align-items: center !important; gap: 16px !important;">
+
+      <div class="header-controls">
         <div class="view-toggle">
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="view-btn"
             [class.active]="viewMode === 'grid'"
             (click)="setViewMode('grid')"
             title="Grid View">
             <i class="fa-solid fa-grip"></i>
           </button>
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="view-btn"
             [class.active]="viewMode === 'list'"
             (click)="setViewMode('list')"
@@ -51,9 +44,9 @@
             <i class="fa-solid fa-list"></i>
           </button>
         </div>
-        
-        <button 
-          type="button" 
+
+        <button
+          type="button"
           class="control-btn primary"
           (click)="createNewModel()"
           title="Create New Model">
@@ -209,105 +202,104 @@
                 <div class="model-grid">
                   @for (model of filteredModels; track model.ID) {
                     <div class="model-card" [class.expanded]="expandedModelId === model.ID">
+                      <!-- Card Header -->
                       <div class="card-header" (click)="toggleModelExpansion(model.ID)">
-                        <div class="card-icon">
-                          <i [class]="getModelIcon(model)"></i>
-                        </div>
-                        <div class="card-info">
-                          <h4>{{ model.Name || 'Unnamed Model' }}</h4>
-                          <div class="card-meta">
-                            @if (model.Vendor) {
-                              <span class="vendor">{{ model.Vendor }}</span>
-                            }
-                            <span class="type">{{ model.AIModelType }}</span>
-                            @if (model.IsActive) {
-                              <span class="status active">Active</span>
-                            } @else {
-                              <span class="status inactive">Inactive</span>
-                            }
+                        <div class="model-info">
+                          <div class="model-icon">
+                            <i [class]="getModelIcon(model)"></i>
                           </div>
-                          <div class="card-stats">
-                            <span class="stat-item" title="Power Rank">
-                              <i class="fa-solid fa-bolt"></i> {{ formatRank(model.PowerRank, 'power') }}
-                            </span>
-                            <span class="stat-item" title="Speed Rank">
-                              <i class="fa-solid fa-gauge-high"></i> {{ formatRank(model.SpeedRank, 'speed') }}
-                            </span>
-                            <span class="stat-item" title="Cost Rank">
-                              <i class="fa-solid fa-dollar-sign"></i> {{ formatRank(model.CostRank, 'cost') }}
-                            </span>
-                            @if (model.InputTokenLimit) {
-                              <span class="stat-item" title="Token Limit">
-                                <i class="fa-solid fa-coins"></i> {{ formatTokenLimit(model.InputTokenLimit) }}
-                              </span>
-                            }
+                          <div class="model-details">
+                            <h4 class="model-name">{{ model.Name || 'Unnamed Model' }}</h4>
+                            <div class="model-meta">
+                              @if (model.Vendor) {
+                                <span class="meta-item">
+                                  <i class="fa-solid fa-building"></i>
+                                  {{ model.Vendor }}
+                                </span>
+                              }
+                              @if (model.AIModelType) {
+                                <span class="meta-item">
+                                  <i class="fa-solid fa-microchip"></i>
+                                  {{ model.AIModelType }}
+                                </span>
+                              }
+                              @if (model.IsActive) {
+                                <span class="meta-item status-active">
+                                  <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+                                  Active
+                                </span>
+                              } @else {
+                                <span class="meta-item status-inactive">
+                                  <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+                                  Inactive
+                                </span>
+                              }
+                            </div>
                           </div>
                         </div>
-                        <i class="fa-solid fa-chevron-down expand-icon" [class.rotated]="expandedModelId === model.ID"></i>
+
+                        <i class="fa-solid fa-chevron-down expand-icon"
+                           [class.rotated]="expandedModelId === model.ID"></i>
                       </div>
 
-                      @if (expandedModelId === model.ID) {
-                        <div class="card-content">
-                          @if (model.Description) {
-                            <div class="description-section">
-                              <h5>Description</h5>
-                              <p>{{ model.Description }}</p>
-                            </div>
-                          }
+                      <!-- Card Body -->
+                      <div class="card-body">
+                        @if (model.Description) {
+                          <p class="model-description">{{ model.Description }}</p>
+                        } @else {
+                          <p class="model-description text-muted">No description provided</p>
+                        }
 
-                          <div class="ranks-section">
-                            <h5>Performance Rankings</h5>
-                            <div class="ranks-grid">
-                              <div class="rank-item">
-                                <span class="rank-label">
-                                  <i class="fa-solid fa-bolt"></i> Power
-                                </span>
-                                <span class="rank-value" [class]="getRankClass(model.PowerRank, 'power')">
-                                  {{ formatRank(model.PowerRank, 'power') }}
-                                </span>
+                        <!-- Expandable Content -->
+                        @if (expandedModelId === model.ID) {
+                          <div class="expanded-content">
+                            <div class="model-stats">
+                              <div class="stat-item">
+                                <span class="stat-label">Power Rank</span>
+                                <span class="stat-value">{{ formatRank(model.PowerRank, 'power') }}</span>
                               </div>
-                              <div class="rank-item">
-                                <span class="rank-label">
-                                  <i class="fa-solid fa-gauge-high"></i> Speed
-                                </span>
-                                <span class="rank-value" [class]="getRankClass(model.SpeedRank, 'speed')">
-                                  {{ formatRank(model.SpeedRank, 'speed') }}
-                                </span>
+                              <div class="stat-item">
+                                <span class="stat-label">Speed Rank</span>
+                                <span class="stat-value">{{ formatRank(model.SpeedRank, 'speed') }}</span>
                               </div>
-                              <div class="rank-item">
-                                <span class="rank-label">
-                                  <i class="fa-solid fa-dollar-sign"></i> Cost
-                                </span>
-                                <span class="rank-value" [class]="getRankClass(model.CostRank, 'cost')">
-                                  {{ formatRank(model.CostRank, 'cost') }}
-                                </span>
+                              <div class="stat-item">
+                                <span class="stat-label">Cost Rank</span>
+                                <span class="stat-value">{{ formatRank(model.CostRank, 'cost') }}</span>
                               </div>
+                              @if (model.InputTokenLimit) {
+                                <div class="stat-item">
+                                  <span class="stat-label">Token Limit</span>
+                                  <span class="stat-value">{{ formatTokenLimit(model.InputTokenLimit) }}</span>
+                                </div>
+                              }
+                              @if (model.APIName) {
+                                <div class="stat-item">
+                                  <span class="stat-label">API Name</span>
+                                  <span class="stat-value">{{ model.APIName }}</span>
+                                </div>
+                              }
+                              @if (model.DriverClass) {
+                                <div class="stat-item">
+                                  <span class="stat-label">Driver</span>
+                                  <span class="stat-value">{{ model.DriverClass }}</span>
+                                </div>
+                              }
                             </div>
                           </div>
+                        }
+                      </div>
 
-                          <div class="stats-grid">
-                            <div class="stat">
-                              <span class="stat-label">Status</span>
-                              <span class="stat-value">{{ model.IsActive ? 'Active' : 'Inactive' }}</span>
-                            </div>
-                            <div class="stat">
-                              <span class="stat-label">API Name</span>
-                              <span class="stat-value">{{ model.APIName || 'N/A' }}</span>
-                            </div>
-                            <div class="stat">
-                              <span class="stat-label">Driver</span>
-                              <span class="stat-value">{{ model.DriverClass || 'N/A' }}</span>
-                            </div>
-                          </div>
-
-                          <div class="card-footer">
-                            <button class="action-button" (click)="openModel(model.ID); $event.stopPropagation()">
-                              <i class="fa-solid fa-edit"></i>
-                              Edit
-                            </button>
-                          </div>
-                        </div>
-                      }
+                      <!-- Card Actions -->
+                      <div class="card-actions">
+                        <button
+                          type="button"
+                          class="action-btn"
+                          (click)="openModel(model.ID); $event.stopPropagation()"
+                          title="Open Model">
+                          <i class="fa-solid fa-external-link-alt"></i>
+                          Open
+                        </button>
+                      </div>
                     </div>
                   }
                 </div>

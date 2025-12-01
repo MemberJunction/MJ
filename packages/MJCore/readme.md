@@ -8,6 +8,63 @@ The `@memberjunction/core` library provides a comprehensive interface for access
 npm install @memberjunction/core
 ```
 
+## Key Features
+
+- **Metadata-Driven Architecture**: Complete access to MemberJunction metadata including entities, fields, relationships, and permissions
+- **Entity Data Access**: Type-safe base classes for loading, saving, and manipulating entity records
+- **View Execution**: Powerful view running capabilities for both stored and dynamic views with filtering and pagination
+- **Query Execution**: Secure parameterized query execution with SQL injection protection
+- **Transaction Management**: Support for grouped database transactions with atomic commits
+- **Provider Architecture**: Flexible provider model supporting different execution environments (server, client, API)
+- **Bulk Data Loading**: Dataset system for efficient loading of related entity collections
+- **Vector Embeddings**: Built-in support for AI-powered text embeddings and similarity search
+- **Enhanced Logging**: Structured logging with metadata, categories, and verbose control
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Application["Application Layer"]
+        App[Your Application]
+    end
+
+    subgraph Core["@memberjunction/core"]
+        MD[Metadata]
+        BE[BaseEntity]
+        RV[RunView]
+        RQ[RunQuery]
+        RR[RunReport]
+        TG[TransactionGroup]
+        DS[Datasets]
+    end
+
+    subgraph Providers["Provider Layer"]
+        SP[Server Provider]
+        CP[Client Provider]
+    end
+
+    subgraph Data["Data Layer"]
+        DB[(Database)]
+        API[GraphQL API]
+    end
+
+    App --> MD
+    App --> BE
+    App --> RV
+    App --> RQ
+
+    MD --> SP
+    MD --> CP
+    BE --> SP
+    BE --> CP
+    RV --> SP
+    RV --> CP
+
+    SP --> DB
+    CP --> API
+    API --> DB
+```
+
 ## Overview
 
 The `@memberjunction/core` library is the central package in the MemberJunction ecosystem, providing:
@@ -969,22 +1026,46 @@ This optimization is particularly beneficial in server environments where each r
 8. **Cache metadata instances** when possible to improve performance
 9. **Override both Load() and LoadFromData()** in subclasses that need additional loading logic to ensure consistent behavior
 
-## Integration with Other MemberJunction Packages
-
-- **@memberjunction/global**: Global utilities and constants
-- **@memberjunction/server**: Server-side provider implementation
-- **@memberjunction/client**: Client-side provider implementation
-- **@memberjunction/angular**: Angular-specific components and services
-- **@memberjunction/react**: React-specific components and hooks
-- **@memberjunction/ai**: AI integration features
-- **@memberjunction/communication**: Communication and messaging features
-
 ## Dependencies
 
-- **@memberjunction/global**: Core global utilities
-- **rxjs**: Reactive programming support
-- **zod**: Schema validation
-- **debug**: Debug logging
+This package depends on:
+
+| Package | Description |
+|---------|-------------|
+| [@memberjunction/global](../MJGlobal/README.md) | Core global utilities, class factory, and singleton patterns |
+| rxjs | Reactive programming support for observables |
+| zod | Schema validation for entity fields |
+| debug | Debug logging utilities |
+
+## Related Packages
+
+### Provider Implementations
+
+- [@memberjunction/sqlserver-dataprovider](../SQLServerDataProvider/README.md) - SQL Server database provider for server-side operations
+- [@memberjunction/graphql-dataprovider](../GraphQLDataProvider/README.md) - GraphQL provider for client-side applications
+
+### Entity Extensions
+
+- [@memberjunction/core-entities](../MJCoreEntities/README.md) - Extended entity classes for MemberJunction system entities
+- [@memberjunction/generated-entities](../GeneratedEntities/README.md) - Auto-generated entity classes for your database
+
+### UI Frameworks
+
+- [@memberjunction/ng-shared](../Angular/Shared/README.md) - Angular-specific components and services
+- [@memberjunction/ng-explorer-core](../Angular/Explorer/core/README.md) - Core Angular explorer components
+
+### AI Integration
+
+- [@memberjunction/ai](../AI/Core/README.md) - AI framework core abstractions
+- [@memberjunction/aiengine](../AI/Engine/README.md) - AI orchestration engine
+
+### Communication
+
+- [@memberjunction/communication-engine](../Communication/engine/README.md) - Multi-channel communication framework
+
+### Actions
+
+- [@memberjunction/actions](../Actions/Engine/README.md) - Business logic action framework
 
 ## TypeScript Support
 
@@ -1178,6 +1259,18 @@ if (dashboard.Success) {
     console.log(`Low stock products: ${lowStockProducts.length}`);
 }
 ```
+
+## Contributing
+
+When contributing to @memberjunction/core:
+
+1. **Follow TypeScript Best Practices**: Use strict typing, avoid `any` types
+2. **Maintain Backward Compatibility**: Existing code should continue to work
+3. **Document Breaking Changes**: Add version notes to the Breaking Changes section
+4. **Add TSDoc Comments**: Document all public APIs with TSDoc
+5. **Test Thoroughly**: Ensure changes work in both server and client environments
+
+See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 

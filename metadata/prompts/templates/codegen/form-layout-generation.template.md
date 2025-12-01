@@ -16,6 +16,21 @@ Analyze the provided entity and assign each field to a domain-specific, semantic
 {{ entityDescription }}
 {% endif %}
 
+### Schema
+{{ schemaName }}
+
+### Field Statistics
+
+- **Total Fields**: {{ totalFields }}
+- **Foreign Key Fields**: {{ fkCount }}
+- **Non-FK Business Fields**: {{ nonFkCount }}
+- **FK Ratio**: {{ fkRatio }}% of fields are foreign keys
+
+**How to interpret FK statistics for Entity Importance:**
+- **Primary entities** (examples: Contact, Account, Order, Deal): Have multiple FKs (3-10+) but MANY MORE non-FK business fields. FK ratio typically 10-30%.
+- **Junction/join tables** (examples: ContactAccount, UserRole): Narrow tables with 2-4 FKs and almost NO non-FK business fields. FK ratio typically 40-80%.
+- **Reference/type tables** (examples: AccountType, OrderStatus): Usually 0-1 FKs with a few descriptive fields like Name, Description. FK ratio typically 0-20%.
+
 ### Fields
 {% for field in fields %}
 - **{{ field.Name }}** ({{ field.Type }}){% if field.IsNullable %} - Nullable{% endif %}
@@ -34,27 +49,35 @@ Analyze the provided entity and assign each field to a domain-specific, semantic
 
 ---
 
-## 🔒 CRITICAL: Existing Category Preservation
+## 🔒 CRITICAL: Existing Category and Icon Preservation
 
 **This entity ALREADY has categorized fields. You MUST preserve the existing categorization scheme.**
 
 ### Existing Categories and Their Fields
 
 {% for category in existingCategories %}
-**{{ category }}** ({{ fieldsByCategory[category].length }} fields)
+**{{ category }}**{% if existingCategoryInfo[category].icon %} (icon: {{ existingCategoryInfo[category].icon }}){% endif %} - {{ fieldsByCategory[category].length }} fields
 {% for fieldName in fieldsByCategory[category] %}
   - {{ fieldName }}
 {% endfor %}
 
 {% endfor %}
 
-### MANDATORY Rules for Incremental Categorization
+### MANDATORY Rules for Incremental Updates
 
-1. **PRESERVE existing category names exactly** - Do not rename or merge existing categories
-2. **REUSE existing categories** - New fields AND re-categorizable fields should fit into existing categories
-3. **Maximum 1-2 new categories allowed** - Only create new categories if fields don't fit semantically into existing ones
-4. **Maintain consistency** - Use the same semantic grouping logic as the existing categories
-5. **Only update allowed fields** - Fields with `AutoUpdateCategory=false` are locked (shown for context, do not include in output)
+**Category Names:**
+1. **NEVER rename existing categories** - Use the exact names shown above
+2. **NEVER merge existing categories** - Keep them separate
+3. **REUSE existing categories** - New fields should fit into existing categories when semantically appropriate
+4. **Maximum 1-2 new categories** - Only create new categories if fields truly don't fit existing ones
+
+**Category Icons:**
+5. **DO NOT output icons for existing categories** - They are already set and must be preserved
+6. **ONLY output icons for NEW categories** you create (if any)
+
+**Field Movement:**
+7. **Avoid moving existing fields** - Only move a field to a different category if it was clearly miscategorized
+8. **Fields with `AutoUpdateCategory=false` are LOCKED** - Do not include them in your output
 
 ### Field Status Legend
 {% for field in fields %}
@@ -205,45 +228,51 @@ Return a JSON object with this exact structure:
       "displayName": "Billing Address Line 1",
       "extendedType": null,
       "codeType": null
-    },
-    {
-      "fieldName": "ShipToAddress1",
-      "category": "Ship To Address",
-      "reason": "Physical shipping destination for order fulfillment",
-      "displayName": "Shipping Address Line 1",
-      "extendedType": null,
-      "codeType": null
     }
   ],
-  "categoryIcons": {
-    "Bill To Address": "fa fa-file-invoice",
-    "Ship To Address": "fa fa-shipping-fast"
+  "categoryInfo": {
+    "Bill To Address": {
+      "icon": "fa fa-file-invoice",
+      "description": "Address for invoice delivery and billing correspondence"
+    }
   },
   "entityImportance": {
     "defaultForNewUser": true,
     "entityCategory": "primary",
     "confidence": "high",
-    "reasoning": "Order is a core business entity with rich domain fields across billing, shipping, and pricing. Users interact with orders daily.",
-    "recommendedSequence": 2
+    "reasoning": "Order is a core business entity with rich domain fields across billing, shipping, and pricing. Users interact with orders daily."
   }
 }
 ```
+
+### Category Info Structure
+
+For each **NEW category only** (not existing ones), provide:
+- **icon**: Font Awesome icon class (e.g., "fa fa-file-invoice")
+- **description**: 1 sentence describing what fields belong in this category (for UX tooltips)
+
+{% if hasExistingCategories %}
+**IMPORTANT**: Do NOT include existing categories in `categoryInfo`. Only include categories you are creating for the first time.
+{% endif %}
 
 ### Entity Importance Fields
 
 - **defaultForNewUser**: boolean - Should new users see this in navigation?
 - **entityCategory**: One of: "primary" | "supporting" | "reference" | "junction" | "system"
 - **confidence**: "high" | "medium" | "low" - How confident is the classification?
-- **reasoning**: string - 1-2 sentences explaining the decision (reference your field analysis)
-- **recommendedSequence**: number (optional) - Suggested sort order (1=first, higher=later)
+- **reasoning**: string - 1-2 sentences explaining the decision (reference field statistics)
+
+{% if isExistingEntity %}
+**NOTE**: This is an EXISTING entity being modified. The `entityImportance` section will be IGNORED - we only set DefaultForNewUser when an entity is first created. You may omit this section or provide minimal values.
+{% endif %}
 
 ### Icon Selection Guidelines
 
 **Entity Icon:**
 Select ONE icon that best represents the entire entity's business purpose and domain. This icon will be used throughout the application to represent this entity type.
 
-**Category Icons:**
-For each **unique category**, select an appropriate Font Awesome icon class (version 5.x solid icons preferred).
+**Category Icons (for NEW categories only):**
+For each **new category**, select an appropriate Font Awesome icon class (version 5.x solid icons preferred).
 
 **Icon Selection Rules:**
 - Use semantic, recognizable icons that clearly represent the category's purpose
@@ -275,65 +304,64 @@ For each **unique category**, select an appropriate Font Awesome icon class (ver
 
 In addition to categorizing fields, you must also analyze whether this entity should be **visible to new users by default** in the application.
 
-### Entity Metadata
+### Understanding Entity Types by Field Composition
 
-- **Schema Name**: {{ schemaName }}
-- **Virtual Entity**: {{ virtualEntity }}
-- **Track Record Changes**: {{ trackRecordChanges }}
-- **Audit Record Access**: {{ auditRecordAccess }}
-- **User Form Generated**: {{ userFormGenerated }}
+Use the field statistics provided above to classify the entity:
 
-### Entity Categories
+**1. Primary Entities** (DefaultForNewUser: **true**)
+- Core business objects users interact with daily
+- Examples: Contact, Account, Order, Deal, Task, Project, Invoice
+- **Characteristics**:
+  - Have multiple FKs (references to other entities) BUT many more non-FK business fields
+  - FK ratio typically **10-30%**
+  - Rich data model with 10+ meaningful business fields
+  - Fields span multiple semantic categories (not just "Relationships" and "System Metadata")
 
-Classify this entity into ONE of these categories:
+**2. Supporting Entities** (DefaultForNewUser: **true** if user-facing, **false** if internal)
+- Important but secondary entities that support primary entities
+- Examples: OrderItem, Address, PaymentMethod, Note, Attachment
+- **Characteristics**:
+  - Moderate FK count (2-5) with some business fields
+  - FK ratio typically **20-40%**
+  - Usually accessed via a parent entity rather than directly
 
-1. **primary** - Core business entities that users interact with daily
-   - Examples: Customer, Order, Product, Invoice, Contact, Deal, Task
-   - Rich data model (10+ non-FK fields), central to business workflows
-   - **DefaultForNewUser: true**
+**3. Reference/Type Tables** (DefaultForNewUser: **false**)
+- Lookup tables with static/admin-managed data
+- Examples: AccountType, ContactType, OrderStatus, Priority, Country
+- **Characteristics**:
+  - Very few FKs (0-1 typically)
+  - FK ratio typically **0-20%**
+  - Small number of fields (3-8), mainly Name, Description, Code
+  - Names often end in "Type", "Status", "Category", "Priority"
+  - Used to populate dropdowns, rarely edited by end users
 
-2. **supporting** - Important but secondary entities
-   - Examples: OrderItem, Address, PaymentMethod, Note, Attachment
-   - Support primary entities, less frequently accessed directly
-   - **DefaultForNewUser: true** (if user-facing) or **false** (if internal)
+**4. Junction/Join Tables** (DefaultForNewUser: **false**)
+- Many-to-many relationship tables
+- Examples: ContactAccount, UserRole, ProductCategory, OrderTag
+- **Characteristics**:
+  - **Narrow tables**: Usually only 4-6 total fields
+  - **High FK ratio**: 40-80% of non-system fields are FKs
+  - Typically 2-3 FKs + primary key + system timestamps
+  - Almost NO business data fields beyond the FKs
+  - Names often combine two entity names or end in "Link"
 
-3. **reference** - Lookup/type tables with static data
-   - Examples: Country, State, ProductCategory, OrderStatus, Priority
-   - Small tables, rarely modified, used in dropdowns
-   - **DefaultForNewUser: false**
+**5. System/Metadata Tables** (DefaultForNewUser: **false**)
+- Technical, audit, or framework tables
+- Examples: AuditLog, RecordChange, EntityField, ApplicationEntity
+- **Characteristics**:
+  - Schema is usually `__mj`, `sys`, or similar system schema
+  - Technical metadata, audit trails, system configuration
+  - Not relevant to business users
 
-4. **junction** - Many-to-many relationship tables
-   - Examples: UserRole, ProductCategory, OrderTag
-   - Only contains foreign keys + maybe sequence/date fields
-   - **DefaultForNewUser: false**
+### Quick Decision Matrix
 
-5. **system** - Technical/audit/metadata tables
-   - Examples: AuditLog, RecordChange, EntityField, ApplicationEntity
-   - System-managed, technical metadata, audit trails
-   - **DefaultForNewUser: false**
-
-### Decision Guidelines
-
-**Visible to new users (true):**
-- Primary business entities (rich domain model)
-- Supporting entities users work with directly
-- Forms/screens users need for daily work
-
-**Hidden from new users (false):**
-- Junction tables (many-to-many joins)
-- Reference/lookup tables (managed by admins)
-- System/audit tables (technical only)
-- Entities in __mj, sys, log schemas (>80% should be hidden)
-- Entities where >70% of fields are foreign keys
-
-### Analysis Factors
-
-Consider:
-- **Field composition**: How many non-FK, meaningful business fields?
-- **Category distribution**: Are most fields in "System Metadata" or business categories?
-- **Schema name**: Is this in __mj, sys, or a business schema?
-- **Relationships**: Is this a join table or a primary entity?
-- **User workflow**: Would end users need direct access to this entity?
+| FK Count | Non-FK Count | FK Ratio | Likely Type | DefaultForNewUser |
+|----------|--------------|----------|-------------|-------------------|
+| 3-10+ | 10-30+ | 10-30% | Primary | **true** |
+| 2-5 | 5-15 | 20-40% | Supporting | true/false |
+| 0-1 | 3-8 | 0-20% | Reference | **false** |
+| 2-3 | 0-2 | 40-80% | Junction | **false** |
+| varies | varies | varies | System (by schema) | **false** |
 
 ---
 
@@ -353,14 +381,20 @@ Consider:
 - Use domain-specific category names, NOT generic labels
 - Consider the business context and user workflow
 - Keep related fields in the same category
+{% if hasExistingCategories %}
+- **DO NOT** include icons for existing categories in `categoryInfo` - only new categories
+- **DO NOT** rename existing categories - use them exactly as shown
+{% endif %}
 
 ## Complete Examples
 
-### Example 1: Primary Business Entity
+### Example 1: Primary Business Entity (New Entity)
 
 For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddress1, BillToCity, BillToState, ShipToAddress1, ShipToCity, ShipToState, SubTotal, Tax, ShippingCost, TotalAmount, ShippingCarrier, TrackingNumber, OrderStatus, __mj_CreatedAt
 
-**Analysis:** 17 fields → Target 4-5 categories
+**Field Statistics:** 17 fields, 2 FKs (CustomerID, OrderStatus), 15 non-FK fields, FK ratio: 12%
+
+**Analysis:** Low FK ratio with many business fields → Primary entity → Target 4-5 categories
 
 ```json
 {
@@ -503,30 +537,44 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "codeType": null
     }
   ],
-  "categoryIcons": {
-    "Order Details": "fa fa-shopping-cart",
-    "Billing Address": "fa fa-file-invoice",
-    "Shipping Address": "fa fa-truck",
-    "Pricing and Charges": "fa fa-dollar-sign",
-    "System Metadata": "fa fa-cog"
+  "categoryInfo": {
+    "Order Details": {
+      "icon": "fa fa-shopping-cart",
+      "description": "Core order information including order number, date, customer, and status"
+    },
+    "Billing Address": {
+      "icon": "fa fa-file-invoice",
+      "description": "Address for invoice delivery and billing correspondence"
+    },
+    "Shipping Address": {
+      "icon": "fa fa-truck",
+      "description": "Physical shipping destination and carrier information"
+    },
+    "Pricing and Charges": {
+      "icon": "fa fa-dollar-sign",
+      "description": "Order pricing including subtotal, tax, shipping, and total"
+    },
+    "System Metadata": {
+      "icon": "fa fa-cog",
+      "description": "System-managed audit and tracking fields"
+    }
   },
   "entityImportance": {
     "defaultForNewUser": true,
     "entityCategory": "primary",
     "confidence": "high",
-    "reasoning": "Order is a primary business entity with 17 fields organized into 5 semantic categories (Order Details, Billing Address, Shipping Address, Pricing, System). Most fields are business-domain focused rather than technical. This is clearly a user-facing entity central to e-commerce workflows.",
-    "recommendedSequence": 2
+    "reasoning": "Order has 17 fields with only 12% FK ratio. 15 non-FK business fields across 5 semantic categories indicate a rich domain model. This is clearly a primary business entity central to e-commerce workflows."
   }
 }
 ```
-
-**Result:** 5 well-organized categories instead of 8 fragmented ones, each with a semantic icon. Marked as primary entity visible to new users.
 
 ### Example 2: Junction Table (Should Be Hidden)
 
 For entity "UserRoles" with fields: ID, UserID, RoleID, __mj_CreatedAt, __mj_UpdatedAt
 
-**Analysis:** 5 fields, 2 are FKs (40%), mostly system fields → Junction table
+**Field Statistics:** 5 fields, 2 FKs (UserID, RoleID), 0 non-FK business fields (excluding PK and system), FK ratio: 67%
+
+**Analysis:** High FK ratio (67%), narrow table with only FKs → Junction table
 
 ```json
 {
@@ -573,18 +621,109 @@ For entity "UserRoles" with fields: ID, UserID, RoleID, __mj_CreatedAt, __mj_Upd
       "codeType": null
     }
   ],
-  "categoryIcons": {
-    "Relationships": "fa fa-link",
-    "System Metadata": "fa fa-cog"
+  "categoryInfo": {
+    "Relationships": {
+      "icon": "fa fa-link",
+      "description": "Foreign key references linking users to roles"
+    },
+    "System Metadata": {
+      "icon": "fa fa-cog",
+      "description": "System-managed audit and tracking fields"
+    }
   },
   "entityImportance": {
     "defaultForNewUser": false,
     "entityCategory": "junction",
     "confidence": "high",
-    "reasoning": "UserRoles is a many-to-many junction table with only 2 foreign keys (40% of fields excluding system fields). The field categorization revealed mostly 'Relationships' and 'System Metadata' with no business domain fields. Users manage this via User/Role forms, not directly.",
-    "recommendedSequence": null
+    "reasoning": "UserRoles has 67% FK ratio with 0 business fields beyond FKs. This narrow 5-field table exists solely to create many-to-many relationships. Users manage this via User/Role forms, not directly."
   }
 }
 ```
 
-**Result:** Simple 2-category structure appropriate for junction table. Correctly marked as hidden from new users.
+### Example 3: Reference/Type Table (Should Be Hidden)
+
+For entity "OrderStatus" with fields: ID, Name, Description, Sequence, IsActive, __mj_CreatedAt, __mj_UpdatedAt
+
+**Field Statistics:** 7 fields, 0 FKs, 4 non-FK business fields, FK ratio: 0%
+
+**Analysis:** Zero FKs, small table with Name/Description pattern → Reference table
+
+```json
+{
+  "entityIcon": "fa fa-flag",
+  "fieldCategories": [
+    {
+      "fieldName": "ID",
+      "category": "System Metadata",
+      "reason": "Primary key identifier",
+      "displayName": "ID",
+      "extendedType": null,
+      "codeType": null
+    },
+    {
+      "fieldName": "Name",
+      "category": "Status Details",
+      "reason": "Display name for the status",
+      "displayName": "Name",
+      "extendedType": null,
+      "codeType": null
+    },
+    {
+      "fieldName": "Description",
+      "category": "Status Details",
+      "reason": "Extended description of what the status means",
+      "displayName": "Description",
+      "extendedType": null,
+      "codeType": null
+    },
+    {
+      "fieldName": "Sequence",
+      "category": "Status Details",
+      "reason": "Display order in dropdowns",
+      "displayName": "Sequence",
+      "extendedType": null,
+      "codeType": null
+    },
+    {
+      "fieldName": "IsActive",
+      "category": "Status Details",
+      "reason": "Whether this status is available for selection",
+      "displayName": "Active",
+      "extendedType": null,
+      "codeType": null
+    },
+    {
+      "fieldName": "__mj_CreatedAt",
+      "category": "System Metadata",
+      "reason": "Audit timestamp",
+      "displayName": "Created At",
+      "extendedType": null,
+      "codeType": null
+    },
+    {
+      "fieldName": "__mj_UpdatedAt",
+      "category": "System Metadata",
+      "reason": "Audit timestamp",
+      "displayName": "Updated At",
+      "extendedType": null,
+      "codeType": null
+    }
+  ],
+  "categoryInfo": {
+    "Status Details": {
+      "icon": "fa fa-flag",
+      "description": "Status name, description, and configuration settings"
+    },
+    "System Metadata": {
+      "icon": "fa fa-cog",
+      "description": "System-managed audit and tracking fields"
+    }
+  },
+  "entityImportance": {
+    "defaultForNewUser": false,
+    "entityCategory": "reference",
+    "confidence": "high",
+    "reasoning": "OrderStatus has 0% FK ratio and follows the classic reference table pattern (Name, Description, Sequence, IsActive). Entity name ends in 'Status'. This is admin-managed lookup data for populating dropdowns, not a user-facing entity."
+  }
+}
+```

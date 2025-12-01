@@ -76,19 +76,7 @@
         "CI": "true"
       },
       "console": "integratedTerminal"
-    },
-    {
-      "type": "chrome",
-      "request": "launch",
-      "name": "Launch Chrome against localhost",
-      "url": "http://localhost:4200",
-      "sourceMaps": true,
-      "webRoot": "${workspaceFolder}/packages",
-      "skipFiles": ["!@memberjunction/**", "<node_internals>/**/*.js", "${workspaceFolder}/node_modules/**/*.js"],
-      "sourceMapPathOverrides": {
-        "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
-      }
-    },
+    }, 
     {
       "type": "node",
       "request": "launch",

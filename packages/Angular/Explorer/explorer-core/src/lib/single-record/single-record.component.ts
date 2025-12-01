@@ -5,6 +5,7 @@ import { Subscription } from 'rxjs';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { RecentAccessService } from '@memberjunction/ng-shared';
 
 
 @Component({
@@ -21,8 +22,10 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
 
-  constructor (private route: ActivatedRoute) {
+  private recentAccessService: RecentAccessService;
 
+  constructor (private route: ActivatedRoute) {
+    this.recentAccessService = new RecentAccessService();
   }
 
   public appDescription: string = ''
@@ -71,10 +74,12 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
       if (record) {
         if (primaryKey.HasValue) {
           await record.InnerLoad(primaryKey);
+          // Log access to existing record (fire-and-forget, don't await)
+          this.recentAccessService.logAccess(entityName, primaryKey, 'record');
         }
         else {
           record.NewRecord();
-          this.SetNewRecordValues(record);          
+          this.SetNewRecordValues(record);
         }
 
         // CRITICAL: Track the event handler subscription for cleanup

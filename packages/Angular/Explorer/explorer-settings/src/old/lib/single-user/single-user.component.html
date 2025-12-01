@@ -1,5 +1,5 @@
 <div >
-    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+    <div *ngIf="isLoading"><mj-loading [showText]="false" size="medium"></mj-loading></div>
     <div *ngIf="!isLoading && UserRecord">
         <table class="info-table">
             <tbody>

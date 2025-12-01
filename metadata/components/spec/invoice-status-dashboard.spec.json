@@ -46,16 +46,6 @@
   ],
   "libraries": [
     {
-      "name": "Plotly",
-      "version": "^2.27.1",
-      "globalVariable": "Plotly"
-    },
-    {
-      "name": "accounting",
-      "version": "^0.4.1",
-      "globalVariable": "accounting"
-    },
-    {
       "name": "Chart.js",
       "version": "^4.4.1",
       "globalVariable": "Chart"

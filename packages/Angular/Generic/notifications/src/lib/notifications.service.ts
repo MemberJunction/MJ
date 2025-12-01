@@ -21,6 +21,10 @@ export class MJNotificationService {
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
 
+  // Observable for notification changes
+  private static _notifications$ = new BehaviorSubject<UserNotificationEntity[]>([]);
+  private static _unreadCount$ = new BehaviorSubject<number>(0);
+
   constructor(private notificationService: NotificationService) {
     if (MJNotificationService._instance) {
       // return existing instance which will short circuit the creation of a new instance
@@ -103,6 +107,34 @@ export class MJNotificationService {
     return MJNotificationService.UnreadUserNotifications.length;
   }
 
+  /**
+   * Observable that emits the full list of user notifications whenever they change
+   */
+  public static get Notifications$(): Observable<UserNotificationEntity[]> {
+    return MJNotificationService._notifications$.asObservable();
+  }
+
+  /**
+   * Observable that emits the unread notification count whenever it changes
+   */
+  public static get UnreadCount$(): Observable<number> {
+    return MJNotificationService._unreadCount$.asObservable();
+  }
+
+  /**
+   * Instance method to access Notifications$ observable
+   */
+  public get notifications$(): Observable<UserNotificationEntity[]> {
+    return MJNotificationService.Notifications$;
+  }
+
+  /**
+   * Instance method to access UnreadCount$ observable
+   */
+  public get unreadCount$(): Observable<number> {
+    return MJNotificationService.UnreadCount$;
+  }
+
 
   /**
    * Creates a user notification in the database and refreshes the UI. Returns the notification object.
@@ -153,6 +185,10 @@ export class MJNotificationService {
       })
       if (result && result.Success) {
         MJNotificationService._userNotifications = result.Results;
+        // Emit to observables
+        MJNotificationService._notifications$.next(result.Results);
+        MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
+        MJNotificationService._loaded = true;
       }
     }
     catch (e) {

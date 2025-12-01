@@ -1,0 +1,150 @@
+.entity-viewer-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: #fafafa;
+}
+
+/* Header */
+.viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+/* Filter */
+.filter-container {
+  flex: 1;
+  max-width: 400px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.filter-icon {
+  position: absolute;
+  left: 12px;
+  color: #9e9e9e;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.filter-input {
+  width: 100%;
+  padding: 8px 36px 8px 36px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.filter-input:focus {
+  border-color: #1976d2;
+}
+
+.filter-input::placeholder {
+  color: #9e9e9e;
+}
+
+.clear-filter-btn {
+  position: absolute;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9e9e9e;
+  transition: all 0.15s ease;
+}
+
+.clear-filter-btn:hover {
+  background: #f5f5f5;
+  color: #616161;
+}
+
+/* Record Count */
+.record-count {
+  font-size: 13px;
+  color: #757575;
+  white-space: nowrap;
+}
+
+/* View Mode Toggle */
+.view-mode-toggle {
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.toggle-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #757575;
+  transition: all 0.15s ease;
+}
+
+.toggle-btn:hover {
+  color: #424242;
+}
+
+.toggle-btn.active {
+  background: white;
+  color: #1976d2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Content */
+.viewer-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Loading State */
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9e9e9e;
+  text-align: center;
+}
+
+.empty-state i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
