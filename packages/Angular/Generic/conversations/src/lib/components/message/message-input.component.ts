@@ -4,7 +4,7 @@ import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntity
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
-import { ConversationStateService } from '../../services/conversation-state.service';
+import { ConversationDataService } from '../../services/conversation-data.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
@@ -83,7 +83,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
-    private conversationState: ConversationStateService,
+    private conversationData: ConversationDataService,
     private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
@@ -1958,7 +1958,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
           if (name) {
             // Update the conversation name and description in database AND state immediately
-            await this.conversationState.saveConversation(
+            await this.conversationData.saveConversation(
               this.conversationId,
               { Name: name, Description: description || '' },
               this.currentUser

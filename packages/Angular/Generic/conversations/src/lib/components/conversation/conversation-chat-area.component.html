@@ -1,6 +1,6 @@
 <div class="chat-area">
     <!-- Fixed Header -->
-    <div class="chat-header" *ngIf="conversationState.activeConversation as conversation">
+    <div class="chat-header" *ngIf="conversation">
     <div class="chat-info">
         <div class="chat-title">{{ conversation.Name }}</div>
         <button class="project-tag" (click)="openProjectSelector()" title="Assign to project" *ngIf="conversation.ProjectID">
@@ -12,7 +12,7 @@
         <span>Test</span>
         </button>
         <mj-active-agent-indicator
-        [conversationId]="conversationState.activeConversation.ID"
+        [conversationId]="conversation.ID"
         [currentUser]="currentUser"
         (togglePanel)="onToggleAgentPanel()"
         (agentSelected)="onAgentSelected($event)">
@@ -28,7 +28,7 @@
         <span>{{ artifactCountDisplay }} artifact{{ artifactCountDisplay !== 1 ? 's' : '' }}</span>
         </button>
         <mj-active-agent-indicator
-        [conversationId]="conversationState.activeConversation.ID"
+        [conversationId]="conversation.ID"
         [currentUser]="currentUser"
         (togglePanel)="onToggleAgentPanel()"
         (agentSelected)="onAgentSelected($event)">
@@ -55,7 +55,7 @@
     <div class="chat-messages-pane"
          [class.full-width]="!showArtifactPanel"
          [class.hidden]="isArtifactPaneMaximized">
-        @if (!conversationState.activeConversation || conversationState.isNewUnsavedConversation) {
+        @if (isNewConversation || !conversationId) {
           <!-- Empty State - No conversation selected OR new unsaved conversation -->
           <mj-conversation-empty-state
             [currentUser]="currentUser"
@@ -73,7 +73,7 @@
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
               <mj-conversation-message-list
               [messages]="messages"
-              [conversation]="conversationState.activeConversation"
+              [conversation]="conversation"
               [currentUser]="currentUser"
               [isProcessing]="isProcessing"
               [artifactMap]="effectiveArtifactsMap"
@@ -111,17 +111,17 @@
                   @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
                     <mj-message-input
                       #messageInput
-                      [hidden]="inputRef.conversationId !== conversationState.activeConversation.ID"
+                      [hidden]="inputRef.conversationId !== conversationId"
                       [conversationId]="inputRef.conversationId"
                       [conversationName]="inputRef.conversationName"
                       [currentUser]="currentUser"
-                      [conversationHistory]="inputRef.conversationId === conversationState.activeConversation.ID ? messages : []"
-                      [artifactsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? artifactsByDetailId : emptyArtifactsMap"
-                      [systemArtifactsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? systemArtifactsByDetailId : emptyArtifactsMap"
-                      [agentRunsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? agentRunsByDetailId : emptyAgentRunsMap"
-                      [inProgressMessageIds]="inputRef.conversationId === conversationState.activeConversation.ID ? inProgressMessageIds : emptyInProgressIds"
+                      [conversationHistory]="inputRef.conversationId === conversationId ? messages : []"
+                      [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
+                      [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
+                      [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
+                      [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                       [disabled]="isProcessing"
-                      [initialMessage]="inputRef.conversationId === conversationState.activeConversation.ID ? conversationState.pendingMessageToSend : null"
+                      [initialMessage]="inputRef.conversationId === conversationId ? pendingMessage : null"
                       (messageSent)="onMessageSent($event)"
                       (agentResponse)="onAgentResponse($event)"
                       (agentRunDetected)="onAgentRunDetected($event)"
@@ -179,12 +179,12 @@
 </div>
 
 <!-- Thread Panel -->
-@if (conversationState.activeThreadId) {
+@if (threadId) {
     <mj-thread-panel
-    [parentMessageId]="conversationState.activeThreadId"
-    [conversationId]="conversationState.activeConversation?.ID || ''"
+    [parentMessageId]="threadId"
+    [conversationId]="conversationId || ''"
     [currentUser]="currentUser"
-    (closed)="onThreadClosed()"
+    (closed)="onLocalThreadClosed()"
     (replyAdded)="onThreadReplyAdded($event)">
     </mj-thread-panel>
 }
@@ -192,7 +192,7 @@
 <!-- Export Modal -->
 <mj-export-modal
     [isVisible]="showExportModal"
-    [conversation]="conversationState.activeConversation || undefined"
+    [conversation]="conversation || undefined"
     [currentUser]="currentUser"
     (cancelled)="onExportModalCancelled()"
     (exported)="onExportModalComplete()">
@@ -201,14 +201,14 @@
 <!-- Members Modal -->
 <mj-members-modal
     [isVisible]="showMembersModal"
-    [conversation]="conversationState.activeConversation || undefined"
+    [conversation]="conversation || undefined"
     [currentUser]="currentUser"
     (cancelled)="showMembersModal = false"
     (membersChanged)="showMembersModal = false">
 </mj-members-modal>
 
 <!-- Project Selector Modal -->
-@if (showProjectSelector && conversationState.activeConversation) {
+@if (showProjectSelector && conversation) {
     <div class="modal-overlay" (click)="showProjectSelector = false">
     <div class="modal-content project-selector-modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
@@ -221,7 +221,7 @@
         <mj-project-selector
             [environmentId]="environmentId"
             [currentUser]="currentUser"
-            [selectedProjectId]="conversationState.activeConversation.ProjectID"
+            [selectedProjectId]="conversation.ProjectID"
             (projectSelected)="onProjectSelected($event)">
         </mj-project-selector>
         </div>
