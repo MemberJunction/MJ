@@ -79,10 +79,15 @@ export type ComponentQueryParameterValue = {
     name: string;
 
     /**
-     * Value of the parameter. If the value is '@runtime', it indicates that the component will determine the value at runtime. 
+     * Whether this parameter must be provided when executing the query.
+     */
+    isRequired: boolean;
+
+    /**
+     * Value of the parameter. If the value is '@runtime', it indicates that the component will determine the value at runtime.
      * If anything other than '@runtime' is specified, it is a hardcoded value that the component will use.
-     */ 
-    value: string;
+     */
+    value?: string;
 
     /**
      * When specifying '@runtime' for the value, populate this field with a value that can be used to test the query to validate it runs. It doesn't need
@@ -90,11 +95,23 @@ export type ComponentQueryParameterValue = {
      * parameter is a number, date or string, include a test value of that type. **Note** if the parameter is for a UNIQUEIDENTIFIER column
      * type make sure to use a valid UUID format otherwise the query will FAIL.
      */
-    testValue: string;
+    testValue?: string;
 
     /**
-     * Description of the parameter and how it is used in the query. This is particular important if 
-     * the value is '@runtime' as it helps the component developer understand what the parameter is for and how to determine its value.
+     * Data type of the parameter (e.g., 'string', 'int', 'uniqueidentifier', 'datetime', 'decimal').
+     * This helps the component generator understand how to properly format and pass the parameter value.
+     */
+    type?: string;
+
+    /**
+     * Example value demonstrating the proper format for this parameter.
+     * Preferred over testValue for component generation as it aligns with SkipQueryParamInfo.SampleValue naming.
+     */
+    sampleValue?: string;
+
+    /**
+     * Description of the parameter and how it is used in the query. This is important for helping
+     * the component developer understand what the parameter is for and how to determine its value.
      */
     description?: string;
 }

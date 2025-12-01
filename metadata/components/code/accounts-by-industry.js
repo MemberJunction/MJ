@@ -1,9 +1,7 @@
 function AccountsByIndustry (props) {
   // Get child components from components prop
   const { utilities, styles, callbacks, savedUserSettings, onSaveUserSettings, components } = props;
-  const AccountsByIndustryChart = components?.AccountsByIndustryChart;
-  const AccountsByIndustryList = components?.AccountsByIndustryList;
-  const AccountsByIndustryDetails = components?.AccountsByIndustryDetails;
+  const { AccountsByIndustryChart, AccountsByIndustryList, AccountsByIndustryDetails } = components;
    
   // Optional custom props with defaults
   const maxIndustries = props.maxIndustries || 10;
@@ -18,7 +16,7 @@ function AccountsByIndustry (props) {
     savedUserSettings?.selectedIndustry || null
   );
   const [sortConfig, setSortConfig] = useState(
-    savedUserSettings?.sortConfig || { field: 'AccountName', direction: 'asc' }
+    savedUserSettings?.sortConfig || { field: 'Name', direction: 'asc' }
   );
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -36,7 +34,7 @@ function AccountsByIndustry (props) {
       const result = await utilities.rv.RunView({
         EntityName: 'Accounts',
         ExtraFilter: 'IsActive = 1',
-        OrderBy: 'AccountName'
+        OrderBy: 'Name'
       });
       
       if (result.Success && result.Results) {
@@ -157,19 +155,6 @@ function AccountsByIndustry (props) {
     setSelectedAccount(account);
     setShowDetails(true);
   }, []);
-  
-  // Load OpenRecordButton component
-  const OpenRecordButton = components?.OpenRecordButton;
-
-  // Handle open record (kept for backward compatibility)
-  const handleOpenRecord = useCallback(() => {
-    if (callbacks?.OpenEntityRecord && selectedAccount) {
-      // Pass entity name and key-value pair for the primary key
-      callbacks.OpenEntityRecord('Accounts', [
-        { FieldName: 'ID', Value: selectedAccount.ID }
-      ]);
-    }
-  }, [callbacks, selectedAccount]);
 
   // Handle clear filter
   const handleClearFilter = useCallback(() => {
@@ -244,7 +229,8 @@ function AccountsByIndustry (props) {
       <div style={{ height: '400px', marginBottom: '32px', position: 'relative' }}>
         {AccountsByIndustryChart && (
           <AccountsByIndustryChart
-            accounts={accounts}
+            industryData={industryData}
+            selectedIndustry={selectedIndustry}
             onSliceClick={handleSliceClick}
             colorScheme={colorScheme}
             utilities={utilities}
@@ -284,7 +270,6 @@ function AccountsByIndustry (props) {
           account={selectedAccount}
           isOpen={showDetails}
           onClose={handleCloseDetails}
-          onOpenRecord={handleOpenRecord}
           utilities={utilities}
           styles={styles}
           components={components}

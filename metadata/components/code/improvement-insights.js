@@ -1,7 +1,7 @@
 // ImprovementInsights component using AIInsightsPanel
 function ImprovementInsights({ insights, loading, error, onGenerate, metrics, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   // Load AIInsightsPanel from component registry
-  const AIInsightsPanel = components['AIInsightsPanel'];
+  const { AIInsightsPanel } = components;
 
   // Convert legacy data format to insights string if needed
   const formatInsights = (insightsData) => {
@@ -88,5 +88,3 @@ function ImprovementInsights({ insights, loading, error, onGenerate, metrics, ut
     />
   );
 }
-
-return ImprovementInsights;

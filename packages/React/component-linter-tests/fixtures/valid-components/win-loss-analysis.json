@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/win-loss-analysis.spec.json",
+  "description": "Valid component demonstrating win/loss analysis dashboard"
+}

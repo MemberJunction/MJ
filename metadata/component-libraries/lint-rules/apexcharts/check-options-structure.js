@@ -16,21 +16,32 @@
     
     if (t.isObjectExpression(optionsArg)) {
       const properties = optionsArg.properties;
-      
-      // Check for required properties
-      const hasChart = properties.some(prop => 
-        t.isObjectProperty(prop) &&
-        t.isIdentifier(prop.key) &&
-        prop.key.name === 'chart'
-      );
-      
-      const hasSeries = properties.some(prop => 
-        t.isObjectProperty(prop) &&
-        t.isIdentifier(prop.key) &&
-        prop.key.name === 'series'
-      );
-      
-      if (!hasChart) {
+
+      // Helper function to check if a property might have a field through spread or direct property
+      const hasPropertyOrSpread = (propName) => {
+        return properties.some(prop => {
+          // Direct property
+          if (t.isObjectProperty(prop) &&
+              t.isIdentifier(prop.key) &&
+              prop.key.name === propName) {
+            return true;
+          }
+          // Spread element - assume it might have the property
+          if (t.isSpreadElement(prop)) {
+            return true;
+          }
+          return false;
+        });
+      };
+
+      const hasChart = hasPropertyOrSpread('chart');
+      const hasSeries = hasPropertyOrSpread('series');
+
+      // Only report violation if we're certain the property is missing
+      // (i.e., no direct property and no spread elements that might contain it)
+      const hasSpread = properties.some(prop => t.isSpreadElement(prop));
+
+      if (!hasChart && !hasSpread) {
         return {
           rule: 'apexcharts-missing-chart-config',
           severity: 'high',
@@ -40,8 +51,8 @@
           fix: 'chart: { type: "bar", height: 350 }'
         };
       }
-      
-      if (!hasSeries) {
+
+      if (!hasSeries && !hasSpread) {
         return {
           rule: 'apexcharts-missing-series',
           severity: 'high',

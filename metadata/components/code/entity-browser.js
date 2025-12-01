@@ -201,7 +201,7 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
   
   // Helper function to get border radius value
   const getBorderRadius = (size) => {
-    return typeof styles.borders.radius === 'object' ? styles.borders.radius[size] : styles.borders.radius;
+    return typeof styles?.borders?.radius === 'object' ? styles?.borders?.radius?.[size] : styles?.borders?.radius;
   };
   
   // Loading state

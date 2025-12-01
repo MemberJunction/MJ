@@ -1,10 +1,10 @@
 // RelationshipMap Sub-component
-function RelationshipMap ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+function RelationshipMap ({ relationships, selectedNode, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
   useEffect(() => {
-    if (!chartRef.current || !data || !window.ApexCharts) return;
+    if (!chartRef.current || !relationships || !ApexCharts) return;
 
     if (chartInstance.current) {
       chartInstance.current.destroy();
@@ -16,16 +16,16 @@ function RelationshipMap ({ data, onDataClick, utilities, styles, components, ca
         height: 350,
         toolbar: { show: true }
       },
-      series: data.series || [{
+      series: relationships.series || [{
         name: 'Series 1',
-        data: data.values || []
+        data: relationships.values || []
       }],
       xaxis: {
-        categories: data.categories || [],
-        title: { text: data.xAxisLabel || 'X Axis' }
+        categories: relationships.categories || [],
+        title: { text: relationships.xAxisLabel || 'X Axis' }
       },
       yaxis: {
-        title: { text: data.yAxisLabel || 'Y Axis' }
+        title: { text: relationships.yAxisLabel || 'Y Axis' }
       },
       colors: ['#007bff', '#28a745', '#dc3545'],
       stroke: { curve: 'smooth', width: 2 },
@@ -37,18 +37,8 @@ function RelationshipMap ({ data, onDataClick, utilities, styles, components, ca
       }
     };
 
-    chartInstance.current = new window.ApexCharts(chartRef.current, options);
+    chartInstance.current = new ApexCharts(chartRef.current, options);
     chartInstance.current.render();
-
-    if (onDataClick) {
-      chartInstance.current.addEventListener('dataPointSelection', function(event, chartContext, config) {
-        onDataClick({
-          seriesIndex: config.seriesIndex,
-          dataPointIndex: config.dataPointIndex,
-          value: config.w.globals.series[config.seriesIndex][config.dataPointIndex]
-        });
-      });
-    }
 
     return () => {
       if (chartInstance.current) {
@@ -56,7 +46,7 @@ function RelationshipMap ({ data, onDataClick, utilities, styles, components, ca
         chartInstance.current = null;
       }
     };
-  }, [data, onDataClick]);
+  }, [relationships, selectedNode]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '350px' }} />;
 }
