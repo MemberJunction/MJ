@@ -16,8 +16,12 @@ import {
   FilteredCountChangedEvent,
   EntityViewerConfig,
   EntityViewMode,
-  NavigateToRelatedEvent
+  NavigateToRelatedEvent,
+  EntityViewerComponent
 } from '@memberjunction/ng-entity-viewer';
+import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
+import { ViewSaveEvent } from './components/view-config-panel/view-config-panel.component';
+import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
@@ -52,6 +56,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') filterInputRef: ElementRef<HTMLInputElement> | undefined;
+
+  /** Reference to the view selector for refreshing after save */
+  @ViewChild(ViewSelectorComponent) viewSelectorRef: ViewSelectorComponent | undefined;
+
+  /** Reference to the entity viewer for refreshing after view save */
+  @ViewChild(EntityViewerComponent) entityViewerRef: EntityViewerComponent | undefined;
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -98,6 +108,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public detailPanelEntity: EntityInfo | null = null;
   // Currently loaded records from mj-entity-viewer (for back/forward navigation lookup)
   private loadedRecords: BaseEntity[] = [];
+
+  // Currently selected view entity (for view data loading)
+  public selectedViewEntity: UserViewEntityExtended | null = null;
 
   // Debounced filter text (synced with mj-entity-viewer)
   public debouncedFilterText: string = '';
@@ -633,6 +646,220 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   // ========================================
+  // VIEW MANAGEMENT
+  // ========================================
+
+  /**
+   * Handle view selection from view selector dropdown
+   */
+  public onViewSelected(event: ViewSelectedEvent): void {
+    this.selectedViewEntity = event.view;
+    this.stateService.selectView(event.viewId);
+
+    // When a view is selected, apply its configuration
+    if (event.view) {
+      // Apply the view's filter - for Smart Filter views, use SmartFilterPrompt
+      // For regular filter views, the WhereClause is applied in the entity-viewer
+      if (event.view.SmartFilterEnabled && event.view.SmartFilterPrompt) {
+        this.stateService.setSmartFilterPrompt(event.view.SmartFilterPrompt);
+        this.debouncedFilterText = event.view.SmartFilterPrompt;
+      } else {
+        // Clear the quick filter when switching to a view with regular filters
+        this.stateService.setSmartFilterPrompt('');
+        this.debouncedFilterText = '';
+      }
+    } else {
+      // Switching to default view - clear any filters
+      this.stateService.setSmartFilterPrompt('');
+      this.debouncedFilterText = '';
+    }
+  }
+
+  /**
+   * Handle save view request from view selector
+   */
+  public onSaveViewRequested(event: SaveViewRequestedEvent): void {
+    // TODO: Implement in Phase 4 - View CRUD Operations
+    // For now, just open the config panel where save functionality will be
+    this.stateService.openViewConfigPanel();
+  }
+
+  /**
+   * Handle manage views request - opens view browser
+   */
+  public onManageViewsRequested(): void {
+    // TODO: Implement navigation to view management
+    // For now, just log
+    console.log('[DataExplorer] Manage views requested');
+  }
+
+  /**
+   * Handle open in tab request
+   */
+  public onOpenInTabRequested(viewId: string): void {
+    // Use OpenEntityRecord to open the view as a resource in a new tab
+    // Views are a known resource type in MJ
+    const compositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = [{ FieldName: 'ID', Value: viewId }];
+    this.OpenEntityRecord.emit({
+      EntityName: 'User Views',
+      RecordPKey: compositeKey
+    });
+  }
+
+  /**
+   * Handle configure view request - opens the configuration panel
+   */
+  public onConfigureViewRequested(): void {
+    this.stateService.openViewConfigPanel();
+  }
+
+  /**
+   * Close the view configuration panel
+   */
+  public onCloseViewConfigPanel(): void {
+    this.stateService.closeViewConfigPanel();
+  }
+
+  /**
+   * Handle save view from config panel
+   */
+  public async onSaveView(event: ViewSaveEvent): Promise<void> {
+    if (!this.selectedEntity) return;
+
+    try {
+      const md = new Metadata();
+
+      // Build GridState in Kendo-compatible format
+      const gridState = this.buildGridState(event);
+
+      // Build SortState in Kendo-compatible format
+      const sortState = this.buildSortState(event);
+
+      if (event.saveAsNew || !this.selectedViewEntity) {
+        // Create new view
+        const newView = await md.GetEntityObject<UserViewEntityExtended>('User Views');
+        newView.Name = event.name || 'Custom';
+        newView.Description = event.description;
+        newView.EntityID = this.selectedEntity.ID;
+        newView.UserID = md.CurrentUser.ID;
+        newView.IsShared = event.isShared;
+        newView.IsDefault = false;
+
+        // Set GridState and SortState
+        if (gridState) {
+          newView.GridState = JSON.stringify(gridState);
+        }
+        if (sortState) {
+          newView.SortState = JSON.stringify(sortState);
+        }
+
+        // Set Smart Filter settings
+        newView.SmartFilterEnabled = event.smartFilterEnabled;
+        newView.SmartFilterPrompt = event.smartFilterPrompt;
+
+        const saved = await newView.Save();
+        if (saved) {
+          this.selectedViewEntity = newView;
+          this.stateService.selectView(newView.ID);
+          this.stateService.setViewModified(false);
+          // Refresh the view selector dropdown
+          await this.viewSelectorRef?.loadViews();
+          // Note: For new views, ngOnChanges will trigger refresh automatically
+          // because selectedViewEntity reference changes
+        }
+      } else {
+        // Update existing view
+        this.selectedViewEntity.Name = event.name;
+        this.selectedViewEntity.Description = event.description;
+        this.selectedViewEntity.IsShared = event.isShared;
+
+        // Update GridState and SortState
+        if (gridState) {
+          this.selectedViewEntity.GridState = JSON.stringify(gridState);
+        }
+        if (sortState) {
+          this.selectedViewEntity.SortState = JSON.stringify(sortState);
+        }
+
+        // Update Smart Filter settings
+        this.selectedViewEntity.SmartFilterEnabled = event.smartFilterEnabled;
+        this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
+
+        const saved = await this.selectedViewEntity.Save();
+        if (saved) {
+          this.stateService.setViewModified(false);
+          // Refresh the view selector dropdown
+          await this.viewSelectorRef?.loadViews();
+          // Refresh the entity viewer to reflect the updated view settings
+          this.entityViewerRef?.refresh();
+        }
+      }
+
+      this.stateService.closeViewConfigPanel();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('[DataExplorer] Error saving view:', error);
+    }
+  }
+
+  /**
+   * Build GridState in Kendo-compatible format
+   * Format: { columnSettings: [{ID, Name, DisplayName, hidden, width, orderIndex}], sortSettings: [{field, dir}] }
+   */
+  private buildGridState(event: ViewSaveEvent): { columnSettings: object[]; sortSettings?: object[] } | null {
+    if (event.columns.length === 0) return null;
+
+    const columnSettings = event.columns.map((col, idx) => ({
+      ID: col.fieldId,
+      Name: col.fieldName,
+      DisplayName: col.displayName,
+      hidden: false, // Visible columns only
+      width: col.width || null,
+      orderIndex: idx
+    }));
+
+    // Also include sort in GridState for Kendo compatibility
+    const sortSettings = event.sortField ? [{
+      field: event.sortField,
+      dir: event.sortDirection // 'asc' or 'desc'
+    }] : undefined;
+
+    return { columnSettings, sortSettings };
+  }
+
+  /**
+   * Build SortState in Kendo-compatible format
+   * Format: [{field, direction}] where direction is 'asc' or 'desc'
+   */
+  private buildSortState(event: ViewSaveEvent): object[] | null {
+    if (!event.sortField) return null;
+
+    return [{
+      field: event.sortField,
+      direction: event.sortDirection // 'asc' or 'desc'
+    }];
+  }
+
+  /**
+   * Handle delete view from config panel
+   */
+  public async onDeleteView(): Promise<void> {
+    if (!this.selectedViewEntity) return;
+
+    try {
+      const deleted = await this.selectedViewEntity.Delete();
+      if (deleted) {
+        this.selectedViewEntity = null;
+        this.stateService.selectView(null);
+        this.stateService.closeViewConfigPanel();
+      }
+    } catch (error) {
+      console.error('[DataExplorer] Error deleting view:', error);
+    }
+  }
+
+  // ========================================
   // VIEW MODE & FILTERING (Dashboard Header)
   // ========================================
 
@@ -641,6 +868,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onViewModeChanged(mode: EntityViewMode): void {
     this.stateService.setViewMode(mode);
+    // Mark view as modified when view mode changes
+    if (this.state.selectedViewId) {
+      this.stateService.setViewModified(true);
+    }
   }
 
   /**

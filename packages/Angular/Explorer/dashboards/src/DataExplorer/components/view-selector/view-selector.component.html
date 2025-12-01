@@ -1,0 +1,153 @@
+<div class="view-selector-container">
+  <!-- Backdrop for closing dropdown -->
+  @if (isDropdownOpen) {
+    <div class="dropdown-backdrop" (click)="closeDropdown()"></div>
+  }
+
+  <!-- Main View Selector Button -->
+  <div class="view-selector-wrapper">
+    <button
+      class="view-selector-button"
+      [class.modified]="viewModified"
+      [class.open]="isDropdownOpen"
+      (click)="toggleDropdown()"
+      [disabled]="isLoading"
+      title="Select a saved view">
+      <i class="fa-solid fa-layer-group view-icon"></i>
+      <span class="view-name">{{ displayName }}</span>
+      @if (viewModified) {
+        <span class="modified-indicator" title="View has unsaved changes">•</span>
+      }
+      <i class="fa-solid fa-chevron-down dropdown-arrow" [class.rotated]="isDropdownOpen"></i>
+    </button>
+
+    <!-- Dropdown Panel -->
+    @if (isDropdownOpen) {
+      <div class="dropdown-panel">
+        <!-- Default Option -->
+        <div
+          class="dropdown-item default-option"
+          [class.selected]="!selectedViewId"
+          (click)="selectDefault()">
+          <i class="fa-solid fa-table item-icon"></i>
+          <span class="item-name">(Default)</span>
+          @if (!selectedViewId) {
+            <i class="fa-solid fa-check selected-check"></i>
+          }
+        </div>
+
+        <div class="dropdown-divider"></div>
+
+        <!-- My Views Section -->
+        @if (myViews.length > 0) {
+          <div class="dropdown-section">
+            <div class="section-header">
+              <i class="fa-solid fa-user section-icon"></i>
+              <span class="section-title">My Views</span>
+              <span class="section-count">{{ myViews.length }}</span>
+            </div>
+            @for (view of myViews; track view.id) {
+              <div
+                class="dropdown-item view-item"
+                [class.selected]="selectedViewId === view.id"
+                (click)="selectView(view)">
+                <i class="fa-solid fa-layer-group item-icon"></i>
+                <span class="item-name">{{ view.name }}</span>
+                @if (view.isShared) {
+                  <i class="fa-solid fa-share-alt shared-indicator" title="Shared with others"></i>
+                }
+                @if (view.isDefault) {
+                  <i class="fa-solid fa-star default-indicator" title="Default view for this entity"></i>
+                }
+                @if (selectedViewId === view.id) {
+                  <i class="fa-solid fa-check selected-check"></i>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Shared Views Section -->
+        @if (sharedViews.length > 0) {
+          <div class="dropdown-section">
+            <div class="section-header">
+              <i class="fa-solid fa-users section-icon"></i>
+              <span class="section-title">Shared Views</span>
+              <span class="section-count">{{ sharedViews.length }}</span>
+            </div>
+            @for (view of sharedViews; track view.id) {
+              <div
+                class="dropdown-item view-item"
+                [class.selected]="selectedViewId === view.id"
+                (click)="selectView(view)">
+                <i class="fa-solid fa-layer-group item-icon"></i>
+                <span class="item-name">{{ view.name }}</span>
+                @if (!view.userCanEdit) {
+                  <i class="fa-solid fa-lock readonly-indicator" title="View-only access"></i>
+                }
+                @if (selectedViewId === view.id) {
+                  <i class="fa-solid fa-check selected-check"></i>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- No Views Message -->
+        @if (!hasViews && !isLoading) {
+          <div class="empty-views-message">
+            <i class="fa-solid fa-info-circle"></i>
+            <span>No saved views yet</span>
+          </div>
+        }
+
+        <!-- Loading Indicator -->
+        @if (isLoading) {
+          <div class="loading-views">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Loading views...</span>
+          </div>
+        }
+
+        <div class="dropdown-divider"></div>
+
+        <!-- Actions Section -->
+        <div class="dropdown-actions">
+          <button
+            class="action-button"
+            (click)="onSaveView()"
+            [disabled]="!viewModified && !selectedViewId"
+            title="Save current configuration">
+            <i class="fa-solid fa-save"></i>
+            <span>Save View</span>
+          </button>
+          <button
+            class="action-button"
+            (click)="onSaveAsNewView()"
+            title="Save as a new view">
+            <i class="fa-solid fa-plus"></i>
+            <span>Save As New</span>
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Open in Tab Button (only visible when a view is selected) -->
+  @if (selectedViewId) {
+    <button
+      class="open-in-tab-button"
+      (click)="onOpenInTab()"
+      title="Open this view in a new tab">
+      <i class="fa-solid fa-external-link-alt"></i>
+    </button>
+  }
+
+  <!-- Configure View Button -->
+  <button
+    class="configure-view-button"
+    (click)="onConfigureView()"
+    title="Configure view settings (columns, filters, sorting)">
+    <i class="fa-solid fa-sliders-h"></i>
+  </button>
+</div>

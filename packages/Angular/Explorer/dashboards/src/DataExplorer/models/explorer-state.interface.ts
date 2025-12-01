@@ -125,6 +125,14 @@ export interface DataExplorerState {
   selectedEntityName: string | null;
   selectedViewId: string | null;
 
+  // View modification tracking
+  /** Whether the current view configuration has unsaved changes */
+  viewModified: boolean;
+
+  // View configuration panel
+  /** Whether the view configuration panel is open */
+  viewConfigPanelOpen: boolean;
+
   // Smart filter (current entity's filter - also cached in entityCache)
   smartFilterPrompt: string;
   smartFilterEnabled: boolean;
@@ -217,6 +225,8 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   navigationPanelCollapsed: false,
   selectedEntityName: null,
   selectedViewId: null,
+  viewModified: false,
+  viewConfigPanelOpen: false,
   smartFilterPrompt: '',
   smartFilterEnabled: true,
   entityCache: {},

@@ -204,7 +204,38 @@ export class ExplorerStateService {
    * Set selected view
    */
   selectView(viewId: string | null): void {
-    this.updateState({ selectedViewId: viewId });
+    this.updateState({
+      selectedViewId: viewId,
+      viewModified: false // Reset modified state when selecting a different view
+    });
+  }
+
+  /**
+   * Mark the current view as modified (has unsaved changes)
+   */
+  setViewModified(modified: boolean): void {
+    this.updateState({ viewModified: modified });
+  }
+
+  /**
+   * Toggle the view configuration panel
+   */
+  toggleViewConfigPanel(): void {
+    this.updateState({ viewConfigPanelOpen: !this.state$.value.viewConfigPanelOpen });
+  }
+
+  /**
+   * Open the view configuration panel
+   */
+  openViewConfigPanel(): void {
+    this.updateState({ viewConfigPanelOpen: true });
+  }
+
+  /**
+   * Close the view configuration panel
+   */
+  closeViewConfigPanel(): void {
+    this.updateState({ viewConfigPanelOpen: false });
   }
 
   /**

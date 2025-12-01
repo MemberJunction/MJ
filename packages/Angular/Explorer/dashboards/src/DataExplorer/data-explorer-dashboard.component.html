@@ -63,6 +63,18 @@
           } @else {
             <span class="record-count">{{ totalRecordCount | number }} records</span>
           }
+
+          <!-- View Selector -->
+          <mj-view-selector
+            [entity]="selectedEntity"
+            [selectedViewId]="state.selectedViewId"
+            [viewModified]="state.viewModified"
+            (viewSelected)="onViewSelected($event)"
+            (saveViewRequested)="onSaveViewRequested($event)"
+            (manageViewsRequested)="onManageViewsRequested()"
+            (openInTabRequested)="onOpenInTabRequested($event)"
+            (configureViewRequested)="onConfigureViewRequested()">
+          </mj-view-selector>
         } @else {
           @if (displayIcon) {
             <i [class]="displayIcon" class="entity-icon"></i>
@@ -372,6 +384,7 @@
       } @else {
         <mj-entity-viewer
           [entity]="selectedEntity"
+          [viewEntity]="selectedViewEntity"
           [viewMode]="state.viewMode"
           [filterText]="debouncedFilterText"
           [selectedRecordId]="state.selectedRecordId"
@@ -401,4 +414,14 @@
       </mj-entity-record-detail-panel>
     </div>
   }
+
+  <!-- View Configuration Panel -->
+  <mj-view-config-panel
+    [entity]="selectedEntity"
+    [viewEntity]="selectedViewEntity"
+    [isOpen]="state.viewConfigPanelOpen"
+    (close)="onCloseViewConfigPanel()"
+    (save)="onSaveView($event)"
+    (delete)="onDeleteView()">
+  </mj-view-config-panel>
 </div>

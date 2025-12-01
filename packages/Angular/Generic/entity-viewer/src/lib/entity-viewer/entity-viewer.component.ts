@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
+import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import {
   EntityViewMode,
   EntityViewerConfig,
@@ -110,6 +111,13 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Custom card template
    */
   @Input() cardTemplate: CardTemplate | null = null;
+
+  /**
+   * Optional User View entity that provides view configuration
+   * When provided, the component will use the view's WhereClause, GridState, SortState, etc.
+   * The view's filter is additive - UserSearchString is applied ON TOP of the view's WhereClause
+   */
+  @Input() viewEntity: UserViewEntityExtended | null = null;
 
   // ========================================
   // OUTPUTS
@@ -454,6 +462,24 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         }
       }
     }
+
+    // Handle viewEntity changes - reload data when view changes
+    if (changes['viewEntity']) {
+      if (this.entity && !this.records) {
+        // Apply view's sort state if available
+        if (this.viewEntity) {
+          const viewSortInfo = this.viewEntity.ViewSortInfo;
+          if (viewSortInfo && viewSortInfo.length > 0) {
+            this.internalSortState = {
+              field: viewSortInfo[0].field,
+              direction: viewSortInfo[0].direction === 'Desc' ? 'desc' : 'asc'
+            };
+          }
+        }
+        this.resetPaginationState();
+        this.loadData();
+      }
+    }
   }
 
   ngOnDestroy(): void {
@@ -563,14 +589,21 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       const rv = new RunView();
 
       // Build OrderBy clause
+      // Priority: 1) External sort state 2) View's OrderByClause 3) undefined
       let orderBy: string | undefined;
       const sortState = this.effectiveSortState;
       if (config.serverSideSorting && sortState?.field && sortState.direction) {
         orderBy = `${sortState.field} ${sortState.direction.toUpperCase()}`;
+      } else if (this.viewEntity?.OrderByClause) {
+        orderBy = this.viewEntity.OrderByClause;
       }
 
       // Calculate StartRow for pagination
       const startRow = this.pagination.currentPage * config.pageSize;
+
+      // Build ExtraFilter from view's WhereClause if available
+      // The view's WhereClause is the "business filter" - UserSearchString is additive
+      const extraFilter = this.viewEntity?.WhereClause || undefined;
 
       const result = await rv.RunView({
         EntityName: this.entity.Name,
@@ -578,6 +611,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         MaxRows: config.pageSize,
         StartRow: startRow,
         OrderBy: orderBy,
+        ExtraFilter: extraFilter,
         UserSearchString: config.serverSideFiltering ? this.debouncedFilterText || undefined : undefined
       });
 
