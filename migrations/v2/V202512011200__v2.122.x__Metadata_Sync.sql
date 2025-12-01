@@ -2543,7 +2543,7 @@ SET
 SET
   @Description_22e7dfb8 = N'Array of entity metadata objects containing schema, view, and field information'
 SET
-  @Type_22e7dfb8 = N'array'
+  @Type_22e7dfb8 = N'Array'
 SET
   @IsRequired_22e7dfb8 = 0
 EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_22e7dfb8,
@@ -2583,7 +2583,7 @@ SET
 SET
   @Description_56db0b23 = N'The raw SQL query template text to be parsed'
 SET
-  @Type_56db0b23 = N'string'
+  @Type_56db0b23 = N'Scalar'
 SET
   @IsRequired_56db0b23 = 0
 SET
