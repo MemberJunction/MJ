@@ -61,27 +61,99 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const report = fs.existsSync('knip-report.txt')
+            const rawReport = fs.existsSync('knip-report.txt')
               ? fs.readFileSync('knip-report.txt', 'utf8')
-              : 'No report generated';
+              : '';
 
             const status = '${{ steps.knip.outputs.status }}';
             const emoji = status === 'success' ? '✅' : '⚠️';
 
-            const body = `## ${emoji} Dependency Check Results
+            // Parse Knip output into structured data
+            function parseKnipOutput(output) {
+              const lines = output.trim().split('\n').filter(l => l.trim());
+              const depsByPackage = new Map();
 
-            ${report}
+              for (const line of lines) {
+                const match = line.match(/^(@?[^\s]+)\s+(.+?):\d+:\d+/);
+                if (!match) continue;
 
-            ---
-            ${status === 'success'
-              ? '**All dependencies are properly declared!**'
-              : '**Please review the missing/unused dependencies above.**'}
+                const [, depName, filePath] = match;
 
-            ### What to do:
-            - **Missing dependencies**: Add them to the appropriate \`package.json\` files
-            - **Unused dependencies**: Remove them or verify they are actually needed
-            - **Transitive dependencies**: Don't rely on packages installed by other packages
-            `;
+                // Extract package path from file path
+                // e.g., packages/Actions/CoreActions/src/file.ts -> packages/Actions/CoreActions
+                const packageMatch = filePath.match(/(packages\/[^\/]+(?:\/[^\/]+)*?)\/(?:src|dist|lib)/);
+                const packagePath = packageMatch ? packageMatch[1] : 'root';
+
+                if (!depsByPackage.has(packagePath)) {
+                  depsByPackage.set(packagePath, new Set());
+                }
+                depsByPackage.get(packagePath).add(depName);
+              }
+
+              return depsByPackage;
+            }
+
+            let body;
+
+            if (status === 'success') {
+              body = `## ✅ Dependency Check Results
+
+**All dependencies are properly declared!**
+
+No missing dependencies detected in this PR.`;
+            } else {
+              const depsByPackage = parseKnipOutput(rawReport);
+              const totalPackages = depsByPackage.size;
+              const totalDeps = Array.from(depsByPackage.values())
+                .reduce((sum, deps) => sum + deps.size, 0);
+
+              let formattedReport = `## ⚠️ Missing Dependencies Detected
+
+Found **${totalDeps} missing dependencies** across **${totalPackages} packages**.
+
+<details>
+<summary><b>📦 Click to see affected packages</b></summary>
+
+`;
+
+              // Sort packages alphabetically
+              const sortedPackages = Array.from(depsByPackage.entries())
+                .sort(([a], [b]) => a.localeCompare(b));
+
+              for (const [packagePath, deps] of sortedPackages) {
+                const sortedDeps = Array.from(deps).sort();
+                formattedReport += `\n### \`${packagePath}\`\n\n`;
+                formattedReport += `Missing ${sortedDeps.length} dependencies:\n`;
+                for (const dep of sortedDeps) {
+                  formattedReport += `- \`${dep}\`\n`;
+                }
+              }
+
+              formattedReport += `\n</details>
+
+---
+
+### 🔧 How to Fix
+
+**Option 1: Auto-fix (recommended)**
+\`\`\`bash
+npm run deps:fix-missing:dry  # Preview changes
+npm run deps:fix-missing       # Apply fixes
+\`\`\`
+
+**Option 2: Manual fix**
+Add the missing dependencies to each package's \`package.json\` file, then run:
+\`\`\`bash
+npm install
+\`\`\`
+
+### 📚 Documentation
+- [Dependency Management Guide](../scripts/README.md)
+- [Why This Matters](../.github/workflows/DEPENDENCY-CHECK.md#why-this-matters)
+`;
+
+              body = formattedReport;
+            }
 
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
