@@ -30,9 +30,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          # Temporarily disable cache to rule out corrupted cache issue
-          # cache: 'npm'
-          # cache-dependency-path: 'package-lock.json'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+        env:
+          # Force cache refresh by changing cache key
+          CACHE_VERSION: v2
 
       - name: Install dependencies
         run: npm ci
