@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 3.0.0 (UNRELEASED)
+
+### Breaking Changes
+
+- **Complete rewrite**: Removed Kendo UI dependency, now pure HTML/CSS implementation
+- **API changes**: Property names changed from PascalCase to camelCase (`Groups` -> `groups`, `DisplayOrientation` -> `orientation`)
+- **Event system**: New BeforeX/AfterX event pattern replaces Kendo events
+- **Removed dependencies**: No longer requires `@progress/kendo-*` packages
+- **Optional MJ dependency**: `@memberjunction/core` is now optional - works with plain JS objects
+
+### New Features
+
+- **Universal compatibility**: Works with MemberJunction BaseEntity objects OR plain JavaScript objects
+- **Time segment grouping**: Group events by day/week/month/quarter/year with collapsible sections
+- **Virtual scrolling**: Built-in support for large datasets with dynamic loading
+- **Rich card configuration**: Configurable fields, images, actions, and custom templates
+- **BeforeX/AfterX events**: Full control from container components with cancel capability
+- **Keyboard navigation**: Full accessibility with ARIA support
+- **Responsive design**: Mobile-first approach with automatic layout adaptation
+- **Theming**: CSS variables for easy customization including dark mode
+- **Alternating layout**: Cards can alternate left/right of timeline axis
+- **Custom templates**: Override any part of card rendering
+
+### Migration Guide
+
+See README.md for detailed migration instructions from v2.x.
+
 ## 2.122.1
 
 ### Patch Changes

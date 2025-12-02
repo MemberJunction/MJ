@@ -1,9 +1,337 @@
-<div  class="wrapper"> 
-  <kendo-timeline
-    [events]="events"
-    [orientation]="DisplayOrientation"
-    [collapsibleEvents]="true"
-    [alterMode]="true"
-  >
-  </kendo-timeline>
-</div> 
+<!--
+  MJ Timeline Component Template
+
+  Structure:
+  - Loading state
+  - Empty state
+  - Timeline container (vertical/horizontal)
+    - Time segments (collapsible)
+      - Segment header
+      - Event cards within segment
+    - Or flat list of events (when segmentGrouping='none')
+  - Virtual scroll sentinel
+-->
+
+<div
+  class="mj-timeline"
+  [class.mj-timeline--vertical]="orientation === 'vertical'"
+  [class.mj-timeline--horizontal]="orientation === 'horizontal'"
+  [class.mj-timeline--single]="layout === 'single'"
+  [class.mj-timeline--alternating]="layout === 'alternating'"
+  [attr.aria-label]="ariaLabel"
+  role="list"
+  tabindex="0"
+  (keydown)="onKeyDown($event)"
+  #scrollContainer
+  (scroll)="onScroll($event)">
+
+  <!-- Loading State -->
+  <ng-container *ngIf="isLoading && !isInitialized">
+    <ng-container *ngIf="loadingTemplate; else defaultLoading">
+      <ng-container *ngTemplateOutlet="loadingTemplate"></ng-container>
+    </ng-container>
+    <ng-template #defaultLoading>
+      <div class="mj-timeline__loading">
+        <div class="mj-timeline__loading-spinner"></div>
+        <span class="mj-timeline__loading-text">{{ loadingMessage }}</span>
+      </div>
+    </ng-template>
+  </ng-container>
+
+  <!-- Empty State -->
+  <ng-container *ngIf="isInitialized && allEvents.length === 0 && !isLoading">
+    <ng-container *ngIf="emptyTemplate; else defaultEmpty">
+      <ng-container *ngTemplateOutlet="emptyTemplate"></ng-container>
+    </ng-container>
+    <ng-template #defaultEmpty>
+      <div class="mj-timeline__empty">
+        <i [class]="emptyIcon" class="mj-timeline__empty-icon"></i>
+        <span class="mj-timeline__empty-text">{{ emptyMessage }}</span>
+      </div>
+    </ng-template>
+  </ng-container>
+
+  <!-- Timeline Content -->
+  <ng-container *ngIf="isInitialized && allEvents.length > 0">
+
+    <!-- Segmented View -->
+    <ng-container *ngIf="segmentGrouping !== 'none'">
+      <div
+        *ngFor="let segment of segments; trackBy: trackBySegmentLabel; let segmentIndex = index"
+        class="mj-timeline__segment"
+        [class.mj-timeline__segment--collapsed]="!segment.isExpanded"
+        [attr.data-segment-label]="segment.label">
+
+        <!-- Segment Header -->
+        <div
+          class="mj-timeline__segment-header"
+          [class.mj-timeline__segment-header--clickable]="segmentsCollapsible"
+          (click)="onSegmentClick(segment)"
+          role="button"
+          [attr.aria-expanded]="segment.isExpanded"
+          [attr.aria-controls]="'segment-content-' + segmentIndex">
+
+          <ng-container *ngIf="segmentHeaderTemplate; else defaultSegmentHeader">
+            <ng-container *ngTemplateOutlet="segmentHeaderTemplate; context: { segment: segment }"></ng-container>
+          </ng-container>
+
+          <ng-template #defaultSegmentHeader>
+            <span class="mj-timeline__segment-toggle" *ngIf="segmentsCollapsible">
+              <i [class]="segment.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+            </span>
+            <span class="mj-timeline__segment-label">{{ segment.label }}</span>
+            <span class="mj-timeline__segment-count">({{ segment.eventCount }} {{ segment.eventCount === 1 ? 'event' : 'events' }})</span>
+            <span class="mj-timeline__segment-line"></span>
+          </ng-template>
+        </div>
+
+        <!-- Segment Content -->
+        <div
+          class="mj-timeline__segment-content"
+          [id]="'segment-content-' + segmentIndex"
+          [class.mj-timeline__segment-content--hidden]="!segment.isExpanded">
+
+          <div class="mj-timeline__axis">
+            <!-- Events in Segment -->
+            <ng-container *ngFor="let event of segment.events; trackBy: trackByEventId; let eventIndex = index; let isOdd = odd">
+              <ng-container *ngTemplateOutlet="eventCard; context: {
+                event: event,
+                index: eventIndex,
+                isOdd: isOdd,
+                globalIndex: getGlobalIndex(event)
+              }"></ng-container>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- Flat View (no segments) -->
+    <ng-container *ngIf="segmentGrouping === 'none'">
+      <div class="mj-timeline__axis">
+        <ng-container *ngFor="let event of allEvents; trackBy: trackByEventId; let eventIndex = index; let isOdd = odd">
+          <ng-container *ngTemplateOutlet="eventCard; context: {
+            event: event,
+            index: eventIndex,
+            isOdd: isOdd,
+            globalIndex: eventIndex
+          }"></ng-container>
+        </ng-container>
+      </div>
+    </ng-container>
+
+  </ng-container>
+
+  <!-- Virtual Scroll Sentinel -->
+  <div
+    class="mj-timeline-scroll-sentinel"
+    *ngIf="virtualScroll.enabled && scrollState.hasMore">
+  </div>
+
+  <!-- Loading More Indicator -->
+  <div
+    class="mj-timeline__loading-more"
+    *ngIf="scrollState.isLoading && virtualScroll.showLoadingIndicator">
+    <div class="mj-timeline__loading-spinner mj-timeline__loading-spinner--small"></div>
+    <span>{{ virtualScroll.loadingMessage }}</span>
+  </div>
+
+</div>
+
+<!-- Event Card Template -->
+<ng-template #eventCard let-event="event" let-index="index" let-isOdd="isOdd" let-globalIndex="globalIndex">
+  <div
+    class="mj-timeline__event"
+    [class.mj-timeline__event--odd]="isOdd && layout === 'alternating'"
+    [class.mj-timeline__event--even]="!isOdd && layout === 'alternating'"
+    [class.mj-timeline__event--expanded]="event.isExpanded"
+    [class.mj-timeline__event--focused]="focusedEventIndex === globalIndex"
+    [attr.data-event-id]="event.id"
+    role="listitem"
+    [attr.aria-expanded]="event.isExpanded">
+
+    <!-- Timeline Marker -->
+    <div class="mj-timeline__marker" [style.background-color]="getColor(event)">
+      <i [class]="getIcon(event)" class="mj-timeline__marker-icon"></i>
+    </div>
+
+    <!-- Connector Line -->
+    <div class="mj-timeline__connector" [style.background-color]="getColor(event)"></div>
+
+    <!-- Date Label (for alternating layout) -->
+    <div class="mj-timeline__date-label" *ngIf="layout === 'alternating'">
+      {{ formatDate(event.date) }}
+    </div>
+
+    <!-- Event Card -->
+    <div
+      class="mj-timeline__card"
+      [class]="getEffectiveCardConfig(event).cssClass"
+      [style.max-width]="getEffectiveCardConfig(event).maxWidth"
+      [style.min-width]="getEffectiveCardConfig(event).minWidth"
+      [style.border-left-color]="getColor(event)"
+      (click)="onEventClick(event, globalIndex, $event)"
+      (mouseenter)="onEventMouseEnter(event, globalIndex, $event)"
+      (mouseleave)="onEventMouseLeave(event, globalIndex, $event)">
+
+      <!-- Custom Card Template -->
+      <ng-container *ngIf="cardTemplate; else defaultCard">
+        <ng-container *ngTemplateOutlet="cardTemplate; context: {
+          event: event,
+          group: groups[event.groupIndex]
+        }"></ng-container>
+      </ng-container>
+
+      <!-- Default Card Template -->
+      <ng-template #defaultCard>
+        <!-- Card Header -->
+        <div class="mj-timeline__card-header">
+          <!-- Image (left position) -->
+          <div
+            class="mj-timeline__card-image mj-timeline__card-image--left"
+            *ngIf="event.imageUrl && getEffectiveCardConfig(event).imagePosition === 'left'"
+            [class.mj-timeline__card-image--small]="getEffectiveCardConfig(event).imageSize === 'small'"
+            [class.mj-timeline__card-image--medium]="getEffectiveCardConfig(event).imageSize === 'medium'"
+            [class.mj-timeline__card-image--large]="getEffectiveCardConfig(event).imageSize === 'large'">
+            <img [src]="event.imageUrl" [alt]="event.title" />
+          </div>
+
+          <div class="mj-timeline__card-header-content">
+            <!-- Custom Header Template -->
+            <ng-container *ngIf="headerTemplate; else defaultHeader">
+              <ng-container *ngTemplateOutlet="headerTemplate; context: { event: event }"></ng-container>
+            </ng-container>
+
+            <ng-template #defaultHeader>
+              <!-- Icon -->
+              <span
+                class="mj-timeline__card-icon"
+                *ngIf="getEffectiveCardConfig(event).showIcon"
+                [style.color]="getColor(event)">
+                <i [class]="getIcon(event)"></i>
+              </span>
+
+              <!-- Title & Subtitle -->
+              <div class="mj-timeline__card-titles">
+                <h4 class="mj-timeline__card-title">{{ event.title }}</h4>
+                <span
+                  class="mj-timeline__card-subtitle"
+                  *ngIf="event.subtitle && getEffectiveCardConfig(event).showSubtitle">
+                  {{ event.subtitle }}
+                </span>
+                <span
+                  class="mj-timeline__card-date"
+                  *ngIf="getEffectiveCardConfig(event).showDate && layout !== 'alternating'">
+                  {{ formatDate(event.date, getEffectiveCardConfig(event).dateFormat) }}
+                </span>
+              </div>
+
+              <!-- Expand/Collapse Toggle -->
+              <button
+                class="mj-timeline__card-toggle"
+                *ngIf="getEffectiveCardConfig(event).collapsible"
+                (click)="onToggleExpand(event, globalIndex, $event)"
+                [attr.aria-label]="event.isExpanded ? 'Collapse' : 'Expand'"
+                type="button">
+                <i [class]="event.isExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+              </button>
+            </ng-template>
+          </div>
+        </div>
+
+        <!-- Image (top position) -->
+        <div
+          class="mj-timeline__card-image mj-timeline__card-image--top"
+          *ngIf="event.imageUrl && getEffectiveCardConfig(event).imagePosition === 'top'">
+          <img [src]="event.imageUrl" [alt]="event.title" />
+        </div>
+
+        <!-- Card Body -->
+        <div
+          class="mj-timeline__card-body"
+          [class.mj-timeline__card-body--collapsed]="!event.isExpanded && getEffectiveCardConfig(event).collapsible">
+
+          <!-- Custom Body Template -->
+          <ng-container *ngIf="bodyTemplate; else defaultBody">
+            <ng-container *ngTemplateOutlet="bodyTemplate; context: { event: event }"></ng-container>
+          </ng-container>
+
+          <ng-template #defaultBody>
+            <!-- Summary Fields (always visible) -->
+            <div
+              class="mj-timeline__card-fields mj-timeline__card-fields--summary"
+              *ngIf="getEffectiveCardConfig(event).summaryFields?.length">
+              <ng-container *ngFor="let field of getEffectiveCardConfig(event).summaryFields">
+                <div class="mj-timeline__card-field" [class]="field.cssClass">
+                  <i *ngIf="field.icon" [class]="field.icon" class="mj-timeline__card-field-icon"></i>
+                  <span *ngIf="!field.hideLabel && field.label" class="mj-timeline__card-field-label">{{ field.label }}:</span>
+                  <span class="mj-timeline__card-field-value">{{ getFieldValue(event, field) }}</span>
+                </div>
+              </ng-container>
+            </div>
+
+            <!-- Description (expanded view) -->
+            <div
+              class="mj-timeline__card-description"
+              *ngIf="event.description && event.isExpanded"
+              [class.mj-timeline__card-description--clamped]="(getEffectiveCardConfig(event).descriptionMaxLines ?? 0) > 0"
+              [style.-webkit-line-clamp]="getEffectiveCardConfig(event).descriptionMaxLines || null">
+              <ng-container *ngIf="getEffectiveCardConfig(event).allowHtmlDescription; else plainDescription">
+                <div [innerHTML]="event.description"></div>
+              </ng-container>
+              <ng-template #plainDescription>
+                {{ event.description }}
+              </ng-template>
+            </div>
+
+            <!-- Expanded Fields -->
+            <div
+              class="mj-timeline__card-fields mj-timeline__card-fields--expanded"
+              *ngIf="event.isExpanded && getEffectiveCardConfig(event).expandedFields?.length">
+              <ng-container *ngFor="let field of getEffectiveCardConfig(event).expandedFields">
+                <div class="mj-timeline__card-field" [class]="field.cssClass">
+                  <i *ngIf="field.icon" [class]="field.icon" class="mj-timeline__card-field-icon"></i>
+                  <span *ngIf="!field.hideLabel" class="mj-timeline__card-field-label">{{ field.label || field.fieldName }}:</span>
+                  <span class="mj-timeline__card-field-value">{{ getFieldValue(event, field) }}</span>
+                </div>
+              </ng-container>
+            </div>
+          </ng-template>
+        </div>
+
+        <!-- Card Actions -->
+        <div
+          class="mj-timeline__card-actions"
+          [class.mj-timeline__card-actions--hover-only]="getEffectiveCardConfig(event).actionsOnHover"
+          *ngIf="getActions(event).length > 0">
+
+          <!-- Custom Actions Template -->
+          <ng-container *ngIf="actionsTemplate; else defaultActions">
+            <ng-container *ngTemplateOutlet="actionsTemplate; context: {
+              event: event,
+              actions: getActions(event)
+            }"></ng-container>
+          </ng-container>
+
+          <ng-template #defaultActions>
+            <button
+              *ngFor="let action of getActions(event)"
+              class="mj-timeline__action"
+              [class.mj-timeline__action--primary]="action.variant === 'primary'"
+              [class.mj-timeline__action--secondary]="action.variant === 'secondary' || !action.variant"
+              [class.mj-timeline__action--danger]="action.variant === 'danger'"
+              [class.mj-timeline__action--link]="action.variant === 'link'"
+              [class]="action.cssClass"
+              [disabled]="action.disabled"
+              [title]="action.tooltip || ''"
+              (click)="onActionClick(event, action, globalIndex, $event)"
+              type="button">
+              <i *ngIf="action.icon" [class]="action.icon"></i>
+              <span>{{ action.label }}</span>
+            </button>
+          </ng-template>
+        </div>
+      </ng-template>
+    </div>
+  </div>
+</ng-template>
