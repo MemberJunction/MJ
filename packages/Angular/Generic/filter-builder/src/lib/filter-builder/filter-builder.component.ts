@@ -63,6 +63,11 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   @Input() disabled: boolean = false;
 
   /**
+   * Whether to show the natural language filter summary at the bottom
+   */
+  @Input() showSummary: boolean = false;
+
+  /**
    * Emitted when the filter changes
    */
   @Output() filterChange = new EventEmitter<CompositeFilterDescriptor>();
@@ -193,5 +198,132 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    */
   private deepCloneFilter(filter: CompositeFilterDescriptor): CompositeFilterDescriptor {
     return JSON.parse(JSON.stringify(filter));
+  }
+
+  /**
+   * Generate a natural language summary of the filter expression
+   */
+  getFilterSummary(): string {
+    if (!this.hasActiveFilters) {
+      return 'No filters applied';
+    }
+    return this.buildFilterSummary(this.internalFilter);
+  }
+
+  /**
+   * Build natural language summary recursively
+   */
+  private buildFilterSummary(filter: CompositeFilterDescriptor): string {
+    const parts: string[] = [];
+
+    for (const item of filter.filters || []) {
+      if (isCompositeFilter(item)) {
+        const groupSummary = this.buildFilterSummary(item);
+        if (groupSummary) {
+          parts.push(`(${groupSummary})`);
+        }
+      } else {
+        const rule = item as FilterDescriptor;
+        const ruleSummary = this.buildRuleSummary(rule);
+        if (ruleSummary) {
+          parts.push(ruleSummary);
+        }
+      }
+    }
+
+    if (parts.length === 0) {
+      return '';
+    }
+
+    const connector = filter.logic === 'and' ? ' AND ' : ' OR ';
+    return parts.join(connector);
+  }
+
+  /**
+   * Build natural language summary for a single rule
+   */
+  private buildRuleSummary(rule: FilterDescriptor): string {
+    if (!rule.field) {
+      return '';
+    }
+
+    // Get the field display name
+    const field = this.fields.find(f => f.name === rule.field);
+    const fieldName = field?.displayName || rule.field;
+
+    // Get the operator label
+    const operatorLabel = this.getOperatorLabel(rule.operator);
+
+    // Format the value
+    const formattedValue = this.formatValue(rule.value, rule.operator);
+
+    // Build the summary based on operator type
+    if (this.isNullCheckOperator(rule.operator)) {
+      return `${fieldName} ${operatorLabel}`;
+    }
+
+    return `${fieldName} ${operatorLabel} ${formattedValue}`;
+  }
+
+  /**
+   * Check if operator is a null-check operator (doesn't need a value)
+   */
+  private isNullCheckOperator(operator: string): boolean {
+    return ['isnull', 'isnotnull', 'isempty', 'isnotempty'].includes(operator);
+  }
+
+  /**
+   * Get human-readable label for an operator
+   */
+  private getOperatorLabel(operator: string): string {
+    const labels: Record<string, string> = {
+      'eq': 'equals',
+      'neq': 'does not equal',
+      'contains': 'contains',
+      'doesnotcontain': 'does not contain',
+      'startswith': 'starts with',
+      'endswith': 'ends with',
+      'isnull': 'is empty',
+      'isnotnull': 'is not empty',
+      'isempty': 'is empty',
+      'isnotempty': 'is not empty',
+      'gt': 'is greater than',
+      'gte': 'is greater than or equal to',
+      'lt': 'is less than',
+      'lte': 'is less than or equal to'
+    };
+    return labels[operator] || operator;
+  }
+
+  /**
+   * Format a value for display in the summary
+   */
+  private formatValue(value: unknown, operator: string): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    // Don't show value for null-check operators
+    if (this.isNullCheckOperator(operator)) {
+      return '';
+    }
+
+    // Handle dates
+    if (value instanceof Date) {
+      return value.toLocaleDateString();
+    }
+
+    // Handle strings
+    if (typeof value === 'string') {
+      return `"${value}"`;
+    }
+
+    // Handle booleans
+    if (typeof value === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
+
+    // Handle numbers and others
+    return String(value);
   }
 }

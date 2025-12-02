@@ -117,6 +117,45 @@
   color: #333;
 }
 
+/* Filter Expression Summary */
+.filter-expression-summary {
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.expression-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.expression-header i {
+  color: #1976d2;
+  font-size: 12px;
+}
+
+.expression-text {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #333;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .filter-header {
@@ -131,5 +170,14 @@
 
   .filter-actions {
     justify-content: center;
+  }
+
+  .filter-expression-summary {
+    padding: 12px;
+  }
+
+  .expression-text {
+    font-size: 12px;
+    padding: 10px 12px;
   }
 }

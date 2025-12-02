@@ -22,7 +22,8 @@ import {
   GridStateChangedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
-import { ViewSaveEvent } from './components/view-config-panel/view-config-panel.component';
+import { ViewSaveEvent, ViewConfigPanelComponent } from './components/view-config-panel/view-config-panel.component';
+import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
@@ -64,6 +65,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** Reference to the entity viewer for refreshing after view save */
   @ViewChild(EntityViewerComponent) entityViewerRef: EntityViewerComponent | undefined;
+
+  /** Reference to the view config panel for passing filter state */
+  @ViewChild(ViewConfigPanelComponent) viewConfigPanelRef: ViewConfigPanelComponent | undefined;
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -340,6 +344,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * This is passed to mj-entity-viewer to control column display
    */
   public currentGridState: ViewGridStateConfig | null = null;
+
+  // Filter dialog state (rendered at dashboard level for full viewport width)
+  public isFilterDialogOpen: boolean = false;
+  public filterDialogFields: FilterFieldInfo[] = [];
+  public filterDialogState: CompositeFilterDescriptor = createEmptyFilter();
+  public filterDialogDisabled: boolean = false;
 
   constructor(
     public stateService: ExplorerStateService,
@@ -788,6 +798,40 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onCloseViewConfigPanel(): void {
     this.stateService.closeViewConfigPanel();
+  }
+
+  // ========================================
+  // FILTER DIALOG (at dashboard level for full width)
+  // ========================================
+
+  /**
+   * Handle request to open filter dialog from view config panel
+   * The dialog is rendered at dashboard level to allow full viewport width
+   */
+  public onOpenFilterDialogRequest(event: { filterState: CompositeFilterDescriptor; filterFields: FilterFieldInfo[] }): void {
+    this.filterDialogState = event.filterState;
+    this.filterDialogFields = event.filterFields;
+    this.filterDialogDisabled = !this.viewConfigPanelRef?.canEdit;
+    this.isFilterDialogOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Close the filter dialog
+   */
+  public onCloseFilterDialog(): void {
+    this.isFilterDialogOpen = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle filter applied from dialog - pass back to view config panel
+   */
+  public onFilterApplied(filter: CompositeFilterDescriptor): void {
+    this.filterDialogState = filter;
+    this.isFilterDialogOpen = false;
+    // The view config panel will pick up the new filter state via input binding
+    this.cdr.detectChanges();
   }
 
   /**

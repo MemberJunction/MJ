@@ -70,10 +70,15 @@ export const DATE_OPERATORS: OperatorInfo[] = [
 
 /**
  * Operators available for lookup/foreign key fields
+ * Include text-based operators since users often filter by display values
  */
 export const LOOKUP_OPERATORS: OperatorInfo[] = [
   { value: 'eq', label: 'equals', requiresValue: true },
   { value: 'neq', label: 'not equals', requiresValue: true },
+  { value: 'contains', label: 'contains', requiresValue: true },
+  { value: 'doesnotcontain', label: 'does not contain', requiresValue: true },
+  { value: 'startswith', label: 'starts with', requiresValue: true },
+  { value: 'endswith', label: 'ends with', requiresValue: true },
   { value: 'isnull', label: 'is empty', requiresValue: false },
   { value: 'isnotnull', label: 'is not empty', requiresValue: false }
 ];

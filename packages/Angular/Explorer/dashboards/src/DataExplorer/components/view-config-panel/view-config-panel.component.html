@@ -227,13 +227,36 @@
             <i class="fa-solid fa-filter"></i>
             <span>Traditional Filters</span>
           </div>
-          <div class="filter-builder-container">
-            <mj-filter-builder
-              [fields]="filterFields"
-              [filter]="filterState"
-              [disabled]="!canEdit"
-              (filterChange)="onFilterChange($event)">
-            </mj-filter-builder>
+          <div class="filter-summary-container">
+            <div class="filter-summary">
+              <div class="summary-info">
+                @if (getFilterCount() > 0) {
+                  <span class="filter-badge">{{ getFilterCount() }}</span>
+                  <span class="summary-text">{{ getFilterSummary() }}</span>
+                } @else {
+                  <span class="summary-text no-filters">{{ getFilterSummary() }}</span>
+                }
+              </div>
+              <div class="summary-actions">
+                @if (getFilterCount() > 0 && canEdit) {
+                  <button
+                    class="summary-btn clear-btn"
+                    (click)="clearFilters()"
+                    title="Clear all filters">
+                    <i class="fa-solid fa-times"></i>
+                    Clear
+                  </button>
+                }
+                <button
+                  class="summary-btn edit-btn"
+                  (click)="openFilterDialog()"
+                  [disabled]="!canEdit && getFilterCount() === 0"
+                  title="Edit filters">
+                  <i class="fa-solid fa-pen"></i>
+                  {{ getFilterCount() > 0 ? 'Edit' : 'Add Filters' }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -61,4 +61,17 @@
       </p>
     </div>
   }
+
+  <!-- Natural language filter summary -->
+  @if (showSummary && hasActiveFilters) {
+    <div class="filter-expression-summary">
+      <div class="expression-header">
+        <i class="fa-solid fa-code"></i>
+        <span>Filter Expression</span>
+      </div>
+      <div class="expression-text">
+        {{ getFilterSummary() }}
+      </div>
+    </div>
+  }
 </div>

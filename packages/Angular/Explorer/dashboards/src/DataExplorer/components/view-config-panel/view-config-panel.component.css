@@ -357,9 +357,91 @@
   font-size: 14px;
 }
 
-/* Filter Builder Container */
-.filter-builder-container {
+/* Filter Summary Container */
+.filter-summary-container {
   padding: 4px 0;
+}
+
+.filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+}
+
+.summary-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-badge {
+  background: #1976d2;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.summary-text {
+  font-size: 14px;
+  color: #333;
+}
+
+.summary-text.no-filters {
+  color: #999;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.summary-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.summary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.summary-btn i {
+  font-size: 11px;
+}
+
+.summary-btn.clear-btn {
+  background: transparent;
+  color: #c62828;
+  border: 1px solid #e0e0e0;
+}
+
+.summary-btn.clear-btn:hover:not(:disabled) {
+  background: #ffebee;
+  border-color: #c62828;
+}
+
+.summary-btn.edit-btn {
+  background: #1976d2;
+  color: white;
+}
+
+.summary-btn.edit-btn:hover:not(:disabled) {
+  background: #1565c0;
 }
 
 /* Filters Placeholder (kept for reference) */

@@ -427,8 +427,20 @@
     [viewEntity]="selectedViewEntity"
     [isOpen]="state.viewConfigPanelOpen"
     [currentGridState]="currentGridState"
+    [externalFilterState]="filterDialogState"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
-    (delete)="onDeleteView()">
+    (delete)="onDeleteView()"
+    (openFilterDialogRequest)="onOpenFilterDialogRequest($event)">
   </mj-view-config-panel>
+
+  <!-- Filter Dialog (rendered at dashboard level for full viewport width) -->
+  <mj-filter-dialog
+    [isOpen]="isFilterDialogOpen"
+    [fields]="filterDialogFields"
+    [filter]="filterDialogState"
+    [disabled]="filterDialogDisabled"
+    (close)="onCloseFilterDialog()"
+    (apply)="onFilterApplied($event)">
+  </mj-filter-dialog>
 </div>

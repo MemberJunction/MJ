@@ -91,6 +91,19 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    */
   @Output() delete = new EventEmitter<void>();
 
+  /**
+   * Emitted when filter dialog should be opened (at dashboard level for full width)
+   */
+  @Output() openFilterDialogRequest = new EventEmitter<{
+    filterState: CompositeFilterDescriptor;
+    filterFields: FilterFieldInfo[];
+  }>();
+
+  /**
+   * Filter state from external dialog (set by parent after dialog closes)
+   */
+  @Input() externalFilterState: CompositeFilterDescriptor | null = null;
+
   // Form state
   public viewName: string = '';
   public viewDescription: string = '';
@@ -144,6 +157,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
     if (changes['entity'] || changes['viewEntity'] || changes['currentGridState']) {
       this.initializeFromEntity();
+    }
+
+    // Apply external filter state when it changes (from dashboard-level dialog)
+    if (changes['externalFilterState'] && this.externalFilterState) {
+      this.filterState = this.externalFilterState;
+      this.cdr.detectChanges();
     }
   }
 
@@ -311,6 +330,57 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    */
   onFilterChange(filter: CompositeFilterDescriptor): void {
     this.filterState = filter;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Open the filter dialog - emits event to parent (dashboard) which renders the dialog at viewport level
+   */
+  openFilterDialog(): void {
+    this.openFilterDialogRequest.emit({
+      filterState: this.filterState,
+      filterFields: this.filterFields
+    });
+  }
+
+  /**
+   * Get the count of active filter rules
+   */
+  getFilterCount(): number {
+    return this.countFilters(this.filterState);
+  }
+
+  /**
+   * Count filters recursively
+   */
+  private countFilters(filter: CompositeFilterDescriptor): number {
+    let count = 0;
+    for (const item of filter.filters || []) {
+      if ('logic' in item && 'filters' in item) {
+        count += this.countFilters(item as CompositeFilterDescriptor);
+      } else if ('field' in item) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Get a human-readable summary of the filter state
+   */
+  getFilterSummary(): string {
+    const count = this.getFilterCount();
+    if (count === 0) {
+      return 'No filters applied';
+    }
+    return `${count} filter${count !== 1 ? 's' : ''} active`;
+  }
+
+  /**
+   * Clear all filters
+   */
+  clearFilters(): void {
+    this.filterState = createEmptyFilter();
     this.cdr.detectChanges();
   }
 
