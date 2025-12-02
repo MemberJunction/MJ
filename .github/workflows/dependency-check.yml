@@ -41,8 +41,8 @@ jobs:
         id: knip
         run: |
           echo "Running Knip to check for missing dependencies..."
-          # Use npm script to ensure consistency with local development
-          if npm run deps:missing --silent > knip-report.txt 2>&1; then
+          # Force no color output and use compact reporter for consistent parsing
+          if NO_COLOR=1 npx knip --include unlisted --reporter compact > knip-report.txt 2>&1; then
             echo "✅ No missing dependencies found"
             echo "status=success" >> $GITHUB_OUTPUT
             echo "has_issues=false" >> $GITHUB_OUTPUT
@@ -50,7 +50,7 @@ jobs:
             echo "⚠️ Missing dependencies detected"
             echo "status=warning" >> $GITHUB_OUTPUT
             # Check if there are actual missing dependencies (not just config hints)
-            if grep -q "^[a-zA-Z@]" knip-report.txt | head -1 | grep -v "Configuration hints"; then
+            if grep -E "^[a-zA-Z@]" knip-report.txt | head -1 | grep -vE "(Configuration hints|index\.js)"; then
               echo "has_issues=true" >> $GITHUB_OUTPUT
             else
               echo "has_issues=false" >> $GITHUB_OUTPUT

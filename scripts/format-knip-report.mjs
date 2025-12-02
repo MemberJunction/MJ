@@ -24,24 +24,78 @@ try {
 }
 
 /**
+ * Strip ANSI color codes from text
+ * @param {string} text - Text with ANSI codes
+ * @returns {string} - Clean text
+ */
+function stripAnsiCodes(text) {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+/**
  * Parse Knip output into structured data
+ * Handles both default and compact reporter formats
  * @param {string} output - Raw Knip output
  * @returns {Map<string, Set<string>>} - Map of package paths to dependency names
  */
 function parseKnipOutput(output) {
-  const lines = output.trim().split('\n').filter(l => l.trim());
+  // Strip ANSI codes first
+  const cleanOutput = stripAnsiCodes(output);
+  const lines = cleanOutput.trim().split('\n').filter(l => l.trim());
   const depsByPackage = new Map();
 
   for (const line of lines) {
-    // Format: @package-name  file-path:line:column
-    const match = line.match(/^(@?[^\s]+)\s+(.+?):\d+:\d+/);
+    // Skip configuration hints and other non-dependency lines
+    if (line.includes('Configuration hints') ||
+        line.includes('knip.json') ||
+        line.includes('Package entry file') ||
+        line.match(/^\.\.\.\d+\s+more/)) {
+      continue;
+    }
+
+    // Try compact format first: file-path: dep1, dep2, dep3
+    const colonIndex = line.indexOf(':');
+    if (colonIndex !== -1) {
+      const beforeColon = line.substring(0, colonIndex).trim();
+      const afterColon = line.substring(colonIndex + 1).trim();
+
+      // Check if this is compact format (file path before colon, no line numbers)
+      if (beforeColon.includes('/') && !beforeColon.match(/:\d+$/)) {
+        const filePath = beforeColon;
+        const deps = afterColon.split(',').map(d => d.trim()).filter(d => d);
+
+        if (deps.length > 0) {
+          // Extract package path from file path
+          const packageMatch = filePath.match(/(packages\/[^\/]+(?:\/[^\/]+)*?)\/(?:src|dist|lib|environments)/);
+          const packagePath = packageMatch ? packageMatch[1] : 'root';
+
+          if (!depsByPackage.has(packagePath)) {
+            depsByPackage.set(packagePath, new Set());
+          }
+
+          for (const dep of deps) {
+            // Only add valid package names (not file paths)
+            if (!dep.includes('/') || dep.startsWith('@')) {
+              depsByPackage.get(packagePath).add(dep);
+            }
+          }
+          continue;
+        }
+      }
+    }
+
+    // Fall back to default format: @package-name  file-path:line:column
+    const match = line.match(/^(@?[a-zA-Z0-9@\/\-_]+)\s+(.+?):\d+:\d+/);
     if (!match) continue;
 
     const [, depName, filePath] = match;
 
+    // Skip if depName looks like a file path (contains slashes other than scoped package)
+    if (depName.match(/^[^@].*\//)) continue;
+
     // Extract package path from file path
-    // e.g., packages/Actions/CoreActions/src/file.ts -> packages/Actions/CoreActions
-    const packageMatch = filePath.match(/(packages\/[^\/]+(?:\/[^\/]+)*?)\/(?:src|dist|lib)/);
+    const packageMatch = filePath.match(/(packages\/[^\/]+(?:\/[^\/]+)*?)\/(?:src|dist|lib|environments)/);
     const packagePath = packageMatch ? packageMatch[1] : 'root';
 
     if (!depsByPackage.has(packagePath)) {
