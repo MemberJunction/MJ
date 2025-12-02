@@ -24,13 +24,15 @@
     "@angular/forms": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/global": "2.122.0",
     "@memberjunction/core": "2.122.0",
     "@memberjunction/core-entities": "2.122.0",
+    "@memberjunction/global": "2.122.0",
     "@memberjunction/ng-base-forms": "2.122.0",
     "@memberjunction/ng-find-record": "2.122.0",
     "@memberjunction/ng-resource-permissions": "2.122.0",
     "@memberjunction/ng-shared": "2.122.0",
+    "@memberjunction/ng-shared-generic": "2.122.0",
+    "@memberjunction/ng-tabstrip": "2.122.0",
     "@progress/kendo-angular-sortable": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
