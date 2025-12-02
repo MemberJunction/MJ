@@ -54,6 +54,10 @@ jobs:
           cat knip-report.txt
         continue-on-error: true
 
+      - name: Format report
+        if: always()
+        run: node scripts/format-knip-report.mjs knip-report.txt > formatted-report.md
+
       - name: Comment PR with results
         if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -61,86 +65,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const rawReport = fs.existsSync('knip-report.txt')
-              ? fs.readFileSync('knip-report.txt', 'utf8')
-              : '';
-
-            const status = '${{ steps.knip.outputs.status }}';
-            const emoji = status === 'success' ? '✅' : '⚠️';
-
-            // Parse Knip output into structured data
-            function parseKnipOutput(output) {
-              const lines = output.trim().split('\n').filter(l => l.trim());
-              const depsByPackage = new Map();
-
-              for (const line of lines) {
-                const match = line.match(/^(@?[^\s]+)\s+(.+?):\d+:\d+/);
-                if (!match) continue;
-
-                const [, depName, filePath] = match;
-
-                // Extract package path from file path
-                // e.g., packages/Actions/CoreActions/src/file.ts -> packages/Actions/CoreActions
-                const packageMatch = filePath.match(/(packages\/[^\/]+(?:\/[^\/]+)*?)\/(?:src|dist|lib)/);
-                const packagePath = packageMatch ? packageMatch[1] : 'root';
-
-                if (!depsByPackage.has(packagePath)) {
-                  depsByPackage.set(packagePath, new Set());
-                }
-                depsByPackage.get(packagePath).add(depName);
-              }
-
-              return depsByPackage;
-            }
-
-            let body;
-
-            if (status === 'success') {
-              body = '## ✅ Dependency Check Results\n\n' +
-                     '**All dependencies are properly declared!**\n\n' +
-                     'No missing dependencies detected in this PR.';
-            } else {
-              const depsByPackage = parseKnipOutput(rawReport);
-              const totalPackages = depsByPackage.size;
-              const totalDeps = Array.from(depsByPackage.values())
-                .reduce((sum, deps) => sum + deps.size, 0);
-
-              let formattedReport = '## ⚠️ Missing Dependencies Detected\\n\\n';
-              formattedReport += 'Found **' + totalDeps + ' missing dependencies** across **' + totalPackages + ' packages**.\\n\\n';
-              formattedReport += '<details>\\n';
-              formattedReport += '<summary><b>📦 Click to see affected packages</b></summary>\\n\\n';
-
-              // Sort packages alphabetically
-              const sortedPackages = Array.from(depsByPackage.entries())
-                .sort(([a], [b]) => a.localeCompare(b));
-
-              for (const [packagePath, deps] of sortedPackages) {
-                const sortedDeps = Array.from(deps).sort();
-                formattedReport += '\\n### \\`' + packagePath + '\\`\\n\\n';
-                formattedReport += 'Missing ' + sortedDeps.length + ' dependencies:\\n';
-                for (const dep of sortedDeps) {
-                  formattedReport += '- \\`' + dep + '\\`\\n';
-                }
-              }
-
-              formattedReport += '\\n</details>\\n\\n---\\n\\n';
-              formattedReport += '### 🔧 How to Fix\\n\\n';
-              formattedReport += '**Option 1: Auto-fix (recommended)**\\n';
-              formattedReport += '\\`\\`\\`bash\\n';
-              formattedReport += 'npm run deps:fix-missing:dry  # Preview changes\\n';
-              formattedReport += 'npm run deps:fix-missing       # Apply fixes\\n';
-              formattedReport += '\\`\\`\\`\\n\\n';
-              formattedReport += '**Option 2: Manual fix**\\n';
-              formattedReport += 'Add the missing dependencies to each package\\'s \\`package.json\\` file, then run:\\n';
-              formattedReport += '\\`\\`\\`bash\\n';
-              formattedReport += 'npm install\\n';
-              formattedReport += '\\`\\`\\`\\n\\n';
-              formattedReport += '### 📚 Documentation\\n';
-              formattedReport += '- [Dependency Management Guide](../scripts/README.md)\\n';
-              formattedReport += '- [Why This Matters](../.github/workflows/DEPENDENCY-CHECK.md#why-this-matters)\\n';
-
-              body = formattedReport;
-            }
+            const body = fs.readFileSync('formatted-report.md', 'utf8');
 
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
