@@ -1,29 +1,36 @@
+/**
+ * @fileoverview Angular module for the MJ Timeline component.
+ *
+ * This module provides a rich, responsive timeline component that works with
+ * both MemberJunction BaseEntity objects and plain JavaScript objects.
+ *
+ * @module @memberjunction/ng-timeline
+ */
+
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-// Kendo UI Angular imports
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { LayoutModule } from '@progress/kendo-angular-layout';
-
-// MJ
-import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
-
-// LOCAL
 import { TimelineComponent } from './component/timeline.component';
 
+/**
+ * Angular module that provides the MJ Timeline component.
+ *
+ * @example
+ * ```typescript
+ * import { TimelineModule } from '@memberjunction/ng-timeline';
+ *
+ * @NgModule({
+ *   imports: [TimelineModule]
+ * })
+ * export class MyModule { }
+ * ```
+ */
 @NgModule({
   declarations: [
     TimelineComponent
   ],
   imports: [
-    CommonModule,
-    ContainerDirectivesModule,
-    ButtonsModule,
-    EntityFormDialogModule,
-    IndicatorsModule,
-    LayoutModule 
+    CommonModule
   ],
   exports: [
     TimelineComponent
