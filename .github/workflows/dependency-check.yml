@@ -96,11 +96,9 @@ jobs:
             let body;
 
             if (status === 'success') {
-              body = `## ✅ Dependency Check Results
-
-**All dependencies are properly declared!**
-
-No missing dependencies detected in this PR.`;
+              body = '## ✅ Dependency Check Results\n\n' +
+                     '**All dependencies are properly declared!**\n\n' +
+                     'No missing dependencies detected in this PR.';
             } else {
               const depsByPackage = parseKnipOutput(rawReport);
               const totalPackages = depsByPackage.size;
@@ -129,28 +127,21 @@ Found **${totalDeps} missing dependencies** across **${totalPackages} packages**
                 }
               }
 
-              formattedReport += `\n</details>
-
----
-
-### 🔧 How to Fix
-
-**Option 1: Auto-fix (recommended)**
-\`\`\`bash
-npm run deps:fix-missing:dry  # Preview changes
-npm run deps:fix-missing       # Apply fixes
-\`\`\`
-
-**Option 2: Manual fix**
-Add the missing dependencies to each package's \`package.json\` file, then run:
-\`\`\`bash
-npm install
-\`\`\`
-
-### 📚 Documentation
-- [Dependency Management Guide](../scripts/README.md)
-- [Why This Matters](../.github/workflows/DEPENDENCY-CHECK.md#why-this-matters)
-`;
+              formattedReport += '\n</details>\n\n---\n\n';
+              formattedReport += '### 🔧 How to Fix\n\n';
+              formattedReport += '**Option 1: Auto-fix (recommended)**\n';
+              formattedReport += '```bash\n';
+              formattedReport += 'npm run deps:fix-missing:dry  # Preview changes\n';
+              formattedReport += 'npm run deps:fix-missing       # Apply fixes\n';
+              formattedReport += '```\n\n';
+              formattedReport += '**Option 2: Manual fix**\n';
+              formattedReport += 'Add the missing dependencies to each package\'s `package.json` file, then run:\n';
+              formattedReport += '```bash\n';
+              formattedReport += 'npm install\n';
+              formattedReport += '```\n\n';
+              formattedReport += '### 📚 Documentation\n';
+              formattedReport += '- [Dependency Management Guide](../scripts/README.md)\n';
+              formattedReport += '- [Why This Matters](../.github/workflows/DEPENDENCY-CHECK.md#why-this-matters)\n';
 
               body = formattedReport;
             }
