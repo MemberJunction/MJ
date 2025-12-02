@@ -105,14 +105,10 @@ jobs:
               const totalDeps = Array.from(depsByPackage.values())
                 .reduce((sum, deps) => sum + deps.size, 0);
 
-              let formattedReport = `## ⚠️ Missing Dependencies Detected
-
-Found **${totalDeps} missing dependencies** across **${totalPackages} packages**.
-
-<details>
-<summary><b>📦 Click to see affected packages</b></summary>
-
-`;
+              let formattedReport = '## ⚠️ Missing Dependencies Detected\\n\\n';
+              formattedReport += 'Found **' + totalDeps + ' missing dependencies** across **' + totalPackages + ' packages**.\\n\\n';
+              formattedReport += '<details>\\n';
+              formattedReport += '<summary><b>📦 Click to see affected packages</b></summary>\\n\\n';
 
               // Sort packages alphabetically
               const sortedPackages = Array.from(depsByPackage.entries())
@@ -120,28 +116,28 @@ Found **${totalDeps} missing dependencies** across **${totalPackages} packages**
 
               for (const [packagePath, deps] of sortedPackages) {
                 const sortedDeps = Array.from(deps).sort();
-                formattedReport += `\n### \`${packagePath}\`\n\n`;
-                formattedReport += `Missing ${sortedDeps.length} dependencies:\n`;
+                formattedReport += '\\n### \\`' + packagePath + '\\`\\n\\n';
+                formattedReport += 'Missing ' + sortedDeps.length + ' dependencies:\\n';
                 for (const dep of sortedDeps) {
-                  formattedReport += `- \`${dep}\`\n`;
+                  formattedReport += '- \\`' + dep + '\\`\\n';
                 }
               }
 
-              formattedReport += '\n</details>\n\n---\n\n';
-              formattedReport += '### 🔧 How to Fix\n\n';
-              formattedReport += '**Option 1: Auto-fix (recommended)**\n';
-              formattedReport += '```bash\n';
-              formattedReport += 'npm run deps:fix-missing:dry  # Preview changes\n';
-              formattedReport += 'npm run deps:fix-missing       # Apply fixes\n';
-              formattedReport += '```\n\n';
-              formattedReport += '**Option 2: Manual fix**\n';
-              formattedReport += 'Add the missing dependencies to each package\'s `package.json` file, then run:\n';
-              formattedReport += '```bash\n';
-              formattedReport += 'npm install\n';
-              formattedReport += '```\n\n';
-              formattedReport += '### 📚 Documentation\n';
-              formattedReport += '- [Dependency Management Guide](../scripts/README.md)\n';
-              formattedReport += '- [Why This Matters](../.github/workflows/DEPENDENCY-CHECK.md#why-this-matters)\n';
+              formattedReport += '\\n</details>\\n\\n---\\n\\n';
+              formattedReport += '### 🔧 How to Fix\\n\\n';
+              formattedReport += '**Option 1: Auto-fix (recommended)**\\n';
+              formattedReport += '\\`\\`\\`bash\\n';
+              formattedReport += 'npm run deps:fix-missing:dry  # Preview changes\\n';
+              formattedReport += 'npm run deps:fix-missing       # Apply fixes\\n';
+              formattedReport += '\\`\\`\\`\\n\\n';
+              formattedReport += '**Option 2: Manual fix**\\n';
+              formattedReport += 'Add the missing dependencies to each package\\'s \\`package.json\\` file, then run:\\n';
+              formattedReport += '\\`\\`\\`bash\\n';
+              formattedReport += 'npm install\\n';
+              formattedReport += '\\`\\`\\`\\n\\n';
+              formattedReport += '### 📚 Documentation\\n';
+              formattedReport += '- [Dependency Management Guide](../scripts/README.md)\\n';
+              formattedReport += '- [Why This Matters](../.github/workflows/DEPENDENCY-CHECK.md#why-this-matters)\\n';
 
               body = formattedReport;
             }
