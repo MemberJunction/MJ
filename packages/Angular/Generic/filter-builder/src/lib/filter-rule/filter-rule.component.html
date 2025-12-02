@@ -1,41 +1,94 @@
 <div class="filter-rule" [class.disabled]="disabled">
-  <!-- Field Selector -->
-  <select
-    class="field-select"
-    [value]="filter.field"
-    (change)="onFieldChange($any($event.target).value)"
-    [disabled]="disabled">
-    <option value="" disabled>Select field...</option>
-    @for (field of fields; track field.name) {
-      <option [value]="field.name">{{ field.displayName }}</option>
+  <!-- Field Selector - Custom Dropdown -->
+  <div class="custom-dropdown field-dropdown" [class.open]="fieldDropdownOpen" [class.disabled]="disabled">
+    <button
+      type="button"
+      class="dropdown-trigger"
+      (click)="toggleFieldDropdown()"
+      (keydown)="onFieldKeydown($event)"
+      [disabled]="disabled">
+      <span class="dropdown-value">{{ getSelectedFieldDisplayName() }}</span>
+      <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+    </button>
+    @if (fieldDropdownOpen) {
+      <div class="dropdown-menu">
+        @for (field of fields; track field.name; let i = $index) {
+          <div
+            class="dropdown-item"
+            [class.selected]="field.name === filter.field"
+            [class.highlighted]="i === fieldHighlightIndex"
+            (click)="selectField(field.name)">
+            {{ field.displayName }}
+          </div>
+        }
+        @if (fields.length === 0) {
+          <div class="dropdown-empty">No fields available</div>
+        }
+      </div>
     }
-  </select>
+  </div>
 
-  <!-- Operator Selector -->
-  <select
-    class="operator-select"
-    [value]="filter.operator"
-    (change)="onOperatorChange($any($event.target).value)"
-    [disabled]="disabled || !selectedField">
-    @for (op of availableOperators; track op.value) {
-      <option [value]="op.value">{{ op.label }}</option>
+  <!-- Operator Selector - Custom Dropdown -->
+  <div class="custom-dropdown operator-dropdown" [class.open]="operatorDropdownOpen" [class.disabled]="disabled || !selectedField">
+    <button
+      type="button"
+      class="dropdown-trigger"
+      (click)="toggleOperatorDropdown()"
+      (keydown)="onOperatorKeydown($event)"
+      [disabled]="disabled || !selectedField">
+      <span class="dropdown-value">{{ getSelectedOperatorLabel() }}</span>
+      <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+    </button>
+    @if (operatorDropdownOpen) {
+      <div class="dropdown-menu">
+        @for (op of availableOperators; track op.value; let i = $index) {
+          <div
+            class="dropdown-item"
+            [class.selected]="op.value === filter.operator"
+            [class.highlighted]="i === operatorHighlightIndex"
+            (click)="selectOperator(op.value)">
+            {{ op.label }}
+          </div>
+        }
+      </div>
     }
-  </select>
+  </div>
 
   <!-- Value Editor - varies by field type -->
   @if (requiresValue && selectedField) {
-    <!-- String with value list (dropdown) -->
+    <!-- String with value list (custom dropdown) -->
     @if (selectedField.type === 'string' && hasValueList()) {
-      <select
-        class="value-select"
-        [value]="filter.value"
-        (change)="onValueChange($any($event.target).value)"
-        [disabled]="disabled">
-        <option value="">Select...</option>
-        @for (option of selectedField.valueList; track option.value) {
-          <option [value]="option.value">{{ option.label }}</option>
+      <div class="custom-dropdown value-dropdown" [class.open]="valueDropdownOpen" [class.disabled]="disabled">
+        <button
+          type="button"
+          class="dropdown-trigger"
+          (click)="toggleValueDropdown()"
+          (keydown)="onValueKeydown($event)"
+          [disabled]="disabled">
+          <span class="dropdown-value">{{ getSelectedValueLabel() }}</span>
+          <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+        </button>
+        @if (valueDropdownOpen) {
+          <div class="dropdown-menu">
+            <div
+              class="dropdown-item"
+              [class.selected]="!filter.value"
+              [class.highlighted]="0 === valueHighlightIndex"
+              (click)="selectValue('')">
+              Select...
+            </div>
+            @for (option of selectedField.valueList; track option.value; let i = $index) {
+              <div
+                class="dropdown-item"
+                [class.selected]="option.value === filter.value"
+                [class.highlighted]="(i + 1) === valueHighlightIndex"
+                (click)="selectValue(option.value)">
+                {{ option.label }}
+              </div>
+            }
+          </div>
         }
-      </select>
+      </div>
     }
     <!-- String (text input) -->
     @else if (selectedField.type === 'string') {

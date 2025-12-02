@@ -121,6 +121,9 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   public filterState: CompositeFilterDescriptor = createEmptyFilter();
   public filterFields: FilterFieldInfo[] = [];
 
+  // Filter mode: 'smart' or 'traditional' (mutually exclusive)
+  public filterMode: 'smart' | 'traditional' = 'smart';
+
   // UI state
   public activeTab: 'columns' | 'filters' | 'settings' = 'columns';
   public isSaving: boolean = false;
@@ -244,6 +247,17 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
       // Apply view's traditional filter state
       this.filterState = this.parseFilterState(this.viewEntity.FilterState);
+
+      // Set filter mode based on which type of filter is active
+      // Smart filter takes precedence if enabled
+      if (this.smartFilterEnabled && this.smartFilterPrompt) {
+        this.filterMode = 'smart';
+      } else if (this.getFilterCount() > 0) {
+        this.filterMode = 'traditional';
+      } else {
+        // Default to smart mode for new/empty filters (promote AI filtering)
+        this.filterMode = 'smart';
+      }
     } else {
       // Default view - use entity defaults
       this.viewName = '';
@@ -257,6 +271,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.smartFilterPrompt = '';
       this.smartFilterExplanation = '';
       this.filterState = createEmptyFilter();
+      // Default to smart mode (promote AI filtering)
+      this.filterMode = 'smart';
     }
 
     this.cdr.detectChanges();
@@ -628,6 +644,38 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    */
   setActiveTab(tab: 'columns' | 'filters' | 'settings'): void {
     this.activeTab = tab;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set the filter mode (smart or traditional)
+   * When switching modes, clear the other mode's settings
+   */
+  setFilterMode(mode: 'smart' | 'traditional'): void {
+    if (this.filterMode === mode) return;
+
+    this.filterMode = mode;
+
+    // When switching to smart mode, clear traditional filters and enable smart filter
+    if (mode === 'smart') {
+      this.smartFilterEnabled = true;
+      this.filterState = createEmptyFilter();
+    }
+    // When switching to traditional mode, disable smart filter and clear its prompt
+    else {
+      this.smartFilterEnabled = false;
+      this.smartFilterPrompt = '';
+      this.smartFilterExplanation = '';
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Apply a smart filter example to the prompt field
+   */
+  applySmartFilterExample(example: string): void {
+    this.smartFilterPrompt = example;
     this.cdr.detectChanges();
   }
 }

@@ -871,6 +871,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         newView.SmartFilterEnabled = event.smartFilterEnabled;
         newView.SmartFilterPrompt = event.smartFilterPrompt;
 
+        // Set traditional filter state (Kendo-compatible JSON format)
+        // The UserViewEntity.Save() will auto-generate WhereClause from FilterState
+        if (event.filterState) {
+          newView.FilterState = JSON.stringify(event.filterState);
+        }
+
         const saved = await newView.Save();
         if (saved) {
           this.selectedViewEntity = newView;
@@ -901,6 +907,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedViewEntity.SmartFilterEnabled = event.smartFilterEnabled;
         this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
 
+        // Update traditional filter state (Kendo-compatible JSON format)
+        // The UserViewEntity.Save() will auto-generate WhereClause from FilterState
+        if (event.filterState) {
+          this.selectedViewEntity.FilterState = JSON.stringify(event.filterState);
+        } else {
+          // Clear filter state if no filters
+          this.selectedViewEntity.FilterState = JSON.stringify({ logic: 'and', filters: [] });
+        }
+
         const saved = await this.selectedViewEntity.Save();
         if (saved) {
           this.stateService.setViewModified(false);
@@ -910,7 +925,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.cdr.detectChanges();
           // Refresh the view selector dropdown
           await this.viewSelectorRef?.loadViews();
-          // Note: Grid will rebuild columns via ngOnChanges when currentGridState changes
+          // Refresh the entity viewer data to apply saved filters/sorts
+          // Note: viewEntity reference didn't change, so we need to manually trigger refresh
+          this.entityViewerRef?.loadData();
         }
       }
 

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewEncapsulation } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewEncapsulation, HostListener, ElementRef } from '@angular/core';
 import {
   FilterDescriptor,
   FilterFieldInfo,
@@ -65,6 +65,28 @@ export class FilterRuleComponent implements OnInit, OnChanges {
    */
   public requiresValue: boolean = true;
 
+  // Dropdown state
+  public fieldDropdownOpen = false;
+  public operatorDropdownOpen = false;
+  public valueDropdownOpen = false;
+
+  // Keyboard navigation state
+  public fieldHighlightIndex = -1;
+  public operatorHighlightIndex = -1;
+  public valueHighlightIndex = -1;
+
+  constructor(private elementRef: ElementRef) {}
+
+  /**
+   * Close dropdowns when clicking outside the component
+   */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.elementRef.nativeElement.contains(event.target)) {
+      this.closeAllDropdowns();
+    }
+  }
+
   ngOnInit(): void {
     this.updateFieldSelection();
   }
@@ -90,6 +112,295 @@ export class FilterRuleComponent implements OnInit, OnChanges {
       this.availableOperators = [];
       this.requiresValue = true;
     }
+  }
+
+  // ========================================
+  // DROPDOWN TOGGLE METHODS
+  // ========================================
+
+  toggleFieldDropdown(): void {
+    if (this.disabled) return;
+    const wasOpen = this.fieldDropdownOpen;
+    this.closeAllDropdowns();
+    this.fieldDropdownOpen = !wasOpen;
+  }
+
+  toggleOperatorDropdown(): void {
+    if (this.disabled || !this.selectedField) return;
+    const wasOpen = this.operatorDropdownOpen;
+    this.closeAllDropdowns();
+    this.operatorDropdownOpen = !wasOpen;
+  }
+
+  toggleValueDropdown(): void {
+    if (this.disabled) return;
+    const wasOpen = this.valueDropdownOpen;
+    this.closeAllDropdowns();
+    this.valueDropdownOpen = !wasOpen;
+  }
+
+  closeFieldDropdown(): void {
+    this.fieldDropdownOpen = false;
+  }
+
+  closeOperatorDropdown(): void {
+    this.operatorDropdownOpen = false;
+  }
+
+  closeValueDropdown(): void {
+    this.valueDropdownOpen = false;
+  }
+
+  closeAllDropdowns(): void {
+    this.fieldDropdownOpen = false;
+    this.operatorDropdownOpen = false;
+    this.valueDropdownOpen = false;
+    this.resetHighlightIndices();
+  }
+
+  resetHighlightIndices(): void {
+    this.fieldHighlightIndex = -1;
+    this.operatorHighlightIndex = -1;
+    this.valueHighlightIndex = -1;
+  }
+
+  // ========================================
+  // KEYBOARD NAVIGATION
+  // ========================================
+
+  /**
+   * Handle keyboard events on the field dropdown trigger
+   */
+  onFieldKeydown(event: KeyboardEvent): void {
+    if (this.disabled) return;
+
+    if (!this.fieldDropdownOpen) {
+      // Open dropdown on Enter, Space, or arrow keys
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.toggleFieldDropdown();
+        this.fieldHighlightIndex = this.fields.findIndex(f => f.name === this.filter.field);
+        if (this.fieldHighlightIndex < 0) this.fieldHighlightIndex = 0;
+      }
+      return;
+    }
+
+    this.handleDropdownKeydown(
+      event,
+      this.fields,
+      this.fieldHighlightIndex,
+      (index) => this.fieldHighlightIndex = index,
+      (item) => this.selectField(item.name),
+      (item) => item.displayName,
+      () => this.closeFieldDropdown()
+    );
+  }
+
+  /**
+   * Handle keyboard events on the operator dropdown trigger
+   */
+  onOperatorKeydown(event: KeyboardEvent): void {
+    if (this.disabled || !this.selectedField) return;
+
+    if (!this.operatorDropdownOpen) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.toggleOperatorDropdown();
+        this.operatorHighlightIndex = this.availableOperators.findIndex(o => o.value === this.filter.operator);
+        if (this.operatorHighlightIndex < 0) this.operatorHighlightIndex = 0;
+      }
+      return;
+    }
+
+    this.handleDropdownKeydown(
+      event,
+      this.availableOperators,
+      this.operatorHighlightIndex,
+      (index) => this.operatorHighlightIndex = index,
+      (item) => this.selectOperator(item.value),
+      (item) => item.label,
+      () => this.closeOperatorDropdown()
+    );
+  }
+
+  /**
+   * Handle keyboard events on the value dropdown trigger
+   */
+  onValueKeydown(event: KeyboardEvent): void {
+    if (this.disabled || !this.selectedField?.valueList) return;
+
+    if (!this.valueDropdownOpen) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.toggleValueDropdown();
+        const valueList = this.selectedField.valueList;
+        this.valueHighlightIndex = valueList.findIndex(v => v.value === this.filter.value);
+        if (this.valueHighlightIndex < 0) this.valueHighlightIndex = 0;
+      }
+      return;
+    }
+
+    this.handleDropdownKeydown(
+      event,
+      this.selectedField.valueList,
+      this.valueHighlightIndex,
+      (index) => this.valueHighlightIndex = index,
+      (item) => this.selectValueFromOption(item.value),
+      (item) => item.label,
+      () => this.closeValueDropdown()
+    );
+  }
+
+  /**
+   * Generic handler for dropdown keyboard navigation
+   */
+  private handleDropdownKeydown<T>(
+    event: KeyboardEvent,
+    items: T[],
+    currentIndex: number,
+    setIndex: (index: number) => void,
+    onSelect: (item: T) => void,
+    getLabel: (item: T) => string,
+    onClose: () => void
+  ): void {
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        setIndex(Math.min(currentIndex + 1, items.length - 1));
+        this.scrollHighlightedItemIntoView();
+        break;
+
+      case 'ArrowUp':
+        event.preventDefault();
+        setIndex(Math.max(currentIndex - 1, 0));
+        this.scrollHighlightedItemIntoView();
+        break;
+
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        if (currentIndex >= 0 && currentIndex < items.length) {
+          onSelect(items[currentIndex]);
+        }
+        break;
+
+      case 'Escape':
+      case 'Tab':
+        event.preventDefault();
+        onClose();
+        break;
+
+      case 'Home':
+        event.preventDefault();
+        setIndex(0);
+        this.scrollHighlightedItemIntoView();
+        break;
+
+      case 'End':
+        event.preventDefault();
+        setIndex(items.length - 1);
+        this.scrollHighlightedItemIntoView();
+        break;
+
+      default:
+        // Type-ahead: jump to first item starting with typed character
+        if (event.key.length === 1 && /[a-zA-Z0-9]/.test(event.key)) {
+          const char = event.key.toLowerCase();
+          const startIndex = currentIndex + 1;
+
+          // Search from current position to end, then from start
+          for (let i = 0; i < items.length; i++) {
+            const idx = (startIndex + i) % items.length;
+            const label = getLabel(items[idx]).toLowerCase();
+            if (label.startsWith(char)) {
+              setIndex(idx);
+              this.scrollHighlightedItemIntoView();
+              break;
+            }
+          }
+        }
+        break;
+    }
+  }
+
+  /**
+   * Scroll the highlighted dropdown item into view
+   */
+  private scrollHighlightedItemIntoView(): void {
+    // Use setTimeout to let Angular update the DOM first
+    setTimeout(() => {
+      const highlightedEl = this.elementRef.nativeElement.querySelector('.dropdown-item.highlighted');
+      if (highlightedEl) {
+        highlightedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }, 0);
+  }
+
+  // ========================================
+  // DISPLAY HELPERS
+  // ========================================
+
+  /**
+   * Get the display name for the currently selected field
+   */
+  getSelectedFieldDisplayName(): string {
+    if (!this.filter.field) return 'Select field...';
+    const field = this.fields.find(f => f.name === this.filter.field);
+    return field?.displayName || this.filter.field;
+  }
+
+  /**
+   * Get the label for the currently selected operator
+   */
+  getSelectedOperatorLabel(): string {
+    if (!this.filter.operator) return 'Select...';
+    const op = this.availableOperators.find(o => o.value === this.filter.operator);
+    return op?.label || this.filter.operator;
+  }
+
+  /**
+   * Get the label for the currently selected value (for value list dropdowns)
+   */
+  getSelectedValueLabel(): string {
+    if (!this.filter.value || !this.selectedField?.valueList) return 'Select...';
+    const option = this.selectedField.valueList.find(o => o.value === this.filter.value);
+    return option?.label || String(this.filter.value);
+  }
+
+  // ========================================
+  // SELECTION HANDLERS
+  // ========================================
+
+  /**
+   * Handle field selection from custom dropdown
+   */
+  selectField(fieldName: string): void {
+    this.closeFieldDropdown();
+    this.onFieldChange(fieldName);
+  }
+
+  /**
+   * Handle operator selection from custom dropdown
+   */
+  selectOperator(operator: string): void {
+    this.closeOperatorDropdown();
+    this.onOperatorChange(operator as FilterOperator);
+  }
+
+  /**
+   * Handle value selection from custom dropdown
+   */
+  selectValue(value: string): void {
+    this.closeValueDropdown();
+    this.onValueChange(value);
+  }
+
+  /**
+   * Handle value selection from value list option (supports union type)
+   */
+  selectValueFromOption(value: string | number | boolean): void {
+    this.closeValueDropdown();
+    this.onValueChange(value);
   }
 
   /**

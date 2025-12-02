@@ -1,17 +1,18 @@
-.cards-view-wrapper {
+/* Scoped to mj-entity-cards to prevent style leakage with ViewEncapsulation.None */
+mj-entity-cards .cards-view-wrapper {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.cards-container {
+mj-entity-cards .cards-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
   padding: 4px;
 }
 
-.data-card {
+mj-entity-cards .data-card {
   background: white;
   border-radius: 12px;
   border: 1px solid #e0e0e0;
@@ -20,52 +21,52 @@
   transition: all 0.2s ease;
 }
 /* Hover state for unselected cards */
-.data-card:hover:not(.selected) {
+mj-entity-cards .data-card:hover:not(.selected) {
   border-color: #bdbdbd;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
-.data-card:hover .card-open-btn {
+mj-entity-cards .data-card:hover .card-open-btn {
   opacity: 1;
 }
 
 /* Selected state - subtle but clear */
-.data-card.selected {
+mj-entity-cards .data-card.selected {
   border-color: #1976d2;
 }
 
-.data-card.selected .card-title {
+mj-entity-cards .data-card.selected .card-title {
   color: #1565c0;
 }
 
 /* Selected + hover state - same as regular hover */
-.data-card.selected:hover {
+mj-entity-cards .data-card.selected:hover {
   border-color: #1976d2;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
 
-.card-header {
+mj-entity-cards .card-header {
   display: flex;
   align-items: flex-start;
   padding: 16px;
   gap: 12px;
 }
 
-.card-thumbnail {
+mj-entity-cards .card-thumbnail {
   width: 48px;
   height: 48px;
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
 }
-.card-thumbnail img {
+mj-entity-cards .card-thumbnail img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.card-avatar {
+mj-entity-cards .card-avatar {
   width: 48px;
   height: 48px;
   border-radius: 8px;
@@ -78,12 +79,12 @@
   flex-shrink: 0;
 }
 
-.card-header-content {
+mj-entity-cards .card-header-content {
   flex: 1;
   min-width: 0;
 }
 
-.card-title {
+mj-entity-cards .card-title {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
@@ -95,7 +96,7 @@
   overflow: hidden;
 }
 
-.card-subtitle {
+mj-entity-cards .card-subtitle {
   display: block;
   margin-top: 2px;
   font-size: 12px;
@@ -105,7 +106,7 @@
   text-overflow: ellipsis;
 }
 
-.card-open-btn {
+mj-entity-cards .card-open-btn {
   width: 32px;
   height: 32px;
   border: none;
@@ -120,16 +121,16 @@
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
-.card-open-btn:hover {
+mj-entity-cards .card-open-btn:hover {
   background: #f5f5f5;
   color: #1976d2;
 }
 
-.card-body {
+mj-entity-cards .card-body {
   padding: 0 16px 16px 16px;
 }
 
-.card-description {
+mj-entity-cards .card-description {
   margin: 0 0 12px 0;
   font-size: 13px;
   color: #616161;
@@ -137,7 +138,7 @@
 }
 
 /* Card Display Fields */
-.card-fields {
+mj-entity-cards .card-fields {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -145,20 +146,20 @@
   border-top: 1px solid #f0f0f0;
 }
 
-.field-item {
+mj-entity-cards .field-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 60px;
 }
 
-.field-item .field-value {
+mj-entity-cards .field-item .field-value {
   font-size: 15px;
   font-weight: 600;
   color: #212121;
 }
 
-.field-item .field-label {
+mj-entity-cards .field-item .field-label {
   font-size: 10px;
   color: #9e9e9e;
   text-transform: uppercase;
@@ -166,38 +167,38 @@
 }
 
 /* Boolean fields */
-.field-item.field-boolean {
+mj-entity-cards .field-item.field-boolean {
   flex-direction: row;
   align-items: center;
   gap: 6px;
   min-width: auto;
 }
 
-.field-item.field-boolean .field-icon {
+mj-entity-cards .field-item.field-boolean .field-icon {
   font-size: 14px;
 }
 
-.field-item.field-boolean .field-icon.bool-true {
+mj-entity-cards .field-item.field-boolean .field-icon.bool-true {
   color: #2e7d32;
 }
 
-.field-item.field-boolean .field-icon.bool-false {
+mj-entity-cards .field-item.field-boolean .field-icon.bool-false {
   color: #bdbdbd;
 }
 
-.field-item.field-boolean .field-label {
+mj-entity-cards .field-item.field-boolean .field-label {
   font-size: 12px;
   text-transform: none;
   color: #616161;
 }
 
 /* Text fields */
-.field-item.field-text {
+mj-entity-cards .field-item.field-text {
   flex: 1 1 100%;
   max-width: 100%;
 }
 
-.field-item .field-text-value {
+mj-entity-cards .field-item .field-text-value {
   font-size: 13px;
   color: #424242;
   line-height: 1.4;
@@ -205,31 +206,31 @@
 }
 
 /* Date fields */
-.field-item .field-date {
+mj-entity-cards .field-item .field-date {
   font-size: 13px;
   font-weight: 500;
 }
 
-.card-footer {
+mj-entity-cards .card-footer {
   padding: 12px 16px;
   background: #fafafa;
   border-top: 1px solid #f0f0f0;
 }
 
-/* Highlight matches */
-::ng-deep .highlight-match {
+/* Highlight matches - scoped to work with innerHTML */
+mj-entity-cards .highlight-match {
   background-color: #fff176;
   border-radius: 2px;
 }
 
 /* Pill spacing when used as subtitle */
-.card-header-content mj-pill {
+mj-entity-cards .card-header-content mj-pill {
   display: block;
   margin-top: 4px;
 }
 
 /* Hidden field match indicator */
-.hidden-match-indicator {
+mj-entity-cards .hidden-match-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -240,16 +241,16 @@
   color: #f57c00;
 }
 
-.hidden-match-indicator i {
+mj-entity-cards .hidden-match-indicator i {
   font-size: 10px;
 }
 
-.hidden-match-indicator span {
+mj-entity-cards .hidden-match-indicator span {
   font-weight: 500;
 }
 
 /* Loading state */
-.loading-container {
+mj-entity-cards .loading-container {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -258,7 +259,7 @@
 }
 
 /* No results state */
-.no-results {
+mj-entity-cards .no-results {
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
@@ -268,12 +269,12 @@
   color: #9e9e9e;
   text-align: center;
 }
-.no-results i {
+mj-entity-cards .no-results i {
   font-size: 48px;
   margin-bottom: 16px;
   opacity: 0.5;
 }
-.no-results p {
+mj-entity-cards .no-results p {
   margin: 0;
   font-size: 14px;
 }
