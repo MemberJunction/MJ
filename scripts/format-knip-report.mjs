@@ -11,7 +11,13 @@
  *   Formatted markdown written to stdout
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const ROOT_DIR = join(__dirname, '..');
 
 const inputFile = process.argv[2] || 'knip-report.txt';
 
@@ -68,6 +74,26 @@ function isValidDependencyName(name) {
 }
 
 /**
+ * Check if dependency is already declared in package.json
+ * @param {string} packagePath - Path to package directory
+ * @param {string} depName - Dependency name
+ * @returns {boolean} - True if already declared
+ */
+function isDependencyAlreadyDeclared(packagePath, depName) {
+  const packageJsonPath = join(ROOT_DIR, packagePath, 'package.json');
+  if (!existsSync(packageJsonPath)) return false;
+
+  try {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return !!(packageJson.dependencies?.[depName] ||
+              packageJson.devDependencies?.[depName] ||
+              packageJson.peerDependencies?.[depName]);
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * Parse Knip output into structured data
  * Handles both default and compact reporter formats
  * @param {string} output - Raw Knip output
@@ -110,7 +136,8 @@ function parseKnipOutput(output) {
 
           for (const dep of deps) {
             // Only add valid package names (not file paths or common false positives)
-            if (isValidDependencyName(dep)) {
+            // and not already declared as dependencies or peerDependencies
+            if (isValidDependencyName(dep) && !isDependencyAlreadyDeclared(packagePath, dep)) {
               depsByPackage.get(packagePath).add(dep);
             }
           }
@@ -131,6 +158,9 @@ function parseKnipOutput(output) {
     // Extract package path from file path
     const packageMatch = filePath.match(/(packages\/[^\/]+(?:\/[^\/]+)*?)\/(?:src|dist|lib|environments)/);
     const packagePath = packageMatch ? packageMatch[1] : 'root';
+
+    // Skip if already declared
+    if (isDependencyAlreadyDeclared(packagePath, depName)) continue;
 
     if (!depsByPackage.has(packagePath)) {
       depsByPackage.set(packagePath, new Set());

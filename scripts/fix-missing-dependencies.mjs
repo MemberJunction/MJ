@@ -118,8 +118,10 @@ for (const [packagePath, deps] of missingDeps.entries()) {
   const depsToAdd = [];
 
   for (const dep of deps) {
-    // Skip if already in dependencies or devDependencies
-    if (packageJson.dependencies[dep] || packageJson.devDependencies?.[dep]) {
+    // Skip if already in dependencies, devDependencies, or peerDependencies
+    if (packageJson.dependencies?.[dep] ||
+        packageJson.devDependencies?.[dep] ||
+        packageJson.peerDependencies?.[dep]) {
       continue;
     }
 

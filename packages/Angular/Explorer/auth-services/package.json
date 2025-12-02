@@ -25,11 +25,11 @@
     "@angular/router": "18.0.2",
     "@auth0/auth0-angular": "^2.2.1",
     "@azure/msal-angular": "^3.0.11",
+    "@azure/msal-browser": "^3.0.0",
+    "@azure/msal-common": "^14.0.0",
     "@okta/okta-auth-js": "^7.0.0"
   },
   "dependencies": {
-    "@azure/msal-browser": "^3.17.0",
-    "@azure/msal-common": "latest",
     "@memberjunction/core": "2.122.1",
     "@memberjunction/global": "2.122.1",
     "rxjs": "^7.8.1",
