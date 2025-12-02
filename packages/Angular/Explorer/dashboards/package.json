@@ -36,6 +36,7 @@
     "@memberjunction/ng-notifications": "2.121.0",
     "@memberjunction/ng-shared": "2.121.0",
     "@memberjunction/ng-shared-generic": "2.121.0",
+    "@memberjunction/ng-filter-builder": "2.121.0",
     "@memberjunction/ng-ai-test-harness": "2.121.0",
     "@memberjunction/ng-action-gallery": "2.121.0",
     "@memberjunction/ng-entity-viewer": "2.121.0",

@@ -118,12 +118,20 @@
 /* Panel Content */
 .panel-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .tab-content {
   padding: 0 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Config Sections */
@@ -214,9 +222,24 @@
   background: #fafafa;
 }
 
-.column-list.hidden-columns {
-  max-height: 200px;
+.column-list.visible-columns {
+  max-height: 300px;
   overflow-y: auto;
+}
+
+.column-list.hidden-columns {
+  flex: 1;
+  min-height: 100px;
+  overflow-y: auto;
+}
+
+/* Hidden columns section should expand to fill available space */
+.config-section:last-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0;
 }
 
 .column-item {
@@ -334,7 +357,12 @@
   font-size: 14px;
 }
 
-/* Filters Placeholder */
+/* Filter Builder Container */
+.filter-builder-container {
+  padding: 4px 0;
+}
+
+/* Filters Placeholder (kept for reference) */
 .filters-placeholder {
   text-align: center;
   padding: 32px 20px;

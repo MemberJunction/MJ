@@ -227,9 +227,13 @@
             <i class="fa-solid fa-filter"></i>
             <span>Traditional Filters</span>
           </div>
-          <div class="filters-placeholder">
-            <i class="fa-solid fa-sliders-h"></i>
-            <p>Traditional filter editing is coming soon. For now, use Smart Filter above or the filter builder in the grid view.</p>
+          <div class="filter-builder-container">
+            <mj-filter-builder
+              [fields]="filterFields"
+              [filter]="filterState"
+              [disabled]="!canEdit"
+              (filterChange)="onFilterChange($event)">
+            </mj-filter-builder>
           </div>
         </div>
       </div>

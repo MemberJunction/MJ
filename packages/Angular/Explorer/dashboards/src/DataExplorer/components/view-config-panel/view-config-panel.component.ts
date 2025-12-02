@@ -2,6 +2,12 @@ import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChange
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
 import { UserViewEntityExtended, ViewColumnInfo, ViewGridState } from '@memberjunction/core-entities';
 import { ViewGridStateConfig, ViewColumnConfig } from '@memberjunction/ng-entity-viewer';
+import {
+  CompositeFilterDescriptor,
+  FilterFieldInfo,
+  FilterFieldType,
+  createEmptyFilter
+} from '@memberjunction/ng-filter-builder';
 
 /**
  * Column configuration for the view
@@ -29,6 +35,8 @@ export interface ViewSaveEvent {
   sortDirection: 'asc' | 'desc';
   smartFilterEnabled: boolean;
   smartFilterPrompt: string;
+  /** Traditional filter state in Kendo-compatible JSON format */
+  filterState: CompositeFilterDescriptor | null;
 }
 
 /**
@@ -96,6 +104,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   public smartFilterPrompt: string = '';
   public smartFilterExplanation: string = '';
 
+  // Traditional Filter state
+  public filterState: CompositeFilterDescriptor = createEmptyFilter();
+  public filterFields: FilterFieldInfo[] = [];
+
   // UI state
   public activeTab: 'columns' | 'filters' | 'settings' = 'columns';
   public isSaving: boolean = false;
@@ -124,6 +136,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // Reset to first tab and clear search when panel opens
+    if (changes['isOpen'] && this.isOpen) {
+      this.activeTab = 'columns';
+      this.columnSearchText = '';
+    }
+
     if (changes['entity'] || changes['viewEntity'] || changes['currentGridState']) {
       this.initializeFromEntity();
     }
@@ -191,6 +209,9 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       }
     }
 
+    // Initialize filter fields from entity
+    this.filterFields = this.buildFilterFields();
+
     // Apply view entity metadata (name, description, etc.) if available
     if (this.viewEntity) {
       this.viewName = this.viewEntity.Name;
@@ -201,6 +222,9 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.smartFilterEnabled = this.viewEntity.SmartFilterEnabled || false;
       this.smartFilterPrompt = this.viewEntity.SmartFilterPrompt || '';
       this.smartFilterExplanation = this.viewEntity.SmartFilterExplanation || '';
+
+      // Apply view's traditional filter state
+      this.filterState = this.parseFilterState(this.viewEntity.FilterState);
     } else {
       // Default view - use entity defaults
       this.viewName = '';
@@ -213,8 +237,80 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.smartFilterEnabled = false;
       this.smartFilterPrompt = '';
       this.smartFilterExplanation = '';
+      this.filterState = createEmptyFilter();
     }
 
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Build filter fields from entity fields
+   */
+  private buildFilterFields(): FilterFieldInfo[] {
+    if (!this.entity) return [];
+
+    return this.entity.Fields
+      .filter(f => !f.Name.startsWith('__mj_') && !f.IsBinaryFieldType)
+      .map(field => ({
+        name: field.Name,
+        displayName: field.DisplayNameOrName,
+        type: this.mapFieldType(field),
+        lookupEntityName: field.RelatedEntity || undefined,
+        valueList: field.ValueListType === 'List' && field.EntityFieldValues?.length > 0
+          ? field.EntityFieldValues.map(v => ({ value: v.Value, label: v.Value }))
+          : undefined
+      }));
+  }
+
+  /**
+   * Map entity field type to filter field type
+   */
+  private mapFieldType(field: EntityFieldInfo): FilterFieldType {
+    // Check for lookup first - RelatedEntity is a string (entity name) if it's a lookup field
+    if (field.RelatedEntity) {
+      return 'lookup';
+    }
+
+    // Map based on SQL type
+    const sqlType = field.Type.toLowerCase();
+    if (sqlType.includes('bit') || sqlType === 'boolean') {
+      return 'boolean';
+    }
+    if (sqlType.includes('date') || sqlType.includes('time')) {
+      return 'date';
+    }
+    if (sqlType.includes('int') || sqlType.includes('decimal') ||
+        sqlType.includes('numeric') || sqlType.includes('float') ||
+        sqlType.includes('real') || sqlType.includes('money')) {
+      return 'number';
+    }
+    return 'string';
+  }
+
+  /**
+   * Parse the filter state from JSON string
+   */
+  private parseFilterState(filterStateJson: string | null | undefined): CompositeFilterDescriptor {
+    if (!filterStateJson) {
+      return createEmptyFilter();
+    }
+    try {
+      const parsed = JSON.parse(filterStateJson);
+      // Validate it has the expected structure
+      if (parsed && typeof parsed === 'object' && 'logic' in parsed && 'filters' in parsed) {
+        return parsed as CompositeFilterDescriptor;
+      }
+      return createEmptyFilter();
+    } catch {
+      return createEmptyFilter();
+    }
+  }
+
+  /**
+   * Handle filter state change from filter builder
+   */
+  onFilterChange(filter: CompositeFilterDescriptor): void {
+    this.filterState = filter;
     this.cdr.detectChanges();
   }
 
@@ -406,6 +502,13 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   }
 
   /**
+   * Check if filter state has any active filters
+   */
+  private hasActiveFilters(): boolean {
+    return this.filterState?.filters?.length > 0;
+  }
+
+  /**
    * Save the view
    */
   onSave(): void {
@@ -418,7 +521,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortField: this.sortField,
       sortDirection: this.sortDirection,
       smartFilterEnabled: this.smartFilterEnabled,
-      smartFilterPrompt: this.smartFilterPrompt
+      smartFilterPrompt: this.smartFilterPrompt,
+      filterState: this.hasActiveFilters() ? this.filterState : null
     });
   }
 
@@ -435,7 +539,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortField: this.sortField,
       sortDirection: this.sortDirection,
       smartFilterEnabled: this.smartFilterEnabled,
-      smartFilterPrompt: this.smartFilterPrompt
+      smartFilterPrompt: this.smartFilterPrompt,
+      filterState: this.hasActiveFilters() ? this.filterState : null
     });
   }
 

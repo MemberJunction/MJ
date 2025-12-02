@@ -158,8 +158,9 @@
           } @else {
             <!-- Two-Column Layout: Records (left) | Entities (right) -->
             @if (hasTopSectionContent) {
-              <div class="home-two-column-layout">
+              <div class="home-two-column-layout" [class.single-column]="!hasRecordsColumnContent || !hasEntitiesColumnContent">
                 <!-- Left Column: Recent & Favorite Records (most actionable) -->
+                @if (hasRecordsColumnContent) {
                 <div class="home-column">
                   <!-- Recent Records Section -->
                   @if (recentRecords.length > 0) {
@@ -235,8 +236,10 @@
                     </div>
                   }
                 </div>
+                }
 
                 <!-- Right Column: Recent & Favorite Entities -->
+                @if (hasEntitiesColumnContent) {
                 <div class="home-column">
                   <!-- Recent Entities Section (list format) -->
                   @if (recentEntities.length > 0) {
@@ -301,6 +304,7 @@
                     </div>
                   }
                 </div>
+                }
               </div>
             }
 

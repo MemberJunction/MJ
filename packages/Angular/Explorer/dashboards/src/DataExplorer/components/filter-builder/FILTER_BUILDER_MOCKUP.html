@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MJ Filter Builder - Design Mockup</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* ============================================
+       MJ FILTER BUILDER - DESIGN MOCKUP
+       ============================================
+
+       DESIGN GOALS:
+       1. Clean, modern UI that matches MJ's design language
+       2. Intuitive visual hierarchy with clear grouping
+       3. Easy to add/remove/reorder conditions
+       4. Type-aware value editors (date picker, dropdown, number, etc.)
+       5. Clear AND/OR logic with visual connectors
+       6. Compact but not cramped
+
+       KEY DIFFERENCES FROM KENDO:
+       - More visual clarity with colored group containers
+       - Inline AND/OR toggle instead of dropdown
+       - Pill-style field/operator selectors
+       - Better empty state guidance
+       - Cleaner action buttons
+       - Support for "quick filters" (common presets)
+    */
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f5f7fa;
+      padding: 40px;
+      color: #333;
+    }
+
+    .mockup-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .mockup-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+
+    .mockup-description {
+      color: #666;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .mockup-section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .mockup-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #666;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mockup-section-title i {
+      color: #1976d2;
+    }
+
+    /* ============================================
+       FILTER BUILDER COMPONENT STYLES
+       ============================================ */
+
+    .filter-builder {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    /* Quick Filters Bar */
+    .quick-filters {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e0e0e0;
+      flex-wrap: wrap;
+    }
+
+    .quick-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 16px;
+      font-size: 13px;
+      color: #555;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .quick-filter-chip:hover {
+      border-color: #1976d2;
+      color: #1976d2;
+      background: #e3f2fd;
+    }
+
+    .quick-filter-chip.active {
+      background: #1976d2;
+      border-color: #1976d2;
+      color: white;
+    }
+
+    .quick-filter-chip i {
+      font-size: 11px;
+    }
+
+    /* Filter Group */
+    .filter-group {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      position: relative;
+    }
+
+    .filter-group.nested {
+      background: #f8fafc;
+      border-color: #d0d7de;
+      margin-left: 24px;
+      margin-top: 8px;
+    }
+
+    .filter-group.nested::before {
+      content: '';
+      position: absolute;
+      left: -16px;
+      top: 20px;
+      width: 12px;
+      height: 2px;
+      background: #d0d7de;
+    }
+
+    /* Group Header */
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .group-logic-toggle {
+      display: flex;
+      background: #f0f0f0;
+      border-radius: 6px;
+      padding: 2px;
+    }
+
+    .logic-btn {
+      padding: 6px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: #666;
+    }
+
+    .logic-btn.active {
+      background: white;
+      color: #1976d2;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .logic-btn:hover:not(.active) {
+      color: #333;
+    }
+
+    .group-label {
+      font-size: 12px;
+      color: #888;
+      flex: 1;
+    }
+
+    .group-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .group-action-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #999;
+      transition: all 0.15s ease;
+    }
+
+    .group-action-btn:hover {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .group-action-btn.delete:hover {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    /* Filter Rules */
+    .filter-rules {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Single Filter Rule */
+    .filter-rule {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #fafafa;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .filter-rule:hover {
+      border-color: #d0d0d0;
+      background: #f5f5f5;
+    }
+
+    .filter-rule.invalid {
+      border-color: #ffcdd2;
+      background: #fff5f5;
+    }
+
+    /* Rule Connector (shows AND/OR between rules) */
+    .rule-connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 0;
+    }
+
+    .connector-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      background: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .connector-label.and {
+      color: #1976d2;
+      border-color: #bbdefb;
+      background: #e3f2fd;
+    }
+
+    .connector-label.or {
+      color: #7b1fa2;
+      border-color: #e1bee7;
+      background: #f3e5f5;
+    }
+
+    /* Field Selector */
+    .field-select {
+      min-width: 160px;
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+
+    .field-select:focus {
+      outline: none;
+      border-color: #1976d2;
+    }
+
+    /* Operator Selector */
+    .operator-select {
+      min-width: 130px;
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+
+    .operator-select:focus {
+      outline: none;
+      border-color: #1976d2;
+    }
+
+    /* Value Input */
+    .value-input {
+      flex: 1;
+      min-width: 120px;
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .value-input:focus {
+      outline: none;
+      border-color: #1976d2;
+    }
+
+    .value-input::placeholder {
+      color: #aaa;
+    }
+
+    /* Boolean Toggle for boolean fields */
+    .value-toggle {
+      display: flex;
+      background: #f0f0f0;
+      border-radius: 6px;
+      padding: 2px;
+    }
+
+    .value-toggle-btn {
+      padding: 6px 16px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: #666;
+    }
+
+    .value-toggle-btn.active {
+      background: white;
+      color: #333;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .value-toggle-btn.true.active {
+      color: #2e7d32;
+    }
+
+    .value-toggle-btn.false.active {
+      color: #c62828;
+    }
+
+    /* Date Input */
+    .value-date {
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      min-width: 150px;
+    }
+
+    .value-date:focus {
+      outline: none;
+      border-color: #1976d2;
+    }
+
+    /* Rule Actions */
+    .rule-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .rule-action-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #bbb;
+      transition: all 0.15s ease;
+    }
+
+    .rule-action-btn:hover {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .rule-action-btn.delete:hover {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    /* Add Buttons */
+    .add-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed #e0e0e0;
+    }
+
+    .add-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: 1px dashed #ccc;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .add-btn:hover {
+      border-color: #1976d2;
+      color: #1976d2;
+      background: #f5f9ff;
+    }
+
+    .add-btn i {
+      font-size: 11px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 32px 20px;
+      color: #888;
+    }
+
+    .empty-state i {
+      font-size: 32px;
+      color: #ddd;
+      margin-bottom: 12px;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state .add-btn {
+      border-style: solid;
+    }
+
+    /* Filter Summary */
+    .filter-summary {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f0f4f8;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .filter-summary-label {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    .filter-summary-text {
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 12px;
+      color: #1976d2;
+      word-break: break-all;
+    }
+
+    /* ============================================
+       ALTERNATIVE DESIGN: COMPACT INLINE
+       ============================================ */
+
+    .filter-builder-compact {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+    }
+
+    .compact-rule {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      gap: 8px;
+    }
+
+    .compact-rule:last-child {
+      border-bottom: none;
+    }
+
+    .compact-connector {
+      font-size: 11px;
+      font-weight: 600;
+      color: #1976d2;
+      min-width: 32px;
+    }
+
+    .compact-connector:first-child {
+      color: transparent;
+    }
+
+    .compact-field {
+      font-weight: 500;
+      color: #333;
+    }
+
+    .compact-operator {
+      color: #666;
+      font-style: italic;
+    }
+
+    .compact-value {
+      color: #1976d2;
+      font-weight: 500;
+    }
+
+    .compact-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+    }
+
+    /* ============================================
+       NOTES & ANNOTATIONS
+       ============================================ */
+
+    .design-note {
+      background: #fff8e1;
+      border-left: 4px solid #ffc107;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      color: #795548;
+    }
+
+    .design-note strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 32px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-container">
+    <h1 class="mockup-title">MJ Filter Builder - Design Mockup</h1>
+    <p class="mockup-description">
+      A modern, intuitive filter builder component for creating complex boolean filter expressions.
+      Designed to be cleaner and more user-friendly than traditional query builders.
+    </p>
+
+    <!-- ============================================
+         DESIGN 1: FULL FILTER BUILDER WITH GROUPS
+         ============================================ -->
+    <div class="mockup-section">
+      <div class="mockup-section-title">
+        <i class="fa-solid fa-filter"></i>
+        Design 1: Full Filter Builder (With Grouping)
+      </div>
+
+      <div class="filter-builder">
+        <!-- Quick Filters -->
+        <div class="quick-filters">
+          <div class="quick-filter-chip">
+            <i class="fa-solid fa-clock"></i>
+            Created Today
+          </div>
+          <div class="quick-filter-chip">
+            <i class="fa-solid fa-calendar-week"></i>
+            This Week
+          </div>
+          <div class="quick-filter-chip active">
+            <i class="fa-solid fa-check-circle"></i>
+            Active Only
+          </div>
+          <div class="quick-filter-chip">
+            <i class="fa-solid fa-user"></i>
+            My Records
+          </div>
+        </div>
+
+        <!-- Main Filter Group -->
+        <div class="filter-group">
+          <div class="group-header">
+            <div class="group-logic-toggle">
+              <button class="logic-btn active">AND</button>
+              <button class="logic-btn">OR</button>
+            </div>
+            <span class="group-label">Match all of the following</span>
+            <div class="group-actions">
+              <button class="group-action-btn" title="Collapse">
+                <i class="fa-solid fa-chevron-up"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-rules">
+            <!-- Rule 1 -->
+            <div class="filter-rule">
+              <select class="field-select">
+                <option selected>Status</option>
+                <option>Name</option>
+                <option>Created At</option>
+                <option>Amount</option>
+              </select>
+              <select class="operator-select">
+                <option selected>equals</option>
+                <option>not equals</option>
+                <option>contains</option>
+              </select>
+              <select class="field-select" style="min-width: 140px;">
+                <option selected>Active</option>
+                <option>Inactive</option>
+                <option>Pending</option>
+              </select>
+              <div class="rule-actions">
+                <button class="rule-action-btn" title="Duplicate">
+                  <i class="fa-solid fa-copy"></i>
+                </button>
+                <button class="rule-action-btn delete" title="Remove">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Connector -->
+            <div class="rule-connector">
+              <span class="connector-label and">AND</span>
+            </div>
+
+            <!-- Rule 2 -->
+            <div class="filter-rule">
+              <select class="field-select">
+                <option>Status</option>
+                <option selected>Amount</option>
+                <option>Created At</option>
+                <option>Name</option>
+              </select>
+              <select class="operator-select">
+                <option>equals</option>
+                <option selected>greater than</option>
+                <option>less than</option>
+                <option>between</option>
+              </select>
+              <input type="number" class="value-input" placeholder="Enter value..." value="1000">
+              <div class="rule-actions">
+                <button class="rule-action-btn" title="Duplicate">
+                  <i class="fa-solid fa-copy"></i>
+                </button>
+                <button class="rule-action-btn delete" title="Remove">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Connector -->
+            <div class="rule-connector">
+              <span class="connector-label and">AND</span>
+            </div>
+
+            <!-- Nested Group (OR condition) -->
+            <div class="filter-group nested">
+              <div class="group-header">
+                <div class="group-logic-toggle">
+                  <button class="logic-btn">AND</button>
+                  <button class="logic-btn active">OR</button>
+                </div>
+                <span class="group-label">Match any of the following</span>
+                <div class="group-actions">
+                  <button class="group-action-btn delete" title="Remove group">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="filter-rules">
+                <!-- Nested Rule 1 -->
+                <div class="filter-rule">
+                  <select class="field-select">
+                    <option selected>Category</option>
+                    <option>Type</option>
+                  </select>
+                  <select class="operator-select">
+                    <option selected>equals</option>
+                    <option>not equals</option>
+                  </select>
+                  <input type="text" class="value-input" value="Premium">
+                  <div class="rule-actions">
+                    <button class="rule-action-btn delete" title="Remove">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Connector -->
+                <div class="rule-connector">
+                  <span class="connector-label or">OR</span>
+                </div>
+
+                <!-- Nested Rule 2 -->
+                <div class="filter-rule">
+                  <select class="field-select">
+                    <option selected>Category</option>
+                    <option>Type</option>
+                  </select>
+                  <select class="operator-select">
+                    <option selected>equals</option>
+                    <option>not equals</option>
+                  </select>
+                  <input type="text" class="value-input" value="Enterprise">
+                  <div class="rule-actions">
+                    <button class="rule-action-btn delete" title="Remove">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="add-buttons">
+                <button class="add-btn">
+                  <i class="fa-solid fa-plus"></i>
+                  Add Condition
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="add-buttons">
+            <button class="add-btn">
+              <i class="fa-solid fa-plus"></i>
+              Add Condition
+            </button>
+            <button class="add-btn">
+              <i class="fa-solid fa-layer-group"></i>
+              Add Group
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Summary -->
+        <div class="filter-summary">
+          <div class="filter-summary-label">Generated Filter:</div>
+          <div class="filter-summary-text">
+            Status = 'Active' AND Amount > 1000 AND (Category = 'Premium' OR Category = 'Enterprise')
+          </div>
+        </div>
+      </div>
+
+      <div class="design-note">
+        <strong>Design Notes:</strong>
+        - AND/OR toggle at group level controls how conditions combine<br>
+        - Visual connectors between rules show the logic clearly<br>
+        - Nested groups allow complex expressions like (A AND B) OR (C AND D)<br>
+        - Quick filter chips at top for common presets<br>
+        - Generated SQL/filter shown at bottom for transparency
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- ============================================
+         DESIGN 2: BOOLEAN VALUE EXAMPLE
+         ============================================ -->
+    <div class="mockup-section">
+      <div class="mockup-section-title">
+        <i class="fa-solid fa-toggle-on"></i>
+        Boolean Field Example
+      </div>
+
+      <div class="filter-rule" style="background: white; border: 1px solid #e0e0e0;">
+        <select class="field-select">
+          <option selected>Is Active</option>
+          <option>Is Verified</option>
+          <option>Has Orders</option>
+        </select>
+        <select class="operator-select">
+          <option selected>is</option>
+          <option>is not</option>
+        </select>
+        <div class="value-toggle">
+          <button class="value-toggle-btn true active">True</button>
+          <button class="value-toggle-btn false">False</button>
+        </div>
+        <div class="rule-actions">
+          <button class="rule-action-btn delete" title="Remove">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="design-note">
+        <strong>Design Notes:</strong>
+        Boolean fields get a special True/False toggle instead of a text input.
+        This is more intuitive than typing "true" or "false".
+      </div>
+    </div>
+
+    <!-- ============================================
+         DESIGN 3: DATE FIELD EXAMPLE
+         ============================================ -->
+    <div class="mockup-section">
+      <div class="mockup-section-title">
+        <i class="fa-solid fa-calendar"></i>
+        Date Field Example
+      </div>
+
+      <div class="filter-rule" style="background: white; border: 1px solid #e0e0e0;">
+        <select class="field-select">
+          <option selected>Created At</option>
+          <option>Updated At</option>
+          <option>Due Date</option>
+        </select>
+        <select class="operator-select">
+          <option>equals</option>
+          <option selected>is after</option>
+          <option>is before</option>
+          <option>is between</option>
+          <option>in the last</option>
+          <option>in the next</option>
+        </select>
+        <input type="date" class="value-date" value="2024-01-01">
+        <div class="rule-actions">
+          <button class="rule-action-btn delete" title="Remove">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="design-note">
+        <strong>Design Notes:</strong>
+        Date fields get a date picker. Special operators like "in the last 7 days"
+        could show a number input + unit dropdown (days/weeks/months).
+      </div>
+    </div>
+
+    <!-- ============================================
+         DESIGN 4: EMPTY STATE
+         ============================================ -->
+    <div class="mockup-section">
+      <div class="mockup-section-title">
+        <i class="fa-solid fa-inbox"></i>
+        Empty State (No Filters)
+      </div>
+
+      <div class="filter-builder">
+        <div class="empty-state">
+          <i class="fa-solid fa-filter"></i>
+          <p>No filters applied. All records will be shown.</p>
+          <button class="add-btn">
+            <i class="fa-solid fa-plus"></i>
+            Add Your First Filter
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- ============================================
+         DESIGN 5: COMPACT INLINE VIEW
+         ============================================ -->
+    <div class="mockup-section">
+      <div class="mockup-section-title">
+        <i class="fa-solid fa-compress"></i>
+        Alternative: Compact Read-Only View
+      </div>
+
+      <div class="filter-builder-compact">
+        <div class="compact-rule">
+          <span class="compact-connector">WHERE</span>
+          <span class="compact-field">Status</span>
+          <span class="compact-operator">equals</span>
+          <span class="compact-value">"Active"</span>
+          <div class="compact-actions">
+            <button class="rule-action-btn" title="Edit">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="rule-action-btn delete" title="Remove">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+        </div>
+        <div class="compact-rule">
+          <span class="compact-connector">AND</span>
+          <span class="compact-field">Amount</span>
+          <span class="compact-operator">greater than</span>
+          <span class="compact-value">1000</span>
+          <div class="compact-actions">
+            <button class="rule-action-btn" title="Edit">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="rule-action-btn delete" title="Remove">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+        </div>
+        <div class="compact-rule">
+          <span class="compact-connector">AND</span>
+          <span class="compact-field">Created At</span>
+          <span class="compact-operator">is after</span>
+          <span class="compact-value">Jan 1, 2024</span>
+          <div class="compact-actions">
+            <button class="rule-action-btn" title="Edit">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="rule-action-btn delete" title="Remove">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="design-note">
+        <strong>Design Notes:</strong>
+        This compact view could be used to display existing filters in a read-only summary.
+        Click the edit button to expand into the full editor.
+        Good for showing active filters in a toolbar or header area.
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- ============================================
+         OPERATOR REFERENCE
+         ============================================ -->
+    <div class="mockup-section">
+      <div class="mockup-section-title">
+        <i class="fa-solid fa-list"></i>
+        Operators by Field Type
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <thead>
+          <tr style="background: #f5f5f5; text-align: left;">
+            <th style="padding: 10px; border-bottom: 2px solid #e0e0e0;">Field Type</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e0e0e0;">Available Operators</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;"><strong>Text/String</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;">
+              equals, not equals, contains, does not contain, starts with, ends with, is empty, is not empty
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;"><strong>Number</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;">
+              equals, not equals, greater than, less than, greater or equal, less or equal, between, is empty, is not empty
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;"><strong>Date</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;">
+              equals, is before, is after, is on or before, is on or after, between, in the last (N days/weeks/months), in the next (N days/weeks/months), is empty, is not empty
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;"><strong>Boolean</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #f0f0f0;">
+              is true, is false, is empty, is not empty
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 10px;"><strong>Lookup/Foreign Key</strong></td>
+            <td style="padding: 10px;">
+              equals (with record selector popup), not equals, is one of (multi-select), is empty, is not empty
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</body>
+</html>

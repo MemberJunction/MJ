@@ -1,0 +1,231 @@
+.filter-group {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafafa;
+  transition: all 0.15s ease;
+}
+
+.filter-group.root {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.filter-group:not(.root) {
+  margin-left: 16px;
+  border-left: 3px solid #1976d2;
+}
+
+.filter-group[data-depth="1"]:not(.root) {
+  border-left-color: #7b1fa2;
+}
+
+.filter-group[data-depth="2"]:not(.root) {
+  border-left-color: #388e3c;
+}
+
+.filter-group[data-depth="3"]:not(.root) {
+  border-left-color: #f57c00;
+}
+
+.filter-group.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Group Header */
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+/* Logic Toggle */
+.logic-toggle {
+  display: flex;
+  background: #e8e8e8;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.logic-btn {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #666;
+}
+
+.logic-btn:hover:not(:disabled) {
+  color: #333;
+}
+
+.logic-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.logic-btn.active {
+  background: white;
+  color: #1976d2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Group Actions */
+.group-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px dashed #ccc;
+  background: white;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.add-btn:hover:not(:disabled) {
+  border-color: #1976d2;
+  color: #1976d2;
+  background: #f3f7fc;
+}
+
+.add-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.add-btn.primary {
+  border-style: solid;
+  border-color: #1976d2;
+  background: #1976d2;
+  color: white;
+}
+
+.add-btn.primary:hover:not(:disabled) {
+  background: #1565c0;
+  border-color: #1565c0;
+}
+
+.add-btn i {
+  font-size: 11px;
+}
+
+.add-group {
+  border-color: #9c27b0;
+  color: #9c27b0;
+}
+
+.add-group:hover:not(:disabled) {
+  border-color: #7b1fa2;
+  color: #7b1fa2;
+  background: #f9f0fc;
+}
+
+.delete-group-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: #bbb;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.delete-group-btn:hover:not(:disabled) {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.delete-group-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+/* Filters Container */
+.filters-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Logic Connector */
+.logic-connector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  margin: 4px 0;
+}
+
+.connector-line {
+  flex: 1;
+  height: 1px;
+  background: #e0e0e0;
+}
+
+.connector-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  letter-spacing: 0.5px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 24px;
+  color: #999;
+}
+
+.empty-state p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .group-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .logic-toggle {
+    justify-content: center;
+  }
+
+  .group-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .filter-group:not(.root) {
+    margin-left: 8px;
+  }
+}

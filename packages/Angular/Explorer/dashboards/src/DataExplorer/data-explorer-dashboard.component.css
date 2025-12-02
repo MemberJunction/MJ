@@ -474,6 +474,11 @@
   margin-bottom: 28px;
 }
 
+/* When only one column has content, let it take full width */
+.home-two-column-layout.single-column {
+  grid-template-columns: 1fr;
+}
+
 .home-column {
   display: flex;
   flex-direction: column;

@@ -42,6 +42,7 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
@@ -209,7 +210,8 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     AvatarModule,
     AITestHarnessModule,
     ArtifactsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    EntityViewerModule
   ],
   exports: [
     FormToolbarComponent,

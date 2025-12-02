@@ -3,10 +3,10 @@ import { Router, NavigationEnd } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
-import { BaseDashboard } from '@memberjunction/ng-shared';
+import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { ApplicationEntityEntity } from '@memberjunction/core-entities';
 import {
@@ -236,6 +236,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Check if the left column (records column) has content
+   */
+  get hasRecordsColumnContent(): boolean {
+    return this.recentRecords.length > 0 || this.favoriteRecords.length > 0;
+  }
+
+  /**
+   * Check if the right column (entities column) has content
+   */
+  get hasEntitiesColumnContent(): boolean {
+    return this.recentEntities.length > 0 || this.favoriteEntities.length > 0;
+  }
+
+  /**
    * Get unique entities from recent records for the filter strip.
    * Returns up to 5 entities, sorted by frequency in the recent records.
    */
@@ -331,7 +345,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
     private router: Router,
-    private recentAccessService: RecentAccessService
+    private recentAccessService: RecentAccessService,
+    private navigationService: NavigationService
   ) {
     super();
     this.state = this.stateService.CurrentState;
@@ -628,6 +643,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public onEntitySelected(entity: EntityInfo): void {
     this.resetRecordCounts();
     this.selectedEntity = entity;
+    // Reset grid state when entity changes - grid state is entity-specific
+    // Without this, columns from a previously viewed entity would incorrectly apply
+    this.currentGridState = null;
     this.stateService.selectEntity(entity.Name);
     // Track entity access for recent entities
     this.stateService.trackEntityAccess(entity.Name, entity.ID);
@@ -640,6 +658,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private onStateChanged(): void {
     if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
       this.resetRecordCounts();
+      // Reset grid state when entity changes - grid state is entity-specific
+      this.currentGridState = null;
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
     }
   }
@@ -746,17 +766,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Handle open in tab request
+   * Handle open in tab request - opens the view as a ViewResource in a new tab
    */
   public onOpenInTabRequested(viewId: string): void {
-    // Use OpenEntityRecord to open the view as a resource in a new tab
-    // Views are a known resource type in MJ
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = [{ FieldName: 'ID', Value: viewId }];
-    this.OpenEntityRecord.emit({
-      EntityName: 'User Views',
-      RecordPKey: compositeKey
-    });
+    // Get the view name from the component's selectedViewEntity (set when view is selected)
+    const viewName = this.selectedViewEntity?.Name || 'View';
+
+    // Use NavigationService to open as a proper ViewResource (not entity record)
+    this.navigationService.OpenView(viewId, viewName, { forceNewTab: true });
   }
 
   /**

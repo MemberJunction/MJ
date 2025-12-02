@@ -97,6 +97,7 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -198,7 +199,8 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     UserViewGridModule,
     EntityViewerModule,
     ExplorerSettingsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    FilterBuilderModule
   ],
   providers: [
     AIInstrumentationService,

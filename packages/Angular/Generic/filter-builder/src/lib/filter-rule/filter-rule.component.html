@@ -1,0 +1,115 @@
+<div class="filter-rule" [class.disabled]="disabled">
+  <!-- Field Selector -->
+  <select
+    class="field-select"
+    [value]="filter.field"
+    (change)="onFieldChange($any($event.target).value)"
+    [disabled]="disabled">
+    <option value="" disabled>Select field...</option>
+    @for (field of fields; track field.name) {
+      <option [value]="field.name">{{ field.displayName }}</option>
+    }
+  </select>
+
+  <!-- Operator Selector -->
+  <select
+    class="operator-select"
+    [value]="filter.operator"
+    (change)="onOperatorChange($any($event.target).value)"
+    [disabled]="disabled || !selectedField">
+    @for (op of availableOperators; track op.value) {
+      <option [value]="op.value">{{ op.label }}</option>
+    }
+  </select>
+
+  <!-- Value Editor - varies by field type -->
+  @if (requiresValue && selectedField) {
+    <!-- String with value list (dropdown) -->
+    @if (selectedField.type === 'string' && hasValueList()) {
+      <select
+        class="value-select"
+        [value]="filter.value"
+        (change)="onValueChange($any($event.target).value)"
+        [disabled]="disabled">
+        <option value="">Select...</option>
+        @for (option of selectedField.valueList; track option.value) {
+          <option [value]="option.value">{{ option.label }}</option>
+        }
+      </select>
+    }
+    <!-- String (text input) -->
+    @else if (selectedField.type === 'string') {
+      <input
+        type="text"
+        class="value-input"
+        [value]="filter.value || ''"
+        (input)="onValueChange($any($event.target).value)"
+        [disabled]="disabled"
+        placeholder="Enter value...">
+    }
+    <!-- Number -->
+    @else if (selectedField.type === 'number') {
+      <input
+        type="number"
+        class="value-input"
+        [value]="filter.value"
+        (input)="onValueChange($any($event.target).valueAsNumber)"
+        [disabled]="disabled"
+        placeholder="Enter number...">
+    }
+    <!-- Boolean -->
+    @else if (selectedField.type === 'boolean') {
+      <div class="value-toggle">
+        <button
+          type="button"
+          class="toggle-btn true"
+          [class.active]="filter.value === true"
+          (click)="onBooleanChange(true)"
+          [disabled]="disabled">
+          True
+        </button>
+        <button
+          type="button"
+          class="toggle-btn false"
+          [class.active]="filter.value === false"
+          (click)="onBooleanChange(false)"
+          [disabled]="disabled">
+          False
+        </button>
+      </div>
+    }
+    <!-- Date -->
+    @else if (selectedField.type === 'date') {
+      <input
+        type="date"
+        class="value-input value-date"
+        [value]="getDateInputValue()"
+        (change)="onDateChange($event)"
+        [disabled]="disabled">
+    }
+    <!-- Lookup (for now, simple text input - can be enhanced with record selector) -->
+    @else if (selectedField.type === 'lookup') {
+      <input
+        type="text"
+        class="value-input"
+        [value]="filter.value || ''"
+        (input)="onValueChange($any($event.target).value)"
+        [disabled]="disabled"
+        placeholder="Enter ID...">
+    }
+  }
+
+  <!-- Actions -->
+  <div class="rule-actions">
+    @if (showDelete) {
+      <button
+        type="button"
+        class="action-btn delete"
+        (click)="onDelete()"
+        [disabled]="disabled"
+        title="Remove filter">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    }
+  </div>
+</div>
