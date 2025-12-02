@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewEncapsulation } from '@angular/core';
 import {
   FilterDescriptor,
   FilterFieldInfo,
@@ -16,7 +16,8 @@ import { getOperatorsForType, OperatorInfo, operatorRequiresValue } from '../typ
 @Component({
   selector: 'mj-filter-rule',
   templateUrl: './filter-rule.component.html',
-  styleUrls: ['./filter-rule.component.css']
+  styleUrls: ['./filter-rule.component.css'],
+  encapsulation: ViewEncapsulation.None
 })
 export class FilterRuleComponent implements OnInit, OnChanges {
   /**

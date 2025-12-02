@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ViewEncapsulation } from '@angular/core';
 import {
   CompositeFilterDescriptor,
   FilterDescriptor,
@@ -16,7 +16,8 @@ import {
 @Component({
   selector: 'mj-filter-group',
   templateUrl: './filter-group.component.html',
-  styleUrls: ['./filter-group.component.css']
+  styleUrls: ['./filter-group.component.css'],
+  encapsulation: ViewEncapsulation.None
 })
 export class FilterGroupComponent implements OnInit {
   /**

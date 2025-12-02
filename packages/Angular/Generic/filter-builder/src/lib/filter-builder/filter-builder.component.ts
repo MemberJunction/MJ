@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import {
   CompositeFilterDescriptor,
   FilterDescriptor,
@@ -68,6 +69,11 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   @Input() showSummary: boolean = false;
 
   /**
+   * Whether the filter summary is expanded (visible)
+   */
+  public isSummaryExpanded: boolean = false;
+
+  /**
    * Emitted when the filter changes
    */
   @Output() filterChange = new EventEmitter<CompositeFilterDescriptor>();
@@ -96,6 +102,8 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Whether there are any active filters
    */
   public hasActiveFilters: boolean = false;
+
+  constructor(private sanitizer: DomSanitizer) {}
 
   ngOnInit(): void {
     this.initializeFilter();
@@ -201,30 +209,56 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Generate a natural language summary of the filter expression
+   * Toggle the filter summary visibility
    */
-  getFilterSummary(): string {
-    if (!this.hasActiveFilters) {
-      return 'No filters applied';
-    }
-    return this.buildFilterSummary(this.internalFilter);
+  toggleSummary(): void {
+    this.isSummaryExpanded = !this.isSummaryExpanded;
   }
 
   /**
-   * Build natural language summary recursively
+   * Generate HTML-formatted summary of the filter expression with syntax highlighting
    */
-  private buildFilterSummary(filter: CompositeFilterDescriptor): string {
+  getFilterSummaryHtml(): SafeHtml {
+    if (!this.hasActiveFilters) {
+      return this.sanitizer.bypassSecurityTrustHtml('<span style="color: #9ca3af; font-style: italic;">No filters applied</span>');
+    }
+    const html = this.buildFilterSummaryHtml(this.internalFilter, 0);
+    return this.sanitizer.bypassSecurityTrustHtml(html);
+  }
+
+  /**
+   * Inline styles for syntax highlighting (needed because Angular view encapsulation
+   * doesn't apply component CSS to dynamically injected innerHTML)
+   */
+  private readonly styles = {
+    fieldName: 'color: #0369a1; font-weight: 600;',
+    operator: 'color: #6b7280; font-style: italic;',
+    valueString: 'color: #059669; font-weight: 500;',
+    valueNumber: 'color: #7c3aed; font-weight: 500;',
+    valueDate: 'color: #c2410c; font-weight: 500;',
+    valueTrue: 'color: #16a34a; font-weight: 600;',
+    valueFalse: 'color: #dc2626; font-weight: 600;',
+    logicAnd: 'display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; background: #dbeafe; color: #1d4ed8;',
+    logicOr: 'display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; background: #fef3c7; color: #b45309;',
+    groupBracket: 'color: #9333ea; font-weight: 700; font-size: 15px;'
+  };
+
+  /**
+   * Build HTML summary recursively with indentation and syntax highlighting
+   */
+  private buildFilterSummaryHtml(filter: CompositeFilterDescriptor, depth: number): string {
     const parts: string[] = [];
+    const indent = '  '.repeat(depth);
 
     for (const item of filter.filters || []) {
       if (isCompositeFilter(item)) {
-        const groupSummary = this.buildFilterSummary(item);
+        const groupSummary = this.buildFilterSummaryHtml(item, depth + 1);
         if (groupSummary) {
-          parts.push(`(${groupSummary})`);
+          parts.push(`<span style="${this.styles.groupBracket}">(</span>\n${groupSummary}\n${indent}<span style="${this.styles.groupBracket}">)</span>`);
         }
       } else {
         const rule = item as FilterDescriptor;
-        const ruleSummary = this.buildRuleSummary(rule);
+        const ruleSummary = this.buildRuleSummaryHtml(rule);
         if (ruleSummary) {
           parts.push(ruleSummary);
         }
@@ -235,14 +269,17 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
       return '';
     }
 
-    const connector = filter.logic === 'and' ? ' AND ' : ' OR ';
-    return parts.join(connector);
+    const logicStyle = filter.logic === 'and' ? this.styles.logicAnd : this.styles.logicOr;
+    const logicLabel = filter.logic === 'and' ? 'AND' : 'OR';
+    const connector = `\n${indent}<span style="${logicStyle}">${logicLabel}</span>\n${indent}`;
+
+    return `${indent}${parts.join(connector)}`;
   }
 
   /**
-   * Build natural language summary for a single rule
+   * Build HTML summary for a single rule with syntax highlighting
    */
-  private buildRuleSummary(rule: FilterDescriptor): string {
+  private buildRuleSummaryHtml(rule: FilterDescriptor): string {
     if (!rule.field) {
       return '';
     }
@@ -255,14 +292,17 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
     const operatorLabel = this.getOperatorLabel(rule.operator);
 
     // Format the value
-    const formattedValue = this.formatValue(rule.value, rule.operator);
+    const formattedValue = this.formatValueHtml(rule.value, rule.operator);
 
     // Build the summary based on operator type
+    const fieldHtml = `<span style="${this.styles.fieldName}">${this.escapeHtml(fieldName)}</span>`;
+    const operatorHtml = `<span style="${this.styles.operator}">${operatorLabel}</span>`;
+
     if (this.isNullCheckOperator(rule.operator)) {
-      return `${fieldName} ${operatorLabel}`;
+      return `${fieldHtml} ${operatorHtml}`;
     }
 
-    return `${fieldName} ${operatorLabel} ${formattedValue}`;
+    return `${fieldHtml} ${operatorHtml} ${formattedValue}`;
   }
 
   /**
@@ -296,9 +336,9 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Format a value for display in the summary
+   * Format a value for HTML display with syntax highlighting
    */
-  private formatValue(value: unknown, operator: string): string {
+  private formatValueHtml(value: unknown, operator: string): string {
     if (value === null || value === undefined) {
       return '';
     }
@@ -308,22 +348,61 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
       return '';
     }
 
-    // Handle dates
-    if (value instanceof Date) {
-      return value.toLocaleDateString();
+    // Handle ISO date strings
+    if (typeof value === 'string' && this.isIsoDateString(value)) {
+      const date = new Date(value);
+      const formatted = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+      return `<span style="${this.styles.valueDate}">${formatted}</span>`;
     }
 
     // Handle strings
     if (typeof value === 'string') {
-      return `"${value}"`;
+      return `<span style="${this.styles.valueString}">"${this.escapeHtml(value)}"</span>`;
     }
 
     // Handle booleans
     if (typeof value === 'boolean') {
-      return value ? 'Yes' : 'No';
+      const boolStyle = value ? this.styles.valueTrue : this.styles.valueFalse;
+      return `<span style="${boolStyle}">${value ? 'Yes' : 'No'}</span>`;
     }
 
-    // Handle numbers and others
-    return String(value);
+    // Handle numbers
+    if (typeof value === 'number') {
+      return `<span style="${this.styles.valueNumber}">${value}</span>`;
+    }
+
+    // Handle Date objects
+    if (value instanceof Date) {
+      const formatted = value.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+      return `<span style="${this.styles.valueDate}">${formatted}</span>`;
+    }
+
+    // Default
+    return `<span style="font-weight: 500;">${this.escapeHtml(String(value))}</span>`;
+  }
+
+  /**
+   * Check if a string looks like an ISO date
+   */
+  private isIsoDateString(value: string): boolean {
+    // Match ISO 8601 date format
+    return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/.test(value);
+  }
+
+  /**
+   * Escape HTML characters to prevent XSS
+   */
+  private escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }

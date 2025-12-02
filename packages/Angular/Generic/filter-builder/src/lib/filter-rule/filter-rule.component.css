@@ -1,4 +1,5 @@
-.filter-rule {
+/* Scoped to mj-filter-rule to prevent style leakage with ViewEncapsulation.None */
+mj-filter-rule .filter-rule {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -10,66 +11,66 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.filter-rule:hover {
+mj-filter-rule .filter-rule:hover {
   border-color: #d1d5db;
   background: linear-gradient(to bottom, #ffffff, #f5f5f5);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
-.filter-rule.disabled {
+mj-filter-rule .filter-rule.disabled {
   opacity: 0.6;
   pointer-events: none;
   box-shadow: none;
 }
 
 /* Selects and Inputs - Custom styled */
-.field-select,
-.operator-select,
-.value-select,
-.value-input {
+mj-filter-rule .field-select,
+mj-filter-rule .operator-select,
+mj-filter-rule .value-select,
+mj-filter-rule .value-input {
   padding: 10px 14px;
   border: 1px solid #d4d4d8;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  background: white;
+  background-color: white;
   color: #374151;
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.field-select:hover:not(:disabled),
-.operator-select:hover:not(:disabled),
-.value-select:hover:not(:disabled),
-.value-input:hover:not(:disabled) {
+mj-filter-rule .field-select:hover:not(:disabled),
+mj-filter-rule .operator-select:hover:not(:disabled),
+mj-filter-rule .value-select:hover:not(:disabled),
+mj-filter-rule .value-input:hover:not(:disabled) {
   border-color: #a1a1aa;
-  background: #fafafa;
+  background-color: #fafafa;
 }
 
-.field-select:focus,
-.operator-select:focus,
-.value-select:focus,
-.value-input:focus {
+mj-filter-rule .field-select:focus,
+mj-filter-rule .operator-select:focus,
+mj-filter-rule .value-select:focus,
+mj-filter-rule .value-input:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-  background: white;
+  background-color: white;
 }
 
-.field-select:disabled,
-.operator-select:disabled,
-.value-select:disabled,
-.value-input:disabled {
-  background: #f4f4f5;
+mj-filter-rule .field-select:disabled,
+mj-filter-rule .operator-select:disabled,
+mj-filter-rule .value-select:disabled,
+mj-filter-rule .value-input:disabled {
+  background-color: #f4f4f5;
   color: #a1a1aa;
   cursor: not-allowed;
   box-shadow: none;
 }
 
 /* Custom select styling */
-.field-select,
-.operator-select,
-.value-select {
+mj-filter-rule .field-select,
+mj-filter-rule .operator-select,
+mj-filter-rule .value-select {
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
@@ -81,35 +82,35 @@
   padding-right: 36px;
 }
 
-.field-select {
+mj-filter-rule .field-select {
   min-width: 160px;
 }
 
-.operator-select {
+mj-filter-rule .operator-select {
   min-width: 160px;
 }
 
-.value-select {
+mj-filter-rule .value-select {
   min-width: 160px;
   flex: 1;
 }
 
-.value-input {
+mj-filter-rule .value-input {
   flex: 1;
   min-width: 150px;
 }
 
-.value-input::placeholder {
+mj-filter-rule .value-input::placeholder {
   color: #9ca3af;
   font-weight: 400;
 }
 
-.value-date {
+mj-filter-rule .value-date {
   min-width: 160px;
 }
 
 /* Boolean Toggle */
-.value-toggle {
+mj-filter-rule .value-toggle {
   display: flex;
   background: #f4f4f5;
   border-radius: 8px;
@@ -117,7 +118,7 @@
   border: 1px solid #e5e7eb;
 }
 
-.toggle-btn {
+mj-filter-rule .toggle-btn {
   padding: 8px 18px;
   border: none;
   background: transparent;
@@ -129,39 +130,39 @@
   color: #71717a;
 }
 
-.toggle-btn:hover:not(:disabled) {
+mj-filter-rule .toggle-btn:hover:not(:disabled) {
   color: #3f3f46;
   background: rgba(255, 255, 255, 0.5);
 }
 
-.toggle-btn:disabled {
+mj-filter-rule .toggle-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-.toggle-btn.active {
+mj-filter-rule .toggle-btn.active {
   background: white;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   color: #18181b;
 }
 
-.toggle-btn.true.active {
+mj-filter-rule .toggle-btn.true.active {
   color: #16a34a;
 }
 
-.toggle-btn.false.active {
+mj-filter-rule .toggle-btn.false.active {
   color: #dc2626;
 }
 
 /* Rule Actions */
-.rule-actions {
+mj-filter-rule .rule-actions {
   display: flex;
   gap: 4px;
   margin-left: auto;
   flex-shrink: 0;
 }
 
-.action-btn {
+mj-filter-rule .action-btn {
   width: 32px;
   height: 32px;
   border: none;
@@ -176,31 +177,31 @@
   font-size: 14px;
 }
 
-.action-btn:hover:not(:disabled) {
+mj-filter-rule .action-btn:hover:not(:disabled) {
   background: #f4f4f5;
   color: #71717a;
 }
 
-.action-btn:disabled {
+mj-filter-rule .action-btn:disabled {
   cursor: not-allowed;
   opacity: 0.3;
 }
 
-.action-btn.delete:hover:not(:disabled) {
+mj-filter-rule .action-btn.delete:hover:not(:disabled) {
   background: #fef2f2;
   color: #ef4444;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .filter-rule {
+  mj-filter-rule .filter-rule {
     flex-wrap: wrap;
   }
 
-  .field-select,
-  .operator-select,
-  .value-select,
-  .value-input {
+  mj-filter-rule .field-select,
+  mj-filter-rule .operator-select,
+  mj-filter-rule .value-select,
+  mj-filter-rule .value-input {
     min-width: 100%;
   }
 }

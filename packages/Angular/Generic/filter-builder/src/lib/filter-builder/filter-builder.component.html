@@ -62,16 +62,20 @@
     </div>
   }
 
-  <!-- Natural language filter summary -->
+  <!-- Collapsible filter expression summary -->
   @if (showSummary && hasActiveFilters) {
-    <div class="filter-expression-summary">
-      <div class="expression-header">
-        <i class="fa-solid fa-code"></i>
-        <span>Filter Expression</span>
-      </div>
-      <div class="expression-text">
-        {{ getFilterSummary() }}
-      </div>
+    <div class="filter-expression-summary" [class.expanded]="isSummaryExpanded">
+      <button type="button" class="expression-toggle" (click)="toggleSummary()">
+        <i class="fa-solid" [class.fa-chevron-right]="!isSummaryExpanded" [class.fa-chevron-down]="isSummaryExpanded"></i>
+        <i class="fa-solid fa-code expression-icon"></i>
+        <span class="expression-label">View Filter Expression</span>
+        <span class="expression-badge">{{ getFilterCount() }}</span>
+      </button>
+      @if (isSummaryExpanded) {
+        <div class="expression-content">
+          <pre class="expression-text" [innerHTML]="getFilterSummaryHtml()"></pre>
+        </div>
+      }
     </div>
   }
 </div>
