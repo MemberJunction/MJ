@@ -22,17 +22,18 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "2.122.1",
-    "@memberjunction/global": "2.122.1",
-    "@memberjunction/core-entities": "2.122.1",
-    "@memberjunction/sqlserver-dataprovider": "2.122.1",
     "@memberjunction/ai": "2.122.1",
     "@memberjunction/ai-agents": "2.122.1",
+    "@memberjunction/aiengine": "2.122.1",
+    "@memberjunction/core": "2.122.1",
+    "@memberjunction/core-entities": "2.122.1",
+    "@memberjunction/global": "2.122.1",
+    "@memberjunction/sqlserver-dataprovider": "2.122.1",
     "cosmiconfig": "^8.0.0",
     "dotenv": "^16.0.3",
     "express": "^5.1.0",
-    "zod": "^3.22.4",
-    "mssql": "^11.0.1"
+    "mssql": "^11.0.1",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",

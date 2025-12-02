@@ -14,7 +14,7 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -29,10 +29,10 @@ const targetPackage = args.find(arg => arg.startsWith('--package='))?.split('=')
 
 console.log('🔍 Analyzing missing dependencies with Knip...\n');
 
-// Run Knip to get missing dependencies
+// Run Knip to get missing dependencies in compact format (shows full names)
 let knipOutput;
 try {
-  knipOutput = execSync('npm run deps:missing --silent', {
+  knipOutput = execSync('npx knip --include unlisted --reporter compact', {
     cwd: ROOT_DIR,
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe']
@@ -47,16 +47,19 @@ if (!knipOutput || knipOutput.trim() === '') {
   process.exit(0);
 }
 
-// Parse Knip output
-// Format: @package-name  file-path:line:column
+// Parse Knip compact output
+// Format: file-path: dep1, dep2, dep3
 const lines = knipOutput.split('\n').filter(line => line.trim());
 const missingDeps = new Map(); // Map<packagePath, Set<depName>>
 
 for (const line of lines) {
-  const match = line.match(/^(@?[^\s]+)\s+(.+?):\d+:\d+/);
-  if (!match) continue;
+  const colonIndex = line.indexOf(':');
+  if (colonIndex === -1) continue;
 
-  const [, depName, filePath] = match;
+  const filePath = line.substring(0, colonIndex).trim();
+  const depsString = line.substring(colonIndex + 1).trim();
+
+  if (!depsString) continue;
 
   // Determine which package this file belongs to
   const packagePath = findPackageForFile(filePath);
@@ -68,7 +71,12 @@ for (const line of lines) {
   if (!missingDeps.has(packagePath)) {
     missingDeps.set(packagePath, new Set());
   }
-  missingDeps.get(packagePath).add(depName);
+
+  // Split dependencies by comma and add each one
+  const deps = depsString.split(',').map(d => d.trim()).filter(d => d);
+  for (const dep of deps) {
+    missingDeps.get(packagePath).add(dep);
+  }
 }
 
 console.log(`📦 Found ${missingDeps.size} packages with missing dependencies\n`);
@@ -78,9 +86,14 @@ if (missingDeps.size === 0) {
   process.exit(0);
 }
 
-// Get current version for @memberjunction packages
-const rootPackageJson = JSON.parse(readFileSync(join(ROOT_DIR, 'package.json'), 'utf8'));
-const mjVersion = rootPackageJson.version || '2.122.0';
+// Get current version for @memberjunction packages from an actual MJ package
+let mjVersion = '2.122.1'; // fallback
+try {
+  const corePackageJson = JSON.parse(readFileSync(join(ROOT_DIR, 'packages/MJCoreEntities/package.json'), 'utf8'));
+  mjVersion = corePackageJson.version;
+} catch (e) {
+  // Use fallback version
+}
 
 // Process each package
 const changes = [];
@@ -114,6 +127,12 @@ for (const [packagePath, deps] of missingDeps.entries()) {
     let version;
     if (dep.startsWith('@memberjunction/')) {
       version = mjVersion;
+    } else if (dep.startsWith('@progress/kendo-angular-')) {
+      // Use fixed version for Kendo packages to match Angular 18
+      version = '16.2.0';
+    } else if (dep.startsWith('@angular/')) {
+      // Use fixed version for Angular packages
+      version = '18.0.2';
     } else {
       // Try to find version from another package that uses it
       version = findVersionInWorkspace(dep) || 'latest';
@@ -243,7 +262,6 @@ function findVersionInWorkspace(packageName) {
       const dirPath = join(ROOT_DIR, dir);
       if (!existsSync(dirPath)) continue;
 
-      const { readdirSync, statSync } = await import('fs');
       const entries = readdirSync(dirPath);
 
       for (const entry of entries) {

@@ -3,6 +3,8 @@
   "ignore": [
     "**/*.spec.ts",
     "**/*.test.ts",
+    "**/*.test.js",
+    "**/examples/**",
     "**/dist/**",
     "**/node_modules/**",
     "**/.turbo/**",

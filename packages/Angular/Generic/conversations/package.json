@@ -27,6 +27,8 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
+    "@angular/animations": "18.0.2",
+    "@angular/cdk": "18.0.2",
     "@memberjunction/ai": "2.122.1",
     "@memberjunction/ai-core-plus": "2.122.1",
     "@memberjunction/ai-engine-base": "2.122.1",
@@ -42,18 +44,19 @@
     "@memberjunction/ng-shared-generic": "2.122.1",
     "@memberjunction/ng-tasks": "2.122.1",
     "@memberjunction/ng-testing": "2.122.1",
-    "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
+    "@progress/kendo-angular-dateinputs": "16.2.0",
+    "@progress/kendo-angular-dialog": "16.2.0",
+    "@progress/kendo-angular-dropdowns": "16.2.0",
+    "@progress/kendo-angular-indicators": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0",
-    "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-notification": "16.2.0",
-    "@angular/cdk": "18.0.2",
-    "tslib": "^2.3.0",
-    "rxjs": "^7.8.1",
+    "@progress/kendo-angular-upload": "16.2.0",
+    "marked": "^9.1.6",
     "ngx-markdown": "18.0.0",
-    "marked": "^9.1.6"
+    "rxjs": "^7.8.1",
+    "tslib": "^2.3.0"
   },
   "sideEffects": false,
   "repository": {

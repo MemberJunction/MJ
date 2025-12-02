@@ -31,6 +31,7 @@
   "dependencies": {
     "@memberjunction/core": "2.122.1",
     "@memberjunction/global": "2.122.1",
+    "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

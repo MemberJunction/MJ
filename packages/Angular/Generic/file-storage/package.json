@@ -26,6 +26,7 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
+    "@angular/platform-browser": "18.0.2",
     "@memberjunction/core": "2.122.1",
     "@memberjunction/core-entities": "2.122.1",
     "@memberjunction/global": "2.122.1",
@@ -36,8 +37,11 @@
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0",
+    "@progress/kendo-angular-excel-export": "16.2.0",
     "@progress/kendo-angular-grid": "16.2.0",
+    "@progress/kendo-angular-indicators": "16.2.0",
+    "@progress/kendo-angular-inputs": "16.2.0",
+    "@progress/kendo-angular-label": "16.2.0",
     "@progress/kendo-angular-menu": "16.2.0",
     "@progress/kendo-angular-treeview": "16.2.0",
     "@progress/kendo-angular-upload": "16.2.0",

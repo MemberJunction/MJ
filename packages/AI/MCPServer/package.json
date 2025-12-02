@@ -16,18 +16,20 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "2.122.1",
-    "@memberjunction/global": "2.122.1",
-    "@memberjunction/core-entities": "2.122.1",
-    "@memberjunction/sqlserver-dataprovider": "2.122.1",
+    "@memberjunction/ai": "2.122.1",
     "@memberjunction/ai-agents": "2.122.1",
+    "@memberjunction/aiengine": "2.122.1",
+    "@memberjunction/core": "2.122.1",
+    "@memberjunction/core-entities": "2.122.1",
+    "@memberjunction/global": "2.122.1",
+    "@memberjunction/sqlserver-dataprovider": "2.122.1",
     "@modelcontextprotocol/sdk": "^1.8.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "^16.4.1",
     "fastmcp": "^1.20.5",
-    "zod": "^3.23.8",
     "mssql": "^11.0.1",
-    "yargs": "^17.7.2"
+    "yargs": "^17.7.2",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/yargs": "^17.0.32",

@@ -23,10 +23,12 @@
     "@memberjunction/core": "2.122.1",
     "@memberjunction/core-entities": "2.122.1",
     "@memberjunction/global": "2.122.1",
-    "@memberjunction/sqlserver-dataprovider": "2.122.1",
     "@memberjunction/interactive-component-types": "2.122.1",
     "@memberjunction/metadata-sync": "2.122.1",
     "@memberjunction/react-test-harness": "2.122.1",
-    "dotenv": "^16.0.0"
+    "@memberjunction/sqlserver-dataprovider": "2.122.1",
+    "dotenv": "^16.0.0",
+    "mj_generatedentities": "1.0.0",
+    "mssql": "^11.0.1"
   }
 }

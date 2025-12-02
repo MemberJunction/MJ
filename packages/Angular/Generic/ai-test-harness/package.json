@@ -31,6 +31,8 @@
     "@angular/animations": "18.0.2"
   },
   "dependencies": {
+    "@angular/platform-browser": "18.0.2",
+    "@angular/router": "18.0.2",
     "@memberjunction/ai": "2.122.1",
     "@memberjunction/ai-engine-base": "2.122.1",
     "@memberjunction/core": "2.122.1",
