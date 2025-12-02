@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+  - @memberjunction/ng-compare-records@2.122.1
+  - @memberjunction/ng-base-types@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-generic-dialog@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @memberjunction/ai-azure
 
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.122.1
+- @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

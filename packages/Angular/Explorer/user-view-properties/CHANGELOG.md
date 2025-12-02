@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-user-view-properties
 
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-base-forms@2.122.1
+  - @memberjunction/ng-resource-permissions@2.122.1
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-find-record@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/ng-tabstrip@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

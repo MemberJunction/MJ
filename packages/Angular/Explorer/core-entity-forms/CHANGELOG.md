@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-action-gallery@2.122.1
+  - @memberjunction/ng-ai-test-harness@2.122.1
+  - @memberjunction/ng-base-forms@2.122.1
+  - @memberjunction/ng-form-toolbar@2.122.1
+  - @memberjunction/ng-join-grid@2.122.1
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-testing@2.122.1
+  - @memberjunction/ng-user-view-grid@2.122.1
+  - @memberjunction/ng-link-directives@2.122.1
+  - @memberjunction/ng-timeline@2.122.1
+  - @memberjunction/ai-engine-base@2.122.1
+  - @memberjunction/ai@2.122.1
+  - @memberjunction/ai-core-plus@2.122.1
+  - @memberjunction/actions-base@2.122.1
+  - @memberjunction/ng-code-editor@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-deep-diff@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-tabstrip@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/templates-base-types@2.122.1
+
 ## 2.122.0
 
 ### Minor Changes

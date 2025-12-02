@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-tasks",
-  "version": "2.122.0",
+  "version": "2.122.1",
   "description": "MemberJunction: Angular components for task visualization and management with Gantt chart support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,9 +13,9 @@
     "@angular/common": "^18.0.0",
     "@angular/core": "^18.0.0",
     "@angular/platform-browser": "^18.0.0",
-    "@memberjunction/core": "2.122.0",
-    "@memberjunction/core-entities": "2.122.0",
-    "@memberjunction/ai-engine-base": "2.122.0",
+    "@memberjunction/core": "2.122.1",
+    "@memberjunction/core-entities": "2.122.1",
+    "@memberjunction/ai-engine-base": "2.122.1",
     "dhtmlx-gantt": "^8.0.10",
     "rxjs": "^7.8.1"
   },

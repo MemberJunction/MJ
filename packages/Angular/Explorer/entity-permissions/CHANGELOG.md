@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-entity-permissions
 
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-compare-records@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

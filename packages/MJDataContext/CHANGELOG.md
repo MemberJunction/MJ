@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/data-context
 
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/core@2.122.1
+- @memberjunction/core-entities@2.122.1
+- @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes
