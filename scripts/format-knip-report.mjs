@@ -35,19 +35,31 @@ function stripAnsiCodes(text) {
 
 /**
  * Check if a string is a valid npm package name
+ * Note: Some common directory names (src, lib, dist) ARE valid npm packages,
+ * but are extremely unlikely to be legitimately imported in code. We filter
+ * them as false positives since Knip commonly misreports them.
  * @param {string} name - Potential package name
  * @returns {boolean} - True if valid package name
  */
 function isValidDependencyName(name) {
   if (!name || typeof name !== 'string') return false;
 
-  // Common false positives
-  const falsePositives = ['src', 'dist', 'lib', 'node_modules', 'build', 'out', 'environments'];
-  if (falsePositives.includes(name)) return false;
+  // Common false positives - directory names that Knip incorrectly reports
+  // Note: 'src' and 'lib' are real (but obscure) npm packages, but in practice
+  // they're almost always false positives from Knip misinterpreting directory names
+  const falsePositives = ['src', 'dist', 'lib', 'node_modules', 'build', 'out', 'environments', 'app', 'public'];
+  if (falsePositives.includes(name.toLowerCase())) return false;
 
   // Scoped packages: @scope/package-name
   if (name.startsWith('@')) {
-    return /^@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*$/.test(name);
+    const regex = /^@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*$/;
+    if (!regex.test(name)) return false;
+
+    // Filter scoped packages with common directory names as scope or package
+    const [scope, pkg] = name.substring(1).split('/');
+    if (falsePositives.includes(scope) || falsePositives.includes(pkg)) return false;
+
+    return true;
   }
 
   // Regular packages: package-name
