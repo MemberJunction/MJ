@@ -1,6 +1,6 @@
 <div  class="wrapper">
     @if(isLoading) {
-        <kendo-loader></kendo-loader>        
+        <mj-loading [showText]="false" size="medium"></mj-loading>
     }
     @if(!isLoading && RoleRecord) {
         <table class="role-info-table">

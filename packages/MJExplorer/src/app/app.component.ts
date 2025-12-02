@@ -1,12 +1,12 @@
 import { DOCUMENT } from '@angular/common';
-import { Component, Inject, OnInit, ViewChild, ViewEncapsulation } from '@angular/core';
+import { Component, Inject, OnInit, ViewEncapsulation } from '@angular/core';
 import { Router } from '@angular/router';
 import { LogError, LogStatus, Metadata, SetProductionStatus } from '@memberjunction/core';
 import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { lastValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { environment } from '../environments/environment';
-import { NavigationComponent, StartupValidationService } from '@memberjunction/ng-explorer-core';
+import { StartupValidationService } from '@memberjunction/ng-explorer-core';
 import { LoadGeneratedEntities } from 'mj_generatedentities'
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -27,7 +27,6 @@ export class AppComponent implements OnInit {
   public subHeaderText: string = "Welcome back! Please log in to your account.";
   public showValidationOnly = false;
 
-  @ViewChild(NavigationComponent, { static: false }) nav!: NavigationComponent;
 
   constructor(
     private router: Router, 
@@ -199,9 +198,6 @@ export class AppComponent implements OnInit {
   }
  
 
-  public toggleDrawer(args: any): void {
-    this.nav.toggle();
-  }
   
   /**
    * Helper function to safely check if an error is related to missing user roles

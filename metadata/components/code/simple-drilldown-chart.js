@@ -172,7 +172,7 @@ function SimpleDrilldownChart({
               <div>
                 <strong style={{ color: '#333' }}>Percentage:</strong>{' '}
                 <span style={{ color: '#722ed1', fontWeight: 600 }}>
-                  {selectedSegment.percentage.toFixed(1)}%
+                  {selectedSegment.percentage?.toFixed(1)}%
                 </span>
               </div>
             )}
@@ -230,7 +230,6 @@ function SimpleDrilldownChart({
                 pageSize={10}
                 filtering={true}
                 onRowClick={showSingleRecordView ? handleRowClick : undefined}
-                highlightedRow={selectedRecord}
                 utilities={utilities}
                 styles={styles}
                 components={components}

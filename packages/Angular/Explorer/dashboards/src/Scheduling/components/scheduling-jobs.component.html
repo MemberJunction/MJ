@@ -43,8 +43,7 @@
 
   @if (isLoading && jobs.length === 0) {
     <div class="loading-overlay">
-      <i class="fa-solid fa-spinner fa-spin fa-3x"></i>
-      <p>Loading jobs...</p>
+      <mj-loading text="Loading jobs..." size="medium"></mj-loading>
     </div>
   }
 

@@ -198,10 +198,6 @@
   min-width: 120px;
 }
 
-.new-agent-dialog .dialog-actions button kendo-loader {
-  margin-right: 0.5rem;
-}
-
 .new-agent-dialog .dialog-actions button i {
   margin-right: 0.5rem;
 }

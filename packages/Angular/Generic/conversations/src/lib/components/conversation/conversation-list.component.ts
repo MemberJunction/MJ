@@ -21,8 +21,7 @@ import { takeUntil } from 'rxjs/operators';
             [(ngModel)]="conversationState.searchQuery">
           @if (!isSelectionMode) {
             <button class="btn-select" (click)="toggleSelectionMode()" title="Select conversations">
-              <i class="fas fa-check-square"></i>
-              <span>Select</span>
+              <i class="fas fa-check-square"></i> 
             </button>
           }
         </div>

@@ -19,6 +19,7 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { AvailableResourcesComponent } from './lib/available-resources.component';
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import { RequestResourceAccessComponent } from './lib/request-access.component';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @NgModule({
   declarations: [
@@ -39,7 +40,8 @@ import { RequestResourceAccessComponent } from './lib/request-access.component';
     IndicatorsModule,
     ListViewModule,
     LayoutModule,
-    GenericDialogModule
+    GenericDialogModule,
+    SharedGenericModule
   ],
   exports: [
     ResourcePermissionsComponent,

@@ -1,0 +1,430 @@
+<div class="data-explorer-container">
+  <!-- Navigation Panel (Left) - Hidden at home level, animated -->
+  @if (!isAtHomeLevel) {
+    <div
+      class="navigation-panel"
+      [class.collapsed]="state.navigationPanelCollapsed"
+      [style.width.px]="state.navigationPanelCollapsed ? 48 : state.navigationPanelWidth"
+      [@slideInLeft]>
+
+      <mj-explorer-navigation-panel
+        [entities]="entities"
+        [selectedEntityName]="state.selectedEntityName"
+        [favorites]="state.favorites"
+        [recentItems]="state.recentItems"
+        [collapsed]="state.navigationPanelCollapsed"
+        [allowedEntityNames]="allowedEntityNames"
+        [favoritesSectionExpanded]="state.favoritesSectionExpanded"
+        [recentSectionExpanded]="state.recentSectionExpanded"
+        [entitiesSectionExpanded]="state.entitiesSectionExpanded"
+        [viewsSectionExpanded]="state.viewsSectionExpanded"
+        (entitySelected)="onEntitySelected($event)"
+        (toggleCollapse)="toggleNavigationPanel()"
+        (sectionToggled)="stateService.toggleSection($event)"
+        (openRecord)="onOpenRecordFromNav($event)"
+        (selectRecord)="onSelectRecordFromNav($event)"
+        (expandAndFocus)="onExpandAndFocus($event)">
+      </mj-explorer-navigation-panel>
+    </div>
+  }
+
+  <!-- Main Content Area -->
+  <div class="content-area">
+    <!-- Breadcrumb Bar - Hidden at home level -->
+    @if (!isAtHomeLevel && breadcrumbs.length > 0) {
+      <div class="breadcrumb-bar">
+        @for (crumb of breadcrumbs; track crumb.label; let i = $index; let last = $last) {
+          <span
+            class="breadcrumb-item"
+            [class.clickable]="!last"
+            [class.current]="last"
+            (click)="onBreadcrumbClick(crumb, i)"
+            [title]="crumb.label">
+            @if (crumb.icon) {
+              <i [class]="crumb.icon" class="breadcrumb-icon"></i>
+            }
+            <span class="breadcrumb-label">{{ crumb.label }}</span>
+          </span>
+          @if (!last) {
+            <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+          }
+        }
+      </div>
+    }
+
+    <!-- Header -->
+    <div class="content-header" [class.home-header]="isAtHomeLevel">
+      <div class="header-left">
+        @if (selectedEntity) {
+          <i [class]="getEntityIcon(selectedEntity)" class="entity-icon"></i>
+          <h2 class="entity-title">{{ selectedEntity.Name }}</h2>
+          @if (debouncedFilterText && filteredRecordCount !== totalRecordCount) {
+            <span class="record-count">{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
+          } @else {
+            <span class="record-count">{{ totalRecordCount | number }} records</span>
+          }
+
+          <!-- View Selector -->
+          <mj-view-selector
+            [entity]="selectedEntity"
+            [selectedViewId]="state.selectedViewId"
+            [viewModified]="state.viewModified"
+            (viewSelected)="onViewSelected($event)"
+            (saveViewRequested)="onSaveViewRequested($event)"
+            (manageViewsRequested)="onManageViewsRequested()"
+            (openInTabRequested)="onOpenInTabRequested($event)"
+            (configureViewRequested)="onConfigureViewRequested()">
+          </mj-view-selector>
+        } @else {
+          @if (displayIcon) {
+            <i [class]="displayIcon" class="entity-icon"></i>
+          }
+          <h2 class="entity-title">{{ displayTitle }}</h2>
+          <span class="record-count">{{ entities.length }} entities available</span>
+        }
+      </div>
+
+      <div class="header-center">
+        @if (selectedEntity) {
+          <div class="smart-filter-container">
+            <i class="fa-solid fa-search filter-icon"></i>
+            <input
+              #filterInput
+              type="text"
+              class="smart-filter-input"
+              placeholder="Filter records... (press / to focus)"
+              [ngModel]="state.smartFilterPrompt"
+              (ngModelChange)="onSmartFilterChanged($event)"
+            />
+            @if (state.smartFilterPrompt) {
+              <button class="clear-filter-btn" (click)="onSmartFilterChanged('')">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
+          </div>
+        } @else {
+          <!-- Entity filter for home screen -->
+          <div class="smart-filter-container">
+            <i class="fa-solid fa-search filter-icon"></i>
+            <input
+              #filterInput
+              type="text"
+              class="smart-filter-input"
+              placeholder="Filter entities... (press / to focus)"
+              [(ngModel)]="entityFilterText"
+            />
+            @if (entityFilterText) {
+              <button class="clear-filter-btn" (click)="entityFilterText = ''">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="header-right">
+        @if (selectedEntity) {
+          <!-- View Mode Toggle -->
+          <div class="view-mode-toggle">
+            <button
+              class="toggle-btn"
+              [class.active]="state.viewMode === 'grid'"
+              (click)="onViewModeChanged('grid')"
+              title="Grid View">
+              <i class="fa-solid fa-list"></i>
+            </button>
+            <button
+              class="toggle-btn"
+              [class.active]="state.viewMode === 'cards'"
+              (click)="onViewModeChanged('cards')"
+              title="Cards View">
+              <i class="fa-solid fa-grip"></i>
+            </button>
+          </div>
+        }
+        <!-- Common/All toggle moved to inline with All Entities section header -->
+      </div>
+    </div>
+
+    <!-- Content Body - Using mj-entity-viewer composite -->
+    <div class="content-body" [class.home-content]="isAtHomeLevel">
+      @if (!selectedEntity) {
+        <!-- Entity Home View - Two-Column Layout -->
+        <div class="entity-home-view">
+          @if (isLoadingEntities) {
+            <div class="loading-state">
+              <mj-loading text="Loading entities..." size="medium"></mj-loading>
+            </div>
+          } @else {
+            <!-- Two-Column Layout: Records (left) | Entities (right) -->
+            @if (hasTopSectionContent) {
+              <div class="home-two-column-layout">
+                <!-- Left Column: Recent & Favorite Records (most actionable) -->
+                <div class="home-column">
+                  <!-- Recent Records Section -->
+                  @if (recentRecords.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-history section-icon"></i>
+                        <h3 class="section-title">Recent Records</h3>
+                        <!-- Entity filter strip - only show with 2+ entities -->
+                        @if (showRecentRecordsEntityFilter) {
+                          <div class="entity-filter-strip">
+                            <button
+                              class="entity-filter-btn"
+                              [class.active]="recentRecordsEntityFilter === null"
+                              (click)="setRecentRecordsEntityFilter(null)"
+                              title="Show all entities">
+                              <i class="fa-solid fa-layer-group"></i>
+                            </button>
+                            @for (entity of uniqueRecentRecordEntities; track entity.entityId) {
+                              <button
+                                class="entity-filter-btn"
+                                [class.active]="recentRecordsEntityFilter === entity.entityId"
+                                (click)="setRecentRecordsEntityFilter(entity.entityId)"
+                                [title]="entity.entityName">
+                                <i [class]="entity.icon"></i>
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                      <div class="recent-records-list">
+                        @for (record of filteredRecentRecords; track record.entityId + '|' + record.recordId) {
+                          <div
+                            class="recent-record-item"
+                            (click)="onRecentRecordClick(record)"
+                            [title]="record.entityName + ' - ' + record.recordId">
+                            <div class="recent-record-icon">
+                              <i [class]="getEntityIconById(record.entityId)"></i>
+                            </div>
+                            <div class="recent-record-content">
+                              <span class="recent-record-name">{{ record.recordName || record.recordId }}</span>
+                              <span class="recent-record-entity">{{ record.entityName }}</span>
+                            </div>
+                            <span class="recent-record-time">{{ formatRelativeTime(record.latestAt) }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Favorite Records Section -->
+                  @if (favoriteRecords.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-star section-icon"></i>
+                        <h3 class="section-title">Favorite Records</h3>
+                      </div>
+                      <div class="recent-records-list">
+                        @for (record of favoriteRecords; track record.userFavoriteId) {
+                          <div
+                            class="recent-record-item"
+                            (click)="onFavoriteRecordClick(record)"
+                            [title]="record.entityName + ' - ' + record.recordId">
+                            <div class="recent-record-icon">
+                              <i [class]="getEntityIconById(record.entityId)"></i>
+                            </div>
+                            <div class="recent-record-content">
+                              <span class="recent-record-name">{{ record.recordName || record.recordId }}</span>
+                              <span class="recent-record-entity">{{ record.entityName }}</span>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+
+                <!-- Right Column: Recent & Favorite Entities -->
+                <div class="home-column">
+                  <!-- Recent Entities Section (list format) -->
+                  @if (recentEntities.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-clock section-icon"></i>
+                        <h3 class="section-title">Recent Entities</h3>
+                      </div>
+                      <div class="entity-list">
+                        @for (entity of recentEntities; track entity.ID) {
+                          <div
+                            class="entity-list-item"
+                            (click)="onEntitySelected(entity)"
+                            [title]="entity.Description || entity.Name">
+                            <div class="entity-list-icon">
+                              <i [class]="getEntityIcon(entity)"></i>
+                            </div>
+                            <div class="entity-list-content">
+                              <span class="entity-list-name">{{ entity.Name }}</span>
+                            </div>
+                            <button
+                              class="favorite-btn"
+                              [class.favorited]="isEntityFavorited(entity)"
+                              (click)="toggleEntityFavorite(entity, $event)"
+                              [title]="isEntityFavorited(entity) ? 'Remove from favorites' : 'Add to favorites'">
+                              <i [class]="isEntityFavorited(entity) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Favorite Entities Section (list format) -->
+                  @if (favoriteEntities.length > 0) {
+                    <div class="home-section">
+                      <div class="section-header">
+                        <i class="fa-solid fa-star section-icon"></i>
+                        <h3 class="section-title">Favorite Entities</h3>
+                      </div>
+                      <div class="entity-list">
+                        @for (entity of favoriteEntities; track entity.ID) {
+                          <div
+                            class="entity-list-item"
+                            (click)="onEntitySelected(entity)"
+                            [title]="entity.Description || entity.Name">
+                            <div class="entity-list-icon">
+                              <i [class]="getEntityIcon(entity)"></i>
+                            </div>
+                            <div class="entity-list-content">
+                              <span class="entity-list-name">{{ entity.Name }}</span>
+                            </div>
+                            <button
+                              class="favorite-btn favorited"
+                              (click)="toggleEntityFavorite(entity, $event)"
+                              title="Remove from favorites">
+                              <i class="fa-solid fa-star"></i>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- All/Common Entities Section - Full Width -->
+            <div class="home-section">
+              <div class="section-header-with-toggle">
+                <div class="section-header-left">
+                  <i class="fa-solid fa-database section-icon"></i>
+                  <h3 class="section-title">
+                    @if (state.showAllEntities || !showCommonAllToggle) {
+                      All Entities
+                    } @else {
+                      Common Entities
+                    }
+                  </h3>
+                  @if (entityFilterText && filteredEntities.length !== entities.length) {
+                    <span class="section-count">{{ filteredEntities.length }} matching</span>
+                  }
+                </div>
+                @if (showCommonAllToggle) {
+                  <div class="inline-toggle">
+                    <button
+                      class="toggle-btn"
+                      [class.active]="!state.showAllEntities"
+                      (click)="toggleShowAllEntities()"
+                      title="Show common entities ({{ commonEntitiesCount }})">
+                      Common
+                    </button>
+                    <button
+                      class="toggle-btn"
+                      [class.active]="state.showAllEntities"
+                      (click)="toggleShowAllEntities()"
+                      title="Show all entities ({{ allEntitiesCount }})">
+                      All
+                    </button>
+                  </div>
+                }
+              </div>
+              <div class="entity-card-grid">
+                @for (entity of filteredEntities; track entity.ID) {
+                  <div
+                    class="entity-card"
+                    (click)="onEntitySelected(entity)"
+                    [title]="entity.Description || entity.Name">
+                    <div class="entity-card-icon">
+                      <i [class]="getEntityIcon(entity)"></i>
+                    </div>
+                    <div class="entity-card-content">
+                      <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                      @if (entity.Description) {
+                        <p class="entity-card-description">{{ entity.Description }}</p>
+                      }
+                    </div>
+                    <button
+                      class="favorite-btn"
+                      [class.favorited]="isEntityFavorited(entity)"
+                      (click)="toggleEntityFavorite(entity, $event)"
+                      [title]="isEntityFavorited(entity) ? 'Remove from favorites' : 'Add to favorites'">
+                      <i [class]="isEntityFavorited(entity) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                    </button>
+                  </div>
+                }
+              </div>
+              @if (filteredEntities.length === 0 && entities.length > 0) {
+                <div class="empty-state small">
+                  <i class="fa-solid fa-search empty-icon"></i>
+                  <h3>No Matching Entities</h3>
+                  <p>No entities match "{{ entityFilterText }}"</p>
+                </div>
+              }
+              @if (entities.length === 0) {
+                <div class="empty-state">
+                  <i class="fa-solid fa-database empty-icon"></i>
+                  <h3>No Entities Available</h3>
+                  <p>There are no entities configured for this application.</p>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <mj-entity-viewer
+          [entity]="selectedEntity"
+          [viewEntity]="selectedViewEntity"
+          [viewMode]="state.viewMode"
+          [filterText]="debouncedFilterText"
+          [selectedRecordId]="state.selectedRecordId"
+          [config]="viewerConfig"
+          [gridState]="currentGridState"
+          (viewModeChange)="onViewModeChanged($event)"
+          (filterTextChange)="onFilterTextChanged($event)"
+          (recordSelected)="onViewerRecordSelected($event)"
+          (recordOpened)="onViewerRecordOpened($event)"
+          (dataLoaded)="onDataLoaded($event)"
+          (filteredCountChanged)="onFilteredCountChanged($event)"
+          (gridStateChanged)="onGridStateChanged($event)">
+        </mj-entity-viewer>
+      }
+    </div>
+  </div>
+
+  <!-- Detail Panel (Right - Slide In) -->
+  @if (state.detailPanelOpen && selectedRecord) {
+    <div class="detail-panel" [style.width.px]="state.detailPanelWidth">
+      <mj-entity-record-detail-panel
+        [entity]="detailPanelEntity"
+        [record]="selectedRecord"
+        (close)="onDetailPanelClosed()"
+        (openRecord)="onOpenRecord($event)"
+        (navigateToRelated)="onNavigateToRelated($event)"
+        (openRelatedRecord)="onOpenRelatedRecord($event)"
+        (openForeignKeyRecord)="onOpenForeignKeyRecord($event)">
+      </mj-entity-record-detail-panel>
+    </div>
+  }
+
+  <!-- View Configuration Panel -->
+  <mj-view-config-panel
+    [entity]="selectedEntity"
+    [viewEntity]="selectedViewEntity"
+    [isOpen]="state.viewConfigPanelOpen"
+    [currentGridState]="currentGridState"
+    (close)="onCloseViewConfigPanel()"
+    (save)="onSaveView($event)"
+    (delete)="onDeleteView()">
+  </mj-view-config-panel>
+</div>

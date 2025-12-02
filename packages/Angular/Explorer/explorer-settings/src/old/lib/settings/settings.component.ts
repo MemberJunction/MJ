@@ -21,7 +21,7 @@ export enum SettingsItem {
 @Component({
   selector: 'mj-settings',
   templateUrl: './settings.component.html',
-  styleUrls: ['./settings.component.scss'],
+  styleUrls: ['./settings.component.css'],
   encapsulation: ViewEncapsulation.None
 })
 @RegisterClass(BaseNavigationComponent, 'Settings')

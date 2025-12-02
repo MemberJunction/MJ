@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "Name": "AI",
+    "Description": "AI Administration",
+    "Icon": "fa-solid fa-robot",
+    "DefaultForNewUser": true,
+    "Color": "#d32f2f",
+    "DefaultSequence": 1001,
+    "DefaultNavItems": [
+      {
+        "Label": "Monitor",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "AIMonitorResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Prompts",
+        "Icon": "fa-solid fa-comment-dots",
+        "ResourceType": "Custom",
+        "DriverClass": "AIPromptsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Agents",
+        "Icon": "fa-solid fa-robot",
+        "ResourceType": "Custom",
+        "DriverClass": "AIAgentsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Models",
+        "Icon": "fa-solid fa-microchip",
+        "ResourceType": "Custom",
+        "DriverClass": "AIModelsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Configuration",
+        "Icon": "fa-solid fa-cogs",
+        "ResourceType": "Custom",
+        "DriverClass": "AIConfigResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "7ACD423E-F36B-1410-8DAC-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2025-11-28T02:04:45.757Z",
+    "checksum": "7e6f7bba31db23f76691d6a7169b15ee3f272936e7f25e1e5c50ace16686ec77"
+  }
+}

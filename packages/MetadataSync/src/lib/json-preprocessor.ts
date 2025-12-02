@@ -56,8 +56,10 @@ export class JsonPreprocessor {
     
     for (const item of arr) {
       // Check for string-based include in array (default element mode)
-      if (typeof item === 'string' && item.startsWith(`${METADATA_KEYWORDS.INCLUDE}:`)) {
-        const includePath = (extractKeywordValue(item) as string).trim();
+      const includePrefix = `${METADATA_KEYWORDS.INCLUDE}:`;
+      if (typeof item === 'string' && item.startsWith(includePrefix)) {
+        // Extract path directly since @include: format isn't handled by extractKeywordValue
+        const includePath = item.substring(includePrefix.length).trim();
         const resolvedPath = this.resolvePath(includePath, currentFilePath);
         const includedContent = await this.loadAndProcessInclude(resolvedPath);
         

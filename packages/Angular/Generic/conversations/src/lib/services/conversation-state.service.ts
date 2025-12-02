@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
 import { ConversationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 
@@ -13,10 +14,14 @@ import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 export class ConversationStateService {
   // Simple properties - Angular change detection will handle updates
   public conversations: ConversationEntity[] = [];
-  public activeConversationId: string | null = null;
+  private _activeConversationId: string | null = null;
   public searchQuery: string = '';
   public isLoading: boolean = false;
   public activeThreadId: string | null = null;
+
+  // Observable for conversation ID changes (for URL tracking)
+  private _activeConversationId$ = new BehaviorSubject<string | null>(null);
+  public readonly activeConversationId$ = this._activeConversationId$.asObservable();
 
   // Pending message from empty state - persists across component lifecycle
   public pendingMessageToSend: string | null = null;
@@ -29,6 +34,23 @@ export class ConversationStateService {
   public pendingArtifactVersionNumber: number | null = null;
 
   constructor() {}
+
+  /**
+   * Gets the active conversation ID
+   */
+  get activeConversationId(): string | null {
+    return this._activeConversationId;
+  }
+
+  /**
+   * Sets the active conversation ID and emits change event
+   */
+  set activeConversationId(value: string | null) {
+    if (this._activeConversationId !== value) {
+      this._activeConversationId = value;
+      this._activeConversationId$.next(value);
+    }
+  }
 
   /**
    * Gets the active conversation object

@@ -1,0 +1,17 @@
+{
+  "name": "TestComponent",
+  "description": "Component calling RunView with entity name not matching dataRequirements (violates entity-name-mismatch rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      // Using 'Account' but spec defines 'Accounts'\n      const result = await utilities.rv.RunView({\n        EntityName: 'Account',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Accounts List</h1>\n      <p>Count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "fields": ["ID", "Name", "Status"],
+        "sortFields": ["Name", "Status"]
+      }
+    ]
+  }
+}

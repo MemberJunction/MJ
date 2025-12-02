@@ -12,9 +12,9 @@
       {
         "name": "Accounts",
         "description": "CRM account data grouped by industry",
-        "displayFields": ["ID", "AccountName", "Industry", "Revenue", "Status", "IsActive"],
+        "displayFields": ["ID", "Name", "Industry", "Revenue", "Status", "IsActive"],
         "filterFields": ["IsActive", "Industry"],
-        "sortFields": ["AccountName", "Revenue", "Industry"],
+        "sortFields": ["Name", "Revenue", "Industry"],
         "fieldMetadata": [],
         "usageContext": "Groups accounts by industry for pie chart visualization and filtered list display"
       }
@@ -53,9 +53,24 @@
     }
   ],
   "dependencies": [
-    "@include:accounts-by-industry-chart.spec.json",
-    "@include:accounts-by-industry-list.spec.json",
-    "@include:accounts-by-industry-details.spec.json",
+    {
+      "name": "AccountsByIndustryChart",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AccountsByIndustryList",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "AccountsByIndustryDetails",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
     {
       "name": "OpenRecordButton",
       "location": "registry",

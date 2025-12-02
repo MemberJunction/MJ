@@ -62,6 +62,46 @@ Or directly:
 npx ts-node run-fixture-tests.ts
 ```
 
+### Single Fixture Test (NEW!)
+
+Test a specific component fixture with detailed violation output:
+
+```bash
+npm run test:fixture fixtures/valid-components/win-loss-analysis.json
+npm run test:fixture fixtures/broken-components/query-field-invalid.json
+npm run test:fixture ./fixtures/fixed-components/entity-field-correct.json
+```
+
+**Benefits**:
+- See exact violations for one component
+- Detailed messages and suggestions
+- Expected violations comparison (for broken/fixed fixtures)
+- Perfect for debugging specific issues
+- Ideal for AI agents working on fixes
+
+**Example output**:
+```
+════════════════════════════════════════════════════════════════════════════════
+LINT RESULTS
+════════════════════════════════════════════════════════════════════════════════
+
+Total violations: 3
+
+Violations by rule:
+  query-field-validation: 4
+  unsafe-formatting-methods: 1
+
+────────────────────────────────────────────────────────────────────────────────
+ALL VIOLATIONS (detailed)
+────────────────────────────────────────────────────────────────────────────────
+
+1. Line 28, Column 21
+   Rule: query-field-validation
+   Severity: critical
+   Message: Field "InvalidField" does not exist on query "SalesReport".
+            Available fields: AccountName, Revenue, Quarter, Year
+```
+
 ### Run All Tests
 
 ```bash
@@ -174,6 +214,7 @@ component-linter-tests/
 ├── tsconfig.json          # TypeScript configuration
 ├── run-tests.ts           # Basic test runner (inline code)
 ├── run-fixture-tests.ts   # Fixture test runner (real components)
+├── lint-fixture.ts        # Single fixture linter (NEW!)
 ├── fixtures/              # Test fixture components
 │   ├── broken-components/   # Components with bugs
 │   ├── fixed-components/    # Corrected versions

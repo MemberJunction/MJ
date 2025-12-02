@@ -78,24 +78,43 @@ export class NewUserBase {
             // Create UserApplication records if specified in the config
             if (configInfo.userHandling && configInfo.userHandling.CreateUserApplicationRecords) {
                 LogStatus("Creating User Applications for new user: " + user.Name);
-                for(const appName of configInfo.userHandling.UserApplications){
-                    const toLowerCase: string = appName.trim().toLocaleLowerCase();
-                    const application: ApplicationInfo | undefined = md.Applications.find(a => a.Name.trim().toLocaleLowerCase() === toLowerCase);
-                    if (!application) {
-                        LogError(`Application ${appName} not found in the Metadata, cannot assign to new user ${user.Name}`);
-                        continue;
-                    }
 
+                // Determine which applications to create UserApplication records for
+                // If UserApplications config array has entries, use those
+                // Otherwise, fall back to applications with DefaultForNewUser = true
+                let applicationsToCreate: ApplicationInfo[] = [];
+
+                if (configInfo.userHandling.UserApplications && configInfo.userHandling.UserApplications.length > 0) {
+                    // Use explicitly configured applications
+                    for (const appName of configInfo.userHandling.UserApplications) {
+                        const toLowerCase: string = appName.trim().toLocaleLowerCase();
+                        const application: ApplicationInfo | undefined = md.Applications.find(a => a.Name.trim().toLocaleLowerCase() === toLowerCase);
+                        if (application) {
+                            applicationsToCreate.push(application);
+                        } else {
+                            LogError(`Application ${appName} not found in the Metadata, cannot assign to new user ${user.Name}`);
+                        }
+                    }
+                } else {
+                    // Fall back to DefaultForNewUser applications from metadata
+                    LogStatus(`No UserApplications configured, using DefaultForNewUser applications for new user ${user.Name}`);
+                    applicationsToCreate = md.Applications.filter(a => a.DefaultForNewUser);
+                    LogStatus(`Found ${applicationsToCreate.length} applications with DefaultForNewUser=true`);
+                }
+
+                // Create UserApplication records for each application
+                for (const [appIndex, application] of applicationsToCreate.entries()) {
                     const userApplication: UserApplicationEntity = await md.GetEntityObject<UserApplicationEntity>('User Applications', contextUser);
                     userApplication.NewRecord();
                     userApplication.UserID = user.ID;
                     userApplication.ApplicationID = application.ID;
+                    userApplication.Sequence = appIndex; // Set sequence based on order
                     userApplication.IsActive = true;
 
                     const userApplicationSaveResult: boolean = await userApplication.Save();
                     if(userApplicationSaveResult){
-                        LogStatus(`Created User Application ${appName} for new user ${user.Name}`);
-                        
+                        LogStatus(`Created User Application ${application.Name} for new user ${user.Name}`);
+
                         //now create a UserApplicationEntity records for each entity in the application
                         const rv: RunView = new RunView();
                         const rvResult: RunViewResult<ApplicationEntityEntityType> = await rv.RunView({
@@ -104,11 +123,11 @@ export class NewUserBase {
                         }, contextUser);
 
                         if(!rvResult.Success){
-                            LogError(`Failed to load Application Entities for Application ${appName} for new user ${user.Name}:`, undefined, rvResult.ErrorMessage);
+                            LogError(`Failed to load Application Entities for Application ${application.Name} for new user ${user.Name}:`, undefined, rvResult.ErrorMessage);
                             continue;
                         }
 
-                        LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${appName} for new user ${user.Name}`);
+                        LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
 
                         for(const [index, appEntity] of rvResult.Results.entries()){
                             const userAppEntity: UserApplicationEntityEntity = await md.GetEntityObject<UserApplicationEntityEntity>('User Application Entities', contextUser);
@@ -127,7 +146,7 @@ export class NewUserBase {
                         }
                     }
                     else{
-                        LogError(`Failed to create User Application ${appName} for new user ${user.Name}:`, undefined, userApplication.LatestResult);
+                        LogError(`Failed to create User Application ${application.Name} for new user ${user.Name}:`, undefined, userApplication.LatestResult);
                     }
                 }
             }

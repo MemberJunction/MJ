@@ -10,6 +10,7 @@ import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer
 import { ArtifactViewerTab } from './base-artifact-viewer.component';
 import { marked } from 'marked';
 import { ArtifactIconService } from '../services/artifact-icon.service';
+import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 @Component({
   selector: 'mj-artifact-viewer-panel',
@@ -127,11 +128,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
   }
 
+  private recentAccessService: RecentAccessService;
+
   constructor(
     private notificationService: MJNotificationService,
     private sanitizer: DomSanitizer,
     private artifactIconService: ArtifactIconService
-  ) {}
+  ) {
+    this.recentAccessService = new RecentAccessService();
+  }
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
@@ -150,6 +155,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     // Track that user viewed this artifact
     if (this.artifactVersion?.ID && this.currentUser) {
       this.trackArtifactUsage('Viewed');
+      // Also log to User Record Logs for recents feature (fire-and-forget)
+      this.recentAccessService.logAccess('MJ: Artifacts', this.artifactId, 'artifact');
     }
   }
 

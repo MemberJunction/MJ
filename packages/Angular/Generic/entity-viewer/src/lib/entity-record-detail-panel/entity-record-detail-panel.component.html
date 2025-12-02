@@ -1,0 +1,160 @@
+<div class="entity-record-card-container">
+  <!-- Header -->
+  <div class="panel-header">
+    <div class="panel-title-row">
+      @if (entity?.Icon) {
+        <i [class]="getEntityIconClass()" class="entity-icon"></i>
+      }
+      <h3 class="panel-title">{{ recordTitle }}</h3>
+    </div>
+    <button class="close-btn" (click)="onClose()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="panel-content">
+    <!-- Details Section -->
+    <div class="section">
+      <div class="section-header" (click)="toggleSection('details')">
+        <i class="fa-solid fa-info-circle section-icon"></i>
+        <span class="section-title">Details</span>
+        <i class="fa-solid expand-icon" [class.fa-chevron-down]="detailsSectionExpanded" [class.fa-chevron-right]="!detailsSectionExpanded"></i>
+      </div>
+
+      @if (detailsSectionExpanded) {
+        <div class="section-content">
+          @for (field of displayFields; track field.name) {
+            <!-- Primary Key Field - Compact with copy button -->
+            @if (field.type === 'primary-key') {
+              <div class="field-row field-row-pk">
+                <div class="pk-row">
+                  <i class="fa-solid fa-key pk-icon"></i>
+                  <span class="field-label">{{ field.label }}</span>
+                  <button class="copy-btn" (click)="copyToClipboard(field.value, $event)" title="Copy ID">
+                    <i class="fa-solid fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+            }
+            <!-- Foreign Key Field - Show friendly name with open button -->
+            @else if (field.type === 'foreign-key') {
+              <div class="field-row field-row-fk">
+                <span class="field-label">{{ field.label }}</span>
+                <div class="fk-value-row" [class.fk-id-only]="!hasFriendlyName(field)">
+                  @if (hasFriendlyName(field)) {
+                    <span class="field-value fk-display-value">{{ field.displayValue }}</span>
+                  } @else {
+                    <!-- No friendly name available, show ID in muted style -->
+                    <span class="field-value fk-id-value">{{ field.value }}</span>
+                  }
+                  <!-- Always show open button for FK fields that have a related entity -->
+                  @if (field.relatedEntityName) {
+                    <button class="fk-link-btn" (click)="onForeignKeyClick(field, $event)" title="Open {{ field.relatedEntityName }} record">
+                      <i class="fa-solid fa-external-link-alt"></i>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+            <!-- Enum Field - Show as pill -->
+            @else if (field.type === 'enum') {
+              <div class="field-row">
+                <span class="field-label">{{ field.label }}</span>
+                <mj-pill [value]="field.value"></mj-pill>
+              </div>
+            }
+            <!-- Regular Field -->
+            @else {
+              <div class="field-row">
+                <span class="field-label">{{ field.label }}</span>
+                <span class="field-value">{{ field.value }}</span>
+              </div>
+            }
+          }
+
+          @if (displayFields.length === 0) {
+            <div class="empty-section">No details available</div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Relationships Section -->
+    <div class="section">
+      <div class="section-header" (click)="toggleSection('relationships')">
+        <i class="fa-solid fa-project-diagram section-icon"></i>
+        <span class="section-title">Related Records</span>
+        <i class="fa-solid expand-icon" [class.fa-chevron-down]="relationshipsSectionExpanded" [class.fa-chevron-right]="!relationshipsSectionExpanded"></i>
+      </div>
+
+      @if (relationshipsSectionExpanded) {
+        <div class="section-content">
+          @if (isLoadingRelationships) {
+            <div class="relationships-loading">
+              <mj-loading text="Loading related records..." size="small"></mj-loading>
+            </div>
+          } @else if (relatedEntitiesWithRecords.length === 0) {
+            <div class="empty-section">No related records</div>
+          } @else {
+            @for (relEntity of relatedEntitiesWithRecords; track relEntity.relatedEntityName) {
+              <div class="related-entity-group" [class.expanded]="relEntity.isExpanded">
+                <!-- Header row - click to expand -->
+                <div
+                  class="related-entity-header"
+                  [class.clickable]="relEntity.count > 0"
+                  (click)="toggleRelatedEntityExpansion(relEntity, $event)">
+                  <i class="fa-solid expand-chevron"
+                     [class.fa-chevron-down]="relEntity.isExpanded"
+                     [class.fa-chevron-right]="!relEntity.isExpanded"></i>
+                  <i [class]="getRelatedEntityIcon(relEntity)"></i>
+                  <span class="related-entity-name">{{ relEntity.relatedEntityName }}</span>
+                  <span class="related-entity-count">{{ relEntity.count }}</span>
+                </div>
+
+                <!-- Expanded records list -->
+                @if (relEntity.isExpanded) {
+                  <div class="related-records-list">
+                    @if (relEntity.isLoadingRecords) {
+                      <div class="records-loading">
+                        <mj-loading text="Loading..." size="small"></mj-loading>
+                      </div>
+                    } @else {
+                      @for (rec of relEntity.records; track rec.PrimaryKey.ToString()) {
+                        <div class="related-record-item" (click)="onRelatedRecordClick(relEntity, rec, $event)">
+                          <div class="record-info">
+                            <span class="record-name">{{ getRelatedRecordDisplayName(relEntity, rec) }}</span>
+                            @if (getRelatedRecordSubtitle(relEntity, rec); as subtitle) {
+                              <span class="record-subtitle">{{ subtitle }}</span>
+                            }
+                          </div>
+                          <i class="fa-solid fa-external-link-alt record-open-icon"></i>
+                        </div>
+                      }
+
+                      <!-- View All link if there are more records -->
+                      @if (relEntity.count > 10) {
+                        <div class="view-all-link" (click)="onViewAllRelated(relEntity, $event)">
+                          <span>View all {{ relEntity.count }} records</span>
+                          <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="panel-footer">
+    <button class="open-record-btn" (click)="onOpenRecord()">
+      <i class="fa-solid fa-external-link-alt"></i>
+      Open Full Record
+    </button>
+  </div>
+</div>

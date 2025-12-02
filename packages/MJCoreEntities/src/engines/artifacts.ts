@@ -35,7 +35,10 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
      * Finds an artifact type on a case-insensitive match of name
      */
     public FindArtifactType(name: string): ArtifactTypeEntity | undefined {
-        const match =  this._artifactTypes.find(c => c.Name.trim().toLowerCase() === name.trim().toLowerCase());
+        if (!this._artifactTypes || !name) {
+            return undefined;
+        }
+        const match = this._artifactTypes.find(c => c.Name.trim().toLowerCase() === name.trim().toLowerCase());
         return match;
     }
 }

@@ -1,5 +1,17 @@
 # Angular Development Guidelines
 
+## 🚨 CRITICAL: NO STANDALONE COMPONENTS 🚨
+- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
+- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
+- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
+- When creating new components:
+  - Create or add to an NgModule
+  - Declare component in the module's `declarations` array
+  - Import `CommonModule` and other required modules in the module's `imports` array
+  - Export the component in the module's `exports` array if it needs to be used outside the module
+- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
+- This is **non-negotiable** - standalone components are strictly forbidden
+
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components
 - **NEVER use Kendo icons** - Replace all Kendo icon references (k-icon, k-i-*) with Font Awesome equivalents

@@ -1,13 +1,13 @@
 <div class="user-view-grid-wrap" >
     @if (!AllowLoad || neverLoaded) {
         <div class="grid-loading-container">
-            <kendo-loader></kendo-loader>
+            <mj-loading [showText]="false" size="large"></mj-loading>
         </div>
     }
     @else {
         @if (isLoading) {
             <div class="grid-loading-overlay">
-                <kendo-loader></kendo-loader>
+                <mj-loading [showText]="false" size="medium"></mj-loading>
             </div>
         }
         <kendo-grid #kendoGrid
@@ -231,7 +231,7 @@
     <hr>
     <div class="overflow-y-scroll">
         @if(showAddToListLoader){
-            <kendo-loader type="converging-spinner"></kendo-loader>
+            <mj-loading [showText]="false" size="medium"></mj-loading>
         }
         @else {
             @for(listEntity of listEntities; track listEntity){

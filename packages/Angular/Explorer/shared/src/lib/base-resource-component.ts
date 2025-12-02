@@ -4,7 +4,14 @@ import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
 
 export abstract class BaseResourceComponent extends BaseNavigationComponent {
-    public Data: ResourceData = new ResourceData();
+    private _data: ResourceData = new ResourceData();
+
+    public get Data(): ResourceData {
+        return this._data;
+    }
+    public set Data(value: ResourceData) {
+        this._data = value;
+    }
 
     private _loadComplete: boolean = false;
     public get LoadComplete(): boolean {

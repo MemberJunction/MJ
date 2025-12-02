@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, UserSettingEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -6307,20 +6307,20 @@ export class MJEnvironment_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => [MJProject_])
-    MJ_Projects_EnvironmentIDArray: MJProject_[]; // Link to MJ_Projects
-    
     @Field(() => [MJCollection_])
     MJ_Collections_EnvironmentIDArray: MJCollection_[]; // Link to MJ_Collections
+    
+    @Field(() => [MJProject_])
+    MJ_Projects_EnvironmentIDArray: MJProject_[]; // Link to MJ_Projects
     
     @Field(() => [MJArtifact_])
     MJ_Artifacts_EnvironmentIDArray: MJArtifact_[]; // Link to MJ_Artifacts
     
-    @Field(() => [MJTask_])
-    MJ_Tasks_EnvironmentIDArray: MJTask_[]; // Link to MJ_Tasks
-    
     @Field(() => [MJDashboard_])
     Dashboards_EnvironmentIDArray: MJDashboard_[]; // Link to Dashboards
+    
+    @Field(() => [MJTask_])
+    MJ_Tasks_EnvironmentIDArray: MJTask_[]; // Link to MJ_Tasks
     
     @Field(() => [MJReport_])
     Reports_EnvironmentIDArray: MJReport_[]; // Link to Reports
@@ -6434,17 +6434,6 @@ export class MJEnvironmentResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJProject_])
-    async MJ_Projects_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Projects', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwProjects] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Projects', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Projects', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJCollection_])
     async MJ_Collections_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collections', userPayload);
@@ -6453,6 +6442,17 @@ export class MJEnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCollections] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJProject_])
+    async MJ_Projects_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Projects', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwProjects] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Projects', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Projects', rows);
         return result;
     }
         
@@ -6467,17 +6467,6 @@ export class MJEnvironmentResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTask_])
-    async MJ_Tasks_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tasks', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTasks] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJDashboard_])
     async Dashboards_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
@@ -6486,6 +6475,17 @@ export class MJEnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTask_])
+    async MJ_Tasks_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tasks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTasks] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows);
         return result;
     }
         
@@ -12184,6 +12184,12 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When 1, allows system/LLM to auto-update Category; when 0, user has locked this field`}) 
     AutoUpdateCategory: boolean;
         
+    @Field(() => Boolean, {description: `When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field`}) 
+    AutoUpdateDisplayName: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field`}) 
+    AutoUpdateIncludeInUserSearchAPI: boolean;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -12342,6 +12348,12 @@ export class CreateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateCategory?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDisplayName?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateIncludeInUserSearchAPI?: boolean;
 }
     
 
@@ -12451,6 +12463,12 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateCategory?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDisplayName?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateIncludeInUserSearchAPI?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14016,6 +14034,9 @@ export class MJUser_ {
     @Field(() => [MJTestSuiteRun_])
     MJ_TestSuiteRuns_RunByUserIDArray: MJTestSuiteRun_[]; // Link to MJ_TestSuiteRuns
     
+    @Field(() => [MJUserSetting_])
+    MJ_UserSettings_UserIDArray: MJUserSetting_[]; // Link to MJ_UserSettings
+    
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
     
@@ -14749,6 +14770,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestSuiteRuns] WHERE [RunByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Suite Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Test Suite Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserSetting_])
+    async MJ_UserSettings_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Settings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserSettings] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: User Settings', rows);
         return result;
     }
         
@@ -15625,6 +15657,9 @@ export class MJUserView_ {
     @Field({nullable: true, description: `Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`}) 
     Thumbnail?: string;
         
+    @Field({nullable: true, description: `JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.`}) 
+    CardState?: string;
+        
     @Field() 
     @MaxLength(200)
     UserName: string;
@@ -15721,6 +15756,9 @@ export class CreateMJUserViewInput {
 
     @Field({ nullable: true })
     Thumbnail: string | null;
+
+    @Field({ nullable: true })
+    CardState: string | null;
 }
     
 
@@ -15785,6 +15823,9 @@ export class UpdateMJUserViewInput {
 
     @Field({ nullable: true })
     Thumbnail?: string | null;
+
+    @Field({ nullable: true })
+    CardState?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16650,6 +16691,42 @@ export class MJApplication_ {
     @Field({nullable: true, description: `Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas`}) 
     SchemaAutoAddNewEntities?: string;
         
+    @Field({nullable: true, description: `Hex color code for visual theming (e.g., #4caf50)`}) 
+    @MaxLength(40)
+    Color?: string;
+        
+    @Field({nullable: true, description: `JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`}) 
+    DefaultNavItems?: string;
+        
+    @Field({nullable: true, description: `TypeScript class name for ClassFactory registration (e.g., CRMApplication)`}) 
+    @MaxLength(510)
+    ClassName?: string;
+        
+    @Field(() => Int, {description: `Default sequence position when adding this application to a new user's User Applications. Lower values appear first. Used when DefaultForNewUser is true.`}) 
+    DefaultSequence: number;
+        
+    @Field({description: `Application lifecycle status. Pending = not yet ready, Active = available for use, Disabled = temporarily unavailable, Deprecated = being phased out. Only Active applications are shown to users.`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({description: `How the application appears in navigation. App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.`}) 
+    @MaxLength(40)
+    NavigationStyle: string;
+        
+    @Field({nullable: true, description: `Position of the permanent nav icon when NavigationStyle is Nav Bar or Both. Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar. Ignored when NavigationStyle is App Switcher.`}) 
+    @MaxLength(60)
+    TopNavLocation?: string;
+        
+    @Field(() => Boolean, {description: `When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.`}) 
+    HideNavBarIconWhenActive: boolean;
+        
+    @Field({description: `URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer"). Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true. Must be unique across all applications.`}) 
+    @MaxLength(200)
+    Path: string;
+        
+    @Field(() => Boolean, {description: `When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`}) 
+    AutoUpdatePath: boolean;
+        
     @Field(() => [MJApplicationEntity_])
     ApplicationEntities_ApplicationIDArray: MJApplicationEntity_[]; // Link to ApplicationEntities
     
@@ -16689,6 +16766,36 @@ export class CreateMJApplicationInput {
 
     @Field({ nullable: true })
     SchemaAutoAddNewEntities: string | null;
+
+    @Field({ nullable: true })
+    Color: string | null;
+
+    @Field({ nullable: true })
+    DefaultNavItems: string | null;
+
+    @Field({ nullable: true })
+    ClassName: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultSequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    NavigationStyle?: string;
+
+    @Field({ nullable: true })
+    TopNavLocation: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HideNavBarIconWhenActive?: boolean;
+
+    @Field({ nullable: true })
+    Path?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdatePath?: boolean;
 }
     
 
@@ -16714,6 +16821,36 @@ export class UpdateMJApplicationInput {
 
     @Field({ nullable: true })
     SchemaAutoAddNewEntities?: string | null;
+
+    @Field({ nullable: true })
+    Color?: string | null;
+
+    @Field({ nullable: true })
+    DefaultNavItems?: string | null;
+
+    @Field({ nullable: true })
+    ClassName?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultSequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    NavigationStyle?: string;
+
+    @Field({ nullable: true })
+    TopNavLocation?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HideNavBarIconWhenActive?: boolean;
+
+    @Field({ nullable: true })
+    Path?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdatePath?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24348,6 +24485,10 @@ export class MJResourceType_ {
     @MaxLength(16)
     CategoryEntityID?: string;
         
+    @Field({nullable: true, description: `The Angular component class name to instantiate for this resource type. NULL for Custom resource type (uses NavItem DriverClass instead).`}) 
+    @MaxLength(510)
+    DriverClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
@@ -24395,6 +24536,9 @@ export class CreateMJResourceTypeInput {
 
     @Field({ nullable: true })
     CategoryEntityID: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -24423,6 +24567,9 @@ export class UpdateMJResourceTypeInput {
 
     @Field({ nullable: true })
     CategoryEntityID?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24956,6 +25103,9 @@ export class MJWorkspace_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(200)
     User: string;
@@ -24981,6 +25131,9 @@ export class CreateMJWorkspaceInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 }
     
 
@@ -25000,6 +25153,9 @@ export class UpdateMJWorkspaceInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -53900,6 +54056,167 @@ export class MJAIConfigurationParamResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Configuration Params', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: User Settings
+//****************************************************************************
+@ObjectType({ description: `Generic key-value store for per-user settings. Allows any application or feature to persist user preferences.` })
+export class MJUserSetting_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `The user this setting belongs to.`}) 
+    @MaxLength(16)
+    UserID: string;
+        
+    @Field({description: `The setting key/name. Use namespaced keys like "DataExplorer.ViewMode" or "Dashboard.AI.CollapsedSections" to avoid collisions.`}) 
+    @MaxLength(510)
+    Setting: string;
+        
+    @Field({nullable: true, description: `The setting value. Can be simple text, numbers, booleans, or JSON for complex configuration objects.`}) 
+    Value?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: User Settings
+//****************************************************************************
+@InputType()
+export class CreateMJUserSettingInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Setting?: string;
+
+    @Field({ nullable: true })
+    Value: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: User Settings
+//****************************************************************************
+@InputType()
+export class UpdateMJUserSettingInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Setting?: string;
+
+    @Field({ nullable: true })
+    Value?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: User Settings
+//****************************************************************************
+@ObjectType()
+export class RunMJUserSettingViewResult {
+    @Field(() => [MJUserSetting_])
+    Results: MJUserSetting_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJUserSetting_)
+export class MJUserSettingResolver extends ResolverBase {
+    @Query(() => RunMJUserSettingViewResult)
+    async RunMJUserSettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJUserSettingViewResult)
+    async RunMJUserSettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJUserSettingViewResult)
+    async RunMJUserSettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: User Settings';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJUserSetting_, { nullable: true })
+    async MJUserSetting(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJUserSetting_ | null> {
+        this.CheckUserReadPermissions('MJ: User Settings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserSettings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: User Settings', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => MJUserSetting_)
+    async CreateMJUserSetting(
+        @Arg('input', () => CreateMJUserSettingInput) input: CreateMJUserSettingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: User Settings', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJUserSetting_)
+    async UpdateMJUserSetting(
+        @Arg('input', () => UpdateMJUserSettingInput) input: UpdateMJUserSettingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: User Settings', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJUserSetting_)
+    async DeleteMJUserSetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: User Settings', key, options, provider, userPayload, pubSub);
     }
     
 }

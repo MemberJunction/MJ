@@ -105,6 +105,33 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
         }
     }
     
+    private normalizeParameterType(type: string): 'Scalar' | 'Array' | 'Object' | 'Record' | 'Entity' {
+        // Normalize LLM output to match database constraint values
+        const normalized = type.toLowerCase();
+        switch (normalized) {
+            case 'scalar':
+            case 'string':
+            case 'number':
+            case 'boolean':
+            case 'date':
+                return 'Scalar';
+            case 'array':
+            case 'list':
+                return 'Array';
+            case 'object':
+            case 'dict':
+            case 'dictionary':
+                return 'Object';
+            case 'record':
+                return 'Record';
+            case 'entity':
+                return 'Entity';
+            default:
+                console.warn(`Unknown parameter type '${type}', defaulting to 'Scalar'`);
+                return 'Scalar';
+        }
+    }
+
     private async syncTemplateParameters(extractedParams: ExtractedParameter[]): Promise<void> {
         // Use the entity's provider instead of creating new Metadata instance
         const md = this.ProviderToUse as any as IMetadataProvider;
@@ -169,7 +196,7 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
                 newParam.TemplateID = this.TemplateID;
                 newParam.TemplateContentID = templateContentID;
                 newParam.Name = param.name;
-                newParam.Type = param.type;
+                newParam.Type = this.normalizeParameterType(param.type);
                 newParam.IsRequired = false; // LLM has been unreliable here, make them ALL optional so we don't break template rendering in case it picks up stuff that is NOT really a param... param.isRequired;
                 newParam.DefaultValue = param.defaultValue;
                 newParam.Description = param.description;
@@ -181,10 +208,11 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
                 const extractedParam = extractedParams.find(p => p.name.toLowerCase() === existingParam.Name.toLowerCase());
                 if (extractedParam) {
                     let hasChanges = false;
-                    
+
                     // Check each property for changes
-                    if (existingParam.Type !== extractedParam.type) {
-                        existingParam.Type = extractedParam.type;
+                    const normalizedType = this.normalizeParameterType(extractedParam.type);
+                    if (existingParam.Type !== normalizedType) {
+                        existingParam.Type = normalizedType;
                         hasChanges = true;
                     }
                     if (existingParam.IsRequired !== extractedParam.isRequired) {

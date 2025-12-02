@@ -108,8 +108,7 @@ import { ToastService } from '../../services/toast.service';
 
         @if (isExporting) {
           <div class="loading-indicator">
-            <kendo-loader type="infinite-spinner" size="medium"></kendo-loader>
-            <span>Exporting conversation...</span>
+            <mj-loading text="Exporting conversation..." size="small"></mj-loading>
           </div>
         }
       </div>

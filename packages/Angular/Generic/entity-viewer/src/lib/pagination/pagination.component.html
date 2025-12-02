@@ -1,0 +1,55 @@
+<div class="pagination-container">
+  <!-- Records summary -->
+  <div class="pagination-info">
+    <span class="records-display">
+      @if (pagination.totalRecords > 0) {
+        <span class="records-shown">{{ displayedTo | number }}</span>
+        <span class="records-separator">of</span>
+        <span class="records-total">{{ pagination.totalRecords | number }}</span>
+        <span class="records-label">records</span>
+      } @else {
+        <span class="no-records">No records</span>
+      }
+    </span>
+  </div>
+
+  <!-- Progress bar -->
+  @if (pagination.totalRecords > 0) {
+    <div class="progress-section">
+      <div class="progress-bar-container">
+        <div
+          class="progress-bar-fill"
+          [style.width.%]="progressPercent"
+          [class.complete]="!pagination.hasMore">
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Load more button -->
+  @if (pagination.hasMore) {
+    <div class="load-more-section">
+      <button
+        class="load-more-btn"
+        [disabled]="pagination.isLoading"
+        (click)="onLoadMore()">
+        @if (pagination.isLoading) {
+          <i class="fa-solid fa-spinner fa-spin loading-icon"></i>
+          <span>Loading...</span>
+        } @else {
+          <i class="fa-solid fa-arrow-down load-icon"></i>
+          <span>Load {{ nextLoadCount | number }} more</span>
+          <span class="remaining-badge">{{ remainingRecords | number }} remaining</span>
+        }
+      </button>
+    </div>
+  }
+
+  <!-- All loaded indicator -->
+  @if (!pagination.hasMore && pagination.totalRecords > 0) {
+    <div class="all-loaded">
+      <i class="fa-solid fa-check-circle"></i>
+      <span>All records loaded</span>
+    </div>
+  }
+</div>

@@ -31,7 +31,7 @@ export async function registerBulkBrokenTests() {
         const lintResult = await ComponentLinter.lintComponent(
           fixture.spec.code,
           fixture.spec.name,
-          { ...fixture.spec, dataRequirements: undefined } as any,
+          fixture.spec,
           true,
           contextUser
         );
@@ -61,7 +61,7 @@ export async function registerBulkFixedTests() {
         const lintResult = await ComponentLinter.lintComponent(
           fixture.spec.code,
           fixture.spec.name,
-          { ...fixture.spec, dataRequirements: undefined } as any,
+          fixture.spec,
           true,
           contextUser
         );
@@ -107,7 +107,9 @@ export async function registerBulkValidTests() {
         } else {
           console.log(`      ❌ ${lintResult.violations.length} violation(s) (expected 0)`);
           lintResult.violations.forEach((v: any, idx: number) => {
-            console.log(`         ${idx + 1}. ${v.rule}: ${v.message.substring(0, 60)}...`);
+            // Show full message for better debugging
+            const fullMessage = v.message.replace(/\n/g, ' ').trim();
+            console.log(`         ${idx + 1}. [${v.rule}] ${fullMessage}`);
           });
         }
 

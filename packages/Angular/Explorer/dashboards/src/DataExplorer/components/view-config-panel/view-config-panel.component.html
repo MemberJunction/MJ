@@ -1,0 +1,342 @@
+<!-- Backdrop -->
+@if (isOpen) {
+  <div class="panel-backdrop" (click)="onClose()"></div>
+}
+
+<!-- Sliding Panel -->
+<div class="config-panel" [class.open]="isOpen">
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <div class="header-title">
+      <i class="fa-solid fa-sliders-h"></i>
+      <span>{{ viewEntity ? 'Edit View' : 'Configure View' }}</span>
+    </div>
+    <button class="close-btn" (click)="onClose()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'columns'"
+      (click)="setActiveTab('columns')">
+      <i class="fa-solid fa-columns"></i>
+      <span>Columns</span>
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'filters'"
+      (click)="setActiveTab('filters')">
+      <i class="fa-solid fa-filter"></i>
+      <span>Filters</span>
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'settings'"
+      (click)="setActiveTab('settings')">
+      <i class="fa-solid fa-cog"></i>
+      <span>Settings</span>
+    </button>
+  </div>
+
+  <!-- Panel Content -->
+  <div class="panel-content">
+    <!-- Columns Tab -->
+    @if (activeTab === 'columns') {
+      <div class="tab-content">
+        <!-- Sort Configuration -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-sort"></i>
+            <span>Default Sort</span>
+          </div>
+          <div class="sort-config">
+            <select
+              class="sort-field-select"
+              [(ngModel)]="sortField">
+              <option [value]="null">No default sort</option>
+              @for (field of sortableFields; track field.ID) {
+                <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+              }
+            </select>
+            @if (sortField) {
+              <div class="sort-direction-toggle">
+                <button
+                  class="direction-btn"
+                  [class.active]="sortDirection === 'asc'"
+                  (click)="sortDirection = 'asc'"
+                  title="Ascending">
+                  <i class="fa-solid fa-arrow-up"></i>
+                </button>
+                <button
+                  class="direction-btn"
+                  [class.active]="sortDirection === 'desc'"
+                  (click)="sortDirection = 'desc'"
+                  title="Descending">
+                  <i class="fa-solid fa-arrow-down"></i>
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Visible Columns -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-eye"></i>
+            <span>Visible Columns</span>
+            <span class="column-count">{{ visibleColumns.length }}</span>
+          </div>
+          <div class="column-list visible-columns">
+            @for (column of visibleColumns; track column.fieldId; let i = $index) {
+              <div
+                class="column-item"
+                draggable="true"
+                (dragstart)="onDragStart($event, column)"
+                (dragover)="onDragOver($event, column)"
+                (drop)="onDrop($event, column)"
+                (dragend)="onDragEnd()">
+                <div class="drag-handle">
+                  <i class="fa-solid fa-grip-vertical"></i>
+                </div>
+                <span class="column-name">{{ column.displayName }}</span>
+                <div class="column-actions">
+                  <button
+                    class="action-btn"
+                    [disabled]="i === 0"
+                    (click)="moveColumnUp(column)"
+                    title="Move up">
+                    <i class="fa-solid fa-chevron-up"></i>
+                  </button>
+                  <button
+                    class="action-btn"
+                    [disabled]="i === visibleColumns.length - 1"
+                    (click)="moveColumnDown(column)"
+                    title="Move down">
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </button>
+                  <button
+                    class="action-btn hide-btn"
+                    (click)="toggleColumnVisibility(column)"
+                    title="Hide column">
+                    <i class="fa-solid fa-eye-slash"></i>
+                  </button>
+                </div>
+              </div>
+            }
+            @if (visibleColumns.length === 0) {
+              <div class="empty-list">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>No columns visible. Add columns from below.</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Hidden Columns -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-eye-slash"></i>
+            <span>Hidden Columns</span>
+            <span class="column-count">{{ hiddenColumns.length }}</span>
+          </div>
+          @if (hiddenColumns.length > 5) {
+            <div class="column-search">
+              <i class="fa-solid fa-search"></i>
+              <input
+                type="text"
+                placeholder="Search columns..."
+                [(ngModel)]="columnSearchText"
+              />
+            </div>
+          }
+          <div class="column-list hidden-columns">
+            @for (column of filteredHiddenColumns; track column.fieldId) {
+              <div class="column-item hidden">
+                <span class="column-name">{{ column.displayName }}</span>
+                <button
+                  class="action-btn show-btn"
+                  (click)="toggleColumnVisibility(column)"
+                  title="Show column">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+            }
+            @if (hiddenColumns.length === 0) {
+              <div class="empty-list">
+                <i class="fa-solid fa-check-circle"></i>
+                <span>All columns are visible</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Filters Tab -->
+    @if (activeTab === 'filters') {
+      <div class="tab-content">
+        <!-- Smart Filter Section -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-magic"></i>
+            <span>Smart Filter</span>
+            <label class="smart-filter-toggle">
+              <input
+                type="checkbox"
+                [(ngModel)]="smartFilterEnabled"
+                [disabled]="!canEdit"
+              />
+              <span class="toggle-label">{{ smartFilterEnabled ? 'Enabled' : 'Disabled' }}</span>
+            </label>
+          </div>
+          @if (smartFilterEnabled) {
+            <div class="form-group">
+              <label for="smartFilterPrompt">Natural Language Filter</label>
+              <textarea
+                id="smartFilterPrompt"
+                class="form-input form-textarea smart-filter-textarea"
+                placeholder="Describe what records you want to see... e.g., 'Show me all records created this month' or 'Active customers with high revenue'"
+                [(ngModel)]="smartFilterPrompt"
+                [disabled]="!canEdit"
+                rows="3"
+              ></textarea>
+            </div>
+            @if (smartFilterExplanation) {
+              <div class="smart-filter-explanation">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>{{ smartFilterExplanation }}</span>
+              </div>
+            }
+            <div class="tip">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span>Tip: The AI will interpret your natural language and create the appropriate filter when you save the view.</span>
+            </div>
+          } @else {
+            <div class="smart-filter-disabled-message">
+              <p>Enable Smart Filter to use natural language filtering. The AI will interpret your description and create the appropriate SQL filter.</p>
+            </div>
+          }
+        </div>
+
+        <!-- Traditional Filter Section -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-filter"></i>
+            <span>Traditional Filters</span>
+          </div>
+          <div class="filters-placeholder">
+            <i class="fa-solid fa-sliders-h"></i>
+            <p>Traditional filter editing is coming soon. For now, use Smart Filter above or the filter builder in the grid view.</p>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Settings Tab -->
+    @if (activeTab === 'settings') {
+      <div class="tab-content">
+        <!-- View Name & Description -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-info-circle"></i>
+            <span>View Details</span>
+          </div>
+          <div class="form-group">
+            <label for="viewName">Name</label>
+            <input
+              id="viewName"
+              type="text"
+              class="form-input"
+              placeholder="Enter view name..."
+              [(ngModel)]="viewName"
+              [disabled]="!canEdit"
+            />
+          </div>
+          <div class="form-group">
+            <label for="viewDescription">Description</label>
+            <textarea
+              id="viewDescription"
+              class="form-input form-textarea"
+              placeholder="Describe this view..."
+              [(ngModel)]="viewDescription"
+              [disabled]="!canEdit"
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- Sharing -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-share-alt"></i>
+            <span>Sharing</span>
+          </div>
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              [(ngModel)]="isShared"
+              [disabled]="!canEdit"
+            />
+            <span class="checkbox-text">
+              <strong>Share with others</strong>
+              <small>Allow other users to use this view</small>
+            </span>
+          </label>
+        </div>
+
+        <!-- Danger Zone -->
+        @if (viewEntity && canDelete) {
+          <div class="config-section danger-zone">
+            <div class="section-header">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>Danger Zone</span>
+            </div>
+            <button class="delete-btn" (click)="onDelete()">
+              <i class="fa-solid fa-trash"></i>
+              <span>Delete View</span>
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Panel Footer -->
+  <div class="panel-footer">
+    <button class="footer-btn cancel-btn" (click)="onClose()">
+      Cancel
+    </button>
+    <div class="footer-right">
+      @if (canEdit || !viewEntity) {
+        <button
+          class="footer-btn save-as-btn"
+          (click)="onSaveAsNew()"
+          [disabled]="isSaving">
+          <i class="fa-solid fa-plus"></i>
+          Save As New
+        </button>
+      }
+      @if (viewEntity && canEdit) {
+        <button
+          class="footer-btn save-btn primary"
+          (click)="onSave()"
+          [disabled]="isSaving || !viewName">
+          <i class="fa-solid fa-save"></i>
+          Save
+        </button>
+      }
+      @if (!viewEntity) {
+        <button
+          class="footer-btn save-btn primary"
+          (click)="onSaveAsNew()"
+          [disabled]="isSaving || !viewName">
+          <i class="fa-solid fa-save"></i>
+          Create View
+        </button>
+      }
+    </div>
+  </div>
+</div>

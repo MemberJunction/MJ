@@ -43,7 +43,6 @@ export class MentionAutocompleteService {
 
     // If initialization is in progress, wait for it
     if (this.initializationPromise) {
-      console.log('[MentionAutocomplete] Initialization already in progress, waiting...');
       return this.initializationPromise;
     }
 
@@ -62,27 +61,20 @@ export class MentionAutocompleteService {
    */
   private async _initializeInternal(currentUser: UserInfo): Promise<void> {
     try {
-      console.log('[MentionAutocomplete] Starting initialization...');
-
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
 
       const allAgents = AIEngineBase.Instance.Agents || [];
-      console.log('[MentionAutocomplete] AI Engine has', allAgents.length, 'total agents');
 
       this.agentsCache = allAgents.filter(
         a => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent' && !a.IsRestricted
       );
-
-      console.log('[MentionAutocomplete] Initialized with agents:', this.agentsCache.map(a => a.Name));
-      console.log('[MentionAutocomplete] Filtered to', this.agentsCache.length, 'user-invocable agents');
 
       // Load users from the system (optional - can be expanded later)
       // For now, we'll just use the current user
       this.usersCache = [currentUser];
 
       this.isInitialized = true;
-      console.log('[MentionAutocomplete] Initialization complete');
     } catch (error) {
       console.error('Failed to initialize MentionAutocompleteService:', error);
       throw error;
@@ -211,7 +203,6 @@ export class MentionAutocompleteService {
    * Resets initialization state and reloads agents
    */
   async refresh(currentUser: UserInfo): Promise<void> {
-    console.log('[MentionAutocomplete] Refreshing cache...');
     this.isInitialized = false;
     this.initializationPromise = null;
     await this.initialize(currentUser);

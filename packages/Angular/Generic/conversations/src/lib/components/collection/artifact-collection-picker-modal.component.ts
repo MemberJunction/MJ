@@ -6,6 +6,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
 import { DialogModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { InputsModule } from '@progress/kendo-angular-inputs';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
 
@@ -33,7 +34,8 @@ interface CollectionNode {
     FormsModule,
     DialogModule,
     ButtonsModule,
-    InputsModule
+    InputsModule,
+    SharedGenericModule
   ],
   template: `
     <kendo-dialog
@@ -121,8 +123,7 @@ interface CollectionNode {
         <!-- Loading State -->
         @if (isLoading) {
           <div class="loading-state">
-            <i class="fas fa-spinner fa-spin"></i>
-            <span>Loading collections...</span>
+            <mj-loading text="Loading collections..." size="medium"></mj-loading>
           </div>
         }
 
@@ -387,7 +388,7 @@ interface CollectionNode {
       color: #6B7280;
     }
 
-    .loading-state i, .error-state i {
+    .error-state i {
       font-size: 32px;
     }
 

@@ -342,6 +342,90 @@ const schemaInfo = await analyzeSchema(connection);
 
 ## Advanced Features That Blow Minds
 
+### 🎨 AI-Powered Form Layout Generation
+
+CodeGen uses AI to automatically organize entity fields into **semantic categories** with icons, creating intuitive form layouts without manual configuration.
+
+#### What It Does:
+
+1. **Field Categorization** - Groups fields into domain-specific categories (e.g., "Billing Address", "Pricing and Charges", "System Metadata")
+2. **Category Icons** - Assigns Font Awesome icons to each category for visual navigation
+3. **Category Descriptions** - Generates tooltip descriptions for UX enhancement
+4. **Entity Importance Analysis** - Determines if entities should appear in navigation for new users
+5. **Smart Display Names** - Converts technical field names to user-friendly labels (e.g., `BillToAddress1` → "Billing Address Line 1")
+
+#### Entity Importance Detection:
+
+The AI uses **FK ratio analysis** to classify entities:
+
+| Entity Type | FK Ratio | Example | DefaultForNewUser |
+|-------------|----------|---------|-------------------|
+| **Primary** | 10-30% | Contact, Order, Deal | ✅ Yes |
+| **Supporting** | 20-40% | OrderItem, Address | Sometimes |
+| **Reference/Type** | 0-20% | OrderStatus, ContactType | ❌ No |
+| **Junction** | 40-80% | UserRole, ContactAccount | ❌ No |
+
+#### Stability Guarantees:
+
+The system enforces **category stability** to prevent unnecessary churn on existing entities:
+
+**What's Preserved (Never Changed by AI):**
+- ✅ Existing category names - AI cannot rename "Personal Info" to "Personal Details"
+- ✅ Existing category icons - Icons set by admins or previous runs are preserved
+- ✅ Existing category descriptions - Descriptions are only added, never modified
+
+**What AI Can Do:**
+- ✅ Assign NEW fields to existing categories
+- ✅ Assign NEW fields to NEW categories (when no existing category fits)
+- ✅ Move existing fields between EXISTING categories (with discretion)
+- ❌ Move existing fields to NEW categories (blocked - prevents renaming)
+
+**Enforcement Example:**
+```
+Field 'Email' is in category 'Contact Info'
+LLM suggests moving to 'Communication Details' (new category)
+→ REJECTED: Cannot move existing field to new category
+→ Field stays in 'Contact Info'
+```
+
+**Control Flags on EntityField:**
+- `AutoUpdateCategory` - If FALSE, field's category is locked
+- `AutoUpdateDisplayName` - If FALSE, display name is locked
+- `AutoUpdateIsNameField` - If FALSE, name field designation is locked
+
+#### DefaultForNewUser - Only for New Entities:
+
+The `DefaultForNewUser` flag is **only set when an entity is first created**, not on subsequent updates. This ensures:
+- Admins retain full control over navigation visibility
+- CodeGen won't override manual admin decisions
+- Existing entity configurations remain stable
+
+#### Storage Format:
+
+Category information is stored in `EntitySetting` with two formats for compatibility:
+
+**New Format** (`FieldCategoryInfo`):
+```json
+{
+  "Billing Address": {
+    "icon": "fa fa-file-invoice",
+    "description": "Address for invoice delivery and billing correspondence"
+  },
+  "System Metadata": {
+    "icon": "fa fa-cog",
+    "description": "System-managed audit and tracking fields"
+  }
+}
+```
+
+**Legacy Format** (`FieldCategoryIcons`) - maintained for backwards compatibility:
+```json
+{
+  "Billing Address": "fa fa-file-invoice",
+  "System Metadata": "fa fa-cog"
+}
+```
+
 ### 🤖 AI-Powered CHECK Constraint Translation
 Our AI doesn't just copy constraints - it **understands intent**:
 

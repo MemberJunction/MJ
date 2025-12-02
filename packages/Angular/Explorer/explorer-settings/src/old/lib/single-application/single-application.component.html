@@ -1,6 +1,6 @@
 <div >
     @if(isLoading) {
-        <kendo-loader></kendo-loader>
+        <mj-loading [showText]="false" size="medium"></mj-loading>
     }
     @if(!isLoading && Record) {
         <table class="info-table">

@@ -1,3 +1,7 @@
+/* Golden Layout CSS - Required for tab system */
+@import 'golden-layout/dist/css/goldenlayout-base.css';
+@import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
+
 html,
 body,
 my-app {

@@ -629,7 +629,7 @@ function DataGrid({
     total: filteredData.length,
     showSizeChanger: showPageSizeChanger,
     pageSizeOptions: ['5', '10', '20', '50', '100'],
-    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
+    showTotal: (total, range) => `${range?.[0] ?? 0}-${range?.[1] ?? 0} of ${total}`,
     onChange: (page, newPageSize) => {
       setCurrentPage(page);
       if (newPageSize !== currentPageSize) {

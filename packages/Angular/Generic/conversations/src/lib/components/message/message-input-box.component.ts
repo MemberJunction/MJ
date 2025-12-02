@@ -21,7 +21,7 @@ import { MentionEditorComponent } from '../mention/mention-editor.component';
 @Component({
   selector: 'mj-message-input-box',
   templateUrl: './message-input-box.component.html',
-  styleUrls: ['./message-input-box.component.scss']
+  styleUrls: ['./message-input-box.component.css']
 })
 export class MessageInputBoxComponent {
   @ViewChild('mentionEditor') mentionEditor?: MentionEditorComponent;
