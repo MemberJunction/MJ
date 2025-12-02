@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "ignore": [
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.turbo/**",
+    "**/generated/**"
+  ],
+  "ignoreDependencies": [
+    "typescript",
+    "@angular/compiler",
+    "@angular/compiler-cli",
+    "sass"
+  ]
+}
