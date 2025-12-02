@@ -82,7 +82,7 @@ jobs:
 
             const botComment = comments.find(comment =>
               comment.user.type === 'Bot' &&
-              comment.body.includes('Dependency Check Results')
+              comment.body.includes('<!-- dependency-check-report -->')
             );
 
             if (botComment) {

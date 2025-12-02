@@ -34,6 +34,28 @@ function stripAnsiCodes(text) {
 }
 
 /**
+ * Check if a string is a valid npm package name
+ * @param {string} name - Potential package name
+ * @returns {boolean} - True if valid package name
+ */
+function isValidDependencyName(name) {
+  if (!name || typeof name !== 'string') return false;
+
+  // Common false positives
+  const falsePositives = ['src', 'dist', 'lib', 'node_modules', 'build', 'out', 'environments'];
+  if (falsePositives.includes(name)) return false;
+
+  // Scoped packages: @scope/package-name
+  if (name.startsWith('@')) {
+    return /^@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*$/.test(name);
+  }
+
+  // Regular packages: package-name
+  // Must start with lowercase letter or number, can contain -, _, .
+  return /^[a-z0-9-~][a-z0-9-._~]*$/.test(name) && !name.includes('/');
+}
+
+/**
  * Parse Knip output into structured data
  * Handles both default and compact reporter formats
  * @param {string} output - Raw Knip output
@@ -75,8 +97,8 @@ function parseKnipOutput(output) {
           }
 
           for (const dep of deps) {
-            // Only add valid package names (not file paths)
-            if (!dep.includes('/') || dep.startsWith('@')) {
+            // Only add valid package names (not file paths or common false positives)
+            if (isValidDependencyName(dep)) {
               depsByPackage.get(packagePath).add(dep);
             }
           }
@@ -91,8 +113,8 @@ function parseKnipOutput(output) {
 
     const [, depName, filePath] = match;
 
-    // Skip if depName looks like a file path (contains slashes other than scoped package)
-    if (depName.match(/^[^@].*\//)) continue;
+    // Validate dependency name
+    if (!isValidDependencyName(depName)) continue;
 
     // Extract package path from file path
     const packageMatch = filePath.match(/(packages\/[^\/]+(?:\/[^\/]+)*?)\/(?:src|dist|lib|environments)/);
@@ -114,7 +136,8 @@ function parseKnipOutput(output) {
  */
 function formatReport(depsByPackage) {
   if (depsByPackage.size === 0) {
-    return `## ✅ Dependency Check Results
+    return `<!-- dependency-check-report -->
+## ✅ Dependency Check Results
 
 **All dependencies are properly declared!**
 
@@ -125,7 +148,8 @@ No missing dependencies detected in this PR.`;
   const totalDeps = Array.from(depsByPackage.values())
     .reduce((sum, deps) => sum + deps.size, 0);
 
-  let output = `## ⚠️ Missing Dependencies Detected
+  let output = `<!-- dependency-check-report -->
+## ⚠️ Missing Dependencies Detected
 
 Found **${totalDeps} missing dependencies** across **${totalPackages} packages**.
 
