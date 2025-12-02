@@ -33,8 +33,9 @@
   "dependencies": {
     "@memberjunction/core": "2.122.0",
     "@memberjunction/core-entities": "2.122.0",
-    "@memberjunction/ng-container-directives": "2.122.0",
     "@memberjunction/ng-ai-test-harness": "2.122.0",
+    "@memberjunction/ng-container-directives": "2.122.0",
+    "@memberjunction/ng-shared-generic": "2.122.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
