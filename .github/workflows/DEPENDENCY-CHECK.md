@@ -22,33 +22,53 @@ The `dependency-check.yml` workflow runs on every pull request and checks for:
 2. Generates a report of dependency issues
 3. Posts a comment on the PR with the results
 4. Uploads the full report as an artifact
+5. **⚠️ BLOCKS the PR** if missing dependencies are found (configuration hints are allowed)
 
 ## How to Fix Issues
 
-### Missing Dependencies
+### Missing Dependencies (Blocks PRs)
 
-If Knip reports missing dependencies:
+If Knip reports missing dependencies, the workflow will **fail** and block the PR.
 
+**Quick Fix (Recommended):**
+```bash
+# Automatically add all missing dependencies
+npm run deps:fix-missing
+
+# Preview changes first
+npm run deps:fix-missing:dry
+```
+
+**Manual Fix:**
 ```bash
 # Add the missing dependency to the package's package.json
 cd packages/path/to/package
-npm install @memberjunction/missing-package@2.122.0
+npm install @memberjunction/missing-package@2.122.1
 
 # Or add it manually to package.json and run from repo root:
 npm install
 ```
 
-### Unused Dependencies
+### Unused Dependencies (Informational Only)
 
-If Knip reports unused dependencies:
+If Knip reports unused dependencies (currently **does not block PRs**):
 
+**Quick Fix (Recommended):**
+```bash
+# Automatically remove all unused dependencies
+npm run deps:remove-unused
+
+# Preview changes first
+npm run deps:remove-unused:dry
+```
+
+**Manual Fix:**
 ```bash
 # Remove from package.json and run from repo root:
 npm install
-
-# Or use Knip's auto-fix:
-npm run deps:unused -- --fix
 ```
+
+**Note:** Unused dependencies are currently informational only and will not block PRs. This may change in the future once the backlog is cleaned up.
 
 ## Local Testing
 

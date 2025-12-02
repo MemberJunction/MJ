@@ -45,14 +45,20 @@ jobs:
           if npm run deps:missing --silent > knip-report.txt 2>&1; then
             echo "✅ No missing dependencies found"
             echo "status=success" >> $GITHUB_OUTPUT
+            echo "has_issues=false" >> $GITHUB_OUTPUT
           else
             echo "⚠️ Missing dependencies detected"
             echo "status=warning" >> $GITHUB_OUTPUT
+            # Check if there are actual missing dependencies (not just config hints)
+            if grep -q "^[a-zA-Z@]" knip-report.txt | head -1 | grep -v "Configuration hints"; then
+              echo "has_issues=true" >> $GITHUB_OUTPUT
+            else
+              echo "has_issues=false" >> $GITHUB_OUTPUT
+            fi
           fi
 
           # Display the report
           cat knip-report.txt
-        continue-on-error: true
 
       - name: Format report
         if: always()
@@ -104,3 +110,11 @@ jobs:
           name: knip-report
           path: knip-report.txt
           retention-days: 30
+
+      - name: Fail if missing dependencies found
+        if: steps.knip.outputs.has_issues == 'true'
+        run: |
+          echo "❌ Missing dependencies detected! Please run 'npm run deps:fix-missing' locally to fix."
+          echo ""
+          echo "See the PR comment above for details on which dependencies are missing."
+          exit 1
