@@ -1,5 +1,24 @@
 # @memberjunction/react-test-harness
 
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/react-runtime@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/interactive-component-types@2.122.0
+  - @memberjunction/react-runtime@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

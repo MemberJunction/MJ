@@ -1,5 +1,48 @@
 # @memberjunction/ng-conversations
 
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-artifacts@2.122.1
+  - @memberjunction/ng-testing@2.122.1
+  - @memberjunction/ai-engine-base@2.122.1
+  - @memberjunction/ai@2.122.1
+  - @memberjunction/ai-core-plus@2.122.1
+  - @memberjunction/ng-base-types@2.122.1
+  - @memberjunction/ng-code-editor@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/ng-tasks@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/graphql-dataprovider@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ai-engine-base@2.122.0
+  - @memberjunction/ai-core-plus@2.122.0
+  - @memberjunction/ng-testing@2.122.0
+  - @memberjunction/ng-artifacts@2.122.0
+  - @memberjunction/ng-base-types@2.122.0
+  - @memberjunction/ng-code-editor@2.122.0
+  - @memberjunction/ng-container-directives@2.122.0
+  - @memberjunction/ng-notifications@2.122.0
+  - @memberjunction/ng-tasks@2.122.0
+  - @memberjunction/ai@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

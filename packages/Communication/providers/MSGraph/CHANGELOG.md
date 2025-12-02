@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.122.1
+- @memberjunction/aiengine@2.122.1
+- @memberjunction/communication-types@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/core-entities@2.122.1
+- @memberjunction/global@2.122.1
+- @memberjunction/sqlserver-dataprovider@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/sqlserver-dataprovider@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/aiengine@2.122.0
+  - @memberjunction/communication-types@2.122.0
+  - @memberjunction/ai@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

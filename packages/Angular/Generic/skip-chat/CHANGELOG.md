@@ -1,5 +1,49 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-react@2.122.1
+  - @memberjunction/ng-resource-permissions@2.122.1
+  - @memberjunction/ng-base-types@2.122.1
+  - @memberjunction/ng-code-editor@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-data-context@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/interactive-component-types@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/data-context@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/react-runtime@2.122.1
+  - @memberjunction/skip-types@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/graphql-dataprovider@2.122.0
+  - @memberjunction/interactive-component-types@2.122.0
+  - @memberjunction/skip-types@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ng-base-types@2.122.0
+  - @memberjunction/ng-code-editor@2.122.0
+  - @memberjunction/ng-container-directives@2.122.0
+  - @memberjunction/ng-data-context@2.122.0
+  - @memberjunction/ng-notifications@2.122.0
+  - @memberjunction/ng-react@2.122.0
+  - @memberjunction/ng-resource-permissions@2.122.0
+  - @memberjunction/data-context@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

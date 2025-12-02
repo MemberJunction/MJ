@@ -1,5 +1,30 @@
 # @memberjunction/ng-react
 
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+  - @memberjunction/ai-vectors-memory@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/interactive-component-types@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/react-runtime@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/interactive-component-types@2.122.0
+  - @memberjunction/ng-notifications@2.122.0
+  - @memberjunction/react-runtime@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes
