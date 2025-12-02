@@ -42,27 +42,34 @@ jobs:
         run: |
           echo "Running Knip to check for missing dependencies..."
           # Force no color output and use compact reporter for consistent parsing
-          if NO_COLOR=1 npx knip --include unlisted --reporter compact > knip-report.txt 2>&1; then
-            echo "✅ No missing dependencies found"
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "has_issues=false" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Missing dependencies detected"
-            echo "status=warning" >> $GITHUB_OUTPUT
-            # Check if there are actual missing dependencies (not just config hints)
-            if grep -E "^[a-zA-Z@]" knip-report.txt | head -1 | grep -vE "(Configuration hints|index\.js)"; then
-              echo "has_issues=true" >> $GITHUB_OUTPUT
-            else
-              echo "has_issues=false" >> $GITHUB_OUTPUT
-            fi
-          fi
+          NO_COLOR=1 npx knip --include unlisted --reporter compact > knip-report.txt 2>&1 || true
 
-          # Display the report
+          # Display the raw report
           cat knip-report.txt
 
       - name: Format report
         if: always()
         run: node scripts/format-knip-report.mjs knip-report.txt > formatted-report.md
+
+      - name: Check for actual issues
+        id: check_issues
+        if: always()
+        run: |
+          # Check the formatted report to see if there are actual missing dependencies
+          # after filtering out false positives
+          if grep -q "Found \*\*[1-9][0-9]* missing dependencies\*\*" formatted-report.md; then
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Missing dependencies detected after filtering"
+          elif grep -q "Found \*\*0 missing dependencies\*\*" formatted-report.md; then
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "✅ No real missing dependencies (false positives filtered out)"
+          elif grep -q "All dependencies are properly declared" formatted-report.md; then
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "✅ No missing dependencies found"
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "✅ No issues detected"
+          fi
 
       - name: Comment PR with results
         if: always() && github.event_name == 'pull_request'
@@ -112,7 +119,7 @@ jobs:
           retention-days: 30
 
       - name: Fail if missing dependencies found
-        if: steps.knip.outputs.has_issues == 'true'
+        if: steps.check_issues.outputs.has_issues == 'true'
         run: |
           echo "❌ Missing dependencies detected! Please run 'npm run deps:fix-missing' locally to fix."
           echo ""

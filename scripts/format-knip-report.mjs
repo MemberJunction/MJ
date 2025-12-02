@@ -148,6 +148,16 @@ No missing dependencies detected in this PR.`;
   const totalDeps = Array.from(depsByPackage.values())
     .reduce((sum, deps) => sum + deps.size, 0);
 
+  // If all dependencies were filtered out (false positives), show success message
+  if (totalDeps === 0) {
+    return `<!-- dependency-check-report -->
+## ✅ Dependency Check Results
+
+**All dependencies are properly declared!**
+
+Knip reported some issues, but they were all false positives (e.g., directory names like \`src\`, \`dist\`) that have been filtered out.`;
+  }
+
   let output = `<!-- dependency-check-report -->
 ## ⚠️ Missing Dependencies Detected
 
