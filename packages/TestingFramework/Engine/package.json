@@ -20,17 +20,18 @@
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "@memberjunction/testing-engine-base": "2.122.1",
-    "@memberjunction/global": "2.122.1",
-    "@memberjunction/core": "2.122.1",
-    "@memberjunction/core-entities": "2.122.1",
+    "@memberjunction/ai": "2.122.1",
     "@memberjunction/ai-agents": "2.122.1",
     "@memberjunction/ai-core-plus": "2.122.1",
     "@memberjunction/ai-prompts": "2.122.1",
     "@memberjunction/aiengine": "2.122.1",
+    "@memberjunction/core": "2.122.1",
+    "@memberjunction/core-entities": "2.122.1",
+    "@memberjunction/global": "2.122.1",
+    "@memberjunction/testing-engine-base": "2.122.1",
+    "debug": "^4.4.0",
     "rxjs": "^7.8.1",
-    "zod": "^3.23.8",
-    "debug": "^4.4.0"
+    "zod": "^3.23.8"
   },
   "repository": {
     "type": "git",

@@ -27,6 +27,7 @@
     "@progress/kendo-angular-indicators": "16.2.0"
   },
   "dependencies": {
+    "@angular/platform-browser": "18.0.2",
     "@memberjunction/core": "2.122.1",
     "@memberjunction/core-entities": "2.122.1",
     "@memberjunction/global": "2.122.1",
@@ -34,6 +35,10 @@
     "@memberjunction/ng-container-directives": "2.122.1",
     "@memberjunction/ng-notifications": "2.122.1",
     "@memberjunction/ng-shared-generic": "2.122.1",
+    "@progress/kendo-angular-buttons": "16.2.0",
+    "@progress/kendo-angular-dialog": "16.2.0",
+    "@progress/kendo-angular-excel-export": "16.2.0",
+    "@progress/kendo-data-query": "~1.7.0",
     "diff": "8.0.2",
     "tslib": "^2.3.0"
   },

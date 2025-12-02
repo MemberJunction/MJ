@@ -28,6 +28,7 @@
     "rxjs": "^7.8.1"
   },
   "dependencies": {
+    "@angular/platform-browser": "18.0.2",
     "@memberjunction/core": "2.122.1",
     "@memberjunction/core-entities": "2.122.1",
     "@memberjunction/global": "2.122.1",

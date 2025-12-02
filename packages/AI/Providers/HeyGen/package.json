@@ -17,6 +17,7 @@
   "dependencies": {
     "@memberjunction/ai": "2.122.1",
     "@memberjunction/global": "2.122.1",
+    "axios": "^1.7.2",
     "elevenlabs": "^1.51.0"
   },
   "repository": {

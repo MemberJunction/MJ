@@ -35,6 +35,8 @@
     "@memberjunction/ng-shared": "2.122.1",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
+    "@progress/kendo-angular-indicators": "16.2.0",
+    "@progress/kendo-angular-inputs": "16.2.0",
     "ngx-markdown": "^18.0.0",
     "tslib": "^2.3.0"
   },

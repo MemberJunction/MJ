@@ -24,6 +24,7 @@
     "@angular/forms": "18.0.2"
   },
   "dependencies": {
+    "@angular/router": "18.0.2",
     "@memberjunction/core": "2.122.1",
     "@memberjunction/core-entities": "2.122.1",
     "@memberjunction/global": "2.122.1",
@@ -33,13 +34,15 @@
     "@memberjunction/ng-shared": "2.122.1",
     "@memberjunction/ng-shared-generic": "2.122.1",
     "@memberjunction/ng-tabstrip": "2.122.1",
-    "@progress/kendo-angular-sortable": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0",
-    "@progress/kendo-angular-layout": "16.2.0",
-    "@progress/kendo-angular-inputs": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-data-query": "~1.7.0",
+    "@progress/kendo-angular-dialog": "16.2.0",
+    "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-filter": "16.2.0",
+    "@progress/kendo-angular-inputs": "16.2.0",
+    "@progress/kendo-angular-label": "16.2.0",
+    "@progress/kendo-angular-layout": "16.2.0",
+    "@progress/kendo-angular-sortable": "16.2.0",
+    "@progress/kendo-data-query": "~1.7.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,
