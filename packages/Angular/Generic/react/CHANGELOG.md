@@ -1,5 +1,16 @@
 # @memberjunction/ng-react
 
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/interactive-component-types@2.122.0
+  - @memberjunction/ng-notifications@2.122.0
+  - @memberjunction/react-runtime@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

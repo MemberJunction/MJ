@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-openai
 
+## 2.122.0
+
+### Patch Changes
+
+- 6e65496: Fix Gemini 3 Pro DriverClass and add Claude 4.5 Opus
+  - @memberjunction/ai@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes
