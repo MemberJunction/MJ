@@ -1,5 +1,16 @@
 # @memberjunction/scheduling-engine-base
 
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/global@2.122.0
+  - @memberjunction/scheduling-base-types@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

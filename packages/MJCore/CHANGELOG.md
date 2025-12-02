@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 2.122.0
+
+### Minor Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+- c989c45: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Minor Changes
