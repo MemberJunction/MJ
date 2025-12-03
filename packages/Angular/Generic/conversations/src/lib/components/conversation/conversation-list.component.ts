@@ -11,7 +11,7 @@ import { takeUntil } from 'rxjs/operators';
 @Component({
   selector: 'mj-conversation-list',
   template: `
-    <div class="conversation-list">
+    <div class="conversation-list" kendoDialogContainer>
       <div class="list-header">
         <div class="header-top">
           <input
