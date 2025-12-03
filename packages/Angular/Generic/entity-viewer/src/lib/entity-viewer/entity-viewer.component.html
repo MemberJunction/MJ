@@ -148,6 +148,7 @@
         <mj-timeline
           [groups]="timelineGroups"
           [orientation]="timelineOrientation"
+          [layout]="timelineOrientation === 'vertical' ? 'alternating' : 'single'"
           [sortOrder]="timelineSortOrder"
           [segmentGrouping]="timelineSegmentGrouping"
           [segmentsCollapsible]="true"

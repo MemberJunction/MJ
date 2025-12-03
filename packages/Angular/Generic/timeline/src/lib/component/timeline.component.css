@@ -1,6 +1,6 @@
 /**
  * MJ Timeline Component Styles
- * Clean, minimal design inspired by professional timeline UIs
+ * Kendo-inspired design with vertical alternating and horizontal layouts
  */
 
 /* ============================================================================
@@ -8,35 +8,35 @@
    ============================================================================ */
 
 mj-timeline {
-  /* Colors - clean and minimal */
+  /* Colors */
   --mj-timeline-bg: transparent;
   --mj-timeline-line-color: #d0d7de;
   --mj-timeline-marker-bg: #ffffff;
-  --mj-timeline-marker-border: #0969da;
-  --mj-timeline-marker-fill: #0969da;
+  --mj-timeline-marker-border: #4678a8;
+  --mj-timeline-marker-fill: #4678a8;
   --mj-timeline-card-bg: #ffffff;
   --mj-timeline-card-border: #d0d7de;
-  --mj-timeline-card-shadow: 0 1px 2px rgba(31, 35, 40, 0.04);
-  --mj-timeline-card-shadow-hover: 0 4px 12px rgba(31, 35, 40, 0.1);
-  --mj-timeline-card-radius: 8px;
+  --mj-timeline-card-shadow: 0 1px 3px rgba(31, 35, 40, 0.08);
+  --mj-timeline-card-shadow-hover: 0 4px 12px rgba(31, 35, 40, 0.12);
+  --mj-timeline-card-radius: 6px;
   --mj-timeline-text-primary: #1f2328;
   --mj-timeline-text-secondary: #656d76;
   --mj-timeline-text-muted: #8c959f;
-  --mj-timeline-accent: #0969da;
-  --mj-timeline-accent-light: rgba(9, 105, 218, 0.08);
-  --mj-timeline-segment-bg: #0969da;
+  --mj-timeline-accent: #4678a8;
+  --mj-timeline-accent-light: rgba(70, 120, 168, 0.08);
+  --mj-timeline-segment-bg: #4678a8;
   --mj-timeline-segment-text: #ffffff;
-  --mj-timeline-focus-ring: 0 0 0 2px rgba(9, 105, 218, 0.3);
+  --mj-timeline-focus-ring: 0 0 0 2px rgba(70, 120, 168, 0.3);
 
   /* Sizing */
   --mj-timeline-line-width: 2px;
-  --mj-timeline-marker-size: 12px;
-  --mj-timeline-card-padding: 14px 16px;
-  --mj-timeline-card-max-width: 480px;
-  --mj-timeline-card-min-width: 280px;
-  --mj-timeline-gap: 12px;
-  --mj-timeline-segment-gap: 8px;
-  --mj-timeline-axis-offset: 0;
+  --mj-timeline-marker-size: 14px;
+  --mj-timeline-card-padding: 16px;
+  --mj-timeline-card-max-width: 400px;
+  --mj-timeline-card-min-width: 200px;
+  --mj-timeline-gap: 24px;
+  --mj-timeline-segment-gap: 16px;
+  --mj-timeline-axis-offset: 50%;
 
   /* Animation */
   --mj-timeline-transition: 0.15s ease;
@@ -71,7 +71,7 @@ mj-timeline {
   position: relative;
   width: 100%;
   height: 100%;
-  padding: 16px;
+  padding: 24px 16px;
   background: var(--mj-timeline-bg);
   outline: none;
   overflow-y: auto;
@@ -168,7 +168,7 @@ mj-timeline {
 }
 
 /* ============================================================================
-   TIME SEGMENTS - Inline badge style like Kendo
+   TIME SEGMENTS - Year/Month badges on the axis
    ============================================================================ */
 
 .mj-timeline__segment {
@@ -181,22 +181,20 @@ mj-timeline {
 }
 
 .mj-timeline__segment-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
+  padding: 6px 16px;
   margin-bottom: var(--mj-timeline-gap);
-  margin-left: 0;
   background: var(--mj-timeline-segment-bg);
-  border-radius: 16px;
+  border-radius: 4px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--mj-timeline-segment-text);
   user-select: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 10;
 }
 
 .mj-timeline__segment-header--clickable {
@@ -216,7 +214,7 @@ mj-timeline {
   width: 16px;
   height: 16px;
   color: inherit;
-  font-size: 9px;
+  font-size: 10px;
   opacity: 0.9;
   transition: transform var(--mj-timeline-transition);
 }
@@ -232,9 +230,7 @@ mj-timeline {
 }
 
 .mj-timeline__segment-count {
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.85;
+  display: none;
 }
 
 .mj-timeline__segment-line {
@@ -253,21 +249,28 @@ mj-timeline {
 }
 
 /* ============================================================================
-   TIMELINE AXIS
+   TIMELINE AXIS - Vertical line in center
    ============================================================================ */
 
 .mj-timeline__axis {
   position: relative;
-  padding-left: var(--mj-timeline-axis-offset);
+  padding-left: 0;
 }
 
-/* Vertical line - hidden since we're not using markers */
+/* Vertical center line */
 .mj-timeline__axis::before {
-  display: none;
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: var(--mj-timeline-line-width);
+  background: var(--mj-timeline-line-color);
+  transform: translateX(-50%);
 }
 
 /* ============================================================================
-   TIMELINE EVENT
+   TIMELINE EVENT - Alternating left/right by default
    ============================================================================ */
 
 .mj-timeline__event {
@@ -275,6 +278,21 @@ mj-timeline {
   display: flex;
   align-items: flex-start;
   margin-bottom: var(--mj-timeline-gap);
+  width: 100%;
+}
+
+/* Even events (0, 2, 4...) - card on LEFT, date on RIGHT */
+.mj-timeline__event {
+  padding-right: calc(50% + 32px);
+  justify-content: flex-end;
+}
+
+/* Odd events (1, 3, 5...) - card on RIGHT, date on LEFT */
+.mj-timeline__event--odd {
+  padding-right: 0;
+  padding-left: calc(50% + 32px);
+  justify-content: flex-start;
+  flex-direction: row;
 }
 
 .mj-timeline__event:last-child {
@@ -282,15 +300,30 @@ mj-timeline {
 }
 
 /* ============================================================================
-   MARKER - Hidden (using card effects instead)
+   MARKER - Circular dot on the axis
    ============================================================================ */
 
 .mj-timeline__marker {
-  display: none;
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  width: var(--mj-timeline-marker-size);
+  height: var(--mj-timeline-marker-size);
+  background: var(--mj-timeline-marker-fill);
+  border: 2px solid var(--mj-timeline-marker-bg);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--mj-timeline-marker-fill);
+  z-index: 5;
+  transition: transform var(--mj-timeline-transition);
 }
 
 .mj-timeline__marker-icon {
   display: none;
+}
+
+.mj-timeline__event:hover .mj-timeline__marker {
+  transform: translateX(-50%) scale(1.2);
 }
 
 .mj-timeline__connector {
@@ -298,51 +331,84 @@ mj-timeline {
 }
 
 /* ============================================================================
-   DATE LABEL
+   DATE LABEL - Positioned opposite the card
    ============================================================================ */
 
 .mj-timeline__date-label {
-  display: none;
+  position: absolute;
+  top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-timeline-text-secondary);
+  white-space: nowrap;
+}
+
+/* Even events - date on RIGHT side of axis */
+.mj-timeline__event:not(.mj-timeline__event--odd) .mj-timeline__date-label {
+  left: calc(50% + 24px);
+  text-align: left;
+}
+
+/* Odd events - date on LEFT side of axis */
+.mj-timeline__event--odd .mj-timeline__date-label {
+  right: calc(50% + 24px);
+  text-align: right;
 }
 
 /* ============================================================================
-   EVENT CARD - Clean, minimal
+   EVENT CARD - Clean design matching Kendo
    ============================================================================ */
 
 .mj-timeline__card {
-  flex: 1;
   background: var(--mj-timeline-card-bg);
   border: 1px solid var(--mj-timeline-card-border);
-  border-left: 3px solid var(--mj-timeline-accent);
   border-radius: var(--mj-timeline-card-radius);
   box-shadow: var(--mj-timeline-card-shadow);
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: all var(--mj-timeline-transition);
   cursor: pointer;
   max-width: var(--mj-timeline-card-max-width);
   min-width: var(--mj-timeline-card-min-width);
+  width: 100%;
 }
 
-/* Hover state - lift and glow effect */
+/* Card arrow/pointer toward the axis */
+.mj-timeline__card::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  width: 10px;
+  height: 10px;
+  background: var(--mj-timeline-card-bg);
+  border: 1px solid var(--mj-timeline-card-border);
+  transform: rotate(45deg);
+}
+
+/* Even events - arrow points RIGHT toward axis */
+.mj-timeline__event:not(.mj-timeline__event--odd) .mj-timeline__card::before {
+  right: -6px;
+  border-left: none;
+  border-bottom: none;
+}
+
+/* Odd events - arrow points LEFT toward axis */
+.mj-timeline__event--odd .mj-timeline__card::before {
+  left: -6px;
+  border-right: none;
+  border-top: none;
+}
+
+/* Hover state */
 .mj-timeline__card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(9, 105, 218, 0.15), 0 4px 8px rgba(31, 35, 40, 0.08);
+  box-shadow: var(--mj-timeline-card-shadow-hover);
   border-color: var(--mj-timeline-accent);
-  border-left-width: 4px;
 }
 
-/* Selected/Focused state - prominent highlight */
+/* Selected/Focused state */
 .mj-timeline__event--focused .mj-timeline__card {
   background: var(--mj-timeline-accent-light);
   border-color: var(--mj-timeline-accent);
-  border-left-width: 4px;
-  box-shadow: 0 0 0 2px var(--mj-timeline-accent), 0 4px 12px rgba(9, 105, 218, 0.2);
-}
-
-/* Active/pressed state */
-.mj-timeline__card:active {
-  transform: translateY(0);
-  box-shadow: var(--mj-timeline-card-shadow);
+  box-shadow: 0 0 0 2px var(--mj-timeline-accent);
 }
 
 /* ============================================================================
@@ -365,12 +431,7 @@ mj-timeline {
 }
 
 .mj-timeline__card-icon {
-  display: none; /* Hidden by default - timeline marker serves as visual indicator */
-  flex-shrink: 0;
-  font-size: 14px;
-  line-height: 1;
-  margin-top: 2px;
-  color: var(--mj-timeline-accent);
+  display: none;
 }
 
 .mj-timeline__card-titles {
@@ -380,39 +441,28 @@ mj-timeline {
 
 .mj-timeline__card-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--mj-timeline-text-primary);
   line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .mj-timeline__card-subtitle {
   display: block;
   font-size: 13px;
   color: var(--mj-timeline-text-secondary);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin-top: 4px;
 }
 
 .mj-timeline__card-date {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  display: block;
+  font-size: 12px;
   color: var(--mj-timeline-text-muted);
   margin-top: 6px;
 }
 
 .mj-timeline__card-date::before {
-  content: '\f073';
-  font-family: 'Font Awesome 6 Free';
-  font-weight: 400;
-  font-size: 10px;
+  display: none;
 }
 
 .mj-timeline__card-toggle {
@@ -420,14 +470,15 @@ mj-timeline {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
   color: var(--mj-timeline-text-muted);
   border-radius: 4px;
   cursor: pointer;
   transition: all var(--mj-timeline-transition);
+  font-size: 14px;
 }
 
 .mj-timeline__card-toggle:hover {
@@ -441,7 +492,7 @@ mj-timeline {
 
 .mj-timeline__card-image {
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 4px;
   flex-shrink: 0;
 }
 
@@ -453,23 +504,23 @@ mj-timeline {
 }
 
 .mj-timeline__card-image--left.mj-timeline__card-image--small {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
 }
 
 .mj-timeline__card-image--left.mj-timeline__card-image--medium {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
 }
 
 .mj-timeline__card-image--left.mj-timeline__card-image--large {
-  width: 88px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
 }
 
 .mj-timeline__card-image--top {
   width: calc(100% - 32px);
-  max-height: 160px;
+  max-height: 180px;
   margin: 0 16px 12px;
 }
 
@@ -478,7 +529,7 @@ mj-timeline {
    ============================================================================ */
 
 .mj-timeline__card-body {
-  padding: 0 16px 14px;
+  padding: 0 var(--mj-timeline-card-padding) var(--mj-timeline-card-padding);
 }
 
 .mj-timeline__card-body--collapsed {
@@ -487,9 +538,9 @@ mj-timeline {
 
 .mj-timeline__card-description {
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--mj-timeline-text-secondary);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .mj-timeline__card-description--clamped {
@@ -513,14 +564,14 @@ mj-timeline {
 }
 
 .mj-timeline__card-fields--summary {
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--mj-timeline-line-color);
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .mj-timeline__card-fields--expanded {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--mj-timeline-line-color);
 }
 
@@ -553,7 +604,7 @@ mj-timeline {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 0 16px 14px;
+  padding: 0 var(--mj-timeline-card-padding) var(--mj-timeline-card-padding);
   justify-content: flex-end;
 }
 
@@ -571,11 +622,11 @@ mj-timeline {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px;
+  padding: 6px 12px;
   font-size: 12px;
   font-weight: 500;
   border: 1px solid;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all var(--mj-timeline-transition);
 }
@@ -638,87 +689,93 @@ mj-timeline {
 }
 
 /* ============================================================================
-   ALTERNATING LAYOUT (like Kendo's alternating mode)
+   SINGLE LAYOUT - Cards only on right side
    ============================================================================ */
 
-.mj-timeline--alternating {
-  --mj-timeline-axis-offset: 0;
+.mj-timeline--single .mj-timeline__axis::before {
+  left: 24px;
+  transform: none;
 }
 
-.mj-timeline--alternating .mj-timeline__axis {
-  padding-left: 0;
+.mj-timeline--single .mj-timeline__segment-header {
+  margin-left: 12px;
 }
 
-.mj-timeline--alternating .mj-timeline__axis::before {
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.mj-timeline--alternating .mj-timeline__segment-header {
-  margin-left: 50%;
-}
-
-.mj-timeline--alternating .mj-timeline__event {
-  width: 100%;
-  padding-right: calc(50% + 24px);
-}
-
-.mj-timeline--alternating .mj-timeline__event--odd {
+.mj-timeline--single .mj-timeline__event {
   padding-right: 0;
-  padding-left: calc(50% + 24px);
-  flex-direction: row-reverse;
+  padding-left: 56px;
+  justify-content: flex-start;
 }
 
-.mj-timeline--alternating .mj-timeline__marker {
-  left: 50%;
+.mj-timeline--single .mj-timeline__event--odd {
+  padding-left: 56px;
+  flex-direction: row;
+}
+
+.mj-timeline--single .mj-timeline__marker {
+  left: 24px;
   transform: translateX(-50%);
 }
 
-.mj-timeline--alternating .mj-timeline__event:hover .mj-timeline__marker {
-  transform: translateX(-50%) scale(1.2);
+.mj-timeline--single .mj-timeline__date-label {
+  display: none;
 }
 
-.mj-timeline--alternating .mj-timeline__date-label {
-  display: block;
-  position: absolute;
-  top: 14px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--mj-timeline-text-secondary);
-  white-space: nowrap;
+.mj-timeline--single .mj-timeline__card::before {
+  left: -6px;
+  right: auto;
+  border-right: none;
+  border-top: none;
+  border-left: 1px solid var(--mj-timeline-card-border);
+  border-bottom: 1px solid var(--mj-timeline-card-border);
 }
 
-.mj-timeline--alternating .mj-timeline__event:not(.mj-timeline__event--odd) .mj-timeline__date-label {
-  right: calc(50% + 24px + var(--mj-timeline-marker-size));
-  text-align: right;
-}
-
-.mj-timeline--alternating .mj-timeline__event--odd .mj-timeline__date-label {
-  left: calc(50% + 24px + var(--mj-timeline-marker-size));
-  text-align: left;
-}
-
-.mj-timeline--alternating .mj-timeline__card {
+.mj-timeline--single .mj-timeline__card {
   max-width: none;
-  min-width: 0;
 }
 
 /* ============================================================================
-   HORIZONTAL LAYOUT (like Kendo's horizontal mode)
+   ALTERNATING LAYOUT - Explicit class (same as default vertical)
+   ============================================================================ */
+
+.mj-timeline--alternating .mj-timeline__segment-header {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ============================================================================
+   HORIZONTAL LAYOUT
    ============================================================================ */
 
 .mj-timeline--horizontal {
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 24px 16px;
+  padding: 80px 40px 24px;
+}
+
+.mj-timeline--horizontal .mj-timeline__segment {
+  display: inline-block;
+  vertical-align: top;
+  margin-bottom: 0;
+  margin-right: 40px;
+}
+
+.mj-timeline--horizontal .mj-timeline__segment:last-child {
+  margin-right: 0;
 }
 
 .mj-timeline--horizontal .mj-timeline__segment-header {
-  position: relative;
-  top: auto;
-  margin-left: 0;
-  margin-bottom: 16px;
-  transform: none;
+  position: absolute;
+  top: -56px;
+  left: 0;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.mj-timeline--horizontal .mj-timeline__segment-content {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
 }
 
 .mj-timeline--horizontal .mj-timeline__axis {
@@ -726,27 +783,36 @@ mj-timeline {
   flex-direction: row;
   align-items: flex-start;
   padding-left: 0;
-  padding-top: 40px;
   min-width: max-content;
   gap: 0;
 }
 
+/* Horizontal axis line */
 .mj-timeline--horizontal .mj-timeline__axis::before {
   left: 0;
   right: 0;
-  top: 5px;
+  top: 0;
   bottom: auto;
-  width: auto;
+  width: 100%;
   height: var(--mj-timeline-line-width);
+  transform: none;
 }
 
 .mj-timeline--horizontal .mj-timeline__event {
   flex-direction: column;
   align-items: center;
   margin-bottom: 0;
-  margin-right: 24px;
-  min-width: 200px;
+  margin-right: 48px;
+  padding: 0;
+  padding-top: 32px;
+  min-width: 180px;
   max-width: 280px;
+  width: auto;
+}
+
+.mj-timeline--horizontal .mj-timeline__event--odd {
+  padding-left: 0;
+  flex-direction: column;
 }
 
 .mj-timeline--horizontal .mj-timeline__event:last-child {
@@ -754,27 +820,25 @@ mj-timeline {
 }
 
 .mj-timeline--horizontal .mj-timeline__marker {
-  position: relative;
-  left: auto;
-  top: auto;
-  margin-bottom: 12px;
-  margin-top: -40px;
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  transform: translateX(-50%);
+  margin: 0;
 }
 
 .mj-timeline--horizontal .mj-timeline__event:hover .mj-timeline__marker {
-  transform: scale(1.2);
+  transform: translateX(-50%) scale(1.2);
 }
 
 .mj-timeline--horizontal .mj-timeline__date-label {
-  display: block;
   position: absolute;
-  top: -28px;
+  top: -40px;
   left: 50%;
+  right: auto;
   transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--mj-timeline-text-secondary);
-  white-space: nowrap;
+  text-align: center;
+  font-size: 12px;
 }
 
 .mj-timeline--horizontal .mj-timeline__card {
@@ -783,119 +847,85 @@ mj-timeline {
   min-width: 0;
 }
 
-/* ============================================================================
-   SINGLE LAYOUT (cards on right only, like Kendo's vertical-right)
-   ============================================================================ */
-
-.mj-timeline--single .mj-timeline__date-label {
-  display: block;
-  position: absolute;
-  left: calc(-1 * var(--mj-timeline-axis-offset) - 8px);
-  top: 14px;
-  transform: translateX(-100%);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--mj-timeline-text-secondary);
-  white-space: nowrap;
-  text-align: right;
+.mj-timeline--horizontal .mj-timeline__card::before {
+  display: none;
 }
 
 /* ============================================================================
    RESPONSIVE
    ============================================================================ */
 
-@media (max-width: 1024px) {
-  mj-timeline {
-    --mj-timeline-card-max-width: 380px;
-  }
-
-  /* Force single layout on tablet */
-  .mj-timeline--alternating .mj-timeline__axis {
-    padding-left: var(--mj-timeline-axis-offset);
-  }
-
+@media (max-width: 900px) {
+  /* Force single layout on smaller screens */
   .mj-timeline--alternating .mj-timeline__axis::before {
-    left: calc(var(--mj-timeline-marker-size) / 2 - var(--mj-timeline-line-width) / 2);
+    left: 24px;
     transform: none;
   }
 
   .mj-timeline--alternating .mj-timeline__segment-header {
-    margin-left: calc(var(--mj-timeline-marker-size) / 2 - 1px);
+    left: auto;
+    transform: none;
+    margin-left: 12px;
   }
 
   .mj-timeline--alternating .mj-timeline__event {
     padding-right: 0;
-    padding-left: 0;
-    flex-direction: row;
+    padding-left: 56px;
+    justify-content: flex-start;
   }
 
   .mj-timeline--alternating .mj-timeline__event--odd {
-    padding-left: 0;
+    padding-left: 56px;
+    padding-right: 0;
     flex-direction: row;
   }
 
   .mj-timeline--alternating .mj-timeline__marker {
-    left: 0;
-    transform: none;
+    left: 24px;
+    transform: translateX(-50%);
   }
 
   .mj-timeline--alternating .mj-timeline__event:hover .mj-timeline__marker {
-    transform: scale(1.2);
+    transform: translateX(-50%) scale(1.2);
   }
 
   .mj-timeline--alternating .mj-timeline__date-label {
     display: none;
   }
 
+  .mj-timeline--alternating .mj-timeline__card::before {
+    left: -6px;
+    right: auto;
+    border-right: none;
+    border-top: none;
+    border-left: 1px solid var(--mj-timeline-card-border);
+    border-bottom: 1px solid var(--mj-timeline-card-border);
+  }
+
   .mj-timeline--alternating .mj-timeline__card {
-    max-width: var(--mj-timeline-card-max-width);
+    max-width: none;
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 600px) {
   mj-timeline {
-    --mj-timeline-card-max-width: 100%;
-    --mj-timeline-card-min-width: 0;
-    --mj-timeline-axis-offset: 28px;
-    --mj-timeline-marker-size: 10px;
-    --mj-timeline-gap: 10px;
+    --mj-timeline-card-padding: 12px;
+    --mj-timeline-gap: 16px;
+    --mj-timeline-marker-size: 12px;
   }
 
   .mj-timeline {
-    padding: 12px;
-  }
-
-  .mj-timeline__segment-header {
-    font-size: 11px;
-    padding: 5px 12px;
-  }
-
-  .mj-timeline__card {
-    max-width: none;
-    min-width: 0;
+    padding: 16px 12px;
   }
 
   .mj-timeline__card-title {
-    font-size: 13px;
-    white-space: normal;
-  }
-
-  .mj-timeline__card-actions {
-    flex-direction: column;
-  }
-
-  .mj-timeline__card-actions .mj-timeline__action {
-    width: 100%;
-    justify-content: center;
+    font-size: 14px;
   }
 
   .mj-timeline--horizontal .mj-timeline__event {
-    min-width: 180px;
+    min-width: 160px;
     max-width: 220px;
-  }
-
-  .mj-timeline--single .mj-timeline__date-label {
-    display: none;
+    margin-right: 32px;
   }
 }
 
@@ -907,19 +937,6 @@ mj-timeline {
 
   .mj-timeline__action {
     min-height: 40px;
-  }
-
-  .mj-timeline__card:hover {
-    box-shadow: var(--mj-timeline-card-shadow);
-    border-color: var(--mj-timeline-card-border);
-  }
-
-  .mj-timeline__event:hover .mj-timeline__marker {
-    transform: none;
-  }
-
-  .mj-timeline--alternating .mj-timeline__event:hover .mj-timeline__marker {
-    transform: translateX(-50%);
   }
 }
 
