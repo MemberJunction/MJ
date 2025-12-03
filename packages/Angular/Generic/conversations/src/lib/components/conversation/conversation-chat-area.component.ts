@@ -38,6 +38,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   private scrollToBottom = false;
   private previousConversationId: string | null = null;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
+  private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   public isProcessing: boolean = false;
   private intentCheckMessage: ConversationDetailEntity | null = null; // Temporary message shown during intent checking
   public isLoadingConversation: boolean = true; // True while loading initial conversation messages
@@ -221,19 +222,22 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
-    // Do NOT clear activeTasks here - they are workspace-level and should persist across conversation switches
-    // Tasks will be automatically removed when agents complete (via markMessageComplete in MessageInputComponent)
-    // Clearing here causes bugs: global tasks panel blanks out, no notifications when switching, spinners disappear
+    // Prevent double-loading if we're already loading this same conversation
+    // (ngDoCheck can fire multiple times during state changes)
+    if (this.currentlyLoadingConversationId === conversationId && conversationId !== null) {
+      return;
+    }
 
-    // Clear message status tracking for previous conversation
+    // Do NOT clear activeTasks - they are workspace-level and persist across conversations
+    // Clearing causes bugs: global tasks panel blanks out, no notifications when switching
+
     this.previousMessageStatuses.clear();
-
-    // Hide artifact panel when conversation changes
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
 
     if (conversationId) {
-      // Add conversation to message-input cache if not already present
+      this.currentlyLoadingConversationId = conversationId;
+
       if (!this.messageInputMetadataCache.has(conversationId)) {
         const conversation = this.conversationState.activeConversation;
         this.messageInputMetadataCache.set(conversationId, {
@@ -242,27 +246,38 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         });
       }
 
-      // Show loading state
       this.isLoadingConversation = true;
-      this.messages = []; // Clear messages to avoid showing stale data
+      this.messages = [];
       this.cdr.detectChanges();
 
       try {
         await this.loadMessages(conversationId);
         await this.restoreActiveTasks(conversationId);
         this.agentStateService.startPolling(this.currentUser, conversationId);
+      } catch (error) {
+        console.error('Error loading conversation:', error);
+        this.messages = [];
       } finally {
-        // Hide loading state
+        this.currentlyLoadingConversationId = null;
         this.isLoadingConversation = false;
+
+        // Create new array reference to trigger Angular change detection
+        this.messages = [...this.messages];
         this.cdr.detectChanges();
 
-        // Pending message will be passed to message-input component via [initialMessage] Input
-        // The component will handle sending it when it initializes
+        // Defensive fallback: force another change detection cycle after async ops complete
+        setTimeout(() => {
+          if (conversationId === this.conversationState.activeConversationId && this.messages.length > 0) {
+            this.messages = [...this.messages];
+            this.cdr.detectChanges();
+          }
+        }, 50);
       }
     } else {
       // No active conversation - show empty state
       this.messages = [];
       this.isLoadingConversation = false;
+      this.currentlyLoadingConversationId = null;
       this.agentStateService.stopPolling();
     }
   }
@@ -278,17 +293,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   private async loadMessages(conversationId: string): Promise<void> {
     try {
-      // Check if we have cached data for this conversation
       const cachedData = this.conversationDataCache.get(conversationId);
 
       if (cachedData) {
-        // Use cached data - instant load!
-        this.buildMessagesFromCache(cachedData);
-        this.loadPeripheralData(conversationId); // Process cached data for maps
+        await this.buildMessagesFromCache(cachedData);
+        await this.loadPeripheralData(conversationId);
       } else {
-        // Load from database with single optimized query
         const rq = new RunQuery();
-
         const result = await rq.RunQuery({
           QueryName: 'GetConversationComplete',
           CategoryPath: 'MJ/Conversations',
@@ -301,24 +312,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           return;
         }
 
-        // Cache the raw results for future use
         const conversationData = result.Results as ConversationDetailComplete[];
         this.conversationDataCache.set(conversationId, conversationData);
 
-        // Build messages and show immediately
-        this.buildMessagesFromCache(conversationData);
+        await this.buildMessagesFromCache(conversationData);
 
-        // Process peripheral data (agent runs & artifacts) in background
         this.isLoadingPeripheralData = true;
         await this.loadPeripheralData(conversationId);
         this.isLoadingPeripheralData = false;
         this.cdr.detectChanges();
       }
 
-      // After loading messages, check for in-progress runs and ensure we're receiving updates
       await this.detectAndReconnectToInProgressRuns(conversationId);
-
-      // Check for pending artifact navigation (from collection link)
       await this.handlePendingArtifactNavigation();
 
     } catch (error) {
@@ -335,29 +340,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     const md = new Metadata();
     const messages: ConversationDetailEntity[] = [];
 
-    // Store raw conversation data for access to query-specific fields
     this.rawConversationData = conversationData;
-
-    // Build user avatar map for fast lookups
     this.buildUserAvatarMap(conversationData);
 
     for (const row of conversationData) {
       if (!row.ID) continue;
 
-      // Create entity object and load from raw data
       const message = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
-
-      // LoadFromData expects the same structure as the query result
-      // Since we're using SELECT *, all fields should be present
       message.LoadFromData(row);
-
       messages.push(message);
     }
 
     this.messages = messages;
 
-    // CRITICAL: Initialize status tracking map BEFORE any callbacks fire
-    // This captures the initial state so the completion detector can see transitions
+    // Initialize status tracking to detect message completion
     this.previousMessageStatuses.clear();
     for (const message of messages) {
       if (message.ID && message.Status) {
@@ -366,22 +362,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     }
 
     // Detect in-progress messages for streaming reconnection
-    // IMPORTANT: Always create NEW array reference to trigger Input setter in message-input component
+    // Always create NEW array reference to trigger Input setter in message-input component
     this.inProgressMessageIds = [...messages
       .filter(m => m.Status === 'In-Progress')
       .map(m => m.ID)];
 
     if (this.inProgressMessageIds.length > 0) {
       LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-      // Note: Reconnection now happens automatically via Input setter in message-input component
-
-      // CRITICAL: Restart the timer to monitor these in-progress messages for completion
-      // This ensures the completion detector runs even if the timer stopped before tracking was initialized
       this.startAgentRunUpdateTimer();
     }
 
     this.scrollToBottom = true;
-    this.cdr.detectChanges(); // Show messages immediately
+    LogStatusEx({message: `✅ Built ${messages.length} messages from cache`, verboseOnly: true});
   }
 
   /**

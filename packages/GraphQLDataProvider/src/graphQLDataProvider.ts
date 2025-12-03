@@ -1969,8 +1969,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     next: (data) => {
                         observer.next(data.data);
                     },
-                    error: (error) => {
-                        observer.error(error);
+                    error: async (error: unknown) => {
+                        // Check if error is JWT_EXPIRED
+                        const errorObj = error as { extensions?: { code?: string }, message?: string };
+                        const isTokenExpired =
+                            errorObj?.extensions?.code === 'JWT_EXPIRED' ||
+                            errorObj?.message?.includes('token has expired') ||
+                            errorObj?.message?.includes('JWT_EXPIRED');
+
+                        if (isTokenExpired) {
+                            console.log('[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...');
+                            try {
+                                // Refresh the token
+                                await this.RefreshToken();
+
+                                // Dispose old WebSocket client
+                                this.disposeWSClient();
+
+                                // Observer will be completed, and caller should re-subscribe
+                                // which will create a new WebSocket connection with the new token
+                                observer.complete();
+                            } catch (refreshError) {
+                                console.error('[GraphQLDataProvider] Failed to refresh token for WebSocket:', refreshError);
+                                observer.error(refreshError);
+                            }
+                        } else {
+                            observer.error(error);
+                        }
                     },
                     complete: () => {
                         observer.complete();
@@ -2046,8 +2071,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             // Extract the message and emit to subject
                             observer.next(data.data.statusUpdates.message);
                         },
-                        error: (error) => {
-                            observer.error(error);
+                        error: async (error: unknown) => {
+                            // Check if error is JWT_EXPIRED
+                            const errorObj = error as { extensions?: { code?: string }, message?: string };
+                            const isTokenExpired =
+                                errorObj?.extensions?.code === 'JWT_EXPIRED' ||
+                                errorObj?.message?.includes('token has expired') ||
+                                errorObj?.message?.includes('JWT_EXPIRED');
+
+                            if (isTokenExpired) {
+                                console.log('[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...');
+                                try {
+                                    // Refresh the token
+                                    await this.RefreshToken();
+
+                                    // Dispose old WebSocket client
+                                    this.disposeWSClient();
+
+                                    // Complete the subscription - components will auto-reconnect via RxJS retry logic
+                                    observer.complete();
+                                } catch (refreshError) {
+                                    console.error('[GraphQLDataProvider] Failed to refresh token for PushStatusUpdates:', refreshError);
+                                    observer.error(refreshError);
+                                }
+                            } else {
+                                observer.error(error);
+                            }
                         },
                         complete: () => {
                             observer.complete();

@@ -106,10 +106,6 @@ export function LoadChatCollectionsResource() {
     }
 
     .artifact-panel {
-      flex-shrink: 0;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
       border-left: 1px solid #e0e0e0;
       background: white;
       transition: width 0.2s ease;
