@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+  - @memberjunction/core@2.122.2
+
 ## 3.0.0 (UNRELEASED)
 
 ### Breaking Changes

@@ -81,6 +81,8 @@ export const getUserPayload = async (
 
     const expiryDate = new Date((payload.exp ?? 0) * 1000);
     if (expiryDate.getTime() <= Date.now()) {
+      // Log at warn level since token expiration is expected behavior (long-lived browser sessions)
+      console.warn(`Token expired at ${expiryDate.toISOString()} - client should refresh`);
       throw new TokenExpiredError(expiryDate);
     }
 

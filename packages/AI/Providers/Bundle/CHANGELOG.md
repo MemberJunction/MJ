@@ -1,5 +1,30 @@
 # @memberjunction/ai-provider-bundle
 
+## 2.122.2
+
+### Patch Changes
+
+- Updated dependencies [81f0c44]
+  - @memberjunction/ai-heygen@2.122.2
+  - @memberjunction/ai-recommendations-rex@2.122.2
+  - @memberjunction/ai-vectors-pinecone@2.122.2
+  - @memberjunction/ai-anthropic@2.122.2
+  - @memberjunction/ai-azure@2.122.2
+  - @memberjunction/ai-bedrock@2.122.2
+  - @memberjunction/ai-betty-bot@2.122.2
+  - @memberjunction/ai-cerebras@2.122.2
+  - @memberjunction/ai-elevenlabs@2.122.2
+  - @memberjunction/ai-gemini@2.122.2
+  - @memberjunction/ai-groq@2.122.2
+  - @memberjunction/ai-lmstudio@2.122.2
+  - @memberjunction/ai-local-embeddings@2.122.2
+  - @memberjunction/ai-mistral@2.122.2
+  - @memberjunction/ai-ollama@2.122.2
+  - @memberjunction/ai-openai@2.122.2
+  - @memberjunction/ai-openrouter@2.122.2
+  - @memberjunction/ai-vertex@2.122.2
+  - @memberjunction/ai-xai@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

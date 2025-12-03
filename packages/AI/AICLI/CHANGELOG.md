@@ -1,5 +1,28 @@
 # @memberjunction/ai-cli
 
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/ai-agents@2.122.2
+  - @memberjunction/ai-prompts@2.122.2
+  - @memberjunction/core-actions@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/core-entities-server@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/actions@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/ai-anthropic@2.122.2
+  - @memberjunction/ai-betty-bot@2.122.2
+  - @memberjunction/ai-cerebras@2.122.2
+  - @memberjunction/ai-groq@2.122.2
+  - @memberjunction/ai-mistral@2.122.2
+  - @memberjunction/ai-openai@2.122.2
+  - @memberjunction/core@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

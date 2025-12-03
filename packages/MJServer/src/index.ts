@@ -227,6 +227,21 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
         const userPayload = await getUserPayload(String(connectionParams?.Authorization), undefined, dataSources);
         return { userPayload };
       },
+      onError: (ctx, message, errors) => {
+        // Check if error is token expiration (expected behavior)
+        const isTokenExpired = errors.some(err =>
+          err.extensions?.code === 'JWT_EXPIRED' ||
+          err.message?.includes('token has expired')
+        );
+
+        if (isTokenExpired) {
+          // Log at warn level - this is expected from long-lived browser sessions
+          console.warn('WebSocket connection token expired - client should reconnect with refreshed token');
+        } else {
+          // Log actual errors at error level
+          console.error('WebSocket error:', errors);
+        }
+      },
     },
     webSocketServer
   );

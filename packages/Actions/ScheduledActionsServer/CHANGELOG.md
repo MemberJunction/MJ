@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/actions-apollo@2.122.2
+  - @memberjunction/actions-content-autotag@2.122.2
+  - @memberjunction/ai-vector-sync@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/scheduled-actions@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/actions@2.122.2
+  - @memberjunction/ai-vectors-pinecone@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/ai-mistral@2.122.2
+  - @memberjunction/ai-openai@2.122.2
+  - @memberjunction/core@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

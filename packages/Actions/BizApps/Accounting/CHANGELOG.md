@@ -1,5 +1,17 @@
 # @memberjunction/actions-bizapps-accounting
 
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/actions@2.122.2
+  - @memberjunction/actions-base@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

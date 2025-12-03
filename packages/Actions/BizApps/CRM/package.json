@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/actions-bizapps-crm",
-  "version": "2.122.1",
+  "version": "2.122.2",
   "description": "CRM system integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,9 +23,11 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "2.122.1",
-    "@memberjunction/core": "2.122.1",
-    "@memberjunction/global": "2.122.1"
+    "@memberjunction/actions": "2.122.2",
+    "@memberjunction/actions-base": "2.122.2",
+    "@memberjunction/core": "2.122.2",
+    "@memberjunction/core-entities": "2.122.2",
+    "@memberjunction/global": "2.122.2"
   },
   "devDependencies": {
     "@types/node": "20.8.7",

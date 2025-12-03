@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.122.2
+
+### Patch Changes
+
+- 3d763e9: Fix MJExplorer UI rendering issues including conversation messages not displaying, collections page showing duplicate items on reload, dialog containers for deletions, loading spinner flashes during navigation, and improve JWT token handling for WebSocket connections
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/ng-conversations@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/entity-communications-client@2.122.2
+  - @memberjunction/ng-ai-test-harness@2.122.2
+  - @memberjunction/ng-artifacts@2.122.2
+  - @memberjunction/ng-auth-services@2.122.2
+  - @memberjunction/ng-base-forms@2.122.2
+  - @memberjunction/ng-compare-records@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-dashboards@2.122.2
+  - @memberjunction/ng-entity-permissions@2.122.2
+  - @memberjunction/ng-explorer-settings@2.122.2
+  - @memberjunction/ng-file-storage@2.122.2
+  - @memberjunction/ng-query-grid@2.122.2
+  - @memberjunction/ng-record-changes@2.122.2
+  - @memberjunction/ng-resource-permissions@2.122.2
+  - @memberjunction/ng-shared@2.122.2
+  - @memberjunction/ng-user-view-grid@2.122.2
+  - @memberjunction/ng-user-view-properties@2.122.2
+  - @memberjunction/ng-notifications@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/ng-base-application@2.122.2
+  - @memberjunction/ng-entity-form-dialog@2.122.2
+  - @memberjunction/ng-record-selector@2.122.2
+  - @memberjunction/ng-shared-generic@2.122.2
+  - @memberjunction/ng-user-avatar@2.122.2
+  - @memberjunction/communication-types@2.122.2
+  - @memberjunction/templates-base-types@2.122.2
+  - @memberjunction/ng-tabstrip@2.122.2
+  - @memberjunction/skip-types@2.122.2
+  - @memberjunction/ng-generic-dialog@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

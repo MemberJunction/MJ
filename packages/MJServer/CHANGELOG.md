@@ -1,5 +1,55 @@
 # Change Log - @memberjunction/server
 
+## 2.122.2
+
+### Patch Changes
+
+- 3d763e9: Fix MJExplorer UI rendering issues including conversation messages not displaying, collections page showing duplicate items on reload, dialog containers for deletions, loading spinner flashes during navigation, and improve JWT token handling for WebSocket connections
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/actions-apollo@2.122.2
+  - @memberjunction/actions-bizapps-accounting@2.122.2
+  - @memberjunction/actions-bizapps-crm@2.122.2
+  - @memberjunction/actions-bizapps-formbuilders@2.122.2
+  - @memberjunction/ai-agent-manager@2.122.2
+  - @memberjunction/ai-agents@2.122.2
+  - @memberjunction/ai-prompts@2.122.2
+  - @memberjunction/communication-ms-graph@2.122.2
+  - @memberjunction/communication-sendgrid@2.122.2
+  - @memberjunction/core-actions@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/core-entities-server@2.122.2
+  - @memberjunction/entity-communications-server@2.122.2
+  - @memberjunction/scheduling-engine@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/testing-engine@2.122.2
+  - @memberjunction/ai-agent-manager-actions@2.122.2
+  - @memberjunction/ai-provider-bundle@2.122.2
+  - @memberjunction/actions@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/aiengine@2.122.2
+  - @memberjunction/actions-bizapps-lms@2.122.2
+  - @memberjunction/actions-bizapps-social@2.122.2
+  - @memberjunction/doc-utils@2.122.2
+  - @memberjunction/external-change-detection@2.122.2
+  - @memberjunction/data-context@2.122.2
+  - @memberjunction/queue@2.122.2
+  - @memberjunction/storage@2.122.2
+  - @memberjunction/scheduling-actions@2.122.2
+  - @memberjunction/scheduling-engine-base@2.122.2
+  - @memberjunction/templates@2.122.2
+  - @memberjunction/ai-vectors-pinecone@2.122.2
+  - @memberjunction/data-context-server@2.122.2
+  - @memberjunction/skip-types@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/component-registry-client-sdk@2.122.2
+  - @memberjunction/interactive-component-types@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+  - @memberjunction/scheduling-base-types@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

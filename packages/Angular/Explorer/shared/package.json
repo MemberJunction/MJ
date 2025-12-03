@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared",
-  "version": "2.122.1",
+  "version": "2.122.2",
   "description": "MemberJunction: MJ Explorer Angular Shared Package - utility functions and other reusable elements used across other MJ Angular packages within the MJ Explorer App - do not use outside of MJ Explorer.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -28,14 +28,15 @@
     "rxjs": "^7.8.1"
   },
   "dependencies": {
-    "@memberjunction/core": "2.122.1",
-    "@memberjunction/core-entities": "2.122.1",
-    "@memberjunction/global": "2.122.1",
-    "@memberjunction/graphql-dataprovider": "2.122.1",
-    "@memberjunction/ng-base-application": "2.122.1",
-    "@memberjunction/ng-base-types": "2.122.1",
-    "@memberjunction/ng-notifications": "2.122.1",
-    "@memberjunction/ng-shared-generic": "2.122.1",
+    "@angular/platform-browser": "18.0.2",
+    "@memberjunction/core": "2.122.2",
+    "@memberjunction/core-entities": "2.122.2",
+    "@memberjunction/global": "2.122.2",
+    "@memberjunction/graphql-dataprovider": "2.122.2",
+    "@memberjunction/ng-base-application": "2.122.2",
+    "@memberjunction/ng-base-types": "2.122.2",
+    "@memberjunction/ng-notifications": "2.122.2",
+    "@memberjunction/ng-shared-generic": "2.122.2",
     "@progress/kendo-angular-notification": "16.2.0",
     "tslib": "^2.3.0"
   },
