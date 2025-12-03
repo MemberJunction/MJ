@@ -247,7 +247,25 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   public availableDateFields: EntityFieldInfo[] = [];
 
   /** Timeline groups configuration for the timeline component */
-  public timelineGroups: TimelineGroup<BaseEntity>[] = [];
+  get timelineGroups(): TimelineGroup<BaseEntity>[] {
+    return this._timelineGroups;
+  }
+  set timelineGroups(value: TimelineGroup<BaseEntity>[]) {
+    const prev = this._timelineGroups;
+    this._timelineGroups = value;
+
+    // Detect meaningful changes to trigger refresh in child timeline component
+    const hasChanged = prev !== value ||
+      (prev.length > 0 && value.length > 0 &&
+        (prev[0].EntityObjects !== value[0]?.EntityObjects ||
+         prev[0].DateFieldName !== value[0]?.DateFieldName));
+
+    if (hasChanged) {
+      // Force change detection to propagate to child timeline component
+      this.cdr.markForCheck();
+    }
+  }
+  private _timelineGroups: TimelineGroup<BaseEntity>[] = [];
 
   /** Timeline sort order */
   public timelineSortOrder: TimelineSortOrder = 'desc';
