@@ -15,6 +15,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@azure/storage-blob": "^12.17.0",
     "@memberjunction/ai": "2.122.1",
     "@memberjunction/ai-provider-bundle": "2.122.1",
     "@memberjunction/aiengine": "2.122.1",

@@ -15,19 +15,21 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "2.122.1",
-    "@memberjunction/global": "2.122.1",
-    "@memberjunction/core-entities": "2.122.1",
     "@memberjunction/ai": "2.122.1",
     "@memberjunction/ai-core-plus": "2.122.1",
+    "@memberjunction/ai-engine-base": "2.122.1",
     "@memberjunction/aiengine": "2.122.1",
+    "@memberjunction/core": "2.122.1",
+    "@memberjunction/core-entities": "2.122.1",
+    "@memberjunction/global": "2.122.1",
     "@memberjunction/templates": "2.122.1",
     "@memberjunction/templates-base-types": "2.122.1",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
     "dotenv": "^16.4.1",
+    "json5": "^2.2.3",
     "rxjs": "^7.8.1",
-    "json5": "^2.2.3"
+    "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@types/node": "20.14.2",

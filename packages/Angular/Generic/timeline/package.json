@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-timeline",
   "version": "2.122.1",
-  "description": "MemberJunction: Timeline Display UI component",
+  "description": "MemberJunction: Responsive timeline component for Angular. Works with MemberJunction entities or plain JavaScript objects. No external dependencies.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -11,8 +11,15 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "ngc"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "angular",
+    "timeline",
+    "memberjunction",
+    "component",
+    "responsive",
+    "chronological"
+  ],
+  "author": "MemberJunction",
   "license": "ISC",
   "devDependencies": {
     "@angular/compiler": "18.0.2",
@@ -20,21 +27,16 @@
   },
   "peerDependencies": {
     "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/router": "18.0.2"
+    "@angular/core": "18.0.2"
+  },
+  "peerDependenciesMeta": {
+    "@memberjunction/core": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.122.1",
-    "@memberjunction/global": "2.122.1",
     "@memberjunction/core": "2.122.1",
-    "@memberjunction/ng-container-directives": "2.122.1",
-    "@memberjunction/ng-entity-form-dialog": "2.122.1",
-    "@memberjunction/ng-shared": "2.122.1",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-layout": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0",
-    "@progress/kendo-angular-scheduler": "16.2.0",
+    "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,
