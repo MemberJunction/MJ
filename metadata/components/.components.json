@@ -1955,5 +1955,24 @@
       "lastModified": "2025-12-04T21:07:42.587Z",
       "checksum": "259d88aaac20d92fcef120fce0ba1ee2243ddef5830457e8be157b194d5f69e6"
     }
+  },
+  {
+    "fields": {
+      "Name": "EntityDataGrid",
+      "Namespace": "Generic/UI/Table",
+      "Title": "Entity Data Grid",
+      "Type": "Table",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/entity-data-grid.spec.json"
+    },
+    "primaryKey": {
+      "ID": "BE1FED28-72D1-4F2E-8FAB-77747639732B"
+    },
+    "sync": {
+      "lastModified": "2025-12-03T19:04:39.218Z",
+      "checksum": "68ef0df7b0d9eef0d564b574c492c645d2bbf2ab62b8194a28b6393248b7c639"
+    }
   }
 ]
