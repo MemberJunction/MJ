@@ -135,7 +135,26 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Timeline configuration state
    * Controls which date field is used and segment grouping
    */
-  @Input() timelineConfig: TimelineState | null = null;
+  @Input()
+  get timelineConfig(): TimelineState | null {
+    return this._timelineConfig;
+  }
+  set timelineConfig(value: TimelineState | null) {
+    const prev = this._timelineConfig;
+    const changed = prev !== value ||
+      (value && prev && (
+        value.dateFieldName !== prev.dateFieldName ||
+        value.sortOrder !== prev.sortOrder ||
+        value.orientation !== prev.orientation ||
+        value.segmentGrouping !== prev.segmentGrouping
+      ));
+    this._timelineConfig = value;
+    if (changed && value && this.entity) {
+      this.configureTimeline();
+      this.cdr.markForCheck();
+    }
+  }
+  private _timelineConfig: TimelineState | null = null;
 
   // ========================================
   // OUTPUTS
@@ -504,13 +523,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.updateTimelineGroups();
     }
 
-    // Handle timeline config changes - always reconfigure when input changes
-    if (changes['timelineConfig']) {
-      if (this.timelineConfig) {
-        this.configureTimeline();
-      }
-      this.cdr.markForCheck();
-    }
+    // Timeline config is now handled by setter - no ngOnChanges handling needed
 
     // Handle external filter text changes (from parent component)
     if (changes['filterText']) {

@@ -180,7 +180,7 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
   private _allowLoad = true;
 
   // ============================================================================
-  // INPUTS - LAYOUT
+  // INPUTS - LAYOUT (using setters for reactive updates)
   // ============================================================================
 
   /**
@@ -189,7 +189,17 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * - `horizontal`: Events displayed left-to-right
    * @default 'vertical'
    */
-  @Input() orientation: TimelineOrientation = 'vertical';
+  @Input()
+  get orientation(): TimelineOrientation {
+    return this._orientation;
+  }
+  set orientation(value: TimelineOrientation) {
+    if (this._orientation !== value) {
+      this._orientation = value;
+      this.cdr.markForCheck();
+    }
+  }
+  private _orientation: TimelineOrientation = 'vertical';
 
   /**
    * Layout mode for vertical timeline.
@@ -197,7 +207,17 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * - `alternating`: Cards alternate sides
    * @default 'single'
    */
-  @Input() layout: TimelineLayout = 'single';
+  @Input()
+  get layout(): TimelineLayout {
+    return this._layout;
+  }
+  set layout(value: TimelineLayout) {
+    if (this._layout !== value) {
+      this._layout = value;
+      this.cdr.markForCheck();
+    }
+  }
+  private _layout: TimelineLayout = 'single';
 
   /**
    * Sort order for events.
@@ -205,13 +225,41 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * - `asc`: Oldest first
    * @default 'desc'
    */
-  @Input() sortOrder: TimelineSortOrder = 'desc';
+  @Input()
+  get sortOrder(): TimelineSortOrder {
+    return this._sortOrder;
+  }
+  set sortOrder(value: TimelineSortOrder) {
+    if (this._sortOrder !== value) {
+      this._sortOrder = value;
+      // Re-process events when sort order changes
+      if (this._initialized) {
+        this.refresh();
+      }
+      this.cdr.markForCheck();
+    }
+  }
+  private _sortOrder: TimelineSortOrder = 'desc';
 
   /**
    * How to group events into time segments.
    * @default 'month'
    */
-  @Input() segmentGrouping: TimeSegmentGrouping = 'month';
+  @Input()
+  get segmentGrouping(): TimeSegmentGrouping {
+    return this._segmentGrouping;
+  }
+  set segmentGrouping(value: TimeSegmentGrouping) {
+    if (this._segmentGrouping !== value) {
+      this._segmentGrouping = value;
+      // Re-segment events when grouping changes
+      if (this._initialized) {
+        this.refresh();
+      }
+      this.cdr.markForCheck();
+    }
+  }
+  private _segmentGrouping: TimeSegmentGrouping = 'month';
 
   // ============================================================================
   // INPUTS - CARD DEFAULTS
