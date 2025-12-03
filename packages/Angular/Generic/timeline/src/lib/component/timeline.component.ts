@@ -154,12 +154,50 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     return this._groups;
   }
   set groups(value: TimelineGroup<T>[]) {
+    const prevGroups = this._groups;
     this._groups = value || [];
-    if (this._initialized && this.allowLoad) {
-      this.refresh();
+    const hasGroups = this._groups.length > 0;
+
+    // Check if groups actually changed (different date field, label, or data)
+    const groupsChanged = this.didGroupsChange(prevGroups, this._groups);
+
+    console.log('[Timeline] groups setter:', {
+      prevCount: prevGroups.length,
+      newCount: this._groups.length,
+      groupsChanged,
+      initialized: this._initialized,
+      allowLoad: this.allowLoad,
+      hasLoaded: this._hasLoaded
+    });
+
+    if (this.allowLoad && hasGroups) {
+      if (!this._hasLoaded) {
+        // First load
+        this.refresh();
+      } else if (groupsChanged) {
+        // Groups changed after initial load - force refresh
+        this.refresh(true);
+      }
     }
   }
   private _groups: TimelineGroup<T>[] = [];
+
+  /**
+   * Check if timeline groups have meaningfully changed
+   */
+  private didGroupsChange(prev: TimelineGroup<T>[], next: TimelineGroup<T>[]): boolean {
+    if (prev.length !== next.length) return true;
+    for (let i = 0; i < prev.length; i++) {
+      const p = prev[i];
+      const n = next[i];
+      if (p.DateFieldName !== n.DateFieldName ||
+          p.GroupLabel !== n.GroupLabel ||
+          p.EntityObjects !== n.EntityObjects) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /**
    * Controls whether data loading is allowed.
@@ -173,8 +211,9 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
   set allowLoad(value: boolean) {
     const wasDisabled = !this._allowLoad;
     this._allowLoad = value;
-    if (value && wasDisabled && this._initialized && !this._hasLoaded) {
-      this.refresh();
+    // When allowLoad becomes true and we have groups, trigger refresh
+    if (value && wasDisabled && this._groups.length > 0) {
+      this.refresh(this._hasLoaded);
     }
   }
   private _allowLoad = true;
@@ -230,11 +269,13 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     return this._sortOrder;
   }
   set sortOrder(value: TimelineSortOrder) {
+    console.log('[Timeline] sortOrder setter:', { prev: this._sortOrder, value, initialized: this._initialized });
     if (this._sortOrder !== value) {
       this._sortOrder = value;
-      // Re-process events when sort order changes
+      // Re-process events when sort order changes - force refresh since data already loaded
       if (this._initialized) {
-        this.refresh();
+        console.log('[Timeline] Calling refresh(true) for sortOrder change');
+        this.refresh(true);
       }
       this.cdr.markForCheck();
     }
@@ -252,9 +293,9 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
   set segmentGrouping(value: TimeSegmentGrouping) {
     if (this._segmentGrouping !== value) {
       this._segmentGrouping = value;
-      // Re-segment events when grouping changes
+      // Re-segment events when grouping changes - force refresh since data already loaded
       if (this._initialized) {
-        this.refresh();
+        this.refresh(true);
       }
       this.cdr.markForCheck();
     }

@@ -386,6 +386,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Set the timeline date field.
    */
   setTimelineDateField(fieldName: string): void {
+    console.log('[DataExplorer] setTimelineDateField:', fieldName);
     this.state.timelineDateFieldName = fieldName;
     this.stateService.updateState({ timelineDateFieldName: fieldName });
     this.cdr.detectChanges();
@@ -396,6 +397,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   toggleTimelineOrientation(): void {
     const newOrientation = this.state.timelineOrientation === 'vertical' ? 'horizontal' : 'vertical';
+    console.log('[DataExplorer] toggleTimelineOrientation:', newOrientation);
     this.state.timelineOrientation = newOrientation;
     this.stateService.updateState({ timelineOrientation: newOrientation });
     this.cdr.detectChanges();
@@ -406,6 +408,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   toggleTimelineSortOrder(): void {
     const newSortOrder = this.state.timelineSortOrder === 'desc' ? 'asc' : 'desc';
+    console.log('[DataExplorer] toggleTimelineSortOrder:', newSortOrder);
     this.state.timelineSortOrder = newSortOrder;
     this.stateService.updateState({ timelineSortOrder: newSortOrder });
     this.cdr.detectChanges();
@@ -417,11 +420,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get currentTimelineConfig(): { dateFieldName: string; orientation: 'vertical' | 'horizontal'; sortOrder: 'asc' | 'desc' } | null {
     const dateField = this.effectiveTimelineDateField;
     if (!dateField) return null;
-    return {
+    const config = {
       dateFieldName: dateField,
       orientation: this.state.timelineOrientation,
       sortOrder: this.state.timelineSortOrder
     };
+    console.log('[DataExplorer] currentTimelineConfig getter:', config);
+    return config;
   }
 
   /**

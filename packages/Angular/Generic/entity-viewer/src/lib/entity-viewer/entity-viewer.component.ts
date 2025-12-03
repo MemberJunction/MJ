@@ -141,17 +141,28 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
   set timelineConfig(value: TimelineState | null) {
     const prev = this._timelineConfig;
-    const changed = prev !== value ||
-      (value && prev && (
-        value.dateFieldName !== prev.dateFieldName ||
-        value.sortOrder !== prev.sortOrder ||
-        value.orientation !== prev.orientation ||
-        value.segmentGrouping !== prev.segmentGrouping
-      ));
-    this._timelineConfig = value;
-    if (changed && value && this.entity) {
-      this.configureTimeline();
-      this.cdr.markForCheck();
+    // Compare by value, not reference
+    const isEqual = (prev === null && value === null) ||
+      (prev !== null && value !== null &&
+        prev.dateFieldName === value.dateFieldName &&
+        prev.sortOrder === value.sortOrder &&
+        prev.orientation === value.orientation &&
+        prev.segmentGrouping === value.segmentGrouping);
+
+    console.log('[EntityViewer] timelineConfig setter:', {
+      prev,
+      value,
+      isEqual,
+      hasEntity: !!this.entity
+    });
+
+    if (!isEqual) {
+      this._timelineConfig = value;
+      if (value && this.entity) {
+        console.log('[EntityViewer] Calling configureTimeline()');
+        this.configureTimeline();
+        this.cdr.markForCheck();
+      }
     }
   }
   private _timelineConfig: TimelineState | null = null;
