@@ -266,6 +266,30 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Get the raw ID value from selectedRecordId for timeline selection.
+   * The selectedRecordId is in composite key format (e.g., "ID|abc-123" or "ID=abc-123"),
+   * but the timeline stores just the raw ID value.
+   */
+  get timelineSelectedEventId(): string | null {
+    if (!this.selectedRecordId) return null;
+
+    // Handle "ID|value" format (pipe separator)
+    if (this.selectedRecordId.includes('|')) {
+      const parts = this.selectedRecordId.split('|');
+      return parts.length > 1 ? parts[1] : this.selectedRecordId;
+    }
+
+    // Handle "ID=value" format (equals separator)
+    if (this.selectedRecordId.includes('=')) {
+      const parts = this.selectedRecordId.split('=');
+      return parts.length > 1 ? parts[1] : this.selectedRecordId;
+    }
+
+    // Return as-is if no separator found
+    return this.selectedRecordId;
+  }
+
+  /**
    * Get the effective sort state (external or internal)
    */
   get effectiveSortState(): SortState | null {
@@ -922,9 +946,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       return;
     }
 
-    // Find all date fields
+    // Find all date fields - include __mj_CreatedAt and __mj_UpdatedAt as they're useful for timelines
     const dateFields = this.entity.Fields.filter(
-      f => f.TSType === EntityFieldTSType.Date && !f.Name.startsWith('__mj_')
+      f => f.TSType === EntityFieldTSType.Date
     );
 
     if (dateFields.length === 0) {

@@ -286,6 +286,23 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    */
   @Input() enableKeyboardNavigation = true;
 
+  /**
+   * ID of the currently selected event.
+   * When set, the corresponding event will be highlighted with the focused style.
+   */
+  @Input()
+  get selectedEventId(): string | null {
+    return this._selectedEventId;
+  }
+  set selectedEventId(value: string | null) {
+    const changed = this._selectedEventId !== value;
+    this._selectedEventId = value;
+    if (changed) {
+      this.cdr.markForCheck();
+    }
+  }
+  private _selectedEventId: string | null = null;
+
   // ============================================================================
   // OUTPUTS - BEFORE EVENTS (with cancel support)
   // ============================================================================
@@ -1006,6 +1023,21 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    */
   getGlobalIndex(event: MJTimelineEvent<T>): number {
     return this.allEvents.indexOf(event);
+  }
+
+  /**
+   * Checks if an event is currently selected/focused.
+   * An event is selected if either:
+   * - Its ID matches the selectedEventId input
+   * - Its global index matches the focusedEventIndex (keyboard navigation)
+   */
+  isEventSelected(event: MJTimelineEvent<T>, globalIndex: number): boolean {
+    // Check selectedEventId from parent first (takes priority)
+    if (this.selectedEventId && event.id === this.selectedEventId) {
+      return true;
+    }
+    // Fall back to keyboard navigation focus
+    return this.focusedEventIndex === globalIndex;
   }
 
   // ============================================================================

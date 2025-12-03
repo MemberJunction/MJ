@@ -331,7 +331,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get entityHasDateFields(): boolean {
     if (!this.selectedEntity) return false;
     return this.selectedEntity.Fields.some(
-      f => f.TSType === EntityFieldTSType.Date && !f.Name.startsWith('__mj_')
+      f => f.TSType === EntityFieldTSType.Date
     );
   }
 
@@ -342,7 +342,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get availableDateFields(): { name: string; displayName: string }[] {
     if (!this.selectedEntity) return [];
     return this.selectedEntity.Fields
-      .filter(f => f.TSType === EntityFieldTSType.Date && !f.Name.startsWith('__mj_'))
+      .filter(f => f.TSType === EntityFieldTSType.Date)
       .sort((a, b) => {
         // Prioritize DefaultInView fields, then by Sequence
         if (a.DefaultInView && !b.DefaultInView) return -1;

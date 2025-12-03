@@ -145,7 +145,7 @@
     [class.mj-timeline__event--odd]="isOdd && layout === 'alternating'"
     [class.mj-timeline__event--even]="!isOdd && layout === 'alternating'"
     [class.mj-timeline__event--expanded]="event.isExpanded"
-    [class.mj-timeline__event--focused]="focusedEventIndex === globalIndex"
+    [class.mj-timeline__event--focused]="isEventSelected(event, globalIndex)"
     [attr.data-event-id]="event.id"
     role="listitem"
     [attr.aria-expanded]="event.isExpanded">

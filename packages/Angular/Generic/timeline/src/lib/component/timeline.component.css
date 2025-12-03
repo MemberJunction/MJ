@@ -71,7 +71,7 @@ mj-timeline {
   position: relative;
   width: 100%;
   height: 100%;
-  padding: 24px 16px;
+  padding: 0;
   background: var(--mj-timeline-bg);
   outline: none;
   overflow-y: auto;
@@ -238,8 +238,9 @@ mj-timeline {
 }
 
 .mj-timeline__segment-content {
-  overflow: hidden;
+  overflow: visible;
   transition: max-height 0.25s ease, opacity 0.2s ease;
+  padding-top: 8px;
 }
 
 .mj-timeline__segment-content--hidden {
@@ -404,11 +405,58 @@ mj-timeline {
   border-color: var(--mj-timeline-accent);
 }
 
-/* Selected/Focused state */
+/* Selected/Focused state - prominent highlight with animation */
 .mj-timeline__event--focused .mj-timeline__card {
   background: var(--mj-timeline-accent-light);
   border-color: var(--mj-timeline-accent);
-  box-shadow: 0 0 0 2px var(--mj-timeline-accent);
+  box-shadow:
+    0 0 0 3px var(--mj-timeline-accent),
+    0 8px 24px rgba(70, 120, 168, 0.25);
+  transform: scale(1.02);
+}
+
+/* Selected marker - larger and more prominent */
+.mj-timeline__event--focused .mj-timeline__marker {
+  transform: translateX(-50%) scale(1.4);
+  box-shadow:
+    0 0 0 3px var(--mj-timeline-marker-fill),
+    0 0 12px rgba(70, 120, 168, 0.5);
+}
+
+/* Pulse animation for selected marker */
+.mj-timeline__event--focused .mj-timeline__marker::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--mj-timeline-accent);
+  animation: mj-timeline-pulse 1.5s ease-out infinite;
+}
+
+@keyframes mj-timeline-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+/* Selected date label - bolder */
+.mj-timeline__event--focused .mj-timeline__date-label {
+  color: var(--mj-timeline-accent);
+  font-weight: 600;
+}
+
+/* Card arrow gets accent color when selected */
+.mj-timeline__event--focused .mj-timeline__card::before {
+  border-color: var(--mj-timeline-accent);
+  background: var(--mj-timeline-accent-light);
 }
 
 /* ============================================================================
@@ -849,6 +897,11 @@ mj-timeline {
 
 .mj-timeline--horizontal .mj-timeline__card::before {
   display: none;
+}
+
+/* Horizontal focused marker override */
+.mj-timeline--horizontal .mj-timeline__event--focused .mj-timeline__marker {
+  transform: translateX(-50%) scale(1.4);
 }
 
 /* ============================================================================
