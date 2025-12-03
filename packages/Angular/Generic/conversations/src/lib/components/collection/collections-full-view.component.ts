@@ -1172,7 +1172,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   async loadData(): Promise<void> {
-    this.isLoading = true;
+    // Only show loading spinner if we don't have data yet
+    // This prevents flash of loading when navigating between collections
+    const hasData = this.collections.length > 0 || this.unifiedItems.length > 0;
+    if (!hasData) {
+      this.isLoading = true;
+    }
+
     try {
       // Load saved view preferences from localStorage
       const savedMode = localStorage.getItem('collections-view-mode');
