@@ -918,6 +918,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.hasDateFields = false;
       this.availableDateFields = [];
       this.timelineGroups = [];
+      this.fallbackFromTimelineIfNeeded();
       return;
     }
 
@@ -930,6 +931,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.hasDateFields = false;
       this.availableDateFields = [];
       this.timelineGroups = [];
+      this.fallbackFromTimelineIfNeeded();
       return;
     }
 
@@ -939,6 +941,16 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
     // Configure timeline with the best date field
     this.configureTimeline();
+  }
+
+  /**
+   * If currently on timeline view but timeline is no longer available,
+   * fall back to grid view
+   */
+  private fallbackFromTimelineIfNeeded(): void {
+    if (this.effectiveViewMode === 'timeline' && !this.hasDateFields) {
+      this.setViewMode('grid');
+    }
   }
 
   /**
