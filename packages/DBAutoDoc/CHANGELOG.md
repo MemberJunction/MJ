@@ -1,5 +1,15 @@
 # @memberjunction/db-auto-doc
 
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+  - @memberjunction/ai-provider-bundle@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

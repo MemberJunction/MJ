@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/ai-agent-manager@2.122.2
+  - @memberjunction/ai-agents@2.122.2
+  - @memberjunction/ai-prompts@2.122.2
+  - @memberjunction/ai-vector-sync@2.122.2
+  - @memberjunction/content-autotagging@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/core-entities-server@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/actions@2.122.2
+  - @memberjunction/ai-engine-base@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/aiengine@2.122.2
+  - @memberjunction/actions-base@2.122.2
+  - @memberjunction/communication-types@2.122.2
+  - @memberjunction/communication-engine@2.122.2
+  - @memberjunction/external-change-detection@2.122.2
+  - @memberjunction/storage@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/ai-betty-bot@2.122.2
+  - @memberjunction/code-execution@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

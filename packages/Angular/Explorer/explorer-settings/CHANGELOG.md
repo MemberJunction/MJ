@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/ng-base-forms@2.122.2
+  - @memberjunction/ng-code-editor@2.122.2
+  - @memberjunction/ng-compare-records@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-entity-permissions@2.122.2
+  - @memberjunction/ng-join-grid@2.122.2
+  - @memberjunction/ng-shared@2.122.2
+  - @memberjunction/ng-simple-record-list@2.122.2
+  - @memberjunction/ng-user-view-grid@2.122.2
+  - @memberjunction/ng-notifications@2.122.2
+  - @memberjunction/ng-base-application@2.122.2
+  - @memberjunction/ng-entity-form-dialog@2.122.2
+  - @memberjunction/ng-shared-generic@2.122.2
+  - @memberjunction/ng-user-avatar@2.122.2
+  - @memberjunction/ng-tabstrip@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes

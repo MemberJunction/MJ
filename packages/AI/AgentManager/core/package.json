@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-agent-manager",
-  "version": "2.122.1",
+  "version": "2.122.2",
   "description": "Core interfaces and types for the MemberJunction Agent Manager system",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,14 +19,14 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai-agents": "2.122.1",
-    "@memberjunction/ai-core-plus": "2.122.1",
-    "@memberjunction/ai-engine-base": "2.122.1",
-    "@memberjunction/aiengine": "2.122.1",
-    "@memberjunction/core": "2.122.1",
-    "@memberjunction/core-entities": "2.122.1",
-    "@memberjunction/global": "2.122.1",
-    "@memberjunction/templates": "2.122.1"
+    "@memberjunction/ai-agents": "2.122.2",
+    "@memberjunction/ai-core-plus": "2.122.2",
+    "@memberjunction/ai-engine-base": "2.122.2",
+    "@memberjunction/aiengine": "2.122.2",
+    "@memberjunction/core": "2.122.2",
+    "@memberjunction/core-entities": "2.122.2",
+    "@memberjunction/global": "2.122.2",
+    "@memberjunction/templates": "2.122.2"
   },
   "devDependencies": {
     "@types/node": "^18.11.0",

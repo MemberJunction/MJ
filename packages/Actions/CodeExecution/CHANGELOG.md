@@ -1,5 +1,12 @@
 # @memberjunction/code-execution
 
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/core@2.122.2
+- @memberjunction/global@2.122.2
+
 ## 2.122.1
 
 ### Patch Changes
