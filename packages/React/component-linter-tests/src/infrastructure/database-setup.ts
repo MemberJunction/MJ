@@ -5,7 +5,6 @@
 
 import { Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { LoadGeneratedEntities } from 'mj_generatedentities';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import * as dotenv from 'dotenv';
@@ -30,9 +29,6 @@ export async function initializeDatabase(): Promise<void> {
   if (isInitialized) {
     return;
   }
-
-  // Load generated entities FIRST - required for metadata to work
-  LoadGeneratedEntities();
 
   console.log(`🔄 Initializing database connection...`);
   console.log(`   Host: ${process.env.DB_HOST}`);
