@@ -161,15 +161,6 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     // Check if groups actually changed (different date field, label, or data)
     const groupsChanged = this.didGroupsChange(prevGroups, this._groups);
 
-    console.log('[Timeline] groups setter:', {
-      prevCount: prevGroups.length,
-      newCount: this._groups.length,
-      groupsChanged,
-      initialized: this._initialized,
-      allowLoad: this.allowLoad,
-      hasLoaded: this._hasLoaded
-    });
-
     if (this.allowLoad && hasGroups) {
       if (!this._hasLoaded) {
         // First load
@@ -269,12 +260,10 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     return this._sortOrder;
   }
   set sortOrder(value: TimelineSortOrder) {
-    console.log('[Timeline] sortOrder setter:', { prev: this._sortOrder, value, initialized: this._initialized });
     if (this._sortOrder !== value) {
       this._sortOrder = value;
       // Re-process events when sort order changes - force refresh since data already loaded
       if (this._initialized) {
-        console.log('[Timeline] Calling refresh(true) for sortOrder change');
         this.refresh(true);
       }
       this.cdr.markForCheck();

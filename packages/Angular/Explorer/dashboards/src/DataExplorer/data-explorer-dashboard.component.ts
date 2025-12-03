@@ -131,6 +131,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Loading state for entities
   public isLoadingEntities: boolean = true;
 
+  // Date field dropdown state
+  public isDateFieldDropdownOpen: boolean = false;
+
   // Flag to skip URL updates during initialization (when applying deep link)
   private skipUrlUpdates: boolean = true;
 
@@ -386,10 +389,24 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Set the timeline date field.
    */
   setTimelineDateField(fieldName: string): void {
-    console.log('[DataExplorer] setTimelineDateField:', fieldName);
     this.state.timelineDateFieldName = fieldName;
     this.stateService.updateState({ timelineDateFieldName: fieldName });
+    this.isDateFieldDropdownOpen = false;
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle the date field dropdown open/closed.
+   */
+  toggleDateFieldDropdown(): void {
+    this.isDateFieldDropdownOpen = !this.isDateFieldDropdownOpen;
+  }
+
+  /**
+   * Close the date field dropdown.
+   */
+  closeDateFieldDropdown(): void {
+    this.isDateFieldDropdownOpen = false;
   }
 
   /**
@@ -397,7 +414,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   toggleTimelineOrientation(): void {
     const newOrientation = this.state.timelineOrientation === 'vertical' ? 'horizontal' : 'vertical';
-    console.log('[DataExplorer] toggleTimelineOrientation:', newOrientation);
     this.state.timelineOrientation = newOrientation;
     this.stateService.updateState({ timelineOrientation: newOrientation });
     this.cdr.detectChanges();
@@ -408,7 +424,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   toggleTimelineSortOrder(): void {
     const newSortOrder = this.state.timelineSortOrder === 'desc' ? 'asc' : 'desc';
-    console.log('[DataExplorer] toggleTimelineSortOrder:', newSortOrder);
     this.state.timelineSortOrder = newSortOrder;
     this.stateService.updateState({ timelineSortOrder: newSortOrder });
     this.cdr.detectChanges();
@@ -420,13 +435,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get currentTimelineConfig(): { dateFieldName: string; orientation: 'vertical' | 'horizontal'; sortOrder: 'asc' | 'desc' } | null {
     const dateField = this.effectiveTimelineDateField;
     if (!dateField) return null;
-    const config = {
+    return {
       dateFieldName: dateField,
       orientation: this.state.timelineOrientation,
       sortOrder: this.state.timelineSortOrder
     };
-    console.log('[DataExplorer] currentTimelineConfig getter:', config);
-    return config;
   }
 
   /**
@@ -652,7 +665,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * @param urlState Optional URL state - if provided, skip restoring persisted entity to avoid race conditions
    */
   private async loadEntities(urlState?: DataExplorerDeepLink | null): Promise<void> {
-    console.log('[DataExplorer] loadEntities called, entityFilter:', this.entityFilter);
     this.isLoadingEntities = true;
 
     try {
@@ -664,18 +676,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         })
         .sort((a, b) => a.Name.localeCompare(b.Name));
 
-      console.log('[DataExplorer] allEntities count:', this.allEntities.length);
-
       // If we have an applicationId filter, load the application entities
       if (this.entityFilter?.applicationId) {
         await this.loadApplicationEntityIds(this.entityFilter.applicationId);
-        console.log('[DataExplorer] applicationEntityIds count:', this.applicationEntityIds.size);
       }
 
       // Apply filter to get the final entity list
       this.entities = this.applyEntityFilter(this.allEntities);
-
-      console.log('[DataExplorer] filtered entities count:', this.entities.length);
 
       // Only restore entity from persisted state if there's no URL state
       // This prevents race conditions where persisted entity triggers data load
@@ -876,8 +883,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onManageViewsRequested(): void {
     // TODO: Implement navigation to view management
-    // For now, just log
-    console.log('[DataExplorer] Manage views requested');
   }
 
   /**

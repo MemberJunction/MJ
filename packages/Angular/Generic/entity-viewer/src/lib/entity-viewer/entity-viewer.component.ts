@@ -149,17 +149,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         prev.orientation === value.orientation &&
         prev.segmentGrouping === value.segmentGrouping);
 
-    console.log('[EntityViewer] timelineConfig setter:', {
-      prev,
-      value,
-      isEqual,
-      hasEntity: !!this.entity
-    });
-
     if (!isEqual) {
       this._timelineConfig = value;
       if (value && this.entity) {
-        console.log('[EntityViewer] Calling configureTimeline()');
         this.configureTimeline();
         this.cdr.markForCheck();
       }

@@ -154,20 +154,42 @@
           <!-- Timeline Controls (only shown when timeline view is active) -->
           @if (state.viewMode === 'timeline' && entityHasDateFields) {
             <!-- Date Field Selector -->
-            <div class="timeline-date-selector">
-              <i class="fa-solid fa-calendar-days"></i>
-              @if (availableDateFields.length === 1) {
-                <span class="date-field-label">{{ effectiveTimelineDateFieldDisplayName }}</span>
-              } @else {
-                <select
-                  class="date-field-select"
-                  [value]="effectiveTimelineDateField"
-                  (change)="setTimelineDateField($any($event.target).value)">
-                  @for (field of availableDateFields; track field.name) {
-                    <option [value]="field.name">{{ field.displayName }}</option>
-                  }
-                </select>
+            <div class="date-field-selector-container">
+              <!-- Backdrop for closing dropdown -->
+              @if (isDateFieldDropdownOpen) {
+                <div class="date-field-backdrop" (click)="closeDateFieldDropdown()"></div>
               }
+
+              <div class="date-field-selector-wrapper">
+                <button
+                  class="date-field-selector-button"
+                  [class.open]="isDateFieldDropdownOpen"
+                  [disabled]="availableDateFields.length <= 1"
+                  (click)="toggleDateFieldDropdown()">
+                  <i class="fa-solid fa-calendar-days date-field-icon"></i>
+                  <span class="date-field-name">{{ effectiveTimelineDateFieldDisplayName }}</span>
+                  @if (availableDateFields.length > 1) {
+                    <i class="fa-solid fa-chevron-down date-field-arrow" [class.rotated]="isDateFieldDropdownOpen"></i>
+                  }
+                </button>
+
+                @if (isDateFieldDropdownOpen && availableDateFields.length > 1) {
+                  <div class="date-field-dropdown-panel">
+                    @for (field of availableDateFields; track field.name) {
+                      <div
+                        class="date-field-dropdown-item"
+                        [class.selected]="field.name === effectiveTimelineDateField"
+                        (click)="setTimelineDateField(field.name)">
+                        <i class="fa-regular fa-calendar item-icon"></i>
+                        <span class="item-name">{{ field.displayName }}</span>
+                        @if (field.name === effectiveTimelineDateField) {
+                          <i class="fa-solid fa-check selected-check"></i>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
             </div>
 
             <!-- Orientation Toggle -->
