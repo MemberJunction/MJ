@@ -366,16 +366,28 @@ function DataGrid({
         align: align,
         width: colDef.width || columnWidth, // Use column-specific width if provided
         ellipsis: false, // We'll handle ellipsis manually for click expansion
-        sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {
-          const valA = a[fieldName];
-          const valB = b[fieldName];
-          if (valA == null) return 1;
-          if (valB == null) return -1;
-          if (typeof valA === 'string') {
-            return valA.localeCompare(valB);
+        sorter: (() => {
+          const shouldSort = colDef.sortable !== undefined ? colDef.sortable : sorting;
+          // If explicitly set to true (not a function), return true to show UI without internal sorting
+          // This allows parent components to handle sorting via onSortChanged
+          if (shouldSort === true) return true;
+          // If truthy but not exactly true, create sorter function for internal sorting
+          if (shouldSort) {
+            return (a, b) => {
+              const valA = a[fieldName];
+              const valB = b[fieldName];
+              if (valA == null) return 1;
+              if (valB == null) return -1;
+              if (typeof valA === 'string') {
+                return valA.localeCompare(valB);
+              }
+              return valA - valB;
+            };
           }
-          return valA - valB;
-        } : false,
+          // Falsy means no sorting
+          return false;
+        })(),
+        sortOrder: colDef.sortOrder, // Pass through sortOrder for controlled sorting
         render: (value, record) => {
           // Check for custom render function first
           if (colDef.render && typeof colDef.render === 'function') {
@@ -663,12 +675,25 @@ function DataGrid({
   const handleTableChange = (pag, filters, sorter) => {
     if (sorter && onSortChanged) {
       setSortConfig(sorter);
-      onSortChanged({
-        sortState: {
-          column: sorter.field,
-          direction: sorter.order === 'ascend' ? 'asc' : 'desc'
-        }
-      });
+
+      // Three-state sorting: ascend -> descend -> undefined (clear)
+      if (sorter.order) {
+        // Valid sort order (ascend or descend)
+        onSortChanged({
+          sortState: {
+            column: sorter.field,
+            direction: sorter.order === 'ascend' ? 'asc' : 'desc'
+          }
+        });
+      } else if (sorter.field) {
+        // sorter.order is undefined - user clicked third time to clear sort
+        onSortChanged({
+          sortState: {
+            column: sorter.field,
+            direction: null // Signal to clear sort
+          }
+        });
+      }
     }
   };
 
