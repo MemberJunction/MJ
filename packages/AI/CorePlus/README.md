@@ -284,8 +284,89 @@ type BaseAgentNextStep = {
 }
 ```
 
+## Runtime Action Changes (v2.123.0)
+
+The `ActionChange` interface allows dynamic customization of which actions are available to agents at runtime, without modifying database configuration. This is particularly useful for multi-tenant scenarios where different executions of the same agent need access to different integrations.
+
+### ActionChange Interface
+
+```typescript
+interface ActionChange {
+  scope: ActionChangeScope;  // Which agents to apply to
+  mode: ActionChangeMode;    // 'add' or 'remove'
+  actionIds: string[];       // Action entity IDs
+  agentIds?: string[];       // Required for 'specific' scope
+}
+
+type ActionChangeScope = 'global' | 'root' | 'all-subagents' | 'specific';
+type ActionChangeMode = 'add' | 'remove';
+```
+
+### Scope Options
+
+- **`global`**: Applies to all agents in the hierarchy (root + all sub-agents)
+- **`root`**: Applies only to the root agent
+- **`all-subagents`**: Applies to all sub-agents but NOT the root agent
+- **`specific`**: Applies only to agents listed in `agentIds`
+
+### Usage Examples
+
+```typescript
+// Add CRM and LMS integrations for a specific tenant
+const params: ExecuteAgentParams = {
+  agent: myAgent,
+  conversationMessages: messages,
+  actionChanges: [
+    {
+      scope: 'global',
+      mode: 'add',
+      actionIds: ['lms-query-action-id', 'crm-search-action-id']
+    }
+  ]
+};
+
+// Remove dangerous actions from sub-agents
+const params: ExecuteAgentParams = {
+  agent: myAgent,
+  conversationMessages: messages,
+  actionChanges: [
+    {
+      scope: 'all-subagents',
+      mode: 'remove',
+      actionIds: ['delete-record-action-id', 'execute-sql-action-id']
+    }
+  ]
+};
+
+// Add special actions only for a specific sub-agent
+const params: ExecuteAgentParams = {
+  agent: myAgent,
+  conversationMessages: messages,
+  actionChanges: [
+    { scope: 'global', mode: 'add', actionIds: ['common-action-id'] },
+    {
+      scope: 'specific',
+      mode: 'add',
+      actionIds: ['special-data-action-id'],
+      agentIds: ['data-gatherer-sub-agent-id']
+    }
+  ]
+};
+```
+
+### Propagation Rules
+
+When sub-agents are executed, action changes are propagated based on scope:
+- **`global`**: Propagated as-is to all sub-agents
+- **`root`**: Not propagated (only applies to root agent)
+- **`all-subagents`**: Propagated as `global` to sub-agents (since they're now in scope)
+- **`specific`**: Propagated as-is; each agent checks if it's in `agentIds`
+
+**See:** [@memberjunction/ai-agents README](../Agents/README.md) for complete implementation details.
+
 ## Version History
 
+- **2.123.0** - Added runtime action changes (ActionChange, ActionChangeScope, ActionChangeMode)
 - **2.108.0** - Added message lifecycle management types and expiration configuration
 - **2.78.0** - Added enhanced model selection tracking with entity objects
 - **2.77.0** - Added execution status enums and cancellation support
