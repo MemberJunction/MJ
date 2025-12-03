@@ -12,16 +12,25 @@
  */
 
 // Import all AI provider loaders
-import { LoadOpenAILLM } from '@memberjunction/ai-openai';
+import { LoadOpenAILLM, LoadOpenAIEmbedding } from '@memberjunction/ai-openai';
 import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
-import { LoadGroqLLM } from '@memberjunction/ai-groq';
+import { LoadAzureLLM, LoadAzureEmbedding } from '@memberjunction/ai-azure';
+import { LoadBedrockLLM, LoadBedrockEmbedding } from '@memberjunction/ai-bedrock';
+import { LoadBettyBotLLM } from '@memberjunction/ai-betty-bot';
 import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
-import { LoadMistralLLM } from '@memberjunction/ai-mistral';
+import { LoadElevenLabsAudioGenerator } from '@memberjunction/ai-elevenlabs';
+import { LoadGeminiLLM } from '@memberjunction/ai-gemini';
+import { LoadGroqLLM } from '@memberjunction/ai-groq';
+import { LoadHeyGenVideoGenerator } from '@memberjunction/ai-heygen';
 import { LoadLMStudioLLM } from '@memberjunction/ai-lmstudio';
-import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
-import { LoadOllamaLLM } from '@memberjunction/ai-ollama';
-import { LoadxAILLM } from '@memberjunction/ai-xai';
 import { LoadLocalEmbedding } from '@memberjunction/ai-local-embeddings';
+import { LoadMistralLLM, LoadMistralEmbedding } from '@memberjunction/ai-mistral';
+import { LoadOllamaLLM, LoadOllamaEmbedding } from '@memberjunction/ai-ollama';
+import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
+import { LoadRexRecommendationsProvider } from '@memberjunction/ai-recommendations-rex';
+import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
+import { LoadVertexLLM, LoadVertexEmbedding } from '@memberjunction/ai-vertex';
+import { LoadxAILLM } from '@memberjunction/ai-xai';
 
 /**
  * Loads all standard AI providers to prevent tree shaking.
@@ -38,14 +47,36 @@ import { LoadLocalEmbedding } from '@memberjunction/ai-local-embeddings';
  * ```
  */
 export function LoadAIProviders(): void {
+    // LLM Providers
     LoadOpenAILLM();
     LoadAnthropicLLM();
-    LoadGroqLLM();
+    LoadAzureLLM();
+    LoadBedrockLLM();
+    LoadBettyBotLLM();
     LoadCerebrasLLM();
-    LoadMistralLLM();
+    LoadGeminiLLM();
+    LoadGroqLLM();
     LoadLMStudioLLM();
-    LoadOpenRouterLLM();
+    LoadMistralLLM();
     LoadOllamaLLM();
+    LoadOpenRouterLLM();
+    LoadVertexLLM();
     LoadxAILLM();
+
+    // Embedding Providers
+    LoadOpenAIEmbedding();
+    LoadAzureEmbedding();
+    LoadBedrockEmbedding();
     LoadLocalEmbedding();
+    LoadMistralEmbedding();
+    LoadOllamaEmbedding();
+    LoadVertexEmbedding();
+
+    // Audio/Video Providers
+    LoadElevenLabsAudioGenerator();
+    LoadHeyGenVideoGenerator();
+
+    // Specialized Providers
+    LoadRexRecommendationsProvider();
+    LoadPineconeVectorDB();
 }
