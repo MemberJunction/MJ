@@ -6,7 +6,7 @@ import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/oper
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView } from '@memberjunction/core';
+import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { ApplicationEntityEntity } from '@memberjunction/core-entities';
 import {
@@ -322,6 +322,95 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   get displayIcon(): string | null {
     return this.contextIcon;
+  }
+
+  /**
+   * Check if the currently selected entity has date fields available for timeline view.
+   * Used to conditionally show the timeline toggle button in the header.
+   */
+  get entityHasDateFields(): boolean {
+    if (!this.selectedEntity) return false;
+    return this.selectedEntity.Fields.some(
+      f => f.TSType === EntityFieldTSType.Date && !f.Name.startsWith('__mj_')
+    );
+  }
+
+  /**
+   * Get available date fields for the currently selected entity.
+   * Used for the date field selector in timeline view.
+   */
+  get availableDateFields(): { name: string; displayName: string }[] {
+    if (!this.selectedEntity) return [];
+    return this.selectedEntity.Fields
+      .filter(f => f.TSType === EntityFieldTSType.Date && !f.Name.startsWith('__mj_'))
+      .sort((a, b) => {
+        // Prioritize DefaultInView fields, then by Sequence
+        if (a.DefaultInView && !b.DefaultInView) return -1;
+        if (!a.DefaultInView && b.DefaultInView) return 1;
+        return a.Sequence - b.Sequence;
+      })
+      .map(f => ({
+        name: f.Name,
+        displayName: f.DisplayNameOrName
+      }));
+  }
+
+  /**
+   * Get the effective timeline date field name.
+   * Returns stored value if valid, otherwise first available date field.
+   */
+  get effectiveTimelineDateField(): string | null {
+    const available = this.availableDateFields;
+    if (available.length === 0) return null;
+
+    // Check if stored value is still valid
+    if (this.state.timelineDateFieldName && available.some(f => f.name === this.state.timelineDateFieldName)) {
+      return this.state.timelineDateFieldName;
+    }
+
+    // Default to first available
+    return available[0].name;
+  }
+
+  /**
+   * Get the display name of the effective timeline date field.
+   */
+  get effectiveTimelineDateFieldDisplayName(): string {
+    const fieldName = this.effectiveTimelineDateField;
+    if (!fieldName) return '';
+    const field = this.availableDateFields.find(f => f.name === fieldName);
+    return field?.displayName || fieldName;
+  }
+
+  /**
+   * Set the timeline date field.
+   */
+  setTimelineDateField(fieldName: string): void {
+    this.state.timelineDateFieldName = fieldName;
+    this.stateService.updateState({ timelineDateFieldName: fieldName });
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle timeline orientation between vertical and horizontal.
+   */
+  toggleTimelineOrientation(): void {
+    const newOrientation = this.state.timelineOrientation === 'vertical' ? 'horizontal' : 'vertical';
+    this.state.timelineOrientation = newOrientation;
+    this.stateService.updateState({ timelineOrientation: newOrientation });
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Get the current timeline configuration for the entity-viewer.
+   */
+  get currentTimelineConfig(): { dateFieldName: string; orientation: 'vertical' | 'horizontal' } | null {
+    const dateField = this.effectiveTimelineDateField;
+    if (!dateField) return null;
+    return {
+      dateFieldName: dateField,
+      orientation: this.state.timelineOrientation
+    };
   }
 
   /**
@@ -927,7 +1016,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           await this.viewSelectorRef?.loadViews();
           // Refresh the entity viewer data to apply saved filters/sorts
           // Note: viewEntity reference didn't change, so we need to manually trigger refresh
-          this.entityViewerRef?.loadData();
+          // Use refresh() instead of loadData() to reset pagination state and reload from page 1
+          this.entityViewerRef?.refresh();
         }
       }
 

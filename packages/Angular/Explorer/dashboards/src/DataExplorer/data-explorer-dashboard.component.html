@@ -140,7 +140,47 @@
               title="Cards View">
               <i class="fa-solid fa-grip"></i>
             </button>
+            @if (entityHasDateFields) {
+              <button
+                class="toggle-btn"
+                [class.active]="state.viewMode === 'timeline'"
+                (click)="onViewModeChanged('timeline')"
+                title="Timeline View">
+                <i class="fa-solid fa-timeline"></i>
+              </button>
+            }
           </div>
+
+          <!-- Timeline Controls (only shown when timeline view is active) -->
+          @if (state.viewMode === 'timeline' && entityHasDateFields) {
+            <!-- Date Field Selector -->
+            <div class="timeline-date-selector">
+              <i class="fa-solid fa-calendar-days"></i>
+              @if (availableDateFields.length === 1) {
+                <span class="date-field-label">{{ effectiveTimelineDateFieldDisplayName }}</span>
+              } @else {
+                <select
+                  class="date-field-select"
+                  [value]="effectiveTimelineDateField"
+                  (change)="setTimelineDateField($any($event.target).value)">
+                  @for (field of availableDateFields; track field.name) {
+                    <option [value]="field.name">{{ field.displayName }}</option>
+                  }
+                </select>
+              }
+            </div>
+
+            <!-- Orientation Toggle -->
+            <div class="timeline-orientation-toggle">
+              <button
+                class="toggle-btn"
+                [class.active]="state.timelineOrientation === 'vertical'"
+                (click)="toggleTimelineOrientation()"
+                [title]="state.timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
+                <i [class]="state.timelineOrientation === 'vertical' ? 'fa-solid fa-arrows-up-down' : 'fa-solid fa-arrows-left-right'"></i>
+              </button>
+            </div>
+          }
         }
         <!-- Common/All toggle moved to inline with All Entities section header -->
       </div>
@@ -394,6 +434,7 @@
           [selectedRecordId]="state.selectedRecordId"
           [config]="viewerConfig"
           [gridState]="currentGridState"
+          [timelineConfig]="currentTimelineConfig"
           (viewModeChange)="onViewModeChanged($event)"
           (filterTextChange)="onFilterTextChanged($event)"
           (recordSelected)="onViewerRecordSelected($event)"

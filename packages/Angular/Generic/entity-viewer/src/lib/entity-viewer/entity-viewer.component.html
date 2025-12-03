@@ -49,6 +49,46 @@
             title="Cards View">
             <i class="fa-solid fa-grip"></i>
           </button>
+          @if (hasDateFields) {
+            <button
+              class="toggle-btn"
+              [class.active]="effectiveViewMode === 'timeline'"
+              (click)="setViewMode('timeline')"
+              title="Timeline View">
+              <i class="fa-solid fa-timeline"></i>
+            </button>
+          }
+        </div>
+      }
+
+      <!-- Timeline Controls (only shown when timeline is active) -->
+      @if (effectiveViewMode === 'timeline' && hasDateFields) {
+        <!-- Date Field Selector -->
+        <div class="timeline-date-selector">
+          <i class="fa-solid fa-calendar-days"></i>
+          @if (availableDateFields.length === 1) {
+            <span class="date-field-label">{{ selectedDateFieldDisplayName }}</span>
+          } @else {
+            <select
+              class="date-field-select"
+              [value]="selectedTimelineDateField"
+              (change)="setTimelineDateField($any($event.target).value)">
+              @for (field of availableDateFields; track field.Name) {
+                <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+              }
+            </select>
+          }
+        </div>
+
+        <!-- Orientation Toggle -->
+        <div class="timeline-orientation-toggle">
+          <button
+            class="toggle-btn"
+            [class.active]="timelineOrientation === 'vertical'"
+            (click)="toggleTimelineOrientation()"
+            [title]="timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
+            <i [class]="timelineOrientation === 'vertical' ? 'fa-solid fa-arrows-up-down' : 'fa-solid fa-arrows-left-right'"></i>
+          </button>
         </div>
       }
     </div>
@@ -72,33 +112,48 @@
         <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
       </div>
     } @else {
-      @if (effectiveViewMode === 'grid') {
-        <mj-entity-grid
-          [entity]="entity"
-          [records]="filteredRecords"
-          [selectedRecordId]="selectedRecordId"
-          [columns]="gridColumns"
-          [height]="'100%'"
-          [filterText]="debouncedFilterText"
-          [sortState]="effectiveSortState"
-          [serverSideSorting]="effectiveConfig.serverSideSorting"
-          [gridState]="gridState"
-          (recordSelected)="onRecordSelected($event)"
-          (recordOpened)="onRecordOpened($event)"
-          (sortChanged)="onSortChanged($event)"
-          (gridStateChanged)="onGridStateChanged($event)">
-        </mj-entity-grid>
-      } @else {
-        <mj-entity-cards
-          [entity]="entity"
-          [records]="filteredRecords"
-          [selectedRecordId]="selectedRecordId"
-          [cardTemplate]="cardTemplate"
-          [hiddenFieldMatches]="hiddenFieldMatches"
-          [filterText]="debouncedFilterText"
-          (recordSelected)="onRecordSelected($event)"
-          (recordOpened)="onRecordOpened($event)">
-        </mj-entity-cards>
+      <!-- Grid View - always rendered but hidden when not active to preserve state -->
+      <mj-entity-grid
+        [hidden]="effectiveViewMode !== 'grid'"
+        [entity]="entity"
+        [records]="filteredRecords"
+        [selectedRecordId]="selectedRecordId"
+        [columns]="gridColumns"
+        [height]="'100%'"
+        [filterText]="debouncedFilterText"
+        [sortState]="effectiveSortState"
+        [serverSideSorting]="effectiveConfig.serverSideSorting"
+        [gridState]="gridState"
+        (recordSelected)="onRecordSelected($event)"
+        (recordOpened)="onRecordOpened($event)"
+        (sortChanged)="onSortChanged($event)"
+        (gridStateChanged)="onGridStateChanged($event)">
+      </mj-entity-grid>
+
+      <!-- Cards View - always rendered but hidden when not active to preserve state -->
+      <mj-entity-cards
+        [hidden]="effectiveViewMode !== 'cards'"
+        [entity]="entity"
+        [records]="filteredRecords"
+        [selectedRecordId]="selectedRecordId"
+        [cardTemplate]="cardTemplate"
+        [hiddenFieldMatches]="hiddenFieldMatches"
+        [filterText]="debouncedFilterText"
+        (recordSelected)="onRecordSelected($event)"
+        (recordOpened)="onRecordOpened($event)">
+      </mj-entity-cards>
+
+      <!-- Timeline View - only created when timeline mode is active -->
+      @if (hasDateFields && effectiveViewMode === 'timeline') {
+        <mj-timeline
+          [groups]="timelineGroups"
+          [orientation]="timelineOrientation"
+          [sortOrder]="timelineSortOrder"
+          [segmentGrouping]="timelineSegmentGrouping"
+          [segmentsCollapsible]="true"
+          [segmentsDefaultExpanded]="true"
+          (afterEventClick)="onTimelineEventClick($event)">
+        </mj-timeline>
       }
     }
   </div>

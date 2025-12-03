@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
 import { UserSettingEntity, UserFavoriteEntity, UserRecordLogEntity, ApplicationEntityEntity } from '@memberjunction/core-entities';
-import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, RecentEntityAccess, FavoriteEntity, RecentRecordAccess, FavoriteRecord } from '../models/explorer-state.interface';
+import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, RecentEntityAccess, FavoriteEntity, RecentRecordAccess, FavoriteRecord, DataExplorerViewMode } from '../models/explorer-state.interface';
 
 const BASE_SETTING_KEY = 'DataExplorer.State';
 const MAX_RECENT_ITEMS = 20;
@@ -241,7 +241,7 @@ export class ExplorerStateService {
   /**
    * Set view mode
    */
-  setViewMode(mode: 'cards' | 'grid'): void {
+  setViewMode(mode: DataExplorerViewMode): void {
     this.updateState({ viewMode: mode });
   }
 

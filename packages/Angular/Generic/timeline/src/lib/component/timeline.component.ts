@@ -26,6 +26,7 @@ import {
   TemplateRef,
   ChangeDetectorRef,
   ChangeDetectionStrategy,
+  ViewEncapsulation,
   NgZone
 } from '@angular/core';
 
@@ -135,8 +136,9 @@ const DEFAULT_ICONS = [
 @Component({
   selector: 'mj-timeline',
   templateUrl: './timeline.component.html',
-  styleUrls: ['./timeline.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  styleUrls: ['./timeline.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.None
 })
 export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewInit {
   // ============================================================================
@@ -455,7 +457,12 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * Refreshes all data from the configured groups.
    * Clears existing data and reloads from sources.
    */
-  async refresh(): Promise<void> {
+  async refresh(force: boolean = false): Promise<void> {
+    // Prevent concurrent refresh calls - if already refreshing, exit immediately
+    if (this.isLoading || (this._hasLoaded && !force)) {
+      return;
+    }
+
     const startTime = Date.now();
 
     // Emit before event
@@ -1482,6 +1489,7 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
 
   /**
    * Simple date formatter (replaces Angular DatePipe for standalone use).
+   * Uses placeholder tokens to avoid replacement conflicts.
    */
   private formatDateInternal(date: Date, format: string): string {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -1495,16 +1503,36 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     const hours = date.getHours();
     const minutes = date.getMinutes();
 
-    return format
-      .replace('yyyy', String(year))
-      .replace('MMMM', months[month])
-      .replace('MMM', monthsShort[month])
-      .replace('MM', String(month + 1).padStart(2, '0'))
-      .replace('dd', String(day).padStart(2, '0'))
-      .replace('d', String(day))
-      .replace('HH', String(hours).padStart(2, '0'))
-      .replace('h', String(hours % 12 || 12))
-      .replace('mm', String(minutes).padStart(2, '0'))
-      .replace('a', hours >= 12 ? 'PM' : 'AM');
+    // Use placeholder tokens to avoid conflicts (e.g., 'May' containing 'M')
+    // Replace longer patterns first with placeholders, then substitute values
+    let result = format;
+
+    // Replace patterns with unique placeholders first
+    result = result.replace(/yyyy/g, '{{YEAR}}');
+    result = result.replace(/MMMM/g, '{{MONTH_FULL}}');
+    result = result.replace(/MMM/g, '{{MONTH_SHORT}}');
+    result = result.replace(/MM/g, '{{MONTH_PAD}}');
+    result = result.replace(/dd/g, '{{DAY_PAD}}');
+    result = result.replace(/d/g, '{{DAY}}');
+    result = result.replace(/HH/g, '{{HOUR_24}}');
+    result = result.replace(/hh/g, '{{HOUR_12_PAD}}');
+    result = result.replace(/h/g, '{{HOUR_12}}');
+    result = result.replace(/mm/g, '{{MIN}}');
+    result = result.replace(/a/g, '{{AMPM}}');
+
+    // Now substitute the actual values
+    result = result.replace(/\{\{YEAR\}\}/g, String(year));
+    result = result.replace(/\{\{MONTH_FULL\}\}/g, months[month]);
+    result = result.replace(/\{\{MONTH_SHORT\}\}/g, monthsShort[month]);
+    result = result.replace(/\{\{MONTH_PAD\}\}/g, String(month + 1).padStart(2, '0'));
+    result = result.replace(/\{\{DAY_PAD\}\}/g, String(day).padStart(2, '0'));
+    result = result.replace(/\{\{DAY\}\}/g, String(day));
+    result = result.replace(/\{\{HOUR_24\}\}/g, String(hours).padStart(2, '0'));
+    result = result.replace(/\{\{HOUR_12_PAD\}\}/g, String(hours % 12 || 12).padStart(2, '0'));
+    result = result.replace(/\{\{HOUR_12\}\}/g, String(hours % 12 || 12));
+    result = result.replace(/\{\{MIN\}\}/g, String(minutes).padStart(2, '0'));
+    result = result.replace(/\{\{AMPM\}\}/g, hours >= 12 ? 'PM' : 'AM');
+
+    return result;
   }
 }

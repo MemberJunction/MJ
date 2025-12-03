@@ -1,0 +1,933 @@
+/**
+ * MJ Timeline Component Styles
+ * Clean, minimal design inspired by professional timeline UIs
+ */
+
+/* ============================================================================
+   CSS VARIABLES (Theming)
+   ============================================================================ */
+
+mj-timeline {
+  /* Colors - clean and minimal */
+  --mj-timeline-bg: transparent;
+  --mj-timeline-line-color: #d0d7de;
+  --mj-timeline-marker-bg: #ffffff;
+  --mj-timeline-marker-border: #0969da;
+  --mj-timeline-marker-fill: #0969da;
+  --mj-timeline-card-bg: #ffffff;
+  --mj-timeline-card-border: #d0d7de;
+  --mj-timeline-card-shadow: 0 1px 2px rgba(31, 35, 40, 0.04);
+  --mj-timeline-card-shadow-hover: 0 4px 12px rgba(31, 35, 40, 0.1);
+  --mj-timeline-card-radius: 8px;
+  --mj-timeline-text-primary: #1f2328;
+  --mj-timeline-text-secondary: #656d76;
+  --mj-timeline-text-muted: #8c959f;
+  --mj-timeline-accent: #0969da;
+  --mj-timeline-accent-light: rgba(9, 105, 218, 0.08);
+  --mj-timeline-segment-bg: #0969da;
+  --mj-timeline-segment-text: #ffffff;
+  --mj-timeline-focus-ring: 0 0 0 2px rgba(9, 105, 218, 0.3);
+
+  /* Sizing */
+  --mj-timeline-line-width: 2px;
+  --mj-timeline-marker-size: 12px;
+  --mj-timeline-card-padding: 14px 16px;
+  --mj-timeline-card-max-width: 480px;
+  --mj-timeline-card-min-width: 280px;
+  --mj-timeline-gap: 12px;
+  --mj-timeline-segment-gap: 8px;
+  --mj-timeline-axis-offset: 0;
+
+  /* Animation */
+  --mj-timeline-transition: 0.15s ease;
+
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Dark mode */
+.dark-theme mj-timeline,
+[data-theme="dark"] mj-timeline {
+  --mj-timeline-line-color: #3d444d;
+  --mj-timeline-card-bg: #161b22;
+  --mj-timeline-card-border: #3d444d;
+  --mj-timeline-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --mj-timeline-text-primary: #e6edf3;
+  --mj-timeline-text-secondary: #8b949e;
+  --mj-timeline-text-muted: #6e7681;
+  --mj-timeline-accent: #58a6ff;
+  --mj-timeline-accent-light: rgba(88, 166, 255, 0.1);
+  --mj-timeline-marker-border: #58a6ff;
+  --mj-timeline-marker-fill: #58a6ff;
+  --mj-timeline-segment-bg: #58a6ff;
+}
+
+/* ============================================================================
+   MAIN CONTAINER
+   ============================================================================ */
+
+.mj-timeline {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  background: var(--mj-timeline-bg);
+  outline: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Subtle scrollbar */
+.mj-timeline::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mj-timeline::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mj-timeline::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.mj-timeline::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.mj-timeline:focus-visible {
+  box-shadow: inset var(--mj-timeline-focus-ring);
+}
+
+/* ============================================================================
+   LOADING & EMPTY STATES
+   ============================================================================ */
+
+.mj-timeline__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 12px;
+}
+
+.mj-timeline__loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--mj-timeline-line-color);
+  border-top-color: var(--mj-timeline-accent);
+  border-radius: 50%;
+  animation: mj-timeline-spin 0.6s linear infinite;
+}
+
+.mj-timeline__loading-spinner--small {
+  width: 14px;
+  height: 14px;
+}
+
+.mj-timeline__loading-text {
+  color: var(--mj-timeline-text-muted);
+  font-size: 13px;
+}
+
+.mj-timeline__loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  gap: 8px;
+  color: var(--mj-timeline-text-muted);
+  font-size: 12px;
+}
+
+@keyframes mj-timeline-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mj-timeline__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  gap: 8px;
+  text-align: center;
+}
+
+.mj-timeline__empty-icon {
+  font-size: 32px;
+  color: var(--mj-timeline-text-muted);
+  opacity: 0.4;
+}
+
+.mj-timeline__empty-text {
+  color: var(--mj-timeline-text-secondary);
+  font-size: 13px;
+}
+
+/* ============================================================================
+   TIME SEGMENTS - Inline badge style like Kendo
+   ============================================================================ */
+
+.mj-timeline__segment {
+  margin-bottom: var(--mj-timeline-segment-gap);
+  position: relative;
+}
+
+.mj-timeline__segment:last-child {
+  margin-bottom: 0;
+}
+
+.mj-timeline__segment-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  margin-bottom: var(--mj-timeline-gap);
+  margin-left: 0;
+  background: var(--mj-timeline-segment-bg);
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--mj-timeline-segment-text);
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.mj-timeline__segment-header--clickable {
+  cursor: pointer;
+  transition: all var(--mj-timeline-transition);
+}
+
+.mj-timeline__segment-header--clickable:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.mj-timeline__segment-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: inherit;
+  font-size: 9px;
+  opacity: 0.9;
+  transition: transform var(--mj-timeline-transition);
+}
+
+.mj-timeline__segment--collapsed .mj-timeline__segment-toggle {
+  transform: rotate(-90deg);
+}
+
+.mj-timeline__segment-label {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.mj-timeline__segment-count {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.mj-timeline__segment-line {
+  display: none;
+}
+
+.mj-timeline__segment-content {
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.mj-timeline__segment-content--hidden {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ============================================================================
+   TIMELINE AXIS
+   ============================================================================ */
+
+.mj-timeline__axis {
+  position: relative;
+  padding-left: var(--mj-timeline-axis-offset);
+}
+
+/* Vertical line - hidden since we're not using markers */
+.mj-timeline__axis::before {
+  display: none;
+}
+
+/* ============================================================================
+   TIMELINE EVENT
+   ============================================================================ */
+
+.mj-timeline__event {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: var(--mj-timeline-gap);
+}
+
+.mj-timeline__event:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================================================
+   MARKER - Hidden (using card effects instead)
+   ============================================================================ */
+
+.mj-timeline__marker {
+  display: none;
+}
+
+.mj-timeline__marker-icon {
+  display: none;
+}
+
+.mj-timeline__connector {
+  display: none;
+}
+
+/* ============================================================================
+   DATE LABEL
+   ============================================================================ */
+
+.mj-timeline__date-label {
+  display: none;
+}
+
+/* ============================================================================
+   EVENT CARD - Clean, minimal
+   ============================================================================ */
+
+.mj-timeline__card {
+  flex: 1;
+  background: var(--mj-timeline-card-bg);
+  border: 1px solid var(--mj-timeline-card-border);
+  border-left: 3px solid var(--mj-timeline-accent);
+  border-radius: var(--mj-timeline-card-radius);
+  box-shadow: var(--mj-timeline-card-shadow);
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  max-width: var(--mj-timeline-card-max-width);
+  min-width: var(--mj-timeline-card-min-width);
+}
+
+/* Hover state - lift and glow effect */
+.mj-timeline__card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(9, 105, 218, 0.15), 0 4px 8px rgba(31, 35, 40, 0.08);
+  border-color: var(--mj-timeline-accent);
+  border-left-width: 4px;
+}
+
+/* Selected/Focused state - prominent highlight */
+.mj-timeline__event--focused .mj-timeline__card {
+  background: var(--mj-timeline-accent-light);
+  border-color: var(--mj-timeline-accent);
+  border-left-width: 4px;
+  box-shadow: 0 0 0 2px var(--mj-timeline-accent), 0 4px 12px rgba(9, 105, 218, 0.2);
+}
+
+/* Active/pressed state */
+.mj-timeline__card:active {
+  transform: translateY(0);
+  box-shadow: var(--mj-timeline-card-shadow);
+}
+
+/* ============================================================================
+   CARD HEADER
+   ============================================================================ */
+
+.mj-timeline__card-header {
+  display: flex;
+  align-items: flex-start;
+  padding: var(--mj-timeline-card-padding);
+  gap: 10px;
+}
+
+.mj-timeline__card-header-content {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mj-timeline__card-icon {
+  display: none; /* Hidden by default - timeline marker serves as visual indicator */
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 2px;
+  color: var(--mj-timeline-accent);
+}
+
+.mj-timeline__card-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.mj-timeline__card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mj-timeline-text-primary);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-timeline__card-subtitle {
+  display: block;
+  font-size: 13px;
+  color: var(--mj-timeline-text-secondary);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-timeline__card-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--mj-timeline-text-muted);
+  margin-top: 6px;
+}
+
+.mj-timeline__card-date::before {
+  content: '\f073';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 400;
+  font-size: 10px;
+}
+
+.mj-timeline__card-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--mj-timeline-text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--mj-timeline-transition);
+}
+
+.mj-timeline__card-toggle:hover {
+  background: var(--mj-timeline-accent-light);
+  color: var(--mj-timeline-accent);
+}
+
+/* ============================================================================
+   CARD IMAGE
+   ============================================================================ */
+
+.mj-timeline__card-image {
+  overflow: hidden;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.mj-timeline__card-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mj-timeline__card-image--left.mj-timeline__card-image--small {
+  width: 40px;
+  height: 40px;
+}
+
+.mj-timeline__card-image--left.mj-timeline__card-image--medium {
+  width: 64px;
+  height: 64px;
+}
+
+.mj-timeline__card-image--left.mj-timeline__card-image--large {
+  width: 88px;
+  height: 88px;
+}
+
+.mj-timeline__card-image--top {
+  width: calc(100% - 32px);
+  max-height: 160px;
+  margin: 0 16px 12px;
+}
+
+/* ============================================================================
+   CARD BODY
+   ============================================================================ */
+
+.mj-timeline__card-body {
+  padding: 0 16px 14px;
+}
+
+.mj-timeline__card-body--collapsed {
+  display: none;
+}
+
+.mj-timeline__card-description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mj-timeline-text-secondary);
+  margin-bottom: 10px;
+}
+
+.mj-timeline__card-description--clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mj-timeline__card-description:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================================================
+   CARD FIELDS
+   ============================================================================ */
+
+.mj-timeline__card-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.mj-timeline__card-fields--summary {
+  padding-top: 10px;
+  border-top: 1px solid var(--mj-timeline-line-color);
+  margin-top: 8px;
+}
+
+.mj-timeline__card-fields--expanded {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--mj-timeline-line-color);
+}
+
+.mj-timeline__card-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.mj-timeline__card-field-icon {
+  color: var(--mj-timeline-text-muted);
+  font-size: 10px;
+}
+
+.mj-timeline__card-field-label {
+  color: var(--mj-timeline-text-muted);
+}
+
+.mj-timeline__card-field-value {
+  color: var(--mj-timeline-text-secondary);
+  font-weight: 500;
+}
+
+/* ============================================================================
+   CARD ACTIONS
+   ============================================================================ */
+
+.mj-timeline__card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 14px;
+  justify-content: flex-end;
+}
+
+.mj-timeline__card-actions--hover-only {
+  opacity: 0;
+  transition: opacity var(--mj-timeline-transition);
+}
+
+.mj-timeline__card:hover .mj-timeline__card-actions--hover-only,
+.mj-timeline__card:focus-within .mj-timeline__card-actions--hover-only {
+  opacity: 1;
+}
+
+.mj-timeline__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all var(--mj-timeline-transition);
+}
+
+.mj-timeline__action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mj-timeline__action i {
+  font-size: 10px;
+}
+
+.mj-timeline__action--primary {
+  background: var(--mj-timeline-accent);
+  border-color: var(--mj-timeline-accent);
+  color: #ffffff;
+}
+
+.mj-timeline__action--primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.mj-timeline__action--secondary {
+  background: transparent;
+  border-color: var(--mj-timeline-card-border);
+  color: var(--mj-timeline-text-primary);
+}
+
+.mj-timeline__action--secondary:hover:not(:disabled) {
+  background: var(--mj-timeline-accent-light);
+  border-color: var(--mj-timeline-accent);
+  color: var(--mj-timeline-accent);
+}
+
+.mj-timeline__action--danger {
+  background: #cf222e;
+  border-color: #cf222e;
+  color: #ffffff;
+}
+
+.mj-timeline__action--link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--mj-timeline-accent);
+}
+
+.mj-timeline__action--link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   VIRTUAL SCROLL
+   ============================================================================ */
+
+.mj-timeline-scroll-sentinel {
+  height: 1px;
+  width: 100%;
+  visibility: hidden;
+}
+
+/* ============================================================================
+   ALTERNATING LAYOUT (like Kendo's alternating mode)
+   ============================================================================ */
+
+.mj-timeline--alternating {
+  --mj-timeline-axis-offset: 0;
+}
+
+.mj-timeline--alternating .mj-timeline__axis {
+  padding-left: 0;
+}
+
+.mj-timeline--alternating .mj-timeline__axis::before {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.mj-timeline--alternating .mj-timeline__segment-header {
+  margin-left: 50%;
+}
+
+.mj-timeline--alternating .mj-timeline__event {
+  width: 100%;
+  padding-right: calc(50% + 24px);
+}
+
+.mj-timeline--alternating .mj-timeline__event--odd {
+  padding-right: 0;
+  padding-left: calc(50% + 24px);
+  flex-direction: row-reverse;
+}
+
+.mj-timeline--alternating .mj-timeline__marker {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.mj-timeline--alternating .mj-timeline__event:hover .mj-timeline__marker {
+  transform: translateX(-50%) scale(1.2);
+}
+
+.mj-timeline--alternating .mj-timeline__date-label {
+  display: block;
+  position: absolute;
+  top: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mj-timeline-text-secondary);
+  white-space: nowrap;
+}
+
+.mj-timeline--alternating .mj-timeline__event:not(.mj-timeline__event--odd) .mj-timeline__date-label {
+  right: calc(50% + 24px + var(--mj-timeline-marker-size));
+  text-align: right;
+}
+
+.mj-timeline--alternating .mj-timeline__event--odd .mj-timeline__date-label {
+  left: calc(50% + 24px + var(--mj-timeline-marker-size));
+  text-align: left;
+}
+
+.mj-timeline--alternating .mj-timeline__card {
+  max-width: none;
+  min-width: 0;
+}
+
+/* ============================================================================
+   HORIZONTAL LAYOUT (like Kendo's horizontal mode)
+   ============================================================================ */
+
+.mj-timeline--horizontal {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 24px 16px;
+}
+
+.mj-timeline--horizontal .mj-timeline__segment-header {
+  position: relative;
+  top: auto;
+  margin-left: 0;
+  margin-bottom: 16px;
+  transform: none;
+}
+
+.mj-timeline--horizontal .mj-timeline__axis {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding-left: 0;
+  padding-top: 40px;
+  min-width: max-content;
+  gap: 0;
+}
+
+.mj-timeline--horizontal .mj-timeline__axis::before {
+  left: 0;
+  right: 0;
+  top: 5px;
+  bottom: auto;
+  width: auto;
+  height: var(--mj-timeline-line-width);
+}
+
+.mj-timeline--horizontal .mj-timeline__event {
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0;
+  margin-right: 24px;
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.mj-timeline--horizontal .mj-timeline__event:last-child {
+  margin-right: 0;
+}
+
+.mj-timeline--horizontal .mj-timeline__marker {
+  position: relative;
+  left: auto;
+  top: auto;
+  margin-bottom: 12px;
+  margin-top: -40px;
+}
+
+.mj-timeline--horizontal .mj-timeline__event:hover .mj-timeline__marker {
+  transform: scale(1.2);
+}
+
+.mj-timeline--horizontal .mj-timeline__date-label {
+  display: block;
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mj-timeline-text-secondary);
+  white-space: nowrap;
+}
+
+.mj-timeline--horizontal .mj-timeline__card {
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ============================================================================
+   SINGLE LAYOUT (cards on right only, like Kendo's vertical-right)
+   ============================================================================ */
+
+.mj-timeline--single .mj-timeline__date-label {
+  display: block;
+  position: absolute;
+  left: calc(-1 * var(--mj-timeline-axis-offset) - 8px);
+  top: 14px;
+  transform: translateX(-100%);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mj-timeline-text-secondary);
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* ============================================================================
+   RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 1024px) {
+  mj-timeline {
+    --mj-timeline-card-max-width: 380px;
+  }
+
+  /* Force single layout on tablet */
+  .mj-timeline--alternating .mj-timeline__axis {
+    padding-left: var(--mj-timeline-axis-offset);
+  }
+
+  .mj-timeline--alternating .mj-timeline__axis::before {
+    left: calc(var(--mj-timeline-marker-size) / 2 - var(--mj-timeline-line-width) / 2);
+    transform: none;
+  }
+
+  .mj-timeline--alternating .mj-timeline__segment-header {
+    margin-left: calc(var(--mj-timeline-marker-size) / 2 - 1px);
+  }
+
+  .mj-timeline--alternating .mj-timeline__event {
+    padding-right: 0;
+    padding-left: 0;
+    flex-direction: row;
+  }
+
+  .mj-timeline--alternating .mj-timeline__event--odd {
+    padding-left: 0;
+    flex-direction: row;
+  }
+
+  .mj-timeline--alternating .mj-timeline__marker {
+    left: 0;
+    transform: none;
+  }
+
+  .mj-timeline--alternating .mj-timeline__event:hover .mj-timeline__marker {
+    transform: scale(1.2);
+  }
+
+  .mj-timeline--alternating .mj-timeline__date-label {
+    display: none;
+  }
+
+  .mj-timeline--alternating .mj-timeline__card {
+    max-width: var(--mj-timeline-card-max-width);
+  }
+}
+
+@media (max-width: 767px) {
+  mj-timeline {
+    --mj-timeline-card-max-width: 100%;
+    --mj-timeline-card-min-width: 0;
+    --mj-timeline-axis-offset: 28px;
+    --mj-timeline-marker-size: 10px;
+    --mj-timeline-gap: 10px;
+  }
+
+  .mj-timeline {
+    padding: 12px;
+  }
+
+  .mj-timeline__segment-header {
+    font-size: 11px;
+    padding: 5px 12px;
+  }
+
+  .mj-timeline__card {
+    max-width: none;
+    min-width: 0;
+  }
+
+  .mj-timeline__card-title {
+    font-size: 13px;
+    white-space: normal;
+  }
+
+  .mj-timeline__card-actions {
+    flex-direction: column;
+  }
+
+  .mj-timeline__card-actions .mj-timeline__action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .mj-timeline--horizontal .mj-timeline__event {
+    min-width: 180px;
+    max-width: 220px;
+  }
+
+  .mj-timeline--single .mj-timeline__date-label {
+    display: none;
+  }
+}
+
+/* Touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .mj-timeline__card-actions--hover-only {
+    opacity: 1;
+  }
+
+  .mj-timeline__action {
+    min-height: 40px;
+  }
+
+  .mj-timeline__card:hover {
+    box-shadow: var(--mj-timeline-card-shadow);
+    border-color: var(--mj-timeline-card-border);
+  }
+
+  .mj-timeline__event:hover .mj-timeline__marker {
+    transform: none;
+  }
+
+  .mj-timeline--alternating .mj-timeline__event:hover .mj-timeline__marker {
+    transform: translateX(-50%);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .mj-timeline__card,
+  .mj-timeline__marker,
+  .mj-timeline__segment-toggle {
+    transition: none;
+  }
+}

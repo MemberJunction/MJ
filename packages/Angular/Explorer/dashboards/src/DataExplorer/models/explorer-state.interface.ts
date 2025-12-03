@@ -48,6 +48,16 @@ export interface BreadcrumbItem {
 }
 
 /**
+ * View mode options for the Data Explorer
+ */
+export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline';
+
+/**
+ * Timeline orientation options
+ */
+export type TimelineOrientationType = 'vertical' | 'horizontal';
+
+/**
  * Initial navigation state from URL query parameters.
  * Used for deep linking into the Data Explorer.
  */
@@ -59,7 +69,7 @@ export interface DataExplorerDeepLink {
   /** Filter text to apply */
   filter?: string;
   /** View mode to use */
-  viewMode?: 'cards' | 'grid';
+  viewMode?: DataExplorerViewMode;
 }
 
 /**
@@ -141,7 +151,11 @@ export interface DataExplorerState {
   entityCache: Record<string, EntityCacheEntry>;
 
   // View mode
-  viewMode: 'cards' | 'grid';
+  viewMode: DataExplorerViewMode;
+
+  // Timeline configuration (per-entity, but stored here for simplicity)
+  timelineOrientation: TimelineOrientationType;
+  timelineDateFieldName: string | null;
 
   // Detail panel
   detailPanelOpen: boolean;
@@ -231,6 +245,8 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   smartFilterEnabled: true,
   entityCache: {},
   viewMode: 'grid',
+  timelineOrientation: 'vertical',
+  timelineDateFieldName: null,
   detailPanelOpen: false,
   detailPanelWidth: 400,
   selectedRecordId: null,
