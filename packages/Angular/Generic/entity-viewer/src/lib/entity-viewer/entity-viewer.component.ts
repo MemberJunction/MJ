@@ -899,6 +899,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Toggle timeline sort order between newest first (desc) and oldest first (asc)
+   */
+  toggleTimelineSortOrder(): void {
+    this.timelineSortOrder = this.timelineSortOrder === 'desc' ? 'asc' : 'desc';
+
+    // Emit config change so parent can persist the preference
+    this.emitTimelineConfigChange();
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Change the date field used for the timeline
    */
   setTimelineDateField(fieldName: string): void {

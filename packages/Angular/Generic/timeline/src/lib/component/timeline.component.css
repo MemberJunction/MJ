@@ -796,16 +796,23 @@ mj-timeline {
    ============================================================================ */
 
 .mj-timeline--horizontal {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 80px 40px 24px;
+  min-width: 100%;
 }
 
 .mj-timeline--horizontal .mj-timeline__segment {
-  display: inline-block;
-  vertical-align: top;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
   margin-bottom: 0;
   margin-right: 40px;
+  position: relative;
 }
 
 .mj-timeline--horizontal .mj-timeline__segment:last-child {
@@ -870,7 +877,9 @@ mj-timeline {
 .mj-timeline--horizontal .mj-timeline__marker {
   position: absolute;
   left: 50%;
-  top: -16px;
+  /* Position so marker is centered on the axis line (top: 0 of axis) */
+  /* Event has padding-top: 32px, marker is 14px, so top: -(32 + 7) = -39px for center */
+  top: calc(-32px - var(--mj-timeline-marker-size) / 2);
   transform: translateX(-50%);
   margin: 0;
 }
@@ -902,6 +911,29 @@ mj-timeline {
 /* Horizontal focused marker override */
 .mj-timeline--horizontal .mj-timeline__event--focused .mj-timeline__marker {
   transform: translateX(-50%) scale(1.4);
+}
+
+/* Horizontal collapsed segment - rotate 90° CCW and compress */
+.mj-timeline--horizontal .mj-timeline__segment--collapsed {
+  flex: 0 0 auto;
+  width: 32px;
+  min-width: 32px;
+  margin-right: 4px;
+}
+
+.mj-timeline--horizontal .mj-timeline__segment--collapsed .mj-timeline__segment-header {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  padding: 8px 4px;
+  margin: 0;
+  top: 0;
+  position: relative;
+}
+
+.mj-timeline--horizontal .mj-timeline__segment--collapsed .mj-timeline__segment-content {
+  display: none;
 }
 
 /* ============================================================================
