@@ -504,9 +504,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.updateTimelineGroups();
     }
 
-    // Handle timeline config changes
-    if (changes['timelineConfig'] && this.timelineConfig) {
-      this.configureTimeline();
+    // Handle timeline config changes - always reconfigure when input changes
+    if (changes['timelineConfig']) {
+      if (this.timelineConfig) {
+        this.configureTimeline();
+      }
+      this.cdr.markForCheck();
     }
 
     // Handle external filter text changes (from parent component)

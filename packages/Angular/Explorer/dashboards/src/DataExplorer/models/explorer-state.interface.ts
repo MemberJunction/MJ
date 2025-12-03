@@ -156,6 +156,7 @@ export interface DataExplorerState {
   // Timeline configuration (per-entity, but stored here for simplicity)
   timelineOrientation: TimelineOrientationType;
   timelineDateFieldName: string | null;
+  timelineSortOrder: 'asc' | 'desc';
 
   // Detail panel
   detailPanelOpen: boolean;
@@ -247,6 +248,7 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   viewMode: 'grid',
   timelineOrientation: 'vertical',
   timelineDateFieldName: null,
+  timelineSortOrder: 'desc',
   detailPanelOpen: false,
   detailPanelWidth: 400,
   selectedRecordId: null,

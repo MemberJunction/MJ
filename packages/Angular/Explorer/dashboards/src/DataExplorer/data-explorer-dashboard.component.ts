@@ -402,14 +402,25 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Toggle timeline sort order between newest first (desc) and oldest first (asc).
+   */
+  toggleTimelineSortOrder(): void {
+    const newSortOrder = this.state.timelineSortOrder === 'desc' ? 'asc' : 'desc';
+    this.state.timelineSortOrder = newSortOrder;
+    this.stateService.updateState({ timelineSortOrder: newSortOrder });
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Get the current timeline configuration for the entity-viewer.
    */
-  get currentTimelineConfig(): { dateFieldName: string; orientation: 'vertical' | 'horizontal' } | null {
+  get currentTimelineConfig(): { dateFieldName: string; orientation: 'vertical' | 'horizontal'; sortOrder: 'asc' | 'desc' } | null {
     const dateField = this.effectiveTimelineDateField;
     if (!dateField) return null;
     return {
       dateFieldName: dateField,
-      orientation: this.state.timelineOrientation
+      orientation: this.state.timelineOrientation,
+      sortOrder: this.state.timelineSortOrder
     };
   }
 

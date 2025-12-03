@@ -174,10 +174,19 @@
             <div class="timeline-orientation-toggle">
               <button
                 class="toggle-btn"
-                [class.active]="state.timelineOrientation === 'vertical'"
                 (click)="toggleTimelineOrientation()"
                 [title]="state.timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
-                <i [class]="state.timelineOrientation === 'vertical' ? 'fa-solid fa-arrows-up-down' : 'fa-solid fa-arrows-left-right'"></i>
+                <i [class]="state.timelineOrientation === 'vertical' ? 'fa-solid fa-ellipsis-vertical' : 'fa-solid fa-ellipsis'"></i>
+              </button>
+            </div>
+
+            <!-- Sort Order Toggle -->
+            <div class="timeline-sort-toggle">
+              <button
+                class="toggle-btn"
+                (click)="toggleTimelineSortOrder()"
+                [title]="state.timelineSortOrder === 'desc' ? 'Showing Newest First (click for Oldest First)' : 'Showing Oldest First (click for Newest First)'">
+                <i [class]="state.timelineSortOrder === 'desc' ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-wide-short'"></i>
               </button>
             </div>
           }
