@@ -61,8 +61,6 @@
 "@memberjunction/server": patch
 "@memberjunction/sqlserver-dataprovider": patch
 "@memberjunction/testing-engine": patch
-"component-linter-tests": patch
-"mj_explorer": patch
 ---
 
 Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
