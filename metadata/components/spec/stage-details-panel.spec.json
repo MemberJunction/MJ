@@ -12,11 +12,28 @@
       {
         "name": "Deals",
         "description": "Deal entities filtered by stage",
-        "displayFields": ["ID", "DealName", "Amount", "CloseDate", "Probability", "Stage", "Account"],
-        "filterFields": ["Stage", "DealName"],
-        "sortFields": ["Amount", "CloseDate", "Probability"],
+        "displayFields": [
+          "ID",
+          "DealName",
+          "Amount",
+          "CloseDate",
+          "Probability",
+          "Stage",
+          "Account"
+        ],
+        "filterFields": [
+          "Stage",
+          "DealName"
+        ],
+        "sortFields": [
+          "Amount",
+          "CloseDate",
+          "Probability"
+        ],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Displays deals for selected stage in cards or list view"
       }
     ],
@@ -70,5 +87,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Slide-out panel showing details for a selected pipeline stage"
 }

@@ -41,7 +41,7 @@
             "type": "datetime",
             "description": "System timestamp when deal was created"
           }
-        ] 
+        ]
       }
     ]
   },
@@ -73,5 +73,6 @@
     }
   ],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Modal component displaying a sortable table of deals for a selected time period with drill-down capability"
 }

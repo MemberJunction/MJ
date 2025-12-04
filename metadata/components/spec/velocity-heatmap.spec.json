@@ -12,11 +12,17 @@
       {
         "name": "Deals",
         "description": "Deal data for velocity calculations",
-        "displayFields": ["Stage", "CloseDate", "__mj_CreatedAt"],
+        "displayFields": [
+          "Stage",
+          "CloseDate",
+          "__mj_CreatedAt"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Velocity data pre-calculated by parent into heatmap matrix"
       }
     ],
@@ -45,5 +51,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Heatmap visualization of deal velocity across stages"
 }

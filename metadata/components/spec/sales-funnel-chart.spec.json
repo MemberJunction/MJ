@@ -12,11 +12,19 @@
       {
         "name": "Deals",
         "description": "Deal records for funnel visualization",
-        "displayFields": ["ID", "Name", "Amount", "Stage", "Probability"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Amount",
+          "Stage",
+          "Probability"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Funnel stage data passed via props"
       }
     ],
@@ -57,5 +65,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Funnel chart visualization sub-component for displaying sales pipeline stages"
 }

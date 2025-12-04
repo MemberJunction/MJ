@@ -94,13 +94,21 @@ async function main() {
 
     // Run the linter
     console.log('\n🔍 Running linter...\n');
-    const lintResult = await ComponentLinter.lintComponent(
-      fixture.spec.code,
-      fixture.spec.name,
-      fixture.spec,
-      true,
-      contextUser
-    );
+    let lintResult;
+    try {
+      lintResult = await ComponentLinter.lintComponent(
+        fixture.spec.code,
+        fixture.spec.name,
+        fixture.spec,
+        true,
+        contextUser
+      );
+    } catch (error: unknown) {
+      console.error('❌ FULL ERROR DETAILS:');
+      console.error('Message:', (error as Error).message);
+      console.error('Stack:', (error as Error).stack);
+      throw error;
+    }
 
     // Display results
     console.log('═'.repeat(80));

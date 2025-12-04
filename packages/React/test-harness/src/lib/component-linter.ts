@@ -8108,6 +8108,10 @@ const result = await utilities.rq.RunQuery({
       };
     } catch (error) {
       // If parsing fails, return a parse error
+      // Log stack trace for debugging
+      if (error instanceof Error && error.stack) {
+        console.error('Parse error stack trace:', error.stack);
+      }
       return {
         success: false,
         violations: [
@@ -8460,7 +8464,7 @@ const result = await utilities.rq.RunQuery({
                     }
 
                     // If query has parameters but no Parameters property was found in the call
-                    if (paramsInCall.size === 0 && queryDef.parameters.length > 0) {
+                    if (paramsInCall.size === 0 && queryDef?.parameters && queryDef.parameters.length > 0) {
                       violations.push({
                         rule: 'missing-parameters-object',
                         severity: 'critical',
