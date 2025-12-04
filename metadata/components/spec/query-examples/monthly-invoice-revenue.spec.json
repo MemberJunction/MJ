@@ -1,0 +1,221 @@
+{
+  "title": "Monthly Invoice Revenue Chart",
+  "type": "chart",
+  "name": "MonthlyInvoiceRevenue",
+  "userExplanation": "A bar chart showing monthly invoice revenue trends with flexible filtering. Supports filtering by year, month, status, and date ranges. When multiple status values are provided (e.g., 'Paid,Sent'), the chart groups by status for comparison.",
+  "functionalRequirements": "## Business Objectives\n- Visualize monthly revenue trends from invoices\n- Understand revenue patterns and seasonality across different invoice statuses\n- Compare monthly performance over time\n- Analyze outstanding balances and payment trends\n\n## Functional Requirements\n- **Chart Display**: Render a bar chart showing monthly revenue totals\n- **Flexible Filtering**: Support year, month, status list, and custom date range filters\n- **Dynamic Grouping**: When multiple statuses provided (e.g., 'Paid,Sent'), group by status for comparison\n- **Data Metrics**: Show total revenue, invoice count, outstanding balance, and average invoice\n- **Tooltips**: Display detailed metrics when hovering over bars\n- **Responsive Design**: Chart resizes for different screen sizes\n- **Loading States**: Show loading indicator while data is being fetched\n- **Empty State**: Display helpful message if no data is available\n- **Error Handling**: Show user-friendly error messages if query fails",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "Monthly Invoice Revenue",
+        "categoryPath": "Demo",
+        "description": "Aggregates invoices by YEAR/MONTH and calculates comprehensive revenue metrics: TotalAmount (revenue), SubTotal, TaxAmount, AmountPaid, BalanceDue, invoice count, and average. Dynamic GROUP BY: adds Status column when multiple statuses provided (e.g., 'Paid,Sent'). Uses STRING_SPLIT for comma-delimited status lists. Defaults to Status='Paid' if no StatusList parameter. Supports Year, Month, StartDate, EndDate filters.",
+        "entityNames": ["Invoices"],
+        "fields": [
+          {
+            "name": "Year",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Calendar year from InvoiceDate"
+          },
+          {
+            "name": "Month",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Calendar month (1-12) from InvoiceDate"
+          },
+          {
+            "name": "MonthName",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar(30)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Full month name (e.g., 'January', 'February') from InvoiceDate"
+          },
+          {
+            "name": "Status",
+            "sequence": 4,
+            "defaultInView": false,
+            "type": "nvarchar(50)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Invoice status - only included when StatusList parameter contains multiple comma-separated values (e.g., 'Paid,Sent'). Enables comparison across statuses."
+          },
+          {
+            "name": "TotalRevenue",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "SUM of TotalAmount (SubTotal + TaxAmount) for all invoices in the time period"
+          },
+          {
+            "name": "TotalSubTotal",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "SUM of SubTotal (amount before tax) for all invoices"
+          },
+          {
+            "name": "TotalTax",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "SUM of TaxAmount for all invoices"
+          },
+          {
+            "name": "TotalPaid",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "SUM of AmountPaid for all invoices"
+          },
+          {
+            "name": "TotalOutstanding",
+            "sequence": 9,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "SUM of BalanceDue for all invoices (unpaid balance)"
+          },
+          {
+            "name": "InvoiceCount",
+            "sequence": 10,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "COUNT of invoices in the time period"
+          },
+          {
+            "name": "AvgInvoice",
+            "sequence": 11,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "AVG of TotalAmount across all invoices"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "StatusList",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Paid,Sent",
+            "description": "Comma-separated list of invoice statuses to include (e.g., 'Paid', 'Sent', 'Paid,Sent'). When multiple values provided, adds Status column to results for comparison. Defaults to 'Paid' when not supplied. Valid values: Draft, Sent, Paid, Overdue, Canceled."
+          },
+          {
+            "name": "Year",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "2024",
+            "description": "Filter invoices to a specific year (e.g., 2024). Uses YEAR(InvoiceDate) for filtering."
+          },
+          {
+            "name": "Month",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "6",
+            "description": "Filter invoices to a specific month (1-12). Uses MONTH(InvoiceDate) for filtering. Can be used alone to show that month across all years, or with Year parameter for a specific month."
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Minimum invoice date for filtering (inclusive). Format: YYYY-MM-DD."
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-12-31",
+            "description": "Maximum invoice date for filtering (inclusive). Format: YYYY-MM-DD."
+          }
+        ],
+        "usageContext": "Primary data source for chart - provides time-series revenue metrics with flexible filtering and optional status-based grouping. Query results are pre-aggregated and ready for visualization in SimpleChart component.",
+        "permissionLevelNeeded": ["read"]
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "year",
+      "type": "number",
+      "required": false,
+      "description": "Optional year filter (e.g., 2024). If provided, shows only months from that year.",
+      "default": null
+    },
+    {
+      "name": "month",
+      "type": "number",
+      "required": false,
+      "description": "Optional month filter (1-12). If provided with year, returns single month. If provided without year, returns that month across all years.",
+      "default": null
+    },
+    {
+      "name": "statusList",
+      "type": "string",
+      "required": false,
+      "description": "Comma-delimited list of invoice statuses (e.g., 'Paid', 'Sent', 'Paid,Sent'). If multiple values, groups by status. If null, defaults to 'Paid' only. Valid values: Draft, Sent, Paid, Overdue, Canceled.",
+      "default": null
+    },
+    {
+      "name": "startDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional start date filter (ISO format: '2024-01-01'). Returns invoices with InvoiceDate >= startDate.",
+      "default": null
+    },
+    {
+      "name": "endDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional end date filter (ISO format: '2024-12-31'). Returns invoices with InvoiceDate <= endDate.",
+      "default": null
+    },
+    {
+      "name": "chartType",
+      "type": "string",
+      "required": false,
+      "description": "Type of chart to display: 'bar' (default), 'line', or 'area'",
+      "default": "bar",
+      "possibleValues": ["bar", "line", "area"]
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "required": false,
+      "description": "Custom chart title. If not provided, uses default title.",
+      "default": "Monthly Invoice Revenue"
+    }
+  ],
+  "events": [],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    }
+  ],
+  "code": "@file:../../code/query-examples/monthly-invoice-revenue.js",
+  "exampleUsage": "// Display monthly revenue for all years (defaults to Paid status)\n<MonthlyInvoiceRevenue />\n\n// Display monthly revenue for 2024 only\n<MonthlyInvoiceRevenue year={2024} />\n\n// Compare Paid vs Sent invoices (adds Status column)\n<MonthlyInvoiceRevenue year={2024} statusList=\"Paid,Sent\" />\n\n// Display all invoice statuses for December 2024\n<MonthlyInvoiceRevenue year={2024} month={12} statusList=\"Draft,Sent,Paid,Overdue\" />\n\n// Custom date range\n<MonthlyInvoiceRevenue startDate=\"2024-01-01\" endDate=\"2024-06-30\" />\n\n// With custom title and chart type\n<MonthlyInvoiceRevenue title=\"Revenue Trends\" chartType=\"line\" year={2024} />"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "DealPipelineVisualization",
+  "title": "Deal Pipeline Visualization",
+  "type": "dashboard",
+  "userExplanation": "",
+  "functionalRequirements": "",
+  "dataRequirements": {
+    "mode": "hybrid",
+    "queries": []
+  },
+  "properties": [],
+  "events": [],
+  "dependencies": [],
+  "code": "@file:../../code/query-examples/deal-pipeline-visualization.js",
+  "exampleUsage": ""
+}

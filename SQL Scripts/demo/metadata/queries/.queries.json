@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Monthly Invoice Revenue",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What is the monthly revenue from invoices? Show me invoice trends by month. Compare paid vs sent invoices.",
+      "Description": "Flexible aggregation query for invoice revenue analysis by month. Supports filtering by year, month, status, and date ranges. Optionally groups by status when multiple status values are provided for comparison analysis. Returns comprehensive revenue metrics including totals, taxes, payments, and outstanding balances.",
+      "SQL": "@file:SQL/monthly-invoice-revenue.sql",
+      "TechnicalDescription": "Groups invoices by YEAR/MONTH and calculates comprehensive revenue metrics: TotalAmount (revenue), SubTotal, TaxAmount, AmountPaid, BalanceDue, invoice count, and average. Dynamic GROUP BY: adds Status column when multiple statuses provided (e.g., 'Paid,Sent'). Uses STRING_SPLIT for comma-delimited status lists. Defaults to Status='Paid' if no StatusList parameter. Supports Year, Month, StartDate, EndDate filters. Valid status values: Draft, Sent, Paid, Overdue, Canceled. Parameters auto-detected: StatusList (nvarchar), Year (int), Month (int), StartDate (datetime), EndDate (datetime).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "A0B4C65A-8AB0-43B3-A800-6A4F89248487"
+    },
+    "sync": {
+      "lastModified": "2025-12-03T22:01:01.469Z",
+      "checksum": "7f87c0be24f36e6abae6a4f10ddb0f0364d5c0715a9a09d9bff4566ad6996d3d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Top Products Ranking",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which products are our top performers? Show me best-selling products by revenue.",
+      "Description": "Ranks products by revenue, units sold, or profit margin with flexible filtering and time period selection.",
+      "SQL": "@file:SQL/top-products-ranking.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "413182FF-1A5E-45D0-A017-1A969B38B857"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:44.054Z",
+      "checksum": "2b1c8e5f98aaf26451140074d86bf269fc889e0cf9d29fb054375004fe66bcdb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Model Analytics - Models",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which AI models are we using most? Show me model performance statistics.",
+      "Description": "Aggregates AI model usage counts, success rates, and performance metrics across different model types.",
+      "SQL": "@file:SQL/ai-model-analytics-models.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "400E240A-3BAD-4397-9F40-7CA355E3DDE6"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:44.835Z",
+      "checksum": "c2806f6a7e10e0df0fc0b51502a8f1e27c98c055c773be1deaa1ff3c63137a87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Model Analytics - Costs",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How much are we spending on AI models? Show me cost breakdown by model.",
+      "Description": "Analyzes AI model costs by calculating token usage costs across different models and time periods.",
+      "SQL": "@file:SQL/ai-model-analytics-costs.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "717882BF-310E-4699-91E1-D60061CE55C0"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:45.617Z",
+      "checksum": "7ef2d4ae7caa882d5825d9e765f9531e139af9c31cc716d4bb174206790e7479"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Model Analytics - Trends",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How is our AI model usage trending? Show me usage patterns over time.",
+      "Description": "Shows AI model usage trends over time with success rates and performance patterns.",
+      "SQL": "@file:SQL/ai-model-analytics-trends.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "35F2A2F2-25F6-4804-ACB2-7CF4CFC39C8A"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:46.391Z",
+      "checksum": "3d24ab2570141e12813b2faab57342440d1c8e706bfcb3d28cba6d356c707e82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Account Revenue by Type",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How does revenue vary by account type? Show me revenue by customer, partner, prospect.",
+      "Description": "Analyzes revenue distribution across different account types with comparison metrics and growth rates.",
+      "SQL": "@file:SQL/account-revenue-by-type.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "06A6EE8E-CD45-42CE-A589-7A916BD51E3B"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:47.160Z",
+      "checksum": "252f969fb5fb66bd8ea69a78f10bde179a5cb755aa8f9d3d1109caaa60a60698"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Category Totals",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which product categories perform best? Show me category revenue totals.",
+      "Description": "Aggregates product category performance showing total revenue, product count, and average metrics per category.",
+      "SQL": "@file:SQL/category-totals.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "483EC96B-814C-47EE-A9D6-EFCD9B96D067"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:47.935Z",
+      "checksum": "65dfb38608cf49eac70223574eb4fd894c0aa848e20073c59ad8f13362a3589f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Category Top Products",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What are the best products in each category? Show me top performers by category.",
+      "Description": "Identifies top-performing products within each category with ranking and performance metrics.",
+      "SQL": "@file:SQL/category-top-products.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "B474483A-8306-4589-B2BE-CFD0EB8F0BE8"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:48.711Z",
+      "checksum": "8fef65fa16b9e6937f85101b998ffc051f243700e8bcb5b4c54dc52b3dbd3941"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Submission Status Summary",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What is the status of event submissions? Show me submission counts by status.",
+      "Description": "Summarizes event submission counts by status with pending, approved, and rejected breakdowns.",
+      "SQL": "@file:SQL/submission-status-summary.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "04AED295-6EF7-486E-B3AA-0B79FD69821A"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:49.497Z",
+      "checksum": "b6493f322cf42a7d171c1a064b2d1a48e859bf59a8f7131f722ac3addb80ccda"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Submission Review Timeline",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How is the submission review process progressing? Show me review activity over time.",
+      "Description": "Tracks submission review activity over time showing review counts, completion rates, and reviewer productivity.",
+      "SQL": "@file:SQL/submission-review-timeline.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "CD225692-FA6C-4F5A-89F9-E8A901B4B370"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:50.275Z",
+      "checksum": "b0eb3653a1288567a279a581b5ded047a916775d47826a2ebba1b4d55bccce9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deal Pipeline Distribution",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What does our sales pipeline look like? Show me deals by stage.",
+      "Description": "Shows deal distribution across pipeline stages with deal counts, total values, and win rate metrics.",
+      "SQL": "@file:SQL/deal-pipeline-distribution.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "05246C80-6479-4730-9ECB-785EFA9CC3C7"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:51.321Z",
+      "checksum": "36bc6496cde77aa5d4001b6e397a6ec26ee9ee4b0238b3dc851f546bc277cca6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deal Velocity Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How fast are deals moving through the pipeline? Show me stage transition times.",
+      "Description": "Calculates average time deals spend in each pipeline stage to identify bottlenecks and optimize sales process.",
+      "SQL": "@file:SQL/deal-velocity-analysis.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "C7ED0A79-8DE3-4279-8F21-3C6FD6F0F4E3"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:52.095Z",
+      "checksum": "636964c92bb701d6a54d334dddf882c637f216989a3e38edec949f8bd6d72635"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deal Stage Trends",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How are new deals entering the pipeline? Show me deal entry trends by stage.",
+      "Description": "Tracks deal entry trends into pipeline stages over time to predict future pipeline health.",
+      "SQL": "@file:SQL/deal-stage-trends.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "13B536D5-C202-4E12-9793-6E4BB1E0D818"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:52.898Z",
+      "checksum": "a4a1b4a9e46f2e7f4cc62cad058f1c4e0f9d817df1b0237e7d45add87837dbe2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Invoice Aging Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which invoices are overdue? Show me accounts receivable aging by bucket.",
+      "Description": "Categorizes outstanding invoices into aging buckets (current, 30, 60, 90+ days) for accounts receivable management.",
+      "SQL": "@file:SQL/invoice-aging-analysis.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "B0AC0653-32C3-4857-9BF2-C20E06F8506B"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:53.670Z",
+      "checksum": "402f2bb714292fe9a81354f77ab926c81cc9f1ae6e00151e3beb8034a473eaa4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Payment Trends",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How are customer payments trending? Show me monthly payment patterns.",
+      "Description": "Analyzes payment patterns over time showing payment amounts, frequency, and collection efficiency.",
+      "SQL": "@file:SQL/payment-trends.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "10059C54-C3C9-409C-9FAB-4CA9E79AE64C"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:54.446Z",
+      "checksum": "2b6830a457d26549a629af3a3d66340f861adb0750cc1930a61ad641a88ac6ce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Top Accounts by Outstanding",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which customers owe us the most? Show me top accounts by outstanding balance.",
+      "Description": "Identifies accounts with highest outstanding balances for targeted collection efforts.",
+      "SQL": "@file:SQL/top-accounts-by-outstanding.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "F3A497D1-6ABA-42F2-85D3-1CC4617FC9AC"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:55.214Z",
+      "checksum": "b986c2e264d0db4231bbb597e9b6361bdca6aa49978677aa48b405d1769f0e3a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Account Payment History",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What is the payment history for this account? Show me their invoices and payments.",
+      "Description": "Provides detailed payment history for specific accounts showing invoices, payments, and aging status.",
+      "SQL": "@file:SQL/account-payment-history.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "6CCEFF70-D195-4082-9091-FED0CE340311"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:08:55.978Z",
+      "checksum": "fdfe8726f3dd49673f9d89b90665c078515fad103b37c19afdea5509e6c88e35"
+    }
+  }
+]

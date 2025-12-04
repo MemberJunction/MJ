@@ -1,0 +1,16 @@
+{
+  "name": "AccountRevenueByType",
+  "title": "Account Revenue by Type",
+  "type": "chart",
+  "userExplanation": "",
+  "functionalRequirements": "",
+  "dataRequirements": {
+    "mode": "hybrid",
+    "queries": []
+  },
+  "properties": [],
+  "events": [],
+  "dependencies": [],
+  "code": "@file:../../code/query-examples/account-revenue-by-type.js",
+  "exampleUsage": ""
+}

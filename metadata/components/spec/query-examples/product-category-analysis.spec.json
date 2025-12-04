@@ -1,0 +1,16 @@
+{
+  "name": "ProductCategoryAnalysis",
+  "title": "Product Category Analysis",
+  "type": "dashboard",
+  "userExplanation": "",
+  "functionalRequirements": "",
+  "dataRequirements": {
+    "mode": "hybrid",
+    "queries": []
+  },
+  "properties": [],
+  "events": [],
+  "dependencies": [],
+  "code": "@file:../../code/query-examples/product-category-analysis.js",
+  "exampleUsage": ""
+}

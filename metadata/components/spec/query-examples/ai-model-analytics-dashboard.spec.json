@@ -1,0 +1,16 @@
+{
+  "name": "AIModelAnalyticsDashboard",
+  "title": "AI Model Analytics Dashboard",
+  "type": "dashboard",
+  "userExplanation": "",
+  "functionalRequirements": "",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": []
+  },
+  "properties": [],
+  "events": [],
+  "dependencies": [],
+  "code": "@file:../../code/query-examples/ai-model-analytics-dashboard.js",
+  "exampleUsage": ""
+}
