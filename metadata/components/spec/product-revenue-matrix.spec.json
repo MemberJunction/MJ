@@ -11,29 +11,61 @@
       {
         "name": "Products",
         "description": "Product catalog with pricing and cost information",
-        "displayFields": ["ID", "Name", "Category", "UnitPrice", "Cost"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Category",
+          "UnitPrice",
+          "Cost"
+        ],
         "filterFields": [],
-        "sortFields": ["Name"],
+        "sortFields": [
+          "Name"
+        ],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"]
+        "permissionLevelNeeded": [
+          "read"
+        ]
       },
       {
         "name": "Invoice Line Items",
         "description": "Line items linking products to invoices with quantities and pricing",
-        "displayFields": ["ID", "InvoiceID", "ProductID", "Quantity", "UnitPrice", "TotalPrice", "Discount"],
+        "displayFields": [
+          "ID",
+          "InvoiceID",
+          "ProductID",
+          "Quantity",
+          "UnitPrice",
+          "TotalPrice",
+          "Discount"
+        ],
         "filterFields": [],
-        "sortFields": ["TotalPrice"],
+        "sortFields": [
+          "TotalPrice"
+        ],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"]
+        "permissionLevelNeeded": [
+          "read"
+        ]
       },
       {
         "name": "Invoices",
         "description": "Invoice headers with dates and customer references",
-        "displayFields": ["ID", "AccountID", "InvoiceDate"],
-        "filterFields": ["InvoiceDate"],
-        "sortFields": ["InvoiceDate"],
+        "displayFields": [
+          "ID",
+          "AccountID",
+          "InvoiceDate"
+        ],
+        "filterFields": [
+          "InvoiceDate"
+        ],
+        "sortFields": [
+          "InvoiceDate"
+        ],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"]
+        "permissionLevelNeeded": [
+          "read"
+        ]
       }
     ],
     "queries": []
@@ -72,5 +104,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Visualize product performance across customers and time periods in an interactive matrix format with treemap and sparklines"
 }

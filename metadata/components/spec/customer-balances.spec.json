@@ -12,21 +12,33 @@
       {
         "name": "Accounts",
         "description": "Customer account information",
-        "displayFields": ["ID", "AccountName"],
+        "displayFields": [
+          "ID",
+          "AccountName"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Customer identification"
       },
       {
         "name": "Invoices",
         "description": "Invoice data for balance calculations",
-        "displayFields": ["AccountID", "TotalAmount", "PaidAmount", "DueDate"],
+        "displayFields": [
+          "AccountID",
+          "TotalAmount",
+          "PaidAmount",
+          "DueDate"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Outstanding balance calculation"
       }
     ],
@@ -49,5 +61,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Table showing customer outstanding balances"
 }

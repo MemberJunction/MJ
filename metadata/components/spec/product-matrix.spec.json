@@ -12,31 +12,46 @@
       {
         "name": "Products",
         "description": "Product entities for matrix rows",
-        "displayFields": ["ID", "ProductName"],
+        "displayFields": [
+          "ID",
+          "ProductName"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Product names as matrix row headers"
       },
       {
         "name": "Accounts",
         "description": "Customer entities for matrix columns",
-        "displayFields": ["ID", "AccountName"],
+        "displayFields": [
+          "ID",
+          "AccountName"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Customer names as matrix column headers"
       },
       {
         "name": "Invoice Line Items",
         "description": "Revenue data for matrix cells",
-        "displayFields": ["ProductID", "TotalPrice"],
+        "displayFields": [
+          "ProductID",
+          "TotalPrice"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Revenue values for product-customer intersections"
       }
     ],
@@ -65,5 +80,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Matrix grid showing products vs customers with revenue values"
 }

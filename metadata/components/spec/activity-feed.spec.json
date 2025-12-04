@@ -12,9 +12,20 @@
       {
         "name": "Activities",
         "description": "CRM activity records",
-        "displayFields": ["ID", "Type", "Subject", "Description", "ActivityDate", "OwnerID", "Owner", "RelatedEntityID"],
+        "displayFields": [
+          "ID",
+          "Type",
+          "Subject",
+          "Description",
+          "ActivityDate",
+          "OwnerID",
+          "Owner",
+          "RelatedEntityID"
+        ],
         "filterFields": [],
-        "sortFields": ["ActivityDate"],
+        "sortFields": [
+          "ActivityDate"
+        ],
         "fieldMetadata": [],
         "usageContext": "Recent activities displayed in chronological feed"
       }
@@ -38,5 +49,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Real-time feed of sales activities and updates"
 }

@@ -20,5 +20,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Gauge charts showing key performance indicators"
 }

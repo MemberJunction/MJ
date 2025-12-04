@@ -7,8 +7,8 @@ function SimpleChart({
   chartType = 'auto',
   title,
   height = 400,
-  sortBy = 'value',
-  sortOrder = 'desc',
+  sortBy = undefined,
+  sortOrder = 'asc',
   limit,
   colors,
   showLegend = true,
@@ -200,9 +200,10 @@ function SimpleChart({
         }
       });
 
-      // Convert to array and sort
+      // Convert to array
       let dataArray = Object.values(grouped);
-      
+
+      // Only sort if explicitly requested (preserves input order by default)
       if (sortBy === 'label') {
         dataArray.sort((a, b) => {
           const comparison = String(a.label).localeCompare(String(b.label));
@@ -214,7 +215,8 @@ function SimpleChart({
           return sortOrder === 'asc' ? comparison : -comparison;
         });
       }
-      
+      // If sortBy is undefined/null, preserve the input order
+
       // Apply limit if specified
       if (limit && limit > 0) {
         dataArray = dataArray.slice(0, limit);

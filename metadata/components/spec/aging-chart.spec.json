@@ -12,11 +12,25 @@
       {
         "name": "Invoices",
         "description": "Invoice data aggregated into aging buckets",
-        "displayFields": ["InvoiceDate", "DueDate", "TotalAmount", "PaidAmount", "BalanceDue"],
-        "filterFields": ["Status", "AccountID"],
-        "sortFields": ["DueDate", "InvoiceDate"],
+        "displayFields": [
+          "InvoiceDate",
+          "DueDate",
+          "TotalAmount",
+          "PaidAmount",
+          "BalanceDue"
+        ],
+        "filterFields": [
+          "Status",
+          "AccountID"
+        ],
+        "sortFields": [
+          "DueDate",
+          "InvoiceDate"
+        ],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Data is pre-aggregated by parent component into aging buckets (0-30, 31-60, 61-90, 90+ days)"
       }
     ],
@@ -39,5 +53,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Chart showing accounts receivable aging buckets"
 }

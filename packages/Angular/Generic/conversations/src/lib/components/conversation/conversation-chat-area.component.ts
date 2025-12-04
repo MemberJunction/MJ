@@ -282,7 +282,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
         // Defensive fallback: force another change detection cycle after async ops complete
         setTimeout(() => {
-          if (conversationId === this.conversationState.activeConversationId && this.messages.length > 0) {
+          if (conversationId === this._conversationId && this.messages.length > 0) {
             this.messages = [...this.messages];
             this.cdr.detectChanges();
           }
