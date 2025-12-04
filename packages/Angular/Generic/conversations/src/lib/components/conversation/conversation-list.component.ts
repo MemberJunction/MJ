@@ -190,6 +190,7 @@ import { takeUntil } from 'rxjs/operators';
     </div>
   `,
   styles: [`
+    :host { display: block; height: 100%; }
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: #092340; }
     .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .search-input {
@@ -224,7 +225,7 @@ import { takeUntil } from 'rxjs/operators';
     }
     .btn-new-conversation:hover { background: #005A8C; }
     .btn-new-conversation i { font-size: 14px; }
-    .list-content { flex: 1; overflow-y: auto; padding: 4px 0; }
+    .list-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; }
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }

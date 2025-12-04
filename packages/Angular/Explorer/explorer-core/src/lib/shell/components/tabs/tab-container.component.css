@@ -83,6 +83,9 @@
 /* Global overrides */
 mj-tab-container .lm_content {
   background: white !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
 }
 
 mj-tab-container .lm_item_container {
