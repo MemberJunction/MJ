@@ -12,11 +12,17 @@
       {
         "name": "Deals",
         "description": "Deal data for velocity distribution analysis",
-        "displayFields": ["Stage", "CloseDate", "__mj_CreatedAt"],
+        "displayFields": [
+          "Stage",
+          "CloseDate",
+          "__mj_CreatedAt"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Velocity values calculated and passed as distribution array"
       }
     ],
@@ -40,5 +46,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Distribution chart showing deal velocity spread"
 }

@@ -10,9 +10,27 @@
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["DealName", "Stage", "Amount", "Probability", "CloseDate", "ActualCloseDate", "__mj_CreatedAt", "__mj_UpdatedAt"],
-        "filterFields": ["Stage", "ActualCloseDate", "CloseDate"],
-        "sortFields": ["ActualCloseDate", "CloseDate", "Amount", "__mj_CreatedAt"]
+        "displayFields": [
+          "DealName",
+          "Stage",
+          "Amount",
+          "Probability",
+          "CloseDate",
+          "ActualCloseDate",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "Stage",
+          "ActualCloseDate",
+          "CloseDate"
+        ],
+        "sortFields": [
+          "ActualCloseDate",
+          "CloseDate",
+          "Amount",
+          "__mj_CreatedAt"
+        ]
       }
     ]
   },
@@ -62,5 +80,6 @@
       "version": "^1.11.10",
       "globalVariable": "dayjs"
     }
-  ]
+  ],
+  "description": "Analyze and visualize the speed of deals through the sales pipeline with detailed stage-by-stage metrics"
 }

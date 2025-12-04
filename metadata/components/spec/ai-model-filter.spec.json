@@ -11,27 +11,38 @@
       {
         "name": "AI Model Types",
         "description": "Model type options for filtering",
-        "displayFields": ["ID", "Name", "Description"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Populates model type dropdown filter"
       },
       {
         "name": "AI Vendors",
         "description": "Vendor options for filtering",
-        "displayFields": ["ID", "Name"],
+        "displayFields": [
+          "ID",
+          "Name"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Populates vendor dropdown filters"
       }
     ],
     "queries": []
   },
-  "technicalDesign": "",
+  "technicalDesign": "## Technical Design\n\n### Component Structure\n- Collapsible filter panel on the left side\n- Multiple filter controls with clear all functionality\n- Persists filter state via event callbacks\n\n### Props\n- filters: Current filter values object\n- modelTypes: Available model type options for dropdown\n- developers: Available model developer options\n- providers: Available inference provider options\n- isCollapsed: Boolean controlling collapse state\n- onFilterChange: Callback when any filter changes\n- onToggleCollapse: Callback to toggle collapse state\n\n### Filter Controls\n- Model Type dropdown (multi-select)\n- Status dropdown (Active/Inactive)\n- Model Developer dropdown (multi-select)\n- Inference Provider dropdown (multi-select)\n- Clear all filters button\n\n### State Management\n- Active filter count badge\n- Visual indicators for applied filters\n- Collapse/expand animation with icon rotation",
   "properties": [
     {
       "name": "filters",

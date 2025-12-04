@@ -12,21 +12,35 @@
       {
         "name": "Products",
         "description": "Product information",
-        "displayFields": ["ID", "ProductName", "Category", "UnitPrice"],
+        "displayFields": [
+          "ID",
+          "ProductName",
+          "Category",
+          "UnitPrice"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Product details display"
       },
       {
         "name": "Invoice Line Items",
         "description": "Product revenue data",
-        "displayFields": ["ProductID", "Quantity", "TotalPrice", "InvoiceID"],
+        "displayFields": [
+          "ProductID",
+          "Quantity",
+          "TotalPrice",
+          "InvoiceID"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Product performance metrics"
       }
     ],
@@ -55,5 +69,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Slide-out panel with detailed product performance metrics"
 }

@@ -12,21 +12,32 @@
       {
         "name": "Invoices",
         "description": "Invoice data for revenue trends",
-        "displayFields": ["TotalAmount", "IssueDate"],
+        "displayFields": [
+          "TotalAmount",
+          "IssueDate"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Historical revenue tracking"
       },
       {
         "name": "Deals",
         "description": "Deal pipeline revenue",
-        "displayFields": ["Amount", "CloseDate", "Stage"],
+        "displayFields": [
+          "Amount",
+          "CloseDate",
+          "Stage"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Pipeline revenue tracking"
       }
     ],
@@ -49,5 +60,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Line chart showing revenue trends over time"
 }

@@ -8,8 +8,7 @@
   "dataRequirements": {
     "mode": "views",
     "description": "Manages collection actions and tasks",
-    "entities": [
-    ],
+    "entities": [],
     "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- actions: Array of available actions\n- tasks: Array of tasks",
@@ -29,5 +28,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Panel with collection actions and follow-up tasks"
 }

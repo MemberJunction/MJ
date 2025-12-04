@@ -12,21 +12,38 @@
       {
         "name": "Deals",
         "description": "Deal data for competitive analysis",
-        "displayFields": ["ID", "Name", "Amount", "Stage", "CompetitorID", "WonLostReason"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Amount",
+          "Stage",
+          "CompetitorID",
+          "WonLostReason"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Win/loss analysis against competitors"
       },
       {
         "name": "Competitors",
         "description": "Competitor information",
-        "displayFields": ["ID", "Name", "MarketPosition", "Strengths", "Weaknesses"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "MarketPosition",
+          "Strengths",
+          "Weaknesses"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Competitor profiles and attributes"
       }
     ],
@@ -49,5 +66,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Competitive win/loss analysis by competitor"
 }

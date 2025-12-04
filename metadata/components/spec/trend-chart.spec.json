@@ -12,11 +12,18 @@
       {
         "name": "Deals",
         "description": "Source data for trend analysis",
-        "displayFields": ["CloseDate", "Amount", "Stage", "__mj_CreatedAt"],
+        "displayFields": [
+          "CloseDate",
+          "Amount",
+          "Stage",
+          "__mj_CreatedAt"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Deal data aggregated over time for trend visualization"
       }
     ],
@@ -39,5 +46,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Time series chart showing velocity trends"
 }
