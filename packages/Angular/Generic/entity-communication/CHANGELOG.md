@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-entity-communications
 
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.123.0
+- @memberjunction/entity-communications-client@2.123.0
+- @memberjunction/ng-shared-generic@2.123.0
+- @memberjunction/ng-container-directives@2.123.0
+- @memberjunction/communication-types@2.123.0
+- @memberjunction/entity-communications-base@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+- @memberjunction/templates-base-types@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes
