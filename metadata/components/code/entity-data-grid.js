@@ -360,15 +360,14 @@ function EntityDataGrid({
     // Skip if initial load hasn't completed
     if (cacheMode === 'loading') return;
 
-    // Skip if we're on page 1 (already loaded by initial load)
-    if (currentPage === 1) return;
-
     const loadPageData = async () => {
       if (cacheMode === 'full') {
         // FULL CACHE MODE: Slice from allDataCache
+        if (!allDataCache || allDataCache.length === 0) return; // Guard: wait for cache to be populated
+
         const startIdx = (currentPage - 1) * currentPageSize;
         const endIdx = startIdx + currentPageSize;
-        const pageData = (allDataCache || []).slice(startIdx, endIdx);
+        const pageData = allDataCache.slice(startIdx, endIdx);
         setData(pageData);
 
         if (onPageChanged) {
@@ -576,9 +575,11 @@ function EntityDataGrid({
         setShowFilterWarning(false);
       }
     } else {
-      // No filter: restore original view
+      // No filter: restore original view for current page
       if (cacheMode === 'full' && allDataCache) {
-        setData(allDataCache.slice(0, currentPageSize));
+        const startIdx = (currentPage - 1) * currentPageSize;
+        const endIdx = startIdx + currentPageSize;
+        setData(allDataCache.slice(startIdx, endIdx));
       } else if (cacheMode === 'partial' && pageCache.has(currentPage)) {
         setData(pageCache.get(currentPage));
       }
