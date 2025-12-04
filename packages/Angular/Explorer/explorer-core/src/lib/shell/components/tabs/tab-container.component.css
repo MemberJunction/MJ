@@ -81,11 +81,76 @@
 
 /* Override Golden Layout styles */
 /* Global overrides */
+
+/* Ensure GL root container fills available space */
+mj-tab-container .lm_goldenlayout {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure the root layout item fills space */
+mj-tab-container .lm_root {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure proper box-sizing for all GL layout elements */
+mj-tab-container .lm_item,
+mj-tab-container .lm_content,
+mj-tab-container .lm_stack,
+mj-tab-container .lm_row,
+mj-tab-container .lm_column {
+  box-sizing: border-box !important;
+}
+
+/* Ensure layout items don't overflow */
+mj-tab-container .lm_item {
+  overflow: hidden !important;
+}
+
+/* Fix for .lm_items - the content container inside stacks */
+/* This is separate from .lm_item - it holds the actual tab content */
+mj-tab-container .lm_items {
+  width: 100% !important;
+  height: calc(100% - 38px) !important; /* Account for header height (38px) */
+  box-sizing: border-box !important;
+  position: relative !important;
+}
+
+/* When tabs are maximized, no header visible */
+mj-tab-container .lm_stack.lm_maximised > .lm_items {
+  height: 100% !important;
+}
+
+/* Target the anonymous ComponentItem div inside lm_items (has no class) */
+/* Created in golden-layout/src/ts/items/component-item.ts:51 without a class */
+mj-tab-container .lm_items > div {
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Clearfix for float-based row layout - GL uses float:left for horizontal panes */
+mj-tab-container .lm_row::after {
+  content: "" !important;
+  display: table !important;
+  clear: both !important;
+}
+
+/* Force content children to respect parent bounds (GL sets pixel widths inline) */
+mj-tab-container .lm_content > * {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
 mj-tab-container .lm_content {
   background: white !important;
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
+  width: 100% !important;
 }
 
 mj-tab-container .lm_item_container {
@@ -162,7 +227,7 @@ mj-tab-container .lm_header .lm_tab:hover::before {
 
 mj-tab-container .lm_header .lm_tab.lm_active {
   background: white !important;
-  height: 37px !important;
+  height: 36px !important;
   margin-bottom: -1px !important;
   margin-right: 0 !important;
   border: 1px solid #ebebeb !important;
