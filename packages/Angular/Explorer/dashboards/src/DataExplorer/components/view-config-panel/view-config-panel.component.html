@@ -178,60 +178,152 @@
     <!-- Filters Tab -->
     @if (activeTab === 'filters') {
       <div class="tab-content">
+        <!-- Filter Mode Selection -->
+        <div class="filter-mode-selector">
+          <button
+            class="filter-mode-btn"
+            [class.active]="filterMode === 'smart'"
+            (click)="setFilterMode('smart')"
+            [disabled]="!canEdit">
+            <div class="mode-icon">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <div class="mode-content">
+              <span class="mode-title">Smart Filter</span>
+              <span class="mode-subtitle">Use AI to filter with natural language</span>
+            </div>
+            @if (filterMode === 'smart') {
+              <i class="fa-solid fa-check mode-check"></i>
+            }
+          </button>
+          <button
+            class="filter-mode-btn"
+            [class.active]="filterMode === 'traditional'"
+            (click)="setFilterMode('traditional')"
+            [disabled]="!canEdit">
+            <div class="mode-icon">
+              <i class="fa-solid fa-sliders"></i>
+            </div>
+            <div class="mode-content">
+              <span class="mode-title">Traditional Filter</span>
+              <span class="mode-subtitle">Build filters with field/operator/value</span>
+            </div>
+            @if (filterMode === 'traditional') {
+              <i class="fa-solid fa-check mode-check"></i>
+            }
+          </button>
+        </div>
+
         <!-- Smart Filter Section -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-magic"></i>
-            <span>Smart Filter</span>
-            <label class="smart-filter-toggle">
-              <input
-                type="checkbox"
-                [(ngModel)]="smartFilterEnabled"
-                [disabled]="!canEdit"
-              />
-              <span class="toggle-label">{{ smartFilterEnabled ? 'Enabled' : 'Disabled' }}</span>
-            </label>
-          </div>
-          @if (smartFilterEnabled) {
-            <div class="form-group">
-              <label for="smartFilterPrompt">Natural Language Filter</label>
+        @if (filterMode === 'smart') {
+          <div class="config-section smart-filter-section">
+            <div class="smart-filter-input-container">
+              <div class="smart-filter-icon">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </div>
               <textarea
                 id="smartFilterPrompt"
-                class="form-input form-textarea smart-filter-textarea"
-                placeholder="Describe what records you want to see... e.g., 'Show me all records created this month' or 'Active customers with high revenue'"
+                class="smart-filter-textarea"
+                placeholder="Describe what you're looking for..."
                 [(ngModel)]="smartFilterPrompt"
                 [disabled]="!canEdit"
                 rows="3"
               ></textarea>
             </div>
+
             @if (smartFilterExplanation) {
               <div class="smart-filter-explanation">
-                <i class="fa-solid fa-info-circle"></i>
+                <i class="fa-solid fa-robot"></i>
                 <span>{{ smartFilterExplanation }}</span>
               </div>
             }
-            <div class="tip">
-              <i class="fa-solid fa-lightbulb"></i>
-              <span>Tip: The AI will interpret your natural language and create the appropriate filter when you save the view.</span>
+
+            <!-- Example Prompts -->
+            <div class="smart-filter-examples">
+              <div class="examples-header">
+                <i class="fa-solid fa-lightbulb"></i>
+                <span>Try these examples:</span>
+              </div>
+              <div class="example-chips">
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Show records created in the last 30 days')"
+                  [disabled]="!canEdit">
+                  <i class="fa-regular fa-calendar"></i>
+                  Last 30 days
+                </button>
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Active records only')"
+                  [disabled]="!canEdit">
+                  <i class="fa-solid fa-circle-check"></i>
+                  Active only
+                </button>
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Records with high priority')"
+                  [disabled]="!canEdit">
+                  <i class="fa-solid fa-star"></i>
+                  High priority
+                </button>
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Records modified this week')"
+                  [disabled]="!canEdit">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                  Modified this week
+                </button>
+              </div>
             </div>
-          } @else {
-            <div class="smart-filter-disabled-message">
-              <p>Enable Smart Filter to use natural language filtering. The AI will interpret your description and create the appropriate SQL filter.</p>
+
+            <div class="smart-filter-tip">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>The AI will interpret your description and create the appropriate filter when you save the view.</span>
             </div>
-          }
-        </div>
+          </div>
+        }
 
         <!-- Traditional Filter Section -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-filter"></i>
-            <span>Traditional Filters</span>
+        @if (filterMode === 'traditional') {
+          <div class="config-section traditional-filter-section">
+            <div class="filter-summary-container">
+              <div class="filter-summary">
+                <div class="summary-info">
+                  @if (getFilterCount() > 0) {
+                    <span class="filter-badge">{{ getFilterCount() }}</span>
+                    <span class="summary-text">{{ getFilterSummary() }}</span>
+                  } @else {
+                    <span class="summary-text no-filters">No filters configured</span>
+                  }
+                </div>
+                <div class="summary-actions">
+                  @if (getFilterCount() > 0 && canEdit) {
+                    <button
+                      class="summary-btn clear-btn"
+                      (click)="clearFilters()"
+                      title="Clear all filters">
+                      <i class="fa-solid fa-times"></i>
+                      Clear
+                    </button>
+                  }
+                  <button
+                    class="summary-btn edit-btn primary"
+                    (click)="openFilterDialog()"
+                    [disabled]="!canEdit && getFilterCount() === 0"
+                    title="Edit filters">
+                    <i class="fa-solid fa-pen"></i>
+                    {{ getFilterCount() > 0 ? 'Edit Filters' : 'Add Filters' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="traditional-filter-tip">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>Build precise filters by selecting fields, operators, and values. Use groups for complex AND/OR logic.</span>
+            </div>
           </div>
-          <div class="filters-placeholder">
-            <i class="fa-solid fa-sliders-h"></i>
-            <p>Traditional filter editing is coming soon. For now, use Smart Filter above or the filter builder in the grid view.</p>
-          </div>
-        </div>
+        }
       </div>
     }
 

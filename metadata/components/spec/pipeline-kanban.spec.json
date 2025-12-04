@@ -12,11 +12,26 @@
       {
         "name": "Deals",
         "description": "Deal entities grouped by pipeline stage",
-        "displayFields": ["ID", "DealName", "Amount", "Stage", "CloseDate", "Probability", "Account"],
-        "filterFields": ["Stage"],
-        "sortFields": ["Amount", "CloseDate"],
+        "displayFields": [
+          "ID",
+          "DealName",
+          "Amount",
+          "Stage",
+          "CloseDate",
+          "Probability",
+          "Account"
+        ],
+        "filterFields": [
+          "Stage"
+        ],
+        "sortFields": [
+          "Amount",
+          "CloseDate"
+        ],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Deals organized into kanban columns by stage"
       }
     ],
@@ -45,5 +60,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Kanban board visualization of sales pipeline stages"
 }

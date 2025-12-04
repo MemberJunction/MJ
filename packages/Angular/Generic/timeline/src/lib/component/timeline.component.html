@@ -145,7 +145,7 @@
     [class.mj-timeline__event--odd]="isOdd && layout === 'alternating'"
     [class.mj-timeline__event--even]="!isOdd && layout === 'alternating'"
     [class.mj-timeline__event--expanded]="event.isExpanded"
-    [class.mj-timeline__event--focused]="focusedEventIndex === globalIndex"
+    [class.mj-timeline__event--focused]="isEventSelected(event, globalIndex)"
     [attr.data-event-id]="event.id"
     role="listitem"
     [attr.aria-expanded]="event.isExpanded">
@@ -166,7 +166,7 @@
     <!-- Event Card -->
     <div
       class="mj-timeline__card"
-      [class]="getEffectiveCardConfig(event).cssClass"
+      [ngClass]="getEffectiveCardConfig(event).cssClass"
       [style.max-width]="getEffectiveCardConfig(event).maxWidth"
       [style.min-width]="getEffectiveCardConfig(event).minWidth"
       [style.border-left-color]="getColor(event)"
@@ -262,8 +262,8 @@
               class="mj-timeline__card-fields mj-timeline__card-fields--summary"
               *ngIf="getEffectiveCardConfig(event).summaryFields?.length">
               <ng-container *ngFor="let field of getEffectiveCardConfig(event).summaryFields">
-                <div class="mj-timeline__card-field" [class]="field.cssClass">
-                  <i *ngIf="field.icon" [class]="field.icon" class="mj-timeline__card-field-icon"></i>
+                <div class="mj-timeline__card-field" [ngClass]="field.cssClass">
+                  <i *ngIf="field.icon" [ngClass]="field.icon" class="mj-timeline__card-field-icon"></i>
                   <span *ngIf="!field.hideLabel && field.label" class="mj-timeline__card-field-label">{{ field.label }}:</span>
                   <span class="mj-timeline__card-field-value">{{ getFieldValue(event, field) }}</span>
                 </div>
@@ -289,8 +289,8 @@
               class="mj-timeline__card-fields mj-timeline__card-fields--expanded"
               *ngIf="event.isExpanded && getEffectiveCardConfig(event).expandedFields?.length">
               <ng-container *ngFor="let field of getEffectiveCardConfig(event).expandedFields">
-                <div class="mj-timeline__card-field" [class]="field.cssClass">
-                  <i *ngIf="field.icon" [class]="field.icon" class="mj-timeline__card-field-icon"></i>
+                <div class="mj-timeline__card-field" [ngClass]="field.cssClass">
+                  <i *ngIf="field.icon" [ngClass]="field.icon" class="mj-timeline__card-field-icon"></i>
                   <span *ngIf="!field.hideLabel" class="mj-timeline__card-field-label">{{ field.label || field.fieldName }}:</span>
                   <span class="mj-timeline__card-field-value">{{ getFieldValue(event, field) }}</span>
                 </div>
@@ -321,12 +321,12 @@
               [class.mj-timeline__action--secondary]="action.variant === 'secondary' || !action.variant"
               [class.mj-timeline__action--danger]="action.variant === 'danger'"
               [class.mj-timeline__action--link]="action.variant === 'link'"
-              [class]="action.cssClass"
+              [ngClass]="action.cssClass"
               [disabled]="action.disabled"
               [title]="action.tooltip || ''"
               (click)="onActionClick(event, action, globalIndex, $event)"
               type="button">
-              <i *ngIf="action.icon" [class]="action.icon"></i>
+              <i *ngIf="action.icon" [ngClass]="action.icon"></i>
               <span>{{ action.label }}</span>
             </button>
           </ng-template>

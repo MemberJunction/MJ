@@ -1,0 +1,168 @@
+<div class="filter-rule" [class.disabled]="disabled">
+  <!-- Field Selector - Custom Dropdown -->
+  <div class="custom-dropdown field-dropdown" [class.open]="fieldDropdownOpen" [class.disabled]="disabled">
+    <button
+      type="button"
+      class="dropdown-trigger"
+      (click)="toggleFieldDropdown()"
+      (keydown)="onFieldKeydown($event)"
+      [disabled]="disabled">
+      <span class="dropdown-value">{{ getSelectedFieldDisplayName() }}</span>
+      <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+    </button>
+    @if (fieldDropdownOpen) {
+      <div class="dropdown-menu">
+        @for (field of fields; track field.name; let i = $index) {
+          <div
+            class="dropdown-item"
+            [class.selected]="field.name === filter.field"
+            [class.highlighted]="i === fieldHighlightIndex"
+            (click)="selectField(field.name)">
+            {{ field.displayName }}
+          </div>
+        }
+        @if (fields.length === 0) {
+          <div class="dropdown-empty">No fields available</div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Operator Selector - Custom Dropdown -->
+  <div class="custom-dropdown operator-dropdown" [class.open]="operatorDropdownOpen" [class.disabled]="disabled || !selectedField">
+    <button
+      type="button"
+      class="dropdown-trigger"
+      (click)="toggleOperatorDropdown()"
+      (keydown)="onOperatorKeydown($event)"
+      [disabled]="disabled || !selectedField">
+      <span class="dropdown-value">{{ getSelectedOperatorLabel() }}</span>
+      <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+    </button>
+    @if (operatorDropdownOpen) {
+      <div class="dropdown-menu">
+        @for (op of availableOperators; track op.value; let i = $index) {
+          <div
+            class="dropdown-item"
+            [class.selected]="op.value === filter.operator"
+            [class.highlighted]="i === operatorHighlightIndex"
+            (click)="selectOperator(op.value)">
+            {{ op.label }}
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Value Editor - varies by field type -->
+  @if (requiresValue && selectedField) {
+    <!-- String with value list (custom dropdown) -->
+    @if (selectedField.type === 'string' && hasValueList()) {
+      <div class="custom-dropdown value-dropdown" [class.open]="valueDropdownOpen" [class.disabled]="disabled">
+        <button
+          type="button"
+          class="dropdown-trigger"
+          (click)="toggleValueDropdown()"
+          (keydown)="onValueKeydown($event)"
+          [disabled]="disabled">
+          <span class="dropdown-value">{{ getSelectedValueLabel() }}</span>
+          <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+        </button>
+        @if (valueDropdownOpen) {
+          <div class="dropdown-menu">
+            <div
+              class="dropdown-item"
+              [class.selected]="!filter.value"
+              [class.highlighted]="0 === valueHighlightIndex"
+              (click)="selectValue('')">
+              Select...
+            </div>
+            @for (option of selectedField.valueList; track option.value; let i = $index) {
+              <div
+                class="dropdown-item"
+                [class.selected]="option.value === filter.value"
+                [class.highlighted]="(i + 1) === valueHighlightIndex"
+                (click)="selectValue(option.value)">
+                {{ option.label }}
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+    <!-- String (text input) -->
+    @else if (selectedField.type === 'string') {
+      <input
+        type="text"
+        class="value-input"
+        [value]="filter.value || ''"
+        (input)="onValueChange($any($event.target).value)"
+        [disabled]="disabled"
+        placeholder="Enter value...">
+    }
+    <!-- Number -->
+    @else if (selectedField.type === 'number') {
+      <input
+        type="number"
+        class="value-input"
+        [value]="filter.value"
+        (input)="onValueChange($any($event.target).valueAsNumber)"
+        [disabled]="disabled"
+        placeholder="Enter number...">
+    }
+    <!-- Boolean -->
+    @else if (selectedField.type === 'boolean') {
+      <div class="value-toggle">
+        <button
+          type="button"
+          class="toggle-btn true"
+          [class.active]="filter.value === true"
+          (click)="onBooleanChange(true)"
+          [disabled]="disabled">
+          True
+        </button>
+        <button
+          type="button"
+          class="toggle-btn false"
+          [class.active]="filter.value === false"
+          (click)="onBooleanChange(false)"
+          [disabled]="disabled">
+          False
+        </button>
+      </div>
+    }
+    <!-- Date -->
+    @else if (selectedField.type === 'date') {
+      <input
+        type="date"
+        class="value-input value-date"
+        [value]="getDateInputValue()"
+        (change)="onDateChange($event)"
+        [disabled]="disabled">
+    }
+    <!-- Lookup (for now, simple text input - can be enhanced with record selector) -->
+    @else if (selectedField.type === 'lookup') {
+      <input
+        type="text"
+        class="value-input"
+        [value]="filter.value || ''"
+        (input)="onValueChange($any($event.target).value)"
+        [disabled]="disabled"
+        placeholder="Enter ID...">
+    }
+  }
+
+  <!-- Actions -->
+  <div class="rule-actions">
+    @if (showDelete) {
+      <button
+        type="button"
+        class="action-btn delete"
+        (click)="onDelete()"
+        [disabled]="disabled"
+        title="Remove filter">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    }
+  </div>
+</div>

@@ -5,8 +5,8 @@ export interface WorkspaceConfiguration {
   /** Schema version for future migrations */
   version: number;
 
-  /** Golden Layout state */
-  layout: LayoutConfig;
+  /** Golden Layout state (may be undefined if cleared due to corruption) */
+  layout?: LayoutConfig;
 
   /** ID of currently active tab */
   activeTabId: string | null;

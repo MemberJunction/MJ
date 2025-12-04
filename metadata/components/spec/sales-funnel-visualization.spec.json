@@ -10,9 +10,23 @@
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Probability", "AccountID"],
-        "filterFields": ["Stage", "CloseDate"],
-        "sortFields": ["Amount", "CloseDate", "Probability"],
+        "displayFields": [
+          "DealName",
+          "Stage",
+          "Amount",
+          "CloseDate",
+          "Probability",
+          "AccountID"
+        ],
+        "filterFields": [
+          "Stage",
+          "CloseDate"
+        ],
+        "sortFields": [
+          "Amount",
+          "CloseDate",
+          "Probability"
+        ],
         "fields": [
           {
             "name": "ID",
@@ -44,7 +58,7 @@
             "type": "number",
             "description": "Win probability percentage"
           }
-        ] 
+        ]
       }
     ]
   },
@@ -76,5 +90,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Interactive sales funnel visualization with conversion metrics and drill-down capabilities"
 }

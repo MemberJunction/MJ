@@ -9,20 +9,45 @@
     "entities": [
       {
         "name": "Invoices",
-        "displayFields": ["InvoiceDate", "TotalAmount", "Status"],
-        "filterFields": ["InvoiceDate", "Status"],
-        "sortFields": ["InvoiceDate"] 
+        "displayFields": [
+          "InvoiceDate",
+          "TotalAmount",
+          "Status"
+        ],
+        "filterFields": [
+          "InvoiceDate",
+          "Status"
+        ],
+        "sortFields": [
+          "InvoiceDate"
+        ]
       },
       {
         "name": "Deals",
-        "displayFields": ["CloseDate", "Amount", "Stage", "Probability"],
-        "filterFields": ["CloseDate", "Stage"],
-        "sortFields": ["CloseDate"] 
+        "displayFields": [
+          "CloseDate",
+          "Amount",
+          "Stage",
+          "Probability"
+        ],
+        "filterFields": [
+          "CloseDate",
+          "Stage"
+        ],
+        "sortFields": [
+          "CloseDate"
+        ]
       },
       {
         "name": "Products",
-        "displayFields": ["Name", "Price", "Cost"],
-        "sortFields": ["Name"]
+        "displayFields": [
+          "Name",
+          "Price",
+          "Cost"
+        ],
+        "sortFields": [
+          "Name"
+        ]
       }
     ]
   },
@@ -55,5 +80,6 @@
       "version": "^3.45.1",
       "globalVariable": "ApexCharts"
     }
-  ]
+  ],
+  "description": "Comprehensive financial overview with revenue trends, forecasting, and profitability analysis with export capabilities"
 }

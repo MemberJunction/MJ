@@ -1,7 +1,7 @@
 //***********************************************************
 // Angular
 //***********************************************************
-import { NgModule } from '@angular/core';
+import { NgModule, APP_INITIALIZER } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { FormsModule } from '@angular/forms';
@@ -16,7 +16,7 @@ import { CoreGeneratedFormsModule, LoadCoreGeneratedForms, LoadCoreCustomForms }
 LoadCoreGeneratedForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
 LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
 
-import { AuthServicesModule, RedirectComponent } from '@memberjunction/ng-auth-services';
+import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -67,6 +67,15 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
   };
 }
 
+/**
+ * Initialize auth provider before Angular routing starts
+ * This ensures MSAL can process OAuth redirect responses before Angular's router
+ * consumes the URL hash
+ */
+export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
+  return () => authService.initialize();
+}
+
 @NgModule({
   declarations: [
     AppComponent, 
@@ -101,7 +110,16 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     // Import standalone components
     SystemValidationBannerComponent,
   ],
-  providers: [SharedService, provideHttpClient(withInterceptorsFromDi())],
+  providers: [
+    SharedService,
+    provideHttpClient(withInterceptorsFromDi()),
+    {
+      provide: APP_INITIALIZER,
+      useFactory: initializeAuth,
+      deps: [MJAuthBase],
+      multi: true
+    }
+  ],
   bootstrap: [AppComponent, RedirectComponent],
 })
 export class AppModule {}

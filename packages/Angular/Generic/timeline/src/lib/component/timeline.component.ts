@@ -26,6 +26,7 @@ import {
   TemplateRef,
   ChangeDetectorRef,
   ChangeDetectionStrategy,
+  ViewEncapsulation,
   NgZone
 } from '@angular/core';
 
@@ -135,8 +136,9 @@ const DEFAULT_ICONS = [
 @Component({
   selector: 'mj-timeline',
   templateUrl: './timeline.component.html',
-  styleUrls: ['./timeline.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  styleUrls: ['./timeline.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.None
 })
 export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewInit {
   // ============================================================================
@@ -152,12 +154,41 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     return this._groups;
   }
   set groups(value: TimelineGroup<T>[]) {
+    const prevGroups = this._groups;
     this._groups = value || [];
-    if (this._initialized && this.allowLoad) {
-      this.refresh();
+    const hasGroups = this._groups.length > 0;
+
+    // Check if groups actually changed (different date field, label, or data)
+    const groupsChanged = this.didGroupsChange(prevGroups, this._groups);
+
+    if (this.allowLoad && hasGroups) {
+      if (!this._hasLoaded) {
+        // First load
+        this.refresh();
+      } else if (groupsChanged) {
+        // Groups changed after initial load - force refresh
+        this.refresh(true);
+      }
     }
   }
   private _groups: TimelineGroup<T>[] = [];
+
+  /**
+   * Check if timeline groups have meaningfully changed
+   */
+  private didGroupsChange(prev: TimelineGroup<T>[], next: TimelineGroup<T>[]): boolean {
+    if (prev.length !== next.length) return true;
+    for (let i = 0; i < prev.length; i++) {
+      const p = prev[i];
+      const n = next[i];
+      if (p.DateFieldName !== n.DateFieldName ||
+          p.GroupLabel !== n.GroupLabel ||
+          p.EntityObjects !== n.EntityObjects) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /**
    * Controls whether data loading is allowed.
@@ -171,14 +202,15 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
   set allowLoad(value: boolean) {
     const wasDisabled = !this._allowLoad;
     this._allowLoad = value;
-    if (value && wasDisabled && this._initialized && !this._hasLoaded) {
-      this.refresh();
+    // When allowLoad becomes true and we have groups, trigger refresh
+    if (value && wasDisabled && this._groups.length > 0) {
+      this.refresh(this._hasLoaded);
     }
   }
   private _allowLoad = true;
 
   // ============================================================================
-  // INPUTS - LAYOUT
+  // INPUTS - LAYOUT (using setters for reactive updates)
   // ============================================================================
 
   /**
@@ -187,7 +219,17 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * - `horizontal`: Events displayed left-to-right
    * @default 'vertical'
    */
-  @Input() orientation: TimelineOrientation = 'vertical';
+  @Input()
+  get orientation(): TimelineOrientation {
+    return this._orientation;
+  }
+  set orientation(value: TimelineOrientation) {
+    if (this._orientation !== value) {
+      this._orientation = value;
+      this.cdr.markForCheck();
+    }
+  }
+  private _orientation: TimelineOrientation = 'vertical';
 
   /**
    * Layout mode for vertical timeline.
@@ -195,7 +237,17 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * - `alternating`: Cards alternate sides
    * @default 'single'
    */
-  @Input() layout: TimelineLayout = 'single';
+  @Input()
+  get layout(): TimelineLayout {
+    return this._layout;
+  }
+  set layout(value: TimelineLayout) {
+    if (this._layout !== value) {
+      this._layout = value;
+      this.cdr.markForCheck();
+    }
+  }
+  private _layout: TimelineLayout = 'single';
 
   /**
    * Sort order for events.
@@ -203,13 +255,41 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * - `asc`: Oldest first
    * @default 'desc'
    */
-  @Input() sortOrder: TimelineSortOrder = 'desc';
+  @Input()
+  get sortOrder(): TimelineSortOrder {
+    return this._sortOrder;
+  }
+  set sortOrder(value: TimelineSortOrder) {
+    if (this._sortOrder !== value) {
+      this._sortOrder = value;
+      // Re-process events when sort order changes - force refresh since data already loaded
+      if (this._initialized) {
+        this.refresh(true);
+      }
+      this.cdr.markForCheck();
+    }
+  }
+  private _sortOrder: TimelineSortOrder = 'desc';
 
   /**
    * How to group events into time segments.
    * @default 'month'
    */
-  @Input() segmentGrouping: TimeSegmentGrouping = 'month';
+  @Input()
+  get segmentGrouping(): TimeSegmentGrouping {
+    return this._segmentGrouping;
+  }
+  set segmentGrouping(value: TimeSegmentGrouping) {
+    if (this._segmentGrouping !== value) {
+      this._segmentGrouping = value;
+      // Re-segment events when grouping changes - force refresh since data already loaded
+      if (this._initialized) {
+        this.refresh(true);
+      }
+      this.cdr.markForCheck();
+    }
+  }
+  private _segmentGrouping: TimeSegmentGrouping = 'month';
 
   // ============================================================================
   // INPUTS - CARD DEFAULTS
@@ -283,6 +363,23 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * @default true
    */
   @Input() enableKeyboardNavigation = true;
+
+  /**
+   * ID of the currently selected event.
+   * When set, the corresponding event will be highlighted with the focused style.
+   */
+  @Input()
+  get selectedEventId(): string | null {
+    return this._selectedEventId;
+  }
+  set selectedEventId(value: string | null) {
+    const changed = this._selectedEventId !== value;
+    this._selectedEventId = value;
+    if (changed) {
+      this.cdr.markForCheck();
+    }
+  }
+  private _selectedEventId: string | null = null;
 
   // ============================================================================
   // OUTPUTS - BEFORE EVENTS (with cancel support)
@@ -455,7 +552,12 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
    * Refreshes all data from the configured groups.
    * Clears existing data and reloads from sources.
    */
-  async refresh(): Promise<void> {
+  async refresh(force: boolean = false): Promise<void> {
+    // Prevent concurrent refresh calls - if already refreshing, exit immediately
+    if (this.isLoading || (this._hasLoaded && !force)) {
+      return;
+    }
+
     const startTime = Date.now();
 
     // Emit before event
@@ -1001,6 +1103,21 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     return this.allEvents.indexOf(event);
   }
 
+  /**
+   * Checks if an event is currently selected/focused.
+   * An event is selected if either:
+   * - Its ID matches the selectedEventId input
+   * - Its global index matches the focusedEventIndex (keyboard navigation)
+   */
+  isEventSelected(event: MJTimelineEvent<T>, globalIndex: number): boolean {
+    // Check selectedEventId from parent first (takes priority)
+    if (this.selectedEventId && event.id === this.selectedEventId) {
+      return true;
+    }
+    // Fall back to keyboard navigation focus
+    return this.focusedEventIndex === globalIndex;
+  }
+
   // ============================================================================
   // PRIVATE METHODS - DATA LOADING
   // ============================================================================
@@ -1482,6 +1599,7 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
 
   /**
    * Simple date formatter (replaces Angular DatePipe for standalone use).
+   * Uses placeholder tokens to avoid replacement conflicts.
    */
   private formatDateInternal(date: Date, format: string): string {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -1495,16 +1613,36 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     const hours = date.getHours();
     const minutes = date.getMinutes();
 
-    return format
-      .replace('yyyy', String(year))
-      .replace('MMMM', months[month])
-      .replace('MMM', monthsShort[month])
-      .replace('MM', String(month + 1).padStart(2, '0'))
-      .replace('dd', String(day).padStart(2, '0'))
-      .replace('d', String(day))
-      .replace('HH', String(hours).padStart(2, '0'))
-      .replace('h', String(hours % 12 || 12))
-      .replace('mm', String(minutes).padStart(2, '0'))
-      .replace('a', hours >= 12 ? 'PM' : 'AM');
+    // Use placeholder tokens to avoid conflicts (e.g., 'May' containing 'M')
+    // Replace longer patterns first with placeholders, then substitute values
+    let result = format;
+
+    // Replace patterns with unique placeholders first
+    result = result.replace(/yyyy/g, '{{YEAR}}');
+    result = result.replace(/MMMM/g, '{{MONTH_FULL}}');
+    result = result.replace(/MMM/g, '{{MONTH_SHORT}}');
+    result = result.replace(/MM/g, '{{MONTH_PAD}}');
+    result = result.replace(/dd/g, '{{DAY_PAD}}');
+    result = result.replace(/d/g, '{{DAY}}');
+    result = result.replace(/HH/g, '{{HOUR_24}}');
+    result = result.replace(/hh/g, '{{HOUR_12_PAD}}');
+    result = result.replace(/h/g, '{{HOUR_12}}');
+    result = result.replace(/mm/g, '{{MIN}}');
+    result = result.replace(/a/g, '{{AMPM}}');
+
+    // Now substitute the actual values
+    result = result.replace(/\{\{YEAR\}\}/g, String(year));
+    result = result.replace(/\{\{MONTH_FULL\}\}/g, months[month]);
+    result = result.replace(/\{\{MONTH_SHORT\}\}/g, monthsShort[month]);
+    result = result.replace(/\{\{MONTH_PAD\}\}/g, String(month + 1).padStart(2, '0'));
+    result = result.replace(/\{\{DAY_PAD\}\}/g, String(day).padStart(2, '0'));
+    result = result.replace(/\{\{DAY\}\}/g, String(day));
+    result = result.replace(/\{\{HOUR_24\}\}/g, String(hours).padStart(2, '0'));
+    result = result.replace(/\{\{HOUR_12_PAD\}\}/g, String(hours % 12 || 12).padStart(2, '0'));
+    result = result.replace(/\{\{HOUR_12\}\}/g, String(hours % 12 || 12));
+    result = result.replace(/\{\{MIN\}\}/g, String(minutes).padStart(2, '0'));
+    result = result.replace(/\{\{AMPM\}\}/g, hours >= 12 ? 'PM' : 'AM');
+
+    return result;
   }
 }

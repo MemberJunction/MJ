@@ -181,6 +181,7 @@ export class NavigationService implements OnDestroy {
     const request: TabRequest = {
       ApplicationId: appId,
       Title: navItem.Label,
+      ResourceRecordId: navItem.RecordID || '',  // Also store at top level for consistent tab matching
       Configuration: {
         route: navItem.Route,
         resourceType: navItem.ResourceType,

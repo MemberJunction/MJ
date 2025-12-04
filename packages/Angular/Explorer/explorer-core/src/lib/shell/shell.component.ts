@@ -989,6 +989,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
+   * Logout user and clear authentication data
+   */
+  async onLogout(): Promise<void> {
+    this.userMenuVisible = false;
+    this.authBase.logout();
+    localStorage.removeItem('auth');
+    localStorage.removeItem('claims');
+  }
+
+  /**
    * Load user avatar from database, auto-sync from auth provider if needed
    */
   private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string }): Promise<void> {

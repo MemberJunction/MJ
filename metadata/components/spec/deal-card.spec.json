@@ -12,11 +12,20 @@
       {
         "name": "Deals",
         "description": "Deal entity displayed in card format",
-        "displayFields": ["ID", "DealName", "Amount", "CloseDate", "Probability", "Stage"],
+        "displayFields": [
+          "ID",
+          "DealName",
+          "Amount",
+          "CloseDate",
+          "Probability",
+          "Stage"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Single deal object displayed as a card"
       }
     ],
@@ -46,5 +55,6 @@
       "version": "^1.11.10",
       "globalVariable": "dayjs"
     }
-  ]
+  ],
+  "description": "Card view component for individual deals"
 }

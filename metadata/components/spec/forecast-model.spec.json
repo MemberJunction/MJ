@@ -12,21 +12,33 @@
       {
         "name": "Deals",
         "description": "Deal pipeline for forecasting",
-        "displayFields": ["Amount", "Probability", "CloseDate", "Stage"],
+        "displayFields": [
+          "Amount",
+          "Probability",
+          "CloseDate",
+          "Stage"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Pipeline-based revenue forecasting"
       },
       {
         "name": "Invoices",
         "description": "Historical revenue data",
-        "displayFields": ["TotalAmount", "IssueDate"],
+        "displayFields": [
+          "TotalAmount",
+          "IssueDate"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Historical trend analysis"
       }
     ],
@@ -55,5 +67,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Predictive model chart with revenue forecasting"
 }

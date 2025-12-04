@@ -37,6 +37,7 @@ import { UserInfo } from '@memberjunction/core';
       <div class="nav-right">
         <mj-tasks-dropdown
           [currentUser]="currentUser"
+          [conversationId]="conversationId"
           (navigateToConversation)="navigateToConversation.emit($event)">
         </mj-tasks-dropdown>
         <button class="nav-btn search-btn" (click)="searchTriggered.emit()" title="Search (Ctrl+K)">
@@ -167,6 +168,7 @@ export class ConversationNavigationComponent {
   @Input() activeTab: NavigationTab = 'conversations';
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() conversationId: string | null = null;
   @Output() tabChanged = new EventEmitter<NavigationTab>();
   @Output() sidebarToggled = new EventEmitter<void>();
   @Output() searchTriggered = new EventEmitter<void>();

@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, RunView } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
 import {
   EntityViewMode,
   EntityViewerConfig,
@@ -18,7 +19,10 @@ import {
   SortChangedEvent,
   PaginationState,
   ViewGridStateConfig,
-  GridStateChangedEvent
+  GridStateChangedEvent,
+  TimelineSegmentGrouping,
+  TimelineOrientation,
+  TimelineState
 } from '../types';
 
 /**
@@ -127,6 +131,34 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Input() gridState: ViewGridStateConfig | null = null;
 
+  /**
+   * Timeline configuration state
+   * Controls which date field is used and segment grouping
+   */
+  @Input()
+  get timelineConfig(): TimelineState | null {
+    return this._timelineConfig;
+  }
+  set timelineConfig(value: TimelineState | null) {
+    const prev = this._timelineConfig;
+    // Compare by value, not reference
+    const isEqual = (prev === null && value === null) ||
+      (prev !== null && value !== null &&
+        prev.dateFieldName === value.dateFieldName &&
+        prev.sortOrder === value.sortOrder &&
+        prev.orientation === value.orientation &&
+        prev.segmentGrouping === value.segmentGrouping);
+
+    if (!isEqual) {
+      this._timelineConfig = value;
+      if (value && this.entity) {
+        this.configureTimeline();
+        this.cdr.markForCheck();
+      }
+    }
+  }
+  private _timelineConfig: TimelineState | null = null;
+
   // ========================================
   // OUTPUTS
   // ========================================
@@ -171,6 +203,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Output() gridStateChanged = new EventEmitter<GridStateChangedEvent>();
 
+  /**
+   * Emitted when timeline configuration changes (date field, grouping, etc.)
+   */
+  @Output() timelineConfigChange = new EventEmitter<TimelineState>();
+
   // ========================================
   // INTERNAL STATE
   // ========================================
@@ -199,6 +236,49 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     isLoading: false
   };
 
+  // ========================================
+  // TIMELINE STATE
+  // ========================================
+
+  /** Whether the current entity has date fields available for timeline view */
+  public hasDateFields: boolean = false;
+
+  /** Available date fields from the entity (sorted by priority) */
+  public availableDateFields: EntityFieldInfo[] = [];
+
+  /** Timeline groups configuration for the timeline component */
+  get timelineGroups(): TimelineGroup<BaseEntity>[] {
+    return this._timelineGroups;
+  }
+  set timelineGroups(value: TimelineGroup<BaseEntity>[]) {
+    const prev = this._timelineGroups;
+    this._timelineGroups = value;
+
+    // Detect meaningful changes to trigger refresh in child timeline component
+    const hasChanged = prev !== value ||
+      (prev.length > 0 && value.length > 0 &&
+        (prev[0].EntityObjects !== value[0]?.EntityObjects ||
+         prev[0].DateFieldName !== value[0]?.DateFieldName));
+
+    if (hasChanged) {
+      // Force change detection to propagate to child timeline component
+      this.cdr.markForCheck();
+    }
+  }
+  private _timelineGroups: TimelineGroup<BaseEntity>[] = [];
+
+  /** Timeline sort order */
+  public timelineSortOrder: TimelineSortOrder = 'desc';
+
+  /** Timeline segment grouping */
+  public timelineSegmentGrouping: TimeSegmentGrouping = 'month';
+
+  /** Timeline orientation (vertical or horizontal) */
+  public timelineOrientation: TimelineOrientation = 'vertical';
+
+  /** Currently selected date field for timeline */
+  public selectedTimelineDateField: string | null = null;
+
   private destroy$ = new Subject<void>();
   private filterInput$ = new Subject<string>();
 
@@ -223,6 +303,30 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   get effectiveFilterText(): string {
     return this.filterText ?? this.internalFilterText;
+  }
+
+  /**
+   * Get the raw ID value from selectedRecordId for timeline selection.
+   * The selectedRecordId is in composite key format (e.g., "ID|abc-123" or "ID=abc-123"),
+   * but the timeline stores just the raw ID value.
+   */
+  get timelineSelectedEventId(): string | null {
+    if (!this.selectedRecordId) return null;
+
+    // Handle "ID|value" format (pipe separator)
+    if (this.selectedRecordId.includes('|')) {
+      const parts = this.selectedRecordId.split('|');
+      return parts.length > 1 ? parts[1] : this.selectedRecordId;
+    }
+
+    // Handle "ID=value" format (equals separator)
+    if (this.selectedRecordId.includes('=')) {
+      const parts = this.selectedRecordId.split('=');
+      return parts.length > 1 ? parts[1] : this.selectedRecordId;
+    }
+
+    // Return as-is if no separator found
+    return this.selectedRecordId;
   }
 
   /**
@@ -414,6 +518,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     if (changes['entity']) {
+      // Detect date fields for timeline support
+      this.detectDateFields();
+
       if (this.entity && !this.records) {
         // Reset state for new entity - synchronously clear all data and force change detection
         // before starting the async load to prevent stale data display
@@ -433,7 +540,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.internalRecords = this.records;
       this.totalRecordCount = this.records.length;
       this.filteredRecordCount = this.records.length;
+      // Update timeline with new records
+      this.updateTimelineGroups();
     }
+
+    // Timeline config is now handled by setter - no ngOnChanges handling needed
 
     // Handle external filter text changes (from parent component)
     if (changes['filterText']) {
@@ -654,6 +765,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
           filteredCount: this.internalRecords.length,
           totalCount: result.TotalRowCount
         });
+
+        // Update timeline groups with new data
+        this.updateTimelineGroups();
       } else {
         console.error('Failed to load records:', result.ErrorMessage);
         if (this.isInitialLoad) {
@@ -790,5 +904,292 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   onLoadMore(): void {
     this.loadMore();
+  }
+
+  // ========================================
+  // TIMELINE METHODS
+  // ========================================
+
+  /**
+   * Handle timeline event click - emit as record selection
+   */
+  onTimelineEventClick(event: AfterEventClickArgs): void {
+    const record = event.event.entity as BaseEntity;
+    if (record && this.entity) {
+      this.recordSelected.emit({
+        record,
+        entity: this.entity,
+        compositeKey: record.PrimaryKey
+      });
+    }
+  }
+
+  /**
+   * Toggle timeline orientation between vertical and horizontal
+   */
+  toggleTimelineOrientation(): void {
+    this.timelineOrientation = this.timelineOrientation === 'vertical' ? 'horizontal' : 'vertical';
+
+    // Emit config change so parent can persist the preference
+    this.emitTimelineConfigChange();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle timeline sort order between newest first (desc) and oldest first (asc)
+   */
+  toggleTimelineSortOrder(): void {
+    this.timelineSortOrder = this.timelineSortOrder === 'desc' ? 'asc' : 'desc';
+
+    // Emit config change so parent can persist the preference
+    this.emitTimelineConfigChange();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Change the date field used for the timeline
+   */
+  setTimelineDateField(fieldName: string): void {
+    if (this.availableDateFields.some(f => f.Name === fieldName)) {
+      this.selectedTimelineDateField = fieldName;
+      this.updateTimelineGroups();
+      this.emitTimelineConfigChange();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Get the display name of the currently selected timeline date field
+   */
+  get selectedDateFieldDisplayName(): string {
+    if (!this.selectedTimelineDateField) return '';
+    const field = this.availableDateFields.find(f => f.Name === this.selectedTimelineDateField);
+    return field?.DisplayNameOrName || this.selectedTimelineDateField;
+  }
+
+  /**
+   * Emit the current timeline configuration for persistence
+   */
+  private emitTimelineConfigChange(): void {
+    if (this.selectedTimelineDateField) {
+      this.timelineConfigChange.emit({
+        dateFieldName: this.selectedTimelineDateField,
+        sortOrder: this.timelineSortOrder,
+        segmentGrouping: this.timelineSegmentGrouping as TimelineSegmentGrouping,
+        orientation: this.timelineOrientation
+      });
+    }
+  }
+
+  /**
+   * Detect and configure timeline based on entity's date fields
+   * Called when entity changes
+   */
+  private detectDateFields(): void {
+    if (!this.entity) {
+      this.hasDateFields = false;
+      this.availableDateFields = [];
+      this.timelineGroups = [];
+      this.fallbackFromTimelineIfNeeded();
+      return;
+    }
+
+    // Find all date fields - include __mj_CreatedAt and __mj_UpdatedAt as they're useful for timelines
+    const dateFields = this.entity.Fields.filter(
+      f => f.TSType === EntityFieldTSType.Date
+    );
+
+    if (dateFields.length === 0) {
+      this.hasDateFields = false;
+      this.availableDateFields = [];
+      this.timelineGroups = [];
+      this.fallbackFromTimelineIfNeeded();
+      return;
+    }
+
+    // Sort by priority: DefaultInView date fields first (by Sequence), then others (by Sequence)
+    this.availableDateFields = this.sortDateFieldsByPriority(dateFields);
+    this.hasDateFields = true;
+
+    // Configure timeline with the best date field
+    this.configureTimeline();
+  }
+
+  /**
+   * If currently on timeline view but timeline is no longer available,
+   * fall back to grid view
+   */
+  private fallbackFromTimelineIfNeeded(): void {
+    if (this.effectiveViewMode === 'timeline' && !this.hasDateFields) {
+      this.setViewMode('grid');
+    }
+  }
+
+  /**
+   * Sort date fields by priority:
+   * 1. DefaultInView=true fields, sorted by Sequence (lowest first)
+   * 2. Other date fields, sorted by Sequence (lowest first)
+   */
+  private sortDateFieldsByPriority(dateFields: EntityFieldInfo[]): EntityFieldInfo[] {
+    const defaultInView = dateFields.filter(f => f.DefaultInView).sort((a, b) => a.Sequence - b.Sequence);
+    const others = dateFields.filter(f => !f.DefaultInView).sort((a, b) => a.Sequence - b.Sequence);
+    return [...defaultInView, ...others];
+  }
+
+  /**
+   * Configure the timeline with the current date field and records
+   */
+  private configureTimeline(): void {
+    if (!this.entity || !this.hasDateFields || this.availableDateFields.length === 0) {
+      this.timelineGroups = [];
+      return;
+    }
+
+    // Determine which date field to use
+    const dateFieldName = this.getEffectiveTimelineDateField();
+    this.selectedTimelineDateField = dateFieldName;
+
+    // Apply timeline config if provided
+    if (this.timelineConfig) {
+      this.timelineSortOrder = (this.timelineConfig.sortOrder || 'desc') as TimelineSortOrder;
+      this.timelineSegmentGrouping = (this.timelineConfig.segmentGrouping || 'month') as TimeSegmentGrouping;
+      this.timelineOrientation = this.timelineConfig.orientation || 'vertical';
+    }
+
+    // Create a timeline group for the current entity's data
+    this.updateTimelineGroups();
+  }
+
+  /**
+   * Get the effective date field to use for timeline
+   * Priority: timelineConfig > first available date field
+   */
+  private getEffectiveTimelineDateField(): string {
+    // If we have a config with a specific date field, use it if valid
+    if (this.timelineConfig?.dateFieldName) {
+      const configField = this.availableDateFields.find(f => f.Name === this.timelineConfig!.dateFieldName);
+      if (configField) {
+        return configField.Name;
+      }
+    }
+
+    // Otherwise use the first available date field (already sorted by priority)
+    return this.availableDateFields[0].Name;
+  }
+
+  /**
+   * Update timeline groups with current records
+   * Called when records change
+   */
+  private updateTimelineGroups(): void {
+    if (!this.entity || !this.selectedTimelineDateField) {
+      this.timelineGroups = [];
+      return;
+    }
+
+    // Find title field - prefer NameField, then first string field with DefaultInView
+    const titleField = this.findTitleField();
+
+    // Create a single group for the current data
+    const group = new TimelineGroup<BaseEntity>();
+    group.DataSourceType = 'array';
+    group.EntityObjects = this.filteredRecords;
+    group.TitleFieldName = titleField;
+    group.DateFieldName = this.selectedTimelineDateField;
+    group.IdFieldName = 'ID';
+    group.GroupLabel = this.entity.Name;
+
+    // Find a suitable description field
+    const descField = this.findDescriptionField();
+    if (descField) {
+      group.DescriptionFieldName = descField;
+    }
+
+    // Find a suitable subtitle field
+    const subtitleField = this.findSubtitleField(titleField);
+    if (subtitleField) {
+      group.SubtitleFieldName = subtitleField;
+    }
+
+    // Configure card display
+    group.CardConfig = {
+      collapsible: true,
+      defaultExpanded: false,
+      showDate: true,
+      dateFormat: 'MMM d, yyyy h:mm a'
+    };
+
+    this.timelineGroups = [group];
+  }
+
+  /**
+   * Find the best field to use as the title
+   */
+  private findTitleField(): string {
+    if (!this.entity) return 'ID';
+
+    // Prefer the entity's NameField
+    if (this.entity.NameField) {
+      return this.entity.NameField.Name;
+    }
+
+    // Look for common name patterns in DefaultInView string fields
+    const stringFields = this.entity.Fields.filter(
+      f => f.TSType === EntityFieldTSType.String && f.DefaultInView && !f.Name.startsWith('__mj_')
+    ).sort((a, b) => a.Sequence - b.Sequence);
+
+    const namePatterns = ['name', 'title', 'subject', 'label'];
+    for (const pattern of namePatterns) {
+      const match = stringFields.find(f => f.Name.toLowerCase().includes(pattern));
+      if (match) return match.Name;
+    }
+
+    // Fall back to first string field
+    return stringFields.length > 0 ? stringFields[0].Name : 'ID';
+  }
+
+  /**
+   * Find a suitable description field
+   */
+  private findDescriptionField(): string | null {
+    if (!this.entity) return null;
+
+    // Look for common description patterns
+    const descPatterns = ['description', 'notes', 'summary', 'content', 'body', 'details'];
+    const textFields = this.entity.Fields.filter(
+      f => (f.TSType === EntityFieldTSType.String) && !f.Name.startsWith('__mj_')
+    );
+
+    for (const pattern of descPatterns) {
+      const match = textFields.find(f => f.Name.toLowerCase().includes(pattern));
+      if (match) return match.Name;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find a suitable subtitle field (different from title)
+   */
+  private findSubtitleField(excludeField: string): string | null {
+    if (!this.entity) return null;
+
+    // Look for status, type, category, or other short classification fields
+    const patterns = ['status', 'type', 'category', 'state', 'priority'];
+    const fields = this.entity.Fields.filter(
+      f => f.TSType === EntityFieldTSType.String &&
+           f.DefaultInView &&
+           f.Name !== excludeField &&
+           !f.Name.startsWith('__mj_')
+    ).sort((a, b) => a.Sequence - b.Sequence);
+
+    for (const pattern of patterns) {
+      const match = fields.find(f => f.Name.toLowerCase().includes(pattern));
+      if (match) return match.Name;
+    }
+
+    // Use the first string field that's not the title field
+    const firstOther = fields.find(f => f.Name !== excludeField);
+    return firstOther?.Name || null;
   }
 }

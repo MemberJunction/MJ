@@ -38,6 +38,7 @@
     "@memberjunction/global": "2.122.2",
     "@memberjunction/core": "2.122.2",
     "@memberjunction/ng-shared-generic": "2.122.2",
+    "@memberjunction/ng-timeline": "2.122.2",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

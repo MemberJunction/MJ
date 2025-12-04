@@ -10,9 +10,24 @@
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Owner", "LossReason", "Competitor"],
-        "filterFields": ["Stage", "CloseDate", "Owner"],
-        "sortFields": ["CloseDate", "Amount"] 
+        "displayFields": [
+          "DealName",
+          "Stage",
+          "Amount",
+          "CloseDate",
+          "Owner",
+          "LossReason",
+          "Competitor"
+        ],
+        "filterFields": [
+          "Stage",
+          "CloseDate",
+          "Owner"
+        ],
+        "sortFields": [
+          "CloseDate",
+          "Amount"
+        ]
       }
     ]
   },
@@ -32,5 +47,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Analyze patterns in won and lost deals to identify success factors and improvement areas with AI-powered insights"
 }

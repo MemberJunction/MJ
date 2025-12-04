@@ -12,11 +12,18 @@
       {
         "name": "Deals",
         "description": "Source data for velocity and conversion metrics",
-        "displayFields": ["Stage", "CloseDate", "Amount", "__mj_CreatedAt"],
+        "displayFields": [
+          "Stage",
+          "CloseDate",
+          "Amount",
+          "__mj_CreatedAt"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Metrics are pre-calculated from deal velocity data"
       }
     ],
@@ -33,5 +40,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Panel showing key velocity metrics and statistics"
 }

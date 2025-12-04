@@ -12,11 +12,20 @@
       {
         "name": "Deals",
         "description": "Deal entity data",
-        "displayFields": ["ID", "Name", "Amount", "Stage", "AccountID", "Account"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Amount",
+          "Stage",
+          "AccountID",
+          "Account"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Individual deal card display"
       }
     ],
@@ -39,5 +48,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Card component for displaying individual deal information in the sales funnel"
 }

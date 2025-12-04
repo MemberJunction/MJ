@@ -1,0 +1,81 @@
+<div class="filter-builder" [class.disabled]="disabled">
+  <!-- Header with summary and actions -->
+  <div class="filter-header">
+    <div class="filter-summary">
+      <span class="filter-icon">
+        <i class="fa-solid fa-filter"></i>
+      </span>
+      @if (hasActiveFilters) {
+        <span class="filter-count">{{ getFilterCount() }} condition{{ getFilterCount() !== 1 ? 's' : '' }}</span>
+      } @else {
+        <span class="filter-count no-filters">No filters applied</span>
+      }
+    </div>
+
+    <div class="filter-actions">
+      @if (mergedConfig.showClearButton && hasActiveFilters) {
+        <button
+          type="button"
+          class="action-btn clear-btn"
+          (click)="onClear()"
+          [disabled]="disabled"
+          title="Clear all filters">
+          <i class="fa-solid fa-times"></i>
+          <span>Clear All</span>
+        </button>
+      }
+      @if (mergedConfig.showApplyButton) {
+        <button
+          type="button"
+          class="action-btn apply-btn"
+          (click)="onApply()"
+          [disabled]="disabled"
+          title="Apply filters">
+          <i class="fa-solid fa-check"></i>
+          <span>Apply</span>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Filter Builder Content -->
+  <div class="filter-content">
+    <mj-filter-group
+      [filter]="internalFilter"
+      [fields]="fields"
+      [isRoot]="true"
+      [depth]="0"
+      [maxDepth]="mergedConfig.maxDepth"
+      [disabled]="disabled"
+      (filterChange)="onFilterChange($event)">
+    </mj-filter-group>
+  </div>
+
+  <!-- Quick tips (shown when no filters) -->
+  @if (!hasActiveFilters) {
+    <div class="filter-tips">
+      <p>
+        <i class="fa-solid fa-lightbulb"></i>
+        <strong>Tip:</strong> Click "Add Condition" to create filter rules.
+        Use "Add Group" for complex AND/OR combinations.
+      </p>
+    </div>
+  }
+
+  <!-- Collapsible filter expression summary -->
+  @if (showSummary && hasActiveFilters) {
+    <div class="filter-expression-summary" [class.expanded]="isSummaryExpanded">
+      <button type="button" class="expression-toggle" (click)="toggleSummary()">
+        <i class="fa-solid" [class.fa-chevron-right]="!isSummaryExpanded" [class.fa-chevron-down]="isSummaryExpanded"></i>
+        <i class="fa-solid fa-code expression-icon"></i>
+        <span class="expression-label">View Filter Expression</span>
+        <span class="expression-badge">{{ getFilterCount() }}</span>
+      </button>
+      @if (isSummaryExpanded) {
+        <div class="expression-content">
+          <pre class="expression-text" [innerHTML]="getFilterSummaryHtml()"></pre>
+        </div>
+      }
+    </div>
+  }
+</div>

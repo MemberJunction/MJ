@@ -12,21 +12,32 @@
       {
         "name": "Products",
         "description": "Product data for revenue treemap",
-        "displayFields": ["ID", "ProductName", "Category"],
+        "displayFields": [
+          "ID",
+          "ProductName",
+          "Category"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Products grouped hierarchically for treemap visualization"
       },
       {
         "name": "Invoice Line Items",
         "description": "Revenue data per product",
-        "displayFields": ["ProductID", "TotalPrice"],
+        "displayFields": [
+          "ProductID",
+          "TotalPrice"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Revenue aggregation by product"
       }
     ],
@@ -49,5 +60,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Treemap visualization of revenue by product hierarchy"
 }

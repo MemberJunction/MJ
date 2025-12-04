@@ -4,60 +4,39 @@ import { ConversationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 
 /**
- * Simplified state management for conversations
- * Uses simple arrays with Angular change detection instead of complex observables
- * This prevents synchronization issues when updating conversation properties
+ * Shared data service for conversations
+ * This is a SINGLETON service that manages the conversation data (list of conversations)
+ * Selection state (which conversation is active) is managed by parent components locally
+ *
+ * This architecture enables multiple conversation panels to coexist (e.g., in tabs)
+ * without conflicting over which conversation is "active"
  */
 @Injectable({
   providedIn: 'root'
 })
-export class ConversationStateService {
-  // Simple properties - Angular change detection will handle updates
+export class ConversationDataService {
+  // The list of conversations - shared across all components
   public conversations: ConversationEntity[] = [];
-  private _activeConversationId: string | null = null;
+
+  // Observable for conversation list changes (for components that need reactive updates)
+  private _conversations$ = new BehaviorSubject<ConversationEntity[]>([]);
+  public readonly conversations$ = this._conversations$.asObservable();
+
+  // Search query for filtering - shared across sidebars
   public searchQuery: string = '';
+
+  // Loading state
   public isLoading: boolean = false;
-  public activeThreadId: string | null = null;
-
-  // Observable for conversation ID changes (for URL tracking)
-  private _activeConversationId$ = new BehaviorSubject<string | null>(null);
-  public readonly activeConversationId$ = this._activeConversationId$.asObservable();
-
-  // Pending message from empty state - persists across component lifecycle
-  public pendingMessageToSend: string | null = null;
-
-  // New unsaved conversation state - delays DB creation until first message
-  public isNewUnsavedConversation: boolean = false;
-
-  // Pending artifact navigation - used when jumping from collection to conversation
-  public pendingArtifactId: string | null = null;
-  public pendingArtifactVersionNumber: number | null = null;
 
   constructor() {}
 
   /**
-   * Gets the active conversation ID
+   * Gets a conversation by ID
+   * @param id The conversation ID
+   * @returns The conversation entity or null if not found
    */
-  get activeConversationId(): string | null {
-    return this._activeConversationId;
-  }
-
-  /**
-   * Sets the active conversation ID and emits change event
-   */
-  set activeConversationId(value: string | null) {
-    if (this._activeConversationId !== value) {
-      this._activeConversationId = value;
-      this._activeConversationId$.next(value);
-    }
-  }
-
-  /**
-   * Gets the active conversation object
-   */
-  get activeConversation(): ConversationEntity | null {
-    if (!this.activeConversationId) return null;
-    return this.conversations.find(c => c.ID === this.activeConversationId) || null;
+  getConversationById(id: string): ConversationEntity | null {
+    return this.conversations.find(c => c.ID === id) || null;
   }
 
   /**
@@ -82,75 +61,6 @@ export class ConversationStateService {
   }
 
   /**
-   * Sets the active conversation
-   * @param id The conversation ID to activate (or null to clear)
-   */
-  setActiveConversation(id: string | null): void {
-    console.log('🎯 Setting active conversation:', id);
-    this.activeConversationId = id;
-    // Clear unsaved state when switching to an existing conversation
-    if (id) {
-      this.isNewUnsavedConversation = false;
-    }
-  }
-
-  /**
-   * Initiates a new unsaved conversation (doesn't create DB record yet)
-   * This shows the welcome screen and delays DB creation until first message
-   */
-  startNewConversation(): void {
-    console.log('✨ Starting new unsaved conversation');
-    this.activeConversationId = null;
-    this.isNewUnsavedConversation = true;
-    this.pendingMessageToSend = null;
-  }
-
-  /**
-   * Clears the new unsaved conversation state
-   * Called when the conversation is actually created or cancelled
-   */
-  clearNewConversationState(): void {
-    this.isNewUnsavedConversation = false;
-  }
-
-  /**
-   * Gets the current active conversation ID
-   */
-  getActiveConversationId(): string | null {
-    return this.activeConversationId;
-  }
-
-  /**
-   * Adds a conversation to the list
-   * @param conversation The conversation to add
-   */
-  addConversation(conversation: ConversationEntity): void {
-    this.conversations = [conversation, ...this.conversations];
-  }
-
-  /**
-   * Updates a conversation in the list by directly modifying the entity object
-   * Angular change detection will pick up the changes automatically
-   * @param id The conversation ID
-   * @param updates The fields to update
-   */
-  updateConversationInPlace(id: string, updates: Partial<ConversationEntity>): void {
-    const conversation = this.conversations.find(c => c.ID === id);
-    if (conversation) {
-      Object.assign(conversation, updates);
-      console.log('📝 Updated conversation in-place:', { id, updates });
-    }
-  }
-
-  /**
-   * Removes a conversation from the list
-   * @param id The conversation ID to remove
-   */
-  removeConversation(id: string): void {
-    this.conversations = this.conversations.filter(c => c.ID !== id);
-  }
-
-  /**
    * Sets the search query
    * @param query The search query string
    */
@@ -163,6 +73,40 @@ export class ConversationStateService {
    */
   clearSearchQuery(): void {
     this.searchQuery = '';
+  }
+
+  /**
+   * Adds a conversation to the list
+   * @param conversation The conversation to add
+   */
+  addConversation(conversation: ConversationEntity): void {
+    this.conversations = [conversation, ...this.conversations];
+    this._conversations$.next(this.conversations);
+  }
+
+  /**
+   * Updates a conversation in the list by directly modifying the entity object
+   * Angular change detection will pick up the changes automatically
+   * @param id The conversation ID
+   * @param updates The fields to update
+   */
+  updateConversationInPlace(id: string, updates: Partial<ConversationEntity>): void {
+    const conversation = this.conversations.find(c => c.ID === id);
+    if (conversation) {
+      Object.assign(conversation, updates);
+      // Emit update to trigger reactive subscribers
+      this._conversations$.next(this.conversations);
+    }
+  }
+
+  /**
+   * Removes a conversation from the list
+   * @param id The conversation ID to remove
+   * @returns True if the conversation was the active one (caller may need to handle)
+   */
+  removeConversation(id: string): void {
+    this.conversations = this.conversations.filter(c => c.ID !== id);
+    this._conversations$.next(this.conversations);
   }
 
   /**
@@ -193,9 +137,11 @@ export class ConversationStateService {
         console.error('Failed to load conversations:', result.ErrorMessage);
         this.conversations = [];
       }
+      this._conversations$.next(this.conversations);
     } catch (error) {
       console.error('Error loading conversations:', error);
       this.conversations = [];
+      this._conversations$.next(this.conversations);
     } finally {
       this.isLoading = false;
     }
@@ -253,9 +199,6 @@ export class ConversationStateService {
     const deleted = await conversation.Delete();
     if (deleted) {
       this.removeConversation(id);
-      if (this.getActiveConversationId() === id) {
-        this.setActiveConversation(null);
-      }
       return true;
     } else {
       throw new Error(conversation.LatestResult?.Message || 'Failed to delete conversation');
@@ -354,27 +297,5 @@ export class ConversationStateService {
    */
   async archiveConversation(id: string, currentUser: UserInfo): Promise<void> {
     await this.saveConversation(id, { IsArchived: true }, currentUser);
-  }
-
-  /**
-   * Opens a thread panel for a specific message
-   * @param messageId The parent message ID
-   */
-  openThread(messageId: string): void {
-    this.activeThreadId = messageId;
-  }
-
-  /**
-   * Closes the currently open thread panel
-   */
-  closeThread(): void {
-    this.activeThreadId = null;
-  }
-
-  /**
-   * Gets the currently active thread ID
-   */
-  getActiveThreadId(): string | null {
-    return this.activeThreadId;
   }
 }

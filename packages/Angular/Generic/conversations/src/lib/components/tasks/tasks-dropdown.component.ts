@@ -1,7 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.service';
-import { ConversationStateService } from '../../services/conversation-state.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -487,6 +486,7 @@ import { takeUntil } from 'rxjs/operators';
 })
 export class TasksDropdownComponent implements OnInit, OnDestroy {
   @Input() currentUser!: UserInfo;
+  @Input() conversationId: string | null = null;
   @Output() taskClicked = new EventEmitter<ActiveTask>();
   @Output() navigateToConversation = new EventEmitter<{conversationId: string; taskId: string}>();
 
@@ -498,8 +498,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   constructor(
-    private activeTasksService: ActiveTasksService,
-    private conversationState: ConversationStateService
+    private activeTasksService: ActiveTasksService
   ) {}
 
   ngOnInit() {
@@ -518,14 +517,12 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
   }
 
   private groupTasks(): void {
-    const currentConvId = this.conversationState.activeConversationId;
-
     this.currentConversationTasks = this.allTasks.filter(
-      task => task.conversationId === currentConvId
+      task => task.conversationId === this.conversationId
     );
 
     this.otherConversationTasks = this.allTasks.filter(
-      task => task.conversationId && task.conversationId !== currentConvId
+      task => task.conversationId && task.conversationId !== this.conversationId
     );
   }
 
@@ -539,8 +536,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
 
   onTaskClick(task: ActiveTask): void {
     // If task is from another conversation, emit navigation event
-    const currentConvId = this.conversationState.activeConversationId;
-    if (task.conversationId && task.conversationId !== currentConvId) {
+    if (task.conversationId && task.conversationId !== this.conversationId) {
       this.navigateToConversation.emit({
         conversationId: task.conversationId,
         taskId: task.id

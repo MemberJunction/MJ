@@ -51,7 +51,7 @@
             "type": "string",
             "description": "Next action or milestone"
           }
-        ] 
+        ]
       }
     ]
   },
@@ -84,5 +84,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Modal component showing detailed information about a specific deal with an option to open the full record"
 }

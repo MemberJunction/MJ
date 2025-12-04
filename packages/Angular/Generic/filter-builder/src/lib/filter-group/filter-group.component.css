@@ -1,0 +1,237 @@
+/* Scoped to mj-filter-group to prevent style leakage with ViewEncapsulation.None */
+mj-filter-group .filter-group {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafafa;
+  transition: all 0.15s ease;
+}
+
+mj-filter-group .filter-group.root {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+mj-filter-group .filter-group:not(.root) {
+  margin-left: 16px;
+  border-left: 3px solid #1976d2;
+}
+
+mj-filter-group .filter-group[data-depth="1"]:not(.root) {
+  border-left-color: #7b1fa2;
+}
+
+mj-filter-group .filter-group[data-depth="2"]:not(.root) {
+  border-left-color: #388e3c;
+}
+
+mj-filter-group .filter-group[data-depth="3"]:not(.root) {
+  border-left-color: #f57c00;
+}
+
+mj-filter-group .filter-group.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Group Header */
+mj-filter-group .group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+/* Logic Toggle */
+mj-filter-group .logic-toggle {
+  display: flex;
+  background: #f4f4f5;
+  border-radius: 8px;
+  padding: 3px;
+  border: 1px solid #e5e7eb;
+}
+
+mj-filter-group .logic-btn {
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #71717a;
+}
+
+mj-filter-group .logic-btn:hover:not(:disabled) {
+  color: #3f3f46;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+mj-filter-group .logic-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+mj-filter-group .logic-btn.active {
+  background: white;
+  color: #3b82f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+}
+
+/* Group Actions */
+mj-filter-group .group-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+mj-filter-group .add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px dashed #d4d4d8;
+  background: white;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+mj-filter-group .add-btn:hover:not(:disabled) {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #eff6ff;
+}
+
+mj-filter-group .add-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+mj-filter-group .add-btn.primary {
+  border-style: solid;
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: white;
+}
+
+mj-filter-group .add-btn.primary:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+mj-filter-group .add-btn i {
+  font-size: 12px;
+}
+
+mj-filter-group .add-group {
+  border-color: #a855f7;
+  color: #a855f7;
+}
+
+mj-filter-group .add-group:hover:not(:disabled) {
+  border-color: #9333ea;
+  color: #9333ea;
+  background: #faf5ff;
+}
+
+mj-filter-group .delete-group-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+mj-filter-group .delete-group-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+mj-filter-group .delete-group-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+/* Filters Container */
+mj-filter-group .filters-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+mj-filter-group .filter-item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Logic Connector */
+mj-filter-group .logic-connector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  margin: 4px 0;
+}
+
+mj-filter-group .connector-line {
+  flex: 1;
+  height: 1px;
+  background: #e0e0e0;
+}
+
+mj-filter-group .connector-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  letter-spacing: 0.5px;
+}
+
+/* Empty State */
+mj-filter-group .empty-state {
+  text-align: center;
+  padding: 24px;
+  color: #999;
+}
+
+mj-filter-group .empty-state p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  mj-filter-group .group-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  mj-filter-group .logic-toggle {
+    justify-content: center;
+  }
+
+  mj-filter-group .group-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  mj-filter-group .filter-group:not(.root) {
+    margin-left: 8px;
+  }
+}
