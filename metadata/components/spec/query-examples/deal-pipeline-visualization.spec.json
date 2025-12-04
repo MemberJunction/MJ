@@ -2,15 +2,73 @@
   "name": "DealPipelineVisualization",
   "title": "Deal Pipeline Visualization",
   "type": "dashboard",
-  "userExplanation": "",
-  "functionalRequirements": "",
+  "userExplanation": "Expert-level sales pipeline dashboard with funnel visualization, velocity heatmap, and stage-specific metrics. Click any pipeline stage to see detailed deal information, value trends, and product breakdowns. Demonstrates complex multi-query coordination with conditional execution and calculated fields.",
+  "functionalRequirements": "## Business Objectives\n- Visualize current sales pipeline across all stages (Prospecting, Qualification, Proposal, Negotiation, Closed Won/Lost)\n- Analyze stage transition velocity to identify bottlenecks\n- Track deal values, probability, and days in stage for each pipeline stage\n- Enable drill-down to individual deals and their products\n- Support pipeline health monitoring with time-based trends\n\n## Functional Requirements\n- **Funnel Chart**: Display pipeline stages with deal count and total value (width proportional to deal count)\n- **Velocity Heatmap**: Show average days to transition between stages (color-coded: green=fast, red=slow)\n- **Stage-Specific Metrics**: When stage selected, show KPI cards (total value, deal count, avg days in stage, win rate)\n- **Trend Analysis**: Conditional line chart showing deals entering selected stage over last 90 days\n- **Deal Details Grid**: EntityDataGrid with deals in selected stage, including calculated DaysInStage column\n- **Product Drill-Down**: Click deal row to show EntityDataGrid of deal products\n- **Conditional Queries**: Trend query only executes when stage is selected\n- **Calculated Fields**: Display custom DaysInStage field using SQL DATEDIFF in EntityDataGrid\n- **Multi-Level State**: Track stage selection and optional deal selection\n- **Clear Navigation**: Breadcrumb or back button to return to pipeline overview\n- **Stage Highlighting**: Visual feedback for selected stage in funnel\n- **Loading States**: Independent loading for each query and grid\n- **Empty States**: Handle stages with no deals",
   "dataRequirements": {
     "mode": "hybrid",
-    "queries": []
+    "queries": [
+      {
+        "name": "Deal Pipeline Distribution",
+        "categoryPath": "Demo",
+        "description": "Current pipeline by stage: COUNT(*), SUM(Value), AVG(Value), AVG(DATEDIFF(day, CreatedDate, GETDATE())) grouped by Stage where Status='Active'. Returns 5-7 stages for funnel chart.",
+        "entityNames": ["Deals"],
+        "fields": [],
+        "parameters": []
+      },
+      {
+        "name": "Deal Velocity Analysis",
+        "categoryPath": "Demo",
+        "description": "Stage transition velocity: AVG(DATEDIFF(day, TransitionDate, PreviousDate)), COUNT(*) grouped by FromStage, ToStage. Returns stage-to-stage transition times for heatmap.",
+        "entityNames": ["Deals"],
+        "fields": [],
+        "parameters": []
+      },
+      {
+        "name": "Deal Stage Trends",
+        "categoryPath": "Demo",
+        "description": "Conditional trend analysis (executes when stage selected): COUNT(*), SUM(Value) grouped by CAST(CreatedDate AS DATE) for last 90 days where Stage=@Stage. Returns daily deal entry trends for line chart.",
+        "entityNames": ["Deals"],
+        "fields": [],
+        "parameters": []
+      }
+    ],
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal records shown in EntityDataGrid when drilling down from pipeline stage. Includes calculated DaysInStage column.",
+        "displayFields": ["DealName", "AccountName", "Value", "Probability", "DaysInStage", "NextAction"],
+        "filterFields": ["Stage", "Status"],
+        "sortFields": ["Value", "DaysInStage", "Probability"],
+        "usageContext": "Loaded by EntityDataGrid with filter: Stage = '{selectedStage}' AND Status = 'Active'. DaysInStage calculated using SQL DATEDIFF."
+      },
+      {
+        "name": "Deal Products",
+        "description": "Product line items for selected deal (nested drill-down from deal row click).",
+        "displayFields": ["ProductName", "Quantity", "UnitPrice", "Total", "Description"],
+        "filterFields": ["DealID"],
+        "sortFields": ["ProductName"],
+        "usageContext": "Loaded by EntityDataGrid when user clicks deal row: DealID = '{selectedDealId}'"
+      }
+    ]
   },
   "properties": [],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "EntityDataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "",
   "code": "@file:../../code/query-examples/deal-pipeline-visualization.js",
   "exampleUsage": ""
 }

@@ -3,15 +3,24 @@
   "title": "Top Products Ranking",
   "type": "table",
   "userExplanation": "Displays top-performing products in a table with click-to-drill-down functionality. When you click a product row, it loads all invoice line items for that product, demonstrating manual drill-down control using RunView and DataGrid (not EntityDataGrid).",
-  "functionalRequirements": "",
+  "functionalRequirements": "## Business Objectives\n- Identify top-performing products by revenue, units sold, or profit margin\n- Support flexible filtering by product category and time period\n- Enable drill-down to see individual invoice line items for any product\n- Demonstrate manual RunView drill-down pattern with standard DataGrid\n\n## Functional Requirements\n- **Product Ranking Display**: Show top N products (configurable, default 10) in a table format\n- **Ranking Metrics**: Display product name, category, total revenue, units sold, and number of invoices\n- **Click-to-Drill-Down**: When user clicks a product row, load all invoice line items for that product using RunView\n- **Detail View**: Display invoice line items in standard DataGrid (not EntityDataGrid) with invoice date, quantity, unit price, total, and account name\n- **Back Navigation**: Provide clear way to return to product ranking view\n- **Flexible Filtering**: Support filtering by product category and date range\n- **Custom Data Transformation**: Demonstrate calculating additional metrics (like margin) on drill-down data\n- **Loading States**: Show loading indicators during data fetch\n- **Empty States**: Handle cases where no products or no line items exist",
   "dataRequirements": {
     "mode": "hybrid",
     "description": "Uses RunQuery for aggregated product rankings and RunView for drill-down to invoice line item details when user clicks a product",
-    "queries": [],
+    "queries": [
+      {
+        "name": "Top Products Ranking",
+        "categoryPath": "Demo",
+        "description": "Ranks products by revenue with TOP N, joins InvoiceLineItem → Product → Product Category. Groups by Product and calculates total revenue and order count. ORDER BY TotalRevenue DESC for ranking.",
+        "entityNames": ["Invoice Line Items", "Products"],
+        "fields": [],
+        "parameters": []
+      }
+    ],
     "entities": [
       {
         "name": "Invoice Line Items",
-        "description": "Detail records shown when drilling down into a specific product",
+        "description": "Detail records shown when drilling down into a specific product. Loaded via RunView (not EntityDataGrid) to demonstrate manual data transformation.",
         "displayFields": ["InvoiceDate", "InvoiceName", "Quantity", "UnitPrice", "Total", "AccountName"],
         "filterFields": ["ProductID"],
         "sortFields": ["InvoiceDate"],
@@ -21,7 +30,16 @@
   },
   "properties": [],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "",
   "code": "@file:../../code/query-examples/top-products-ranking.js",
   "exampleUsage": ""
 }
