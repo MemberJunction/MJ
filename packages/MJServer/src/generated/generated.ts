@@ -43074,7 +43074,7 @@ export class MJComponent_ {
     @MaxLength(2000)
     Title?: string;
         
-    @Field({nullable: true, description: `Detailed description of the component functionality`}) 
+    @Field({nullable: true, description: `[READ-ONLY] Detailed description of the component functionality. This field is automatically synchronized from the Specification.description field and should not be edited directly. To update this value, edit the component spec file.`}) 
     Description?: string;
         
     @Field({nullable: true, description: `Component type: report, dashboard, form, table, chart, navigation, search, widget, utility, or other`}) 
@@ -43120,10 +43120,10 @@ export class MJComponent_ {
     @Field({description: `Complete JSON specification object for the component`}) 
     Specification: string;
         
-    @Field({nullable: true, description: `Functional requirements describing what the component should accomplish`}) 
+    @Field({nullable: true, description: `[READ-ONLY] Functional requirements describing what the component should accomplish. This field is automatically synchronized from the Specification.functionalRequirements field and should not be edited directly. To update this value, edit the component spec file.`}) 
     FunctionalRequirements?: string;
         
-    @Field({nullable: true, description: `Technical design describing how the component is implemented`}) 
+    @Field({nullable: true, description: `[READ-ONLY] Technical design describing how the component is implemented. This field is automatically synchronized from the Specification.technicalDesign field and should not be edited directly. To update this value, edit the component spec file.`}) 
     TechnicalDesign?: string;
         
     @Field({nullable: true, description: `Vector embedding of the functional requirements for similarity search`}) 

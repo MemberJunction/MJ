@@ -11788,7 +11788,7 @@ export const ComponentSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Detailed description of the component functionality`),
+        * * Description: [READ-ONLY] Detailed description of the component functionality. This field is automatically synchronized from the Specification.description field and should not be edited directly. To update this value, edit the component spec file.`),
     Type: z.union([z.literal('Chart'), z.literal('Dashboard'), z.literal('Form'), z.literal('Navigation'), z.literal('Other'), z.literal('Report'), z.literal('Search'), z.literal('Table'), z.literal('Utility'), z.literal('Widget')]).nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
@@ -11866,12 +11866,12 @@ export const ComponentSchema = z.object({
         * * Field Name: FunctionalRequirements
         * * Display Name: Functional Requirements
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Functional requirements describing what the component should accomplish`),
+        * * Description: [READ-ONLY] Functional requirements describing what the component should accomplish. This field is automatically synchronized from the Specification.functionalRequirements field and should not be edited directly. To update this value, edit the component spec file.`),
     TechnicalDesign: z.string().nullable().describe(`
         * * Field Name: TechnicalDesign
         * * Display Name: Technical Design
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Technical design describing how the component is implemented`),
+        * * Description: [READ-ONLY] Technical design describing how the component is implemented. This field is automatically synchronized from the Specification.technicalDesign field and should not be edited directly. To update this value, edit the component spec file.`),
     FunctionalRequirementsVector: z.string().nullable().describe(`
         * * Field Name: FunctionalRequirementsVector
         * * Display Name: Functional Requirements Vector
@@ -48184,7 +48184,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * Field Name: Description
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Detailed description of the component functionality
+    * * Description: [READ-ONLY] Detailed description of the component functionality. This field is automatically synchronized from the Specification.description field and should not be edited directly. To update this value, edit the component spec file.
     */
     get Description(): string | null {
         return this.Get('Description');
@@ -48352,7 +48352,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * Field Name: FunctionalRequirements
     * * Display Name: Functional Requirements
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Functional requirements describing what the component should accomplish
+    * * Description: [READ-ONLY] Functional requirements describing what the component should accomplish. This field is automatically synchronized from the Specification.functionalRequirements field and should not be edited directly. To update this value, edit the component spec file.
     */
     get FunctionalRequirements(): string | null {
         return this.Get('FunctionalRequirements');
@@ -48365,7 +48365,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * Field Name: TechnicalDesign
     * * Display Name: Technical Design
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Technical design describing how the component is implemented
+    * * Description: [READ-ONLY] Technical design describing how the component is implemented. This field is automatically synchronized from the Specification.technicalDesign field and should not be edited directly. To update this value, edit the component spec file.
     */
     get TechnicalDesign(): string | null {
         return this.Get('TechnicalDesign');
