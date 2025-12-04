@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/top-products-ranking.spec.json",
+  "description": "Valid component demonstrating top products ranking with flexible filtering and sorting"
+}

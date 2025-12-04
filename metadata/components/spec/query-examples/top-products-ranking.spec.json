@@ -1,0 +1,27 @@
+{
+  "name": "TopProductsRanking",
+  "title": "Top Products Ranking",
+  "type": "table",
+  "userExplanation": "Displays top-performing products in a table with click-to-drill-down functionality. When you click a product row, it loads all invoice line items for that product, demonstrating manual drill-down control using RunView and DataGrid (not EntityDataGrid).",
+  "functionalRequirements": "",
+  "dataRequirements": {
+    "mode": "hybrid",
+    "description": "Uses RunQuery for aggregated product rankings and RunView for drill-down to invoice line item details when user clicks a product",
+    "queries": [],
+    "entities": [
+      {
+        "name": "Invoice Line Items",
+        "description": "Detail records shown when drilling down into a specific product",
+        "displayFields": ["InvoiceDate", "InvoiceName", "Quantity", "UnitPrice", "Total", "AccountName"],
+        "filterFields": ["ProductID"],
+        "sortFields": ["InvoiceDate"],
+        "usageContext": "Loaded via RunView when user clicks on a product to show all sales for that product"
+      }
+    ]
+  },
+  "properties": [],
+  "events": [],
+  "dependencies": [],
+  "code": "@file:../../code/query-examples/top-products-ranking.js",
+  "exampleUsage": ""
+}

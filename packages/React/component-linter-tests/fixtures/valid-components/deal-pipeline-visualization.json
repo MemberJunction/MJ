@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/deal-pipeline-visualization.spec.json",
+  "description": "Valid component demonstrating sales pipeline analysis with stage metrics"
+}

@@ -1974,5 +1974,181 @@
       "lastModified": "2025-12-03T19:04:39.218Z",
       "checksum": "68ef0df7b0d9eef0d564b574c492c645d2bbf2ab62b8194a28b6393248b7c639"
     }
+  },
+  {
+    "fields": {
+      "Name": "MonthlyInvoiceRevenue",
+      "Namespace": "CRM/Finance",
+      "Description": "Displays monthly invoice revenue trends with flexible filtering by year, month, status, and date ranges. Features dynamic grouping by status when comparing multiple invoice states.",
+      "Title": "Monthly Invoice Revenue",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/monthly-invoice-revenue.spec.json",
+      "FunctionalRequirements": "## Monthly Invoice Revenue Requirements\n\n### Core Functionality\n- Display monthly invoice revenue trends in bar/line chart format\n- Support filtering by year, month, status list, and date ranges\n- Show comprehensive metrics: total revenue, subtotal, tax, paid amounts, outstanding balance\n- Display 4 summary statistics cards: Average Invoice, Invoice Count, Total Paid, Total Outstanding\n- Handle dynamic grouping: when multiple statuses provided, group data by status for comparison\n- Support chart type selection (bar, line, area, column)\n- Show loading states while fetching data\n- Display error messages on query failure\n- Handle empty data states with helpful messages\n\n### UX Considerations\n- Clean, responsive layout with chart and statistics cards\n- Smooth loading animations\n- Clear error messaging with retry capability\n- Proper date label formatting with status when grouped\n- Visual feedback for data updates\n- Tooltip support in charts for detailed values",
+      "TechnicalDesign": "## Technical Architecture\n\n### Component Structure\n- **Root Component (MonthlyInvoiceRevenue)**: Manages data loading and layout\n- **SimpleChart**: Reusable chart component for visualization\n- **StatCard**: Summary statistic cards (4 total)\n\n### State Management\n- data: Array of query results with transformed DateLabel\n- loading: Boolean for async query state\n- error: String for error messages\n\n### Data Flow\n1. Component receives parameters as props (year, month, statusList, startDate, endDate)\n2. useEffect triggers on mount or parameter changes\n3. Calls utilities.rq.RunQuery with 'Monthly Invoice Revenue' query name\n4. Transforms results to add DateLabel: \"{MonthName} {Year} ({Status})\"\n5. Passes transformed data to SimpleChart component\n6. Calculates summary statistics from data\n\n### Query Integration\n- Query Name: 'Monthly Invoice Revenue'\n- Parameters: Year (int), Month (int), StatusList (string), StartDate (datetime), EndDate (datetime)\n- Dynamic Results: Status column only appears when StatusList contains comma\n- Returns: Year, Month, MonthName, Status (optional), TotalRevenue, TotalSubTotal, TotalTax, TotalPaid, TotalOutstanding, InvoiceCount, AvgInvoice\n\n### Layout\n```\n+------------------------------------------+\n|         Monthly Invoice Revenue          |\n|                                          |\n|  [Bar Chart showing revenue by month]    |\n|                                          |\n+------------------------------------------+\n|  [AvgInvoice]  [Count]  [Paid]  [Outstanding] |\n+------------------------------------------+\n```\n\n### Props\n- utilities: MJ utilities object (required for RunQuery)\n- styles: Styling utilities\n- components: Component registry (requires SimpleChart)\n- year: Optional year filter\n- month: Optional month filter (1-12)\n- statusList: Optional status filter (e.g., 'Paid' or 'Paid,Sent')\n- startDate: Optional start date filter\n- endDate: Optional end date filter\n- chartType: Chart visualization type (default: 'bar')\n- title: Chart title (default: 'Monthly Invoice Revenue')"
+    },
+    "primaryKey": {
+      "ID": "B6D7F6BD-3B64-4F17-9ADD-EBCD00039265"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:34.050Z",
+      "checksum": "4cd5cbd96f5b51e20d39142c2380cdfd42cd45eeec51618340280c463347ee46"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TopProductsRanking",
+      "Namespace": "CRM/Sales",
+      "Description": "Displays top-performing products ranked by revenue, units sold, or profit margin with flexible filtering and drill-down capabilities.",
+      "Title": "Top Products Ranking",
+      "Type": "Table",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/top-products-ranking.spec.json",
+      "FunctionalRequirements": "",
+      "TechnicalDesign": ""
+    },
+    "primaryKey": {
+      "ID": "0A1F4AB3-9558-41AA-A6F0-E71BDD56B663"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:34.010Z",
+      "checksum": "1c90216cade14407f031c2a61599ce911a44f7d10dbe34aa55e3431d82656dac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIModelAnalyticsDashboard",
+      "Namespace": "AI/Analytics",
+      "Description": "Comprehensive AI model usage analytics showing model performance, cost analysis, and usage trends with drill-down to prompt run details.",
+      "Title": "AI Model Analytics Dashboard",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/ai-model-analytics-dashboard.spec.json",
+      "FunctionalRequirements": "",
+      "TechnicalDesign": ""
+    },
+    "primaryKey": {
+      "ID": "AA9D4155-4706-49BF-894F-ECB00D5C32D1"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:33.994Z",
+      "checksum": "6f6708fdd36141d63fa92fe926475c79079af46076f7b4c5977e525ef1e83f86"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AccountRevenueByType",
+      "Namespace": "CRM/Analytics",
+      "Description": "Analyzes revenue distribution across different account types with comparison metrics and trend analysis.",
+      "Title": "Account Revenue by Type",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/account-revenue-by-type.spec.json",
+      "FunctionalRequirements": "",
+      "TechnicalDesign": ""
+    },
+    "primaryKey": {
+      "ID": "AC5E6307-706C-4D04-A151-2A5983F99A23"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:33.960Z",
+      "checksum": "09245053aeef244ec4a733099ec00fc51a4a7f3a3a31dc66df8cac887f3a7fd3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ProductCategoryAnalysis",
+      "Namespace": "CRM/Sales",
+      "Description": "Multi-level product category analysis showing category totals and top products within each category with drill-down navigation.",
+      "Title": "Product Category Analysis",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/product-category-analysis.spec.json",
+      "FunctionalRequirements": "",
+      "TechnicalDesign": ""
+    },
+    "primaryKey": {
+      "ID": "87539D5A-8C4A-4A67-9F2F-14C50D26C639"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:34.029Z",
+      "checksum": "c8ff044b08e16034a196cdb2751e732cee5c568f287a32c06b6a7050cd1c23c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SubmissionReviewDashboard",
+      "Namespace": "Events/Reports",
+      "Description": "Event submission review dashboard showing status distribution, review timeline, and reviewer activity with drill-down to submission details.",
+      "Title": "Submission Review Dashboard",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/submission-review-dashboard.spec.json",
+      "FunctionalRequirements": "",
+      "TechnicalDesign": ""
+    },
+    "primaryKey": {
+      "ID": "23408A2B-3295-49A8-B273-1D1091F97833"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:33.978Z",
+      "checksum": "f6f7703951adcdc7ba248830e7edf83510ef26dbca4baa6315b39c7c8ded763c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DealPipelineVisualization",
+      "Namespace": "CRM/Sales",
+      "Description": "Interactive deal pipeline showing stage distribution, velocity analysis, and stage transition trends with predictive insights.",
+      "Title": "Deal Pipeline Visualization",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/deal-pipeline-visualization.spec.json",
+      "FunctionalRequirements": "",
+      "TechnicalDesign": ""
+    },
+    "primaryKey": {
+      "ID": "ADE1DF36-7E8A-490E-B602-454D7F009CF7"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:34.071Z",
+      "checksum": "2d63047e643c05f131097c87bbcfac803850c6edb4a3315e00cd9fb8c7eaf599"
+    }
+  },
+  {
+    "fields": {
+      "Name": "InvoiceAgingAnalysis",
+      "Namespace": "CRM/Finance",
+      "Description": "Accounts receivable aging analysis showing overdue invoices by aging buckets, payment trends, and top accounts by outstanding balance.",
+      "Title": "Invoice Aging Analysis",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/query-examples/invoice-aging-analysis.spec.json",
+      "FunctionalRequirements": "",
+      "TechnicalDesign": ""
+    },
+    "primaryKey": {
+      "ID": "10D09796-10E6-4850-924A-57BCE90FAB8E"
+    },
+    "sync": {
+      "lastModified": "2025-12-04T02:07:34.084Z",
+      "checksum": "26e1e9b1c8bb84970514516b266c674a824f4460890164eca607a94c9d291450"
+    }
   }
 ]
