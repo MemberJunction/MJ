@@ -85,34 +85,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   }
   
   private async _performInitialization(): Promise<void> {
-    
     await this.auth.instance.initialize();
-    
+
     // Handle redirect immediately after initialization
     const redirectResponse = await this.auth.instance.handleRedirectPromise();
+
     if (redirectResponse && redirectResponse.account) {
       // User just logged in via redirect
       this.auth.instance.setActiveAccount(redirectResponse.account);
       this.updateAuthState(true);
       this.authenticated = true;
-      this._initializationCompleted$.next(true); // Signal initialization complete
-      
-      // Do a controlled reload after successful login
-      // This ensures the app fully reinitializes with the authenticated state
-      setTimeout(() => {
-        window.location.href = window.location.origin;
-      }, 100);
-      return;
+      this._initializationCompleted$.next(true);
     } else {
-      // Set active account if we have one
+      // Set active account if we have one from cache
       const accounts = this.auth.instance.getAllAccounts();
-      
+
       if (accounts.length > 0) {
         this.auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
         this.authenticated = true;
         this._initializationCompleted$.next(true);
-      } else {
       }
     }
     
@@ -146,8 +138,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       scopes: ['User.Read','email', 'profile'],
       ...options
     };
-    
-    this.auth.loginRedirect(silentRequest).subscribe({ 
+
+    this.auth.loginRedirect(silentRequest).subscribe({
       next: () => {
         this.auth.instance.setActiveAccount(this.auth.instance.getAllAccounts()[0] || null);
         // Don't reload here - let the redirect handler manage the flow
@@ -156,7 +148,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         LogError(error);
       }
     });
-    
+
     return of(void 0);
   }
 
