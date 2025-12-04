@@ -30,6 +30,7 @@
     "rxjs": "^7.8.1"
   },
   "dependencies": {
+    "@angular/platform-browser": "18.0.2",
     "@memberjunction/core": "2.122.2",
     "tslib": "^2.3.0"
   },
