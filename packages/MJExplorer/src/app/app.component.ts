@@ -141,18 +141,18 @@ export class AppComponent implements OnInit {
   }
 
   async setupAuth() {
-    
+    // Auth provider already initialized by APP_INITIALIZER
+
     // Don't await here - let it run asynchronously to avoid blocking app startup
     this.authBase.getUserClaims().then(claims => {
-      
       claims.subscribe((claims: any) => {
       if (claims) {
         const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
-        const result = claims.idTokenClaims ? 
+        const result = claims.idTokenClaims ?
                         {...claims, ...claims.idTokenClaims} : // combine the values from the two claims objects because in auth0 and MSAL they have different structures, this pushes them all together into one
                         claims; // or if idTokenClaims doesn't exist, just use the claims object as is
 
-        this.handleLogin(token, result); 
+        this.handleLogin(token, result);
       }
     }, (err: any) => {
       LogError('Error Logging In: ' + err);
@@ -163,7 +163,7 @@ export class AppComponent implements OnInit {
           this.subHeaderText = "Welcome back! Please log in to your account.";
         }
         else if(err.name === 'InteractionRequiredAuthError'){
-          //if we're using MSAL, then its likely the user has previously 
+          //if we're using MSAL, then its likely the user has previously
           //signed in, but the auth token/session has expired
           this.subHeaderText = "Your session has expired. Please log in to your account.";
         }
