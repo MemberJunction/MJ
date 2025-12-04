@@ -19,6 +19,7 @@ export class UserViewFormComponent extends BaseFormComponent {
             { sectionKey: 'entityContext', sectionName: 'Entity Context', isExpanded: true },
             { sectionKey: 'viewDefinitionSettings', sectionName: 'View Definition & Settings', isExpanded: false },
             { sectionKey: 'filteringSmartSearch', sectionName: 'Filtering & Smart Search', isExpanded: false },
+            { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'dataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'entityRelationships', sectionName: 'Entity Relationships', isExpanded: false },

@@ -502,6 +502,21 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Clear the saved layout structure.
+   * This is used to recover from corrupted layouts - tabs will be recreated fresh.
+   */
+  ClearLayout(): void {
+    console.log('[WorkspaceStateManager.ClearLayout] Clearing saved layout structure');
+    const config = this.configuration$.value;
+    if (!config) return;
+
+    this.UpdateConfiguration({
+      ...config,
+      layout: undefined // Clear the layout, tabs will be recreated fresh
+    });
+  }
+
+  /**
    * Toggle pin state of a tab
    */
   TogglePin(tabId: string): void {

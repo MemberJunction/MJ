@@ -342,23 +342,26 @@ export class GoldenLayoutManager {
 
   /**
    * Load layout from configuration
+   * @returns true if layout was loaded successfully, false if it failed
    */
-  LoadLayout(config: WorkspaceLayoutConfig): void {
+  LoadLayout(config: WorkspaceLayoutConfig): boolean {
     if (!this.layout) {
       LogError('GoldenLayoutManager: Layout not initialized');
-      return;
+      return false;
     }
 
     // Don't load empty or invalid layouts - Golden Layout doesn't handle them well
     if (!config || !config.root || !config.root.content || config.root.content.length === 0) {
-      return;
+      return false;
     }
 
     try {
       const glConfig = this.convertToGoldenLayoutConfig(config);
       this.layout.loadLayout(glConfig);
+      return true;
     } catch (error) {
       LogError('GoldenLayoutManager: Failed to load layout - ' + (error as Error).message);
+      return false;
     }
   }
 

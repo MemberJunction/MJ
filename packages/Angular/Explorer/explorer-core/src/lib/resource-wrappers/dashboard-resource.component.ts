@@ -17,7 +17,25 @@ export function LoadDashboardResource() {
 @RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
     selector: 'mj-dashboard-resource',
-    template: `<div #container class="dashboard-resource-container"></div>`,
+    template: `
+        <div #container class="dashboard-resource-container">
+            @if (errorMessage) {
+                <div class="error-state">
+                    <div class="error-icon">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h2 class="error-title">Unable to Load Dashboard</h2>
+                    <p class="error-message">{{ errorMessage }}</p>
+                    @if (errorDetails) {
+                        <details class="error-details">
+                            <summary>Technical Details</summary>
+                            <pre>{{ errorDetails }}</pre>
+                        </details>
+                    }
+                </div>
+            }
+        </div>
+    `,
     styles: [`
         :host {
             display: block;
@@ -34,12 +52,91 @@ export function LoadDashboardResource() {
             bottom: 0;
             overflow: auto;
         }
+        .error-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 40px;
+            text-align: center;
+            color: #424242;
+        }
+        .error-icon {
+            font-size: 64px;
+            color: #f44336;
+            margin-bottom: 24px;
+            opacity: 0.8;
+        }
+        .error-title {
+            font-size: 24px;
+            font-weight: 500;
+            margin: 0 0 12px 0;
+            color: #212121;
+        }
+        .error-message {
+            font-size: 16px;
+            color: #616161;
+            margin: 0 0 24px 0;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+        .error-details {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 12px 16px;
+            max-width: 600px;
+            text-align: left;
+            font-size: 13px;
+        }
+        .error-details summary {
+            cursor: pointer;
+            font-weight: 500;
+            color: #757575;
+            margin-bottom: 8px;
+        }
+        .error-details pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #d32f2f;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+        }
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
     private componentRef: ComponentRef<unknown> | null = null;
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
+
+    /** Error message to display when dashboard fails to load */
+    public errorMessage: string | null = null;
+    /** Technical error details (shown in expandable section) */
+    public errorDetails: string | null = null;
+
+    /**
+     * Sets the error state with a user-friendly message and optional technical details
+     */
+    private setError(message: string, error?: unknown): void {
+        this.errorMessage = message;
+        if (error instanceof Error) {
+            this.errorDetails = error.message;
+            if (error.stack) {
+                this.errorDetails += '\n\nStack trace:\n' + error.stack;
+            }
+        } else if (error) {
+            this.errorDetails = String(error);
+        }
+    }
+
+    /**
+     * Clears any previous error state
+     */
+    private clearError(): void {
+        this.errorMessage = null;
+        this.errorDetails = null;
+    }
 
     constructor(
         private viewContainer: ViewContainerRef,
@@ -72,6 +169,9 @@ export class DashboardResource extends BaseResourceComponent {
      * Routes between code-based dashboards (registered classes) and config-based dashboards
      */
     private async loadDashboard(): Promise<void> {
+        // Clear any previous error state
+        this.clearError();
+
         const data = this.Data;
         console.log('[DashboardResource] loadDashboard called with:', data);
 
@@ -116,6 +216,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
         } catch (error) {
             console.error('Error loading dashboard:', error);
+            this.setError('The dashboard could not be loaded. This may be due to a missing component or configuration issue.', error);
             this.NotifyLoadComplete();
         }
     }
@@ -178,6 +279,7 @@ export class DashboardResource extends BaseResourceComponent {
             this.NotifyLoadComplete();
         } catch (error) {
             console.error('Error loading Data Explorer:', error);
+            this.setError('The Data Explorer could not be loaded.', error);
             this.NotifyLoadComplete();
         }
     }
@@ -252,6 +354,7 @@ export class DashboardResource extends BaseResourceComponent {
             this.NotifyLoadComplete();
         } catch (error) {
             console.error('Error loading code-based dashboard:', error);
+            this.setError(`The dashboard "${dashboard.Name}" could not be loaded. The dashboard class may not be registered or may have failed to initialize.`, error);
             this.NotifyLoadComplete();
         }
     }
@@ -321,6 +424,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
         } catch (error) {
             console.error('Error loading config-based dashboard:', error);
+            this.setError(`The dashboard "${dashboard.Name}" could not be loaded. There may be an issue with the dashboard configuration.`, error);
             this.NotifyLoadComplete();
         }
     }

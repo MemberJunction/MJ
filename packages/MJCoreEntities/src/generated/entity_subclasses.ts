@@ -6359,7 +6359,7 @@ export const EntityFieldValueSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityFieldID: z.string().describe(`
         * * Field Name: EntityFieldID
-        * * Display Name: Entity Field ID
+        * * Display Name: Entity Field
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)`),
     Sequence: z.number().describe(`
@@ -6383,12 +6383,12 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityField: z.string().describe(`
@@ -6401,7 +6401,7 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -17066,13 +17066,13 @@ export const UserViewSchema = z.object({
         * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)`),
     IsShared: z.boolean().describe(`
         * * Field Name: IsShared
-        * * Display Name: Shared
+        * * Display Name: Is Shared
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this view is shared with other users.`),
     IsDefault: z.boolean().describe(`
         * * Field Name: IsDefault
-        * * Display Name: Default
+        * * Display Name: Is Default
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this is the user's default view for the entity.`),
@@ -17088,7 +17088,7 @@ export const UserViewSchema = z.object({
         * * Description: JSON storing the view's filter configuration.`),
     CustomFilterState: z.boolean().describe(`
         * * Field Name: CustomFilterState
-        * * Display Name: Custom Filter
+        * * Display Name: Custom Filter State
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if custom filters beyond standard options are applied.`),
@@ -17149,13 +17149,18 @@ export const UserViewSchema = z.object({
         * * Display Name: Card State
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.`),
+    DisplayState: z.string().nullable().describe(`
+        * * Field Name: DisplayState
+        * * Display Name: Display State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     UserFirstLast: z.string().nullable().describe(`
         * * Field Name: UserFirstLast
-        * * Display Name: User First Last
+        * * Display Name: User Full Name
         * * SQL Data Type: nvarchar(101)`),
     UserEmail: z.string().describe(`
         * * Field Name: UserEmail
@@ -34190,7 +34195,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityFieldID
-    * * Display Name: Entity Field ID
+    * * Display Name: Entity Field
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
     */
@@ -34254,7 +34259,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34264,7 +34269,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34292,7 +34297,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {
@@ -62190,7 +62195,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: IsShared
-    * * Display Name: Shared
+    * * Display Name: Is Shared
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this view is shared with other users.
@@ -62204,7 +62209,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: IsDefault
-    * * Display Name: Default
+    * * Display Name: Is Default
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this is the user's default view for the entity.
@@ -62244,7 +62249,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: CustomFilterState
-    * * Display Name: Custom Filter
+    * * Display Name: Custom Filter State
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if custom filters beyond standard options are applied.
@@ -62396,6 +62401,19 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     }
 
     /**
+    * * Field Name: DisplayState
+    * * Display Name: Display State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.
+    */
+    get DisplayState(): string | null {
+        return this.Get('DisplayState');
+    }
+    set DisplayState(value: string | null) {
+        this.Set('DisplayState', value);
+    }
+
+    /**
     * * Field Name: UserName
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -62406,7 +62424,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: UserFirstLast
-    * * Display Name: User First Last
+    * * Display Name: User Full Name
     * * SQL Data Type: nvarchar(101)
     */
     get UserFirstLast(): string | null {

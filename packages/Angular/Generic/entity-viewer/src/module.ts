@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridModule } from 'ag-grid-angular';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { TimelineModule } from '@memberjunction/ng-timeline';
 
 import { EntityGridComponent } from './lib/entity-grid/entity-grid.component';
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
@@ -45,7 +46,8 @@ import { PaginationComponent } from './lib/pagination/pagination.component';
     CommonModule,
     FormsModule,
     AgGridModule,
-    SharedGenericModule
+    SharedGenericModule,
+    TimelineModule
   ],
   exports: [
     EntityGridComponent,

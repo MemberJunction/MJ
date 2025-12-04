@@ -4,7 +4,7 @@ import { BaseEntity } from '@memberjunction/core';
 /**
  * View modes supported by the EntityViewer component
  */
-export type EntityViewMode = 'grid' | 'cards';
+export type EntityViewMode = 'grid' | 'cards' | 'timeline';
 
 /**
  * Behavior when a record is selected
@@ -349,6 +349,75 @@ export interface EntityViewerConfig {
    * @default 'asc'
    */
   defaultSortDirection?: SortDirection;
+}
+
+/**
+ * Timeline segment grouping options
+ */
+export type TimelineSegmentGrouping = 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+/**
+ * Timeline orientation options
+ */
+export type TimelineOrientation = 'vertical' | 'horizontal';
+
+/**
+ * Timeline-specific configuration state
+ * Persisted in UserView.DisplayState JSON
+ */
+export interface TimelineState {
+  /** The date field name to use for timeline ordering */
+  dateFieldName: string;
+  /** Time segment grouping */
+  segmentGrouping?: TimelineSegmentGrouping;
+  /** Sort order for timeline events */
+  sortOrder?: 'asc' | 'desc';
+  /** Whether segments are collapsible */
+  segmentsCollapsible?: boolean;
+  /** Whether segments start expanded */
+  segmentsDefaultExpanded?: boolean;
+  /** Timeline orientation (vertical or horizontal) */
+  orientation?: TimelineOrientation;
+}
+
+/**
+ * Card-specific configuration state
+ * Persisted in UserView.DisplayState JSON
+ */
+export interface CardState {
+  /** Custom card size (small, medium, large) */
+  cardSize?: 'small' | 'medium' | 'large';
+}
+
+/**
+ * Grid-specific configuration state
+ * Persisted in UserView.DisplayState JSON
+ * Note: Most grid state is already in GridState column, this is for additional settings
+ */
+export interface GridDisplayState {
+  /** Row height preference */
+  rowHeight?: 'compact' | 'normal' | 'comfortable';
+}
+
+/**
+ * View display state - persisted in UserView.DisplayState
+ * Contains the default view mode and mode-specific configuration
+ */
+export interface ViewDisplayState {
+  /** The default view mode to show when loading this view */
+  defaultMode: EntityViewMode;
+  /** Which view modes are enabled/visible for this view */
+  enabledModes?: {
+    grid?: boolean;
+    cards?: boolean;
+    timeline?: boolean;
+  };
+  /** Timeline-specific configuration */
+  timeline?: TimelineState;
+  /** Card-specific configuration */
+  cards?: CardState;
+  /** Grid-specific configuration */
+  grid?: GridDisplayState;
 }
 
 /**

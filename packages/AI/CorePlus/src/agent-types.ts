@@ -745,6 +745,75 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * ```
      */
     convertUIMarkupToPlainText?: boolean;
+
+    /**
+     * Optional runtime modifications to the agent's available actions.
+     *
+     * Action changes allow dynamic customization of which actions are available
+     * to agents at runtime, without modifying database configuration. This is
+     * particularly useful for:
+     * - Multi-tenant scenarios where different executions need different integrations
+     * - Security restrictions where sub-agents should have limited action access
+     * - Testing scenarios with controlled action availability
+     *
+     * Changes are applied in order. For each agent in the hierarchy:
+     * 1. Start with the agent's configured actions (from AIAgentAction table)
+     * 2. Apply each ActionChange that matches the agent's scope
+     * 3. The resulting action set is what the agent sees and can invoke
+     *
+     * Changes are propagated to sub-agents based on scope:
+     * - 'global': Propagated as-is to all sub-agents
+     * - 'root': Not propagated (only applies to root)
+     * - 'all-subagents': Propagated as 'global' to sub-agents
+     * - 'specific': Propagated as-is, each agent checks if it's in agentIds
+     *
+     * @example
+     * ```typescript
+     * // Add LMS and CRM integrations for a specific tenant
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   actionChanges: [
+     *     {
+     *       scope: 'global',
+     *       mode: 'add',
+     *       actionIds: ['lms-query-action-id', 'crm-search-action-id']
+     *     }
+     *   ]
+     * };
+     *
+     * // Remove dangerous actions from sub-agents
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   actionChanges: [
+     *     {
+     *       scope: 'all-subagents',
+     *       mode: 'remove',
+     *       actionIds: ['delete-record-action-id', 'execute-sql-action-id']
+     *     }
+     *   ]
+     * };
+     *
+     * // Different actions for specific sub-agent
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   actionChanges: [
+     *     { scope: 'global', mode: 'add', actionIds: ['common-action-id'] },
+     *     {
+     *       scope: 'specific',
+     *       mode: 'add',
+     *       actionIds: ['special-data-action-id'],
+     *       agentIds: ['data-gatherer-sub-agent-id']
+     *     }
+     *   ]
+     * };
+     * ```
+     *
+     * @since 2.123.0
+     */
+    actionChanges?: ActionChange[];
 }
 
 /**
@@ -883,6 +952,99 @@ export interface ExpandMessageRequest {
     messageIndex: number;
     /** Optional reason for expanding the message */
     reason?: string;
+}
+
+/**
+ * Scope options for runtime action changes.
+ * Determines which agents in the execution hierarchy the change applies to.
+ *
+ * @since 2.123.0
+ */
+export type ActionChangeScope =
+    /** Applies to all agents in the hierarchy (root + all sub-agents) */
+    | 'global'
+    /** Applies only to the root agent */
+    | 'root'
+    /** Applies to all sub-agents but NOT the root agent */
+    | 'all-subagents'
+    /** Applies only to specific agents identified by agentIds */
+    | 'specific';
+
+/**
+ * Mode options for runtime action changes.
+ * Determines how the action change is applied.
+ *
+ * @since 2.123.0
+ */
+export type ActionChangeMode =
+    /** Add actions to the existing set */
+    | 'add'
+    /** Remove actions from the existing set */
+    | 'remove';
+
+/**
+ * Represents a runtime modification to an agent's available actions.
+ *
+ * Action changes allow callers to dynamically customize which actions are available
+ * to agents at runtime, without modifying the agent's database configuration.
+ * This is particularly useful for multi-tenant scenarios where different executions
+ * of the same agent need access to different integrations.
+ *
+ * @example
+ * ```typescript
+ * // Add CRM and LMS actions to all agents in the hierarchy
+ * const change: ActionChange = {
+ *   scope: 'global',
+ *   mode: 'add',
+ *   actionIds: ['crm-search-action-id', 'lms-query-action-id']
+ * };
+ *
+ * // Remove dangerous actions from sub-agents only
+ * const restrictChange: ActionChange = {
+ *   scope: 'all-subagents',
+ *   mode: 'remove',
+ *   actionIds: ['delete-record-action-id', 'execute-sql-action-id']
+ * };
+ *
+ * // Add special actions to a specific sub-agent
+ * const specificChange: ActionChange = {
+ *   scope: 'specific',
+ *   mode: 'add',
+ *   actionIds: ['special-data-action-id'],
+ *   agentIds: ['data-gatherer-sub-agent-id']
+ * };
+ * ```
+ *
+ * @since 2.123.0
+ */
+export interface ActionChange {
+    /**
+     * Scope of the action change - determines which agents it applies to.
+     * - 'global': All agents in the hierarchy
+     * - 'root': Only the root agent
+     * - 'all-subagents': All sub-agents but not the root
+     * - 'specific': Only agents listed in agentIds
+     */
+    scope: ActionChangeScope;
+
+    /**
+     * Mode of the action change.
+     * - 'add': Add actions to the agent's available actions
+     * - 'remove': Remove actions from the agent's available actions
+     */
+    mode: ActionChangeMode;
+
+    /**
+     * Array of Action entity IDs to add or remove.
+     * These must be valid Action IDs from the Actions table.
+     */
+    actionIds: string[];
+
+    /**
+     * Array of Agent IDs that this change applies to.
+     * Required when scope is 'specific', ignored otherwise.
+     */
+    agentIds?: string[];
 }
 
 

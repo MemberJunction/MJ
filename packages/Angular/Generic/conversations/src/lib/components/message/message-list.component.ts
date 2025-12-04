@@ -11,6 +11,7 @@ import {
   SimpleChanges,
   ChangeDetectorRef,
   ElementRef,
+  AfterViewInit,
   AfterViewChecked
 } from '@angular/core';
 import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
@@ -30,7 +31,7 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
   templateUrl: './message-list.component.html',
   styleUrls: ['./message-list.component.css']
 })
-export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
+export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit, AfterViewChecked {
   @Input() public messages: ConversationDetailEntity[] = [];
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
@@ -92,13 +93,28 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  // Track whether initial render has happened
+  private _initialRenderComplete = false;
+
   ngOnInit() {
-    // Initial render will happen in AfterViewInit
+    // Initial render will happen in ngAfterViewInit when ViewContainerRef is available
+  }
+
+  ngAfterViewInit() {
+    // ViewContainerRef is now available - perform initial render if we have messages
+    if (this.messages && this.messages.length > 0 && this.messageContainerRef && !this._initialRenderComplete) {
+      this._initialRenderComplete = true;
+      this.updateMessages(this.messages);
+      this.updateDateFilterVisibility();
+    }
   }
 
   ngOnChanges(changes: SimpleChanges) {
     // React to messages array changes
+    // Note: On initial load, messageContainerRef may not be available yet (ngOnChanges runs before ngAfterViewInit)
+    // In that case, ngAfterViewInit will handle the initial render
     if (changes['messages'] && this.messages && this.messageContainerRef) {
+      this._initialRenderComplete = true;
       this.updateMessages(this.messages);
       this.updateDateFilterVisibility();
     }

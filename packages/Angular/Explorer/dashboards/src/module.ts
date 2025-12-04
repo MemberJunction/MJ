@@ -92,11 +92,13 @@ import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-das
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
 import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
 import { ViewConfigPanelComponent } from './DataExplorer/components/view-config-panel/view-config-panel.component';
+import { FilterDialogComponent } from './DataExplorer/components/filter-dialog/filter-dialog.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
 // Home Dashboard Components
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -167,6 +169,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     ExplorerNavigationPanelComponent,
     ViewSelectorComponent,
     ViewConfigPanelComponent,
+    FilterDialogComponent,
     // Home Dashboard Components
     HomeDashboardComponent
   ],
@@ -198,7 +201,8 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     UserViewGridModule,
     EntityViewerModule,
     ExplorerSettingsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    FilterBuilderModule
   ],
   providers: [
     AIInstrumentationService,

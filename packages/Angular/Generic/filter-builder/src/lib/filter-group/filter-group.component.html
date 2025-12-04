@@ -1,0 +1,113 @@
+<div class="filter-group" [class.root]="isRoot" [class.disabled]="disabled" [attr.data-depth]="depth">
+  <!-- Group Header -->
+  <div class="group-header">
+    <div class="logic-toggle">
+      <button
+        type="button"
+        class="logic-btn"
+        [class.active]="filter.logic === 'and'"
+        (click)="setLogic('and')"
+        [disabled]="disabled"
+        title="Match ALL conditions">
+        AND
+      </button>
+      <button
+        type="button"
+        class="logic-btn"
+        [class.active]="filter.logic === 'or'"
+        (click)="setLogic('or')"
+        [disabled]="disabled"
+        title="Match ANY condition">
+        OR
+      </button>
+    </div>
+
+    <div class="group-actions">
+      <button
+        type="button"
+        class="add-btn"
+        (click)="addRule()"
+        [disabled]="disabled"
+        title="Add filter condition">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Condition</span>
+      </button>
+      @if (canAddGroup()) {
+        <button
+          type="button"
+          class="add-btn add-group"
+          (click)="addGroup()"
+          [disabled]="disabled"
+          title="Add nested group">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Add Group</span>
+        </button>
+      }
+      @if (!isRoot) {
+        <button
+          type="button"
+          class="delete-group-btn"
+          (click)="onDelete()"
+          [disabled]="disabled"
+          title="Remove this group">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Filters Container -->
+  <div class="filters-container">
+    @for (item of filter.filters; track trackByIndex($index); let i = $index; let isLast = $last) {
+      <div class="filter-item">
+        <!-- Logic connector between items -->
+        @if (i > 0) {
+          <div class="logic-connector">
+            <span class="connector-line"></span>
+            <span class="connector-label">{{ filter.logic | uppercase }}</span>
+            <span class="connector-line"></span>
+          </div>
+        }
+
+        @if (isGroup(item)) {
+          <!-- Nested Group -->
+          <mj-filter-group
+            [filter]="asGroup(item)"
+            [fields]="fields"
+            [isRoot]="false"
+            [depth]="depth + 1"
+            [maxDepth]="maxDepth"
+            [disabled]="disabled"
+            (filterChange)="onGroupChange(i, $event)"
+            (delete)="deleteFilter(i)">
+          </mj-filter-group>
+        } @else {
+          <!-- Simple Rule -->
+          <mj-filter-rule
+            [filter]="asRule(item)"
+            [fields]="fields"
+            [disabled]="disabled"
+            [showDelete]="filter.filters.length > 1 || !isRoot"
+            (filterChange)="onRuleChange(i, $event)"
+            (delete)="deleteFilter(i)">
+          </mj-filter-rule>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Empty State -->
+  @if (!filter.filters || filter.filters.length === 0) {
+    <div class="empty-state">
+      <p>No filter conditions defined.</p>
+      <button
+        type="button"
+        class="add-btn primary"
+        (click)="addRule()"
+        [disabled]="disabled">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add your first condition</span>
+      </button>
+    </div>
+  }
+</div>

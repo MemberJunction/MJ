@@ -3,10 +3,10 @@ import { Router, NavigationEnd } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
-import { BaseDashboard } from '@memberjunction/ng-shared';
+import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { ApplicationEntityEntity } from '@memberjunction/core-entities';
 import {
@@ -22,7 +22,8 @@ import {
   GridStateChangedEvent
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
-import { ViewSaveEvent } from './components/view-config-panel/view-config-panel.component';
+import { ViewSaveEvent, ViewConfigPanelComponent } from './components/view-config-panel/view-config-panel.component';
+import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
@@ -64,6 +65,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** Reference to the entity viewer for refreshing after view save */
   @ViewChild(EntityViewerComponent) entityViewerRef: EntityViewerComponent | undefined;
+
+  /** Reference to the view config panel for passing filter state */
+  @ViewChild(ViewConfigPanelComponent) viewConfigPanelRef: ViewConfigPanelComponent | undefined;
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -126,6 +130,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Loading state for entities
   public isLoadingEntities: boolean = true;
+
+  // Date field dropdown state
+  public isDateFieldDropdownOpen: boolean = false;
 
   // Flag to skip URL updates during initialization (when applying deep link)
   private skipUrlUpdates: boolean = true;
@@ -236,6 +243,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Check if the left column (records column) has content
+   */
+  get hasRecordsColumnContent(): boolean {
+    return this.recentRecords.length > 0 || this.favoriteRecords.length > 0;
+  }
+
+  /**
+   * Check if the right column (entities column) has content
+   */
+  get hasEntitiesColumnContent(): boolean {
+    return this.recentEntities.length > 0 || this.favoriteEntities.length > 0;
+  }
+
+  /**
    * Get unique entities from recent records for the filter strip.
    * Returns up to 5 entities, sorted by frequency in the recent records.
    */
@@ -307,6 +328,121 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Check if the currently selected entity has date fields available for timeline view.
+   * Used to conditionally show the timeline toggle button in the header.
+   */
+  get entityHasDateFields(): boolean {
+    if (!this.selectedEntity) return false;
+    return this.selectedEntity.Fields.some(
+      f => f.TSType === EntityFieldTSType.Date
+    );
+  }
+
+  /**
+   * Get available date fields for the currently selected entity.
+   * Used for the date field selector in timeline view.
+   */
+  get availableDateFields(): { name: string; displayName: string }[] {
+    if (!this.selectedEntity) return [];
+    return this.selectedEntity.Fields
+      .filter(f => f.TSType === EntityFieldTSType.Date)
+      .sort((a, b) => {
+        // Prioritize DefaultInView fields, then by Sequence
+        if (a.DefaultInView && !b.DefaultInView) return -1;
+        if (!a.DefaultInView && b.DefaultInView) return 1;
+        return a.Sequence - b.Sequence;
+      })
+      .map(f => ({
+        name: f.Name,
+        displayName: f.DisplayNameOrName
+      }));
+  }
+
+  /**
+   * Get the effective timeline date field name.
+   * Returns stored value if valid, otherwise first available date field.
+   */
+  get effectiveTimelineDateField(): string | null {
+    const available = this.availableDateFields;
+    if (available.length === 0) return null;
+
+    // Check if stored value is still valid
+    if (this.state.timelineDateFieldName && available.some(f => f.name === this.state.timelineDateFieldName)) {
+      return this.state.timelineDateFieldName;
+    }
+
+    // Default to first available
+    return available[0].name;
+  }
+
+  /**
+   * Get the display name of the effective timeline date field.
+   */
+  get effectiveTimelineDateFieldDisplayName(): string {
+    const fieldName = this.effectiveTimelineDateField;
+    if (!fieldName) return '';
+    const field = this.availableDateFields.find(f => f.name === fieldName);
+    return field?.displayName || fieldName;
+  }
+
+  /**
+   * Set the timeline date field.
+   */
+  setTimelineDateField(fieldName: string): void {
+    this.state.timelineDateFieldName = fieldName;
+    this.stateService.updateState({ timelineDateFieldName: fieldName });
+    this.isDateFieldDropdownOpen = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle the date field dropdown open/closed.
+   */
+  toggleDateFieldDropdown(): void {
+    this.isDateFieldDropdownOpen = !this.isDateFieldDropdownOpen;
+  }
+
+  /**
+   * Close the date field dropdown.
+   */
+  closeDateFieldDropdown(): void {
+    this.isDateFieldDropdownOpen = false;
+  }
+
+  /**
+   * Toggle timeline orientation between vertical and horizontal.
+   */
+  toggleTimelineOrientation(): void {
+    const newOrientation = this.state.timelineOrientation === 'vertical' ? 'horizontal' : 'vertical';
+    this.state.timelineOrientation = newOrientation;
+    this.stateService.updateState({ timelineOrientation: newOrientation });
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle timeline sort order between newest first (desc) and oldest first (asc).
+   */
+  toggleTimelineSortOrder(): void {
+    const newSortOrder = this.state.timelineSortOrder === 'desc' ? 'asc' : 'desc';
+    this.state.timelineSortOrder = newSortOrder;
+    this.stateService.updateState({ timelineSortOrder: newSortOrder });
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Get the current timeline configuration for the entity-viewer.
+   */
+  get currentTimelineConfig(): { dateFieldName: string; orientation: 'vertical' | 'horizontal'; sortOrder: 'asc' | 'desc' } | null {
+    const dateField = this.effectiveTimelineDateField;
+    if (!dateField) return null;
+    return {
+      dateFieldName: dateField,
+      orientation: this.state.timelineOrientation,
+      sortOrder: this.state.timelineSortOrder
+    };
+  }
+
+  /**
    * Configuration for mj-entity-viewer composite component
    * Hides the built-in header since we have a custom header in the dashboard
    * Uses server-side pagination with 100 records per page (default)
@@ -327,11 +463,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public currentGridState: ViewGridStateConfig | null = null;
 
+  // Filter dialog state (rendered at dashboard level for full viewport width)
+  public isFilterDialogOpen: boolean = false;
+  public filterDialogFields: FilterFieldInfo[] = [];
+  public filterDialogState: CompositeFilterDescriptor = createEmptyFilter();
+  public filterDialogDisabled: boolean = false;
+
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
     private router: Router,
-    private recentAccessService: RecentAccessService
+    private recentAccessService: RecentAccessService,
+    private navigationService: NavigationService
   ) {
     super();
     this.state = this.stateService.CurrentState;
@@ -522,7 +665,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * @param urlState Optional URL state - if provided, skip restoring persisted entity to avoid race conditions
    */
   private async loadEntities(urlState?: DataExplorerDeepLink | null): Promise<void> {
-    console.log('[DataExplorer] loadEntities called, entityFilter:', this.entityFilter);
     this.isLoadingEntities = true;
 
     try {
@@ -534,18 +676,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         })
         .sort((a, b) => a.Name.localeCompare(b.Name));
 
-      console.log('[DataExplorer] allEntities count:', this.allEntities.length);
-
       // If we have an applicationId filter, load the application entities
       if (this.entityFilter?.applicationId) {
         await this.loadApplicationEntityIds(this.entityFilter.applicationId);
-        console.log('[DataExplorer] applicationEntityIds count:', this.applicationEntityIds.size);
       }
 
       // Apply filter to get the final entity list
       this.entities = this.applyEntityFilter(this.allEntities);
-
-      console.log('[DataExplorer] filtered entities count:', this.entities.length);
 
       // Only restore entity from persisted state if there's no URL state
       // This prevents race conditions where persisted entity triggers data load
@@ -628,6 +765,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public onEntitySelected(entity: EntityInfo): void {
     this.resetRecordCounts();
     this.selectedEntity = entity;
+    // Reset grid state when entity changes - grid state is entity-specific
+    // Without this, columns from a previously viewed entity would incorrectly apply
+    this.currentGridState = null;
     this.stateService.selectEntity(entity.Name);
     // Track entity access for recent entities
     this.stateService.trackEntityAccess(entity.Name, entity.ID);
@@ -640,6 +780,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private onStateChanged(): void {
     if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
       this.resetRecordCounts();
+      // Reset grid state when entity changes - grid state is entity-specific
+      this.currentGridState = null;
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
     }
   }
@@ -741,22 +883,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onManageViewsRequested(): void {
     // TODO: Implement navigation to view management
-    // For now, just log
-    console.log('[DataExplorer] Manage views requested');
   }
 
   /**
-   * Handle open in tab request
+   * Handle open in tab request - opens the view as a ViewResource in a new tab
    */
   public onOpenInTabRequested(viewId: string): void {
-    // Use OpenEntityRecord to open the view as a resource in a new tab
-    // Views are a known resource type in MJ
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = [{ FieldName: 'ID', Value: viewId }];
-    this.OpenEntityRecord.emit({
-      EntityName: 'User Views',
-      RecordPKey: compositeKey
-    });
+    // Get the view name from the component's selectedViewEntity (set when view is selected)
+    const viewName = this.selectedViewEntity?.Name || 'View';
+
+    // Use NavigationService to open as a proper ViewResource (not entity record)
+    this.navigationService.OpenView(viewId, viewName, { forceNewTab: true });
   }
 
   /**
@@ -771,6 +908,40 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onCloseViewConfigPanel(): void {
     this.stateService.closeViewConfigPanel();
+  }
+
+  // ========================================
+  // FILTER DIALOG (at dashboard level for full width)
+  // ========================================
+
+  /**
+   * Handle request to open filter dialog from view config panel
+   * The dialog is rendered at dashboard level to allow full viewport width
+   */
+  public onOpenFilterDialogRequest(event: { filterState: CompositeFilterDescriptor; filterFields: FilterFieldInfo[] }): void {
+    this.filterDialogState = event.filterState;
+    this.filterDialogFields = event.filterFields;
+    this.filterDialogDisabled = !this.viewConfigPanelRef?.canEdit;
+    this.isFilterDialogOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Close the filter dialog
+   */
+  public onCloseFilterDialog(): void {
+    this.isFilterDialogOpen = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle filter applied from dialog - pass back to view config panel
+   */
+  public onFilterApplied(filter: CompositeFilterDescriptor): void {
+    this.filterDialogState = filter;
+    this.isFilterDialogOpen = false;
+    // The view config panel will pick up the new filter state via input binding
+    this.cdr.detectChanges();
   }
 
   /**
@@ -810,6 +981,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         newView.SmartFilterEnabled = event.smartFilterEnabled;
         newView.SmartFilterPrompt = event.smartFilterPrompt;
 
+        // Set traditional filter state (Kendo-compatible JSON format)
+        // The UserViewEntity.Save() will auto-generate WhereClause from FilterState
+        if (event.filterState) {
+          newView.FilterState = JSON.stringify(event.filterState);
+        }
+
         const saved = await newView.Save();
         if (saved) {
           this.selectedViewEntity = newView;
@@ -840,6 +1017,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedViewEntity.SmartFilterEnabled = event.smartFilterEnabled;
         this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
 
+        // Update traditional filter state (Kendo-compatible JSON format)
+        // The UserViewEntity.Save() will auto-generate WhereClause from FilterState
+        if (event.filterState) {
+          this.selectedViewEntity.FilterState = JSON.stringify(event.filterState);
+        } else {
+          // Clear filter state if no filters
+          this.selectedViewEntity.FilterState = JSON.stringify({ logic: 'and', filters: [] });
+        }
+
         const saved = await this.selectedViewEntity.Save();
         if (saved) {
           this.stateService.setViewModified(false);
@@ -849,7 +1035,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.cdr.detectChanges();
           // Refresh the view selector dropdown
           await this.viewSelectorRef?.loadViews();
-          // Note: Grid will rebuild columns via ngOnChanges when currentGridState changes
+          // Refresh the entity viewer data to apply saved filters/sorts
+          // Note: viewEntity reference didn't change, so we need to manually trigger refresh
+          // Use refresh() instead of loadData() to reset pagination state and reload from page 1
+          this.entityViewerRef?.refresh();
         }
       }
 

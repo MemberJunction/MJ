@@ -12,7 +12,7 @@ import {
 import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ConversationStateService } from '../../services/conversation-state.service';
+import { ConversationDataService } from '../../services/conversation-data.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
@@ -52,10 +52,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   @Input() set activeConversationInput(value: string | undefined) {
-    if (value && value !== this.conversationState.activeConversationId) {
+    if (value && value !== this.selectedConversationId) {
       console.log('🔗 Deep link to conversation:', value);
       this.activeTab = 'conversations';
-      this.conversationState.setActiveConversation(value);
+      this.setActiveConversation(value);
     }
   }
 
@@ -148,8 +148,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   // Task filter for conversation-specific filtering
   public tasksFilter: string = '1=1';
 
+  // LOCAL CONVERSATION STATE - enables multiple workspace instances
+  // Each workspace manages its own selection state independently
+  public selectedConversationId: string | null = null;
+  public selectedConversation: ConversationEntity | null = null;
+  public selectedThreadId: string | null = null;
+  public isNewUnsavedConversation: boolean = false;
+  public pendingMessageToSend: string | null = null;
+  public pendingArtifactId: string | null = null;
+  public pendingArtifactVersionNumber: number | null = null;
+
   constructor(
-    public conversationState: ConversationStateService,
+    public conversationData: ConversationDataService,
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
@@ -160,6 +170,91 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     private cdr: ChangeDetectorRef
   ) {
     super();
+  }
+
+  // =========================================================================
+  // LOCAL CONVERSATION STATE MANAGEMENT
+  // These methods manage the workspace's local selection state
+  // =========================================================================
+
+  /**
+   * Sets the active conversation for this workspace instance
+   * @param id The conversation ID to activate (or null to clear)
+   */
+  setActiveConversation(id: string | null): void {
+    console.log('🎯 Setting active conversation:', id);
+    this.selectedConversationId = id;
+    this.selectedConversation = id ? this.conversationData.getConversationById(id) : null;
+    // Clear unsaved state when switching to an existing conversation
+    if (id) {
+      this.isNewUnsavedConversation = false;
+    }
+  }
+
+  /**
+   * Initiates a new unsaved conversation (doesn't create DB record yet)
+   * This shows the welcome screen and delays DB creation until first message
+   */
+  startNewConversation(): void {
+    console.log('✨ Starting new unsaved conversation');
+    this.selectedConversationId = null;
+    this.selectedConversation = null;
+    this.isNewUnsavedConversation = true;
+    this.pendingMessageToSend = null;
+  }
+
+  /**
+   * Clears the new unsaved conversation state
+   * Called when the conversation is actually created or cancelled
+   */
+  clearNewConversationState(): void {
+    this.isNewUnsavedConversation = false;
+  }
+
+  /**
+   * Opens a thread panel for a specific message
+   * @param messageId The parent message ID
+   */
+  openThread(messageId: string): void {
+    this.selectedThreadId = messageId;
+  }
+
+  /**
+   * Closes the currently open thread panel
+   */
+  closeThread(): void {
+    this.selectedThreadId = null;
+  }
+
+  /**
+   * Handler for conversation selection from sidebar/list
+   */
+  onConversationSelected(conversationId: string): void {
+    this.setActiveConversation(conversationId);
+  }
+
+  /**
+   * Handler for new conversation creation from chat area
+   */
+  onConversationCreated(conversation: ConversationEntity): void {
+    this.selectedConversationId = conversation.ID;
+    this.selectedConversation = conversation;
+    this.isNewUnsavedConversation = false;
+    // The conversation is already added to conversationData by the chat area
+  }
+
+  /**
+   * Handler for thread opened from chat area
+   */
+  onThreadOpened(threadId: string): void {
+    this.selectedThreadId = threadId;
+  }
+
+  /**
+   * Handler for thread closed from chat area
+   */
+  onThreadClosed(): void {
+    this.selectedThreadId = null;
   }
 
   async ngOnInit() {
@@ -220,7 +315,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Mark workspace as ready - this allows UI to render
       this.isWorkspaceReady = true;
       this.cdr.detectChanges();
-      console.log('✅ Workspace ready - UI can now render');
     } catch (error) {
       console.error('❌ Failed to initialize engines:', error);
       // Still mark as ready so UI isn't blocked forever
@@ -232,7 +326,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.isPanelOpen$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isOpen => {
-        console.log('📡 Workspace received isPanelOpen$:', isOpen);
         this.isArtifactPanelOpen = isOpen;
       });
 
@@ -240,7 +333,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.activeArtifactId$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async id => {
-        console.log('📡 Workspace received activeArtifactId$:', id);
         this.activeArtifactId = id;
         // Load permissions when artifact changes
         if (id) {
@@ -255,13 +347,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.activeVersionNumber$
       .pipe(takeUntil(this.destroy$))
       .subscribe(versionNumber => {
-        console.log('📡 Workspace received activeVersionNumber$:', versionNumber);
         this.activeVersionNumber = versionNumber;
       });
 
     // Set initial conversation if provided
     if (this.initialConversationId) {
-      this.conversationState.setActiveConversation(this.initialConversationId);
+      this.setActiveConversation(this.initialConversationId);
     }
 
     // Handle context-based navigation
@@ -302,7 +393,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   ngDoCheck() {
     // Detect new unsaved conversation state changes
-    const currentIsNewConversation = this.conversationState.isNewUnsavedConversation;
+    const currentIsNewConversation = this.isNewUnsavedConversation;
     if (currentIsNewConversation !== this.previousIsNewConversation) {
       this.previousIsNewConversation = currentIsNewConversation;
       if (currentIsNewConversation) {
@@ -314,10 +405,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Detect conversation changes and emit event
-    const currentId = this.conversationState.activeConversationId;
+    const currentId = this.selectedConversationId;
     if (currentId !== this.previousConversationId) {
       this.previousConversationId = currentId;
-      const conversation = this.conversationState.activeConversation;
+      const conversation = this.selectedConversation;
       if (conversation) {
         this.conversationChanged.emit(conversation);
 
@@ -392,7 +483,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     };
 
     if (tab === 'conversations') {
-      navEvent.conversationId = this.conversationState.activeConversationId || undefined;
+      navEvent.conversationId = this.selectedConversationId || undefined;
     } else if (tab === 'collections') {
       // If switching TO collections tab from another tab, clear to root level
       if (wasOnDifferentTab) {
@@ -465,7 +556,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       case 'conversation':
         // Switch to conversations tab and select conversation
         this.activeTab = 'conversations';
-        this.conversationState.setActiveConversation(result.id);
+        this.setActiveConversation(result.id);
         this.navigationChanged.emit({
           tab: 'conversations',
           conversationId: result.id
@@ -476,7 +567,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         // Switch to conversations tab, open conversation, and scroll to message (future enhancement)
         this.activeTab = 'conversations';
         if (result.conversationId) {
-          this.conversationState.setActiveConversation(result.conversationId);
+          this.setActiveConversation(result.conversationId);
           this.navigationChanged.emit({
             tab: 'conversations',
             conversationId: result.conversationId
@@ -802,12 +893,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       // Store pending artifact info so chat area can show it and scroll to message
       if (event.artifactId) {
-        this.conversationState.pendingArtifactId = event.artifactId;
-        this.conversationState.pendingArtifactVersionNumber = event.versionNumber || null;
+        this.pendingArtifactId = event.artifactId;
+        this.pendingArtifactVersionNumber = event.versionNumber || null;
         console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
       }
 
-      this.conversationState.setActiveConversation(event.id);
+      this.setActiveConversation(event.id);
 
       this.navigationChanged.emit({
         tab: 'conversations',

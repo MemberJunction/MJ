@@ -803,6 +803,155 @@ The `AIAgentDataSource` table includes:
 - Allows same Name across different destinations/paths
 - Example: "ENTITIES" can exist in both Data and Payload destinations
 
+### Runtime Action Changes (v2.123.0)
+
+The framework supports dynamic customization of which actions are available to agents at runtime, without modifying database configuration. This is particularly useful for:
+
+- **Multi-tenant scenarios** where different executions need different integrations
+- **Security restrictions** where sub-agents should have limited action access
+- **Testing scenarios** with controlled action availability
+
+#### ActionChange Interface
+
+```typescript
+interface ActionChange {
+  scope: ActionChangeScope;  // Which agents to apply to
+  mode: ActionChangeMode;    // 'add' or 'remove'
+  actionIds: string[];       // Action entity IDs to add/remove
+  agentIds?: string[];       // Required when scope is 'specific'
+}
+
+type ActionChangeScope = 'global' | 'root' | 'all-subagents' | 'specific';
+type ActionChangeMode = 'add' | 'remove';
+```
+
+#### Scope Options
+
+- **`global`**: Applies to all agents in the hierarchy (root + all sub-agents)
+- **`root`**: Applies only to the root agent
+- **`all-subagents`**: Applies to all sub-agents but NOT the root agent
+- **`specific`**: Applies only to agents listed in `agentIds`
+
+#### Usage Examples
+
+```typescript
+// Example 1: Tenant A context - add LMS and CRM integrations to all agents
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['lms-query-action-id', 'crm-search-action-id']
+        }
+    ]
+});
+
+// Example 2: Tenant B context - different integrations
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['membership-action-id', 'events-action-id']
+        }
+    ]
+});
+
+// Example 3: Remove dangerous actions from sub-agents only
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        {
+            scope: 'all-subagents',
+            mode: 'remove',
+            actionIds: ['delete-record-action-id', 'execute-sql-action-id']
+        }
+    ]
+});
+
+// Example 4: Add special actions to a specific sub-agent
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        { scope: 'global', mode: 'add', actionIds: ['common-action-id'] },
+        {
+            scope: 'specific',
+            mode: 'add',
+            actionIds: ['special-data-action-id'],
+            agentIds: ['data-gatherer-sub-agent-id']
+        }
+    ]
+});
+
+// Example 5: Replace actions (remove then add)
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        // First remove the default integrations
+        {
+            scope: 'global',
+            mode: 'remove',
+            actionIds: ['default-crm-action-id']
+        },
+        // Then add the tenant-specific ones
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['tenant-specific-crm-action-id']
+        }
+    ]
+});
+```
+
+#### Propagation Rules
+
+When sub-agents are executed, action changes are propagated based on scope:
+
+| Original Scope | Propagated As | Behavior |
+|---------------|---------------|----------|
+| `global` | `global` | Propagated as-is to all sub-agents |
+| `root` | (not propagated) | Only applied to root agent |
+| `all-subagents` | `global` | Becomes global for sub-agent's perspective |
+| `specific` | `specific` | Propagated as-is; each agent checks if it's in agentIds |
+
+#### How It Works
+
+1. **During prompt preparation** (`gatherPromptTemplateData`):
+   - Base actions are loaded from database configuration (`AIAgentAction` table)
+   - Runtime action changes are applied based on scope
+   - The modified action list is injected into the prompt template
+   - LLM sees only the effective actions
+
+2. **During action execution** (`executeActionsStep`):
+   - When LLM requests an action, it's validated against the effective action list
+   - Actions not in the effective list are rejected with a clear error message
+
+3. **During sub-agent execution** (`ExecuteSubAgent`):
+   - Action changes are filtered and transformed for propagation
+   - Sub-agents receive only applicable changes
+
+#### Key Benefits
+
+- **No database changes required** - Actions are modified at runtime
+- **Tenant isolation** - Same agent, different action sets per tenant
+- **Security** - Restrict sub-agents from dangerous operations
+- **Flexibility** - Combine add/remove operations for complex scenarios
+- **Type-safe** - Full TypeScript typing with ActionChange interface
+
+**See:** [@memberjunction/ai-core-plus README](../CorePlus/README.md) for type definitions.
+
 ### Payload Scoping for Sub-Agents
 
 The framework now supports narrowing the payload that sub-agents work with through the `PayloadScope` field:

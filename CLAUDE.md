@@ -806,6 +806,8 @@ CodeGen ensures that your database schema, TypeScript types, and UI components s
 
 ## Angular Development Best Practices
 
+> **See [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md) for comprehensive Angular-specific guidelines** including component patterns, state management, and change detection strategies.
+
 ### Change Detection and ExpressionChangedAfterItHasBeenCheckedError
 When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular components:
 - Add `ChangeDetectorRef` to the component constructor

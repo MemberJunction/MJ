@@ -19,7 +19,8 @@ import {
   ApplicationManager,
   TabComponentState,
   TabShownEvent,
-  WorkspaceTab
+  WorkspaceTab,
+  LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -180,41 +181,55 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Check if we have a saved layout structure with actual content
     const hasSavedLayout = config.layout?.root?.content && config.layout.root.content.length > 0;
 
-    if (hasSavedLayout && !forceCreateTabs) {
-      // RESTORE SAVED LAYOUT - preserves drag/drop arrangements (stacks, columns, rows)
-      // This is the single source of truth for visual arrangement
-      console.log('[TabContainer.initializeGoldenLayout] Restoring saved layout structure');
-      this.layoutManager.LoadLayout(config.layout);
+    if (hasSavedLayout && !forceCreateTabs && config.layout) {
+      // VALIDATE: Check that layout component count matches tabs array count
+      const layoutComponentCount = this.countLayoutComponents(config.layout.root);
+      if (layoutComponentCount !== config.tabs.length) {
+        console.warn(`[TabContainer.initializeGoldenLayout] Layout/tabs mismatch: layout has ${layoutComponentCount} components but tabs array has ${config.tabs.length} tabs. Clearing layout.`);
+        this.workspaceManager.ClearLayout();
+        // Fall through to create fresh tabs
+      } else {
+        // RESTORE SAVED LAYOUT - preserves drag/drop arrangements (stacks, columns, rows)
+        // This is the single source of truth for visual arrangement
+        console.log('[TabContainer.initializeGoldenLayout] Restoring saved layout structure');
+        const layoutLoaded = this.layoutManager.LoadLayout(config.layout);
 
-      // Focus active tab and ensure proper sizing
-      setTimeout(() => {
-        if (config.activeTabId) {
-          this.layoutManager.FocusTab(config.activeTabId);
+        if (layoutLoaded) {
+          // Focus active tab and ensure proper sizing
+          setTimeout(() => {
+            if (config.activeTabId) {
+              this.layoutManager.FocusTab(config.activeTabId);
+            }
+          }, 50);
+          return; // Layout restored successfully
         }
-      }, 50);
 
-    } else {
-      // CREATE FRESH - no saved layout or forceCreateTabs=true
-      // Use config.tabs sorted by sequence to build a simple single-stack layout
-      console.log(`[TabContainer.initializeGoldenLayout] Creating ${config.tabs.length} tabs from config (sorted by sequence)`);
-
-      const sortedTabs = [...config.tabs].sort((a, b) => a.sequence - b.sequence);
-
-      this.isCreatingInitialTabs = true;
-      try {
-        sortedTabs.forEach(tab => {
-          this.createTab(tab);
-        });
-      } finally {
-        this.isCreatingInitialTabs = false;
+        // Layout load FAILED - clear the corrupted layout and fall through to create tabs fresh
+        console.warn('[TabContainer.initializeGoldenLayout] Saved layout was corrupted, clearing and recreating tabs');
+        this.workspaceManager.ClearLayout();
       }
-
-      setTimeout(() => {
-        if (config.activeTabId) {
-          this.layoutManager.FocusTab(config.activeTabId);
-        }
-      }, 50);
     }
+
+    // CREATE FRESH - no saved layout, forceCreateTabs=true, or layout load failed
+    // Use config.tabs sorted by sequence to build a simple single-stack layout
+    console.log(`[TabContainer.initializeGoldenLayout] Creating ${config.tabs.length} tabs from config (sorted by sequence)`);
+
+    const sortedTabs = [...config.tabs].sort((a, b) => a.sequence - b.sequence);
+
+    this.isCreatingInitialTabs = true;
+    try {
+      sortedTabs.forEach(tab => {
+        this.createTab(tab);
+      });
+    } finally {
+      this.isCreatingInitialTabs = false;
+    }
+
+    setTimeout(() => {
+      if (config.activeTabId) {
+        this.layoutManager.FocusTab(config.activeTabId);
+      }
+    }, 50);
   }
 
   ngOnDestroy(): void {
@@ -453,11 +468,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private getTabContentSignature(tab: WorkspaceTab): string {
     // Include key identifying fields that determine what component/content is shown
+    // IMPORTANT: Check both resourceRecordId AND configuration.recordId
+    // because for nav items, the recordId is stored in configuration, not resourceRecordId
+    const effectiveRecordId = tab.resourceRecordId || (tab.configuration?.recordId as string) || '';
     const parts = [
       tab.applicationId,
       tab.configuration?.resourceType || '',
       tab.configuration?.driverClass || '',
-      tab.resourceRecordId || '',
+      effectiveRecordId,
       tab.configuration?.route || ''
     ];
     return parts.join('|');
@@ -842,6 +860,28 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Default based on first segment
     return segments[0] || 'home';
+  }
+
+  /**
+   * Count the number of component nodes in a layout tree.
+   * Used to validate that saved layout matches the tabs array before restoring.
+   */
+  private countLayoutComponents(node: LayoutNode): number {
+    if (!node) {
+      return 0;
+    }
+
+    // If this is a component node, count it
+    if (node.type === 'component') {
+      return 1;
+    }
+
+    // If this node has children (row, column, stack), recursively count them
+    if (node.content && Array.isArray(node.content)) {
+      return node.content.reduce((count, child) => count + this.countLayoutComponents(child), 0);
+    }
+
+    return 0;
   }
 
   /**
