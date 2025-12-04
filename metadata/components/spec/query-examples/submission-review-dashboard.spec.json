@@ -3,11 +3,28 @@
   "title": "Submission Review Dashboard",
   "type": "dashboard",
   "userExplanation": "Comprehensive submission review dashboard showing status distribution charts, review timeline, and top reviewers list. Demonstrates complex hybrid pattern: uses multiple queries for charts, direct RunView for reviewer stats, and EntityDataGrid for drilling into submissions by status.",
-  "functionalRequirements": "",
+  "functionalRequirements": "## Business Objectives\n- Monitor event submission review process across all statuses\n- Track review activity and timeline trends\n- Identify top-performing reviewers by volume and quality\n- Enable drill-down into submissions by status for detailed review\n- Demonstrate mixing multiple data loading patterns in one component\n\n## Functional Requirements\n- **Status Summary Chart**: Stacked bar or pie chart showing submission counts by status (Pending, Under Review, Accepted, Rejected, etc.)\n- **Review Timeline Chart**: Line chart showing review activity over time (daily or weekly counts)\n- **Top Reviewers Panel**: Display top 10 reviewers with submission count, average score, and review count\n- **KPI Cards**: Show total submissions, average score, unique speakers, and pending count\n- **Click-to-Drill-Down**: When user clicks status segment, show EntityDataGrid with submissions in that status\n- **Multi-Query Coordination**: Load status summary and timeline queries in parallel\n- **RunView for Reference Data**: Load reviewer records via RunView, aggregate client-side for top reviewers list\n- **Mixed Data Sources**: Demonstrate using RunQuery for charts, RunView for aggregation, EntityDataGrid for drill-down\n- **State Management**: Track selected status and coordinate updates across all panels\n- **Conditional Loading**: Only load drill-down grid when status is selected\n- **Clear Selection**: Return to overview when clearing status filter\n- **Loading States**: Show loading indicators for each panel independently\n- **Empty States**: Handle cases with no submissions or no reviews",
   "dataRequirements": {
     "mode": "hybrid",
     "description": "Uses multiple RunQuery calls for status summary and timeline charts, RunView for top reviewers reference data, and EntityDataGrid for drill-down into submissions by status",
-    "queries": [],
+    "queries": [
+      {
+        "name": "Submission Status Summary",
+        "categoryPath": "Demo",
+        "description": "Status distribution: COUNT(*), COUNT(DISTINCT SpeakerID), AVG(ReviewScore) grouped by SubmissionStatus. Returns 5-8 status categories for stacked bar chart.",
+        "entityNames": ["Submissions", "Speakers"],
+        "fields": [],
+        "parameters": []
+      },
+      {
+        "name": "Submission Review Timeline",
+        "categoryPath": "Demo",
+        "description": "Conditional review activity timeline (executes when status clicked): COUNT(*), AVG(Score) grouped by CAST(ReviewDate AS DATE) for selected status. Returns daily review counts for line chart.",
+        "entityNames": ["Submission Reviews", "Submissions"],
+        "fields": [],
+        "parameters": []
+      }
+    ],
     "entities": [
       {
         "name": "Submissions",
@@ -29,7 +46,22 @@
   },
   "properties": [],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "EntityDataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "",
   "code": "@file:../../code/query-examples/submission-review-dashboard.js",
   "exampleUsage": ""
 }

@@ -100,6 +100,7 @@ function MonthlyInvoiceRevenue({
         chartType={chartType}
         groupBy="DateLabel"
         valueField="TotalRevenue"
+        aggregateMethod="sum"
         title={title}
         showLegend={false}
         utilities={utilities}

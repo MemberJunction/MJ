@@ -2,15 +2,81 @@
   "name": "InvoiceAgingAnalysis",
   "title": "Invoice Aging Analysis",
   "type": "dashboard",
-  "userExplanation": "",
-  "functionalRequirements": "",
+  "userExplanation": "Master-level accounts receivable dashboard with aging buckets, payment trends, and interactive filters. Shows outstanding balances by aging period (0-30, 30-60, 60-90, 90+ days), top accounts with overdue invoices, and payment history. Demonstrates the most complex hybrid pattern with 4+ queries, multi-level drill-downs, and filter panel affecting all queries.",
+  "functionalRequirements": "## Business Objectives\n- Monitor accounts receivable aging across different time periods\n- Identify high-risk accounts with significant overdue balances\n- Track payment trends and average days to payment\n- Enable drill-down from aging buckets to specific invoices and payments\n- Support filtering by date range, account type, and minimum outstanding amount\n\n## Functional Requirements\n- **Interactive Filter Panel**: Date range selector, account type dropdown, minimum outstanding amount input\n- **Aging Buckets Chart**: Stacked bar chart showing outstanding amounts by aging period (0-30, 30-60, 60-90, 90+ days)\n- **Payment Trends Chart**: Dual-axis chart showing monthly payment totals and average days to payment (last 12 months)\n- **Click Aging Bucket**: When user clicks bucket, show three panels: top accounts, KPI cards, and invoice grid\n- **Top Accounts Panel**: Conditional query showing top 10 accounts with most outstanding in selected bucket\n- **KPI Cards**: Total outstanding, invoice count, average days overdue for selected bucket\n- **Invoice Grid**: EntityDataGrid with invoices in selected aging bucket, color-coded by overdue status (green/yellow/red)\n- **Account Selection**: Click account in top accounts list to show account payment history (conditional query 4)\n- **Payment Drill-Down**: Click invoice row to show EntityDataGrid of payments for that invoice\n- **Filter Coordination**: All queries re-execute when filters change\n- **Query Result Caching**: Cache query results for configured duration (default 5 minutes) to reduce database load\n- **State Cleanup**: Clear conditional queries when selections change\n- **Custom Column Rendering**: Color-code DaysOverdue column based on thresholds\n- **Multi-Level State**: Track filter values, selected bucket, selected account, and selected invoice\n- **Loading States**: Independent loading for each query and grid\n- **Empty States**: Handle buckets with no invoices or accounts with no history",
   "dataRequirements": {
     "mode": "hybrid",
-    "queries": []
+    "queries": [
+      {
+        "name": "Invoice Aging Analysis",
+        "categoryPath": "Demo",
+        "description": "Aging buckets: SUM(Outstanding), COUNT(*), AVG(DaysOverdue) grouped by AgeBucket (CASE WHEN DaysOverdue < 30 THEN '0-30 days' ...). Returns 4 aging periods for stacked bar chart.",
+        "entityNames": ["Invoices"],
+        "fields": [],
+        "parameters": []
+      },
+      {
+        "name": "Payment Trends",
+        "categoryPath": "Demo",
+        "description": "Monthly payment trends: SUM(Amount), COUNT(*), AVG(DATEDIFF(day, InvoiceDate, PaymentDate)) grouped by YEAR/MONTH for last 12 months. Returns dual-axis chart data.",
+        "entityNames": ["Payments", "Invoices"],
+        "fields": [],
+        "parameters": []
+      },
+      {
+        "name": "Top Accounts by Outstanding",
+        "categoryPath": "Demo",
+        "description": "Conditional query (executes when aging bucket selected): TOP 10 accounts with most outstanding in selected bucket. Returns AccountName, InvoiceCount, TotalOutstanding.",
+        "entityNames": ["Accounts", "Invoices"],
+        "fields": [],
+        "parameters": []
+      },
+      {
+        "name": "Account Payment History",
+        "categoryPath": "Demo",
+        "description": "Conditional query (executes when account clicked): InvoiceNumber, InvoiceDate, Total, PaidAmount, Outstanding, LastPaymentDate for AccountID=@AccountID. Returns account invoice history.",
+        "entityNames": ["Invoices", "Payments"],
+        "fields": [],
+        "parameters": []
+      }
+    ],
+    "entities": [
+      {
+        "name": "Invoices",
+        "description": "Invoice records shown in EntityDataGrid when drilling down from aging bucket. Includes custom color-coded DaysOverdue column.",
+        "displayFields": ["InvoiceNumber", "AccountName", "InvoiceDate", "DueDate", "TotalAmount", "AmountPaid", "BalanceDue", "DaysOverdue"],
+        "filterFields": ["Status", "DueDate"],
+        "sortFields": ["DaysOverdue", "BalanceDue", "InvoiceDate"],
+        "usageContext": "Loaded by EntityDataGrid with dynamic filter based on aging bucket: Status != 'Paid' AND DATEDIFF(day, DueDate, GETDATE()) BETWEEN x AND y"
+      },
+      {
+        "name": "Payments",
+        "description": "Payment records for selected invoice (nested drill-down from invoice row click).",
+        "displayFields": ["PaymentDate", "Amount", "PaymentMethod", "ReferenceNumber", "Notes"],
+        "filterFields": ["InvoiceID"],
+        "sortFields": ["PaymentDate"],
+        "usageContext": "Loaded by EntityDataGrid when user clicks invoice row: InvoiceID = '{selectedInvoiceId}'"
+      }
+    ]
   },
   "properties": [],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "EntityDataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "",
   "code": "@file:../../code/query-examples/invoice-aging-analysis.js",
   "exampleUsage": ""
 }
