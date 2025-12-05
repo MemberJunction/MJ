@@ -1,5 +1,29 @@
 # @memberjunction/ai-core-plus
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.123.1
+- @memberjunction/actions-base@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Minor Changes
+
+- 0944f59: migrations
+
+### Patch Changes
+
+- @memberjunction/ai@2.123.0
+- @memberjunction/actions-base@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes

@@ -1,5 +1,30 @@
 # component-linter-tests
 
+## 1.0.6
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/metadata-sync@2.123.1
+- @memberjunction/react-test-harness@2.123.1
+- @memberjunction/sqlserver-dataprovider@2.123.1
+
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [52cf482]
+  - @memberjunction/react-test-harness@2.123.0
+  - @memberjunction/sqlserver-dataprovider@2.123.0
+  - @memberjunction/metadata-sync@2.123.0
+  - @memberjunction/interactive-component-types@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+
 ## 1.0.4
 
 ### Patch Changes

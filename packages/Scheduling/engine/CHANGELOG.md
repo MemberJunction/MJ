@@ -1,5 +1,34 @@
 # @memberjunction/scheduling-engine
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.123.1
+- @memberjunction/actions-base@2.123.1
+- @memberjunction/actions@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/sqlserver-dataprovider@2.123.1
+- @memberjunction/scheduling-engine-base@2.123.1
+- @memberjunction/scheduling-base-types@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- Updated dependencies [0944f59]
+  - @memberjunction/ai-agents@2.123.0
+  - @memberjunction/actions@2.123.0
+  - @memberjunction/sqlserver-dataprovider@2.123.0
+  - @memberjunction/actions-base@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+  - @memberjunction/scheduling-engine-base@2.123.0
+  - @memberjunction/scheduling-base-types@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes

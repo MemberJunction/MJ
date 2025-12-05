@@ -1,5 +1,31 @@
 # @memberjunction/ng-react
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/interactive-component-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/react-runtime@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.123.0
+- @memberjunction/ng-notifications@2.123.0
+- @memberjunction/react-runtime@2.123.0
+- @memberjunction/ai-vectors-memory@2.123.0
+- @memberjunction/interactive-component-types@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes

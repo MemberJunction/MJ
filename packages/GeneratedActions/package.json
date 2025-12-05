@@ -20,14 +20,14 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "2.122.2",
-    "@memberjunction/actions": "2.122.2",
-    "@memberjunction/global": "2.122.2",
-    "@memberjunction/core": "2.122.2",
-    "@memberjunction/core-entities": "2.122.2",
-    "@memberjunction/core-entities-server": "2.122.2",
-    "@memberjunction/ai": "2.122.2",
-    "@memberjunction/aiengine": "2.122.2",
+    "@memberjunction/actions-base": "2.123.1",
+    "@memberjunction/actions": "2.123.1",
+    "@memberjunction/global": "2.123.1",
+    "@memberjunction/core": "2.123.1",
+    "@memberjunction/core-entities": "2.123.1",
+    "@memberjunction/core-entities-server": "2.123.1",
+    "@memberjunction/ai": "2.123.1",
+    "@memberjunction/aiengine": "2.123.1",
     "zod": "^3.23.8"
   },
   "repository": {

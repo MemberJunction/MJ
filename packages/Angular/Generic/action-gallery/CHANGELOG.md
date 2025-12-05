@@ -1,5 +1,25 @@
 # @memberjunction/ng-action-gallery
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-shared-generic@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@2.123.0
+- @memberjunction/ng-shared-generic@2.123.0
+- @memberjunction/ng-container-directives@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes

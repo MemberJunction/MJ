@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduling-base-types",
-  "version": "2.122.2",
+  "version": "2.123.1",
   "description": "MemberJunction: Scheduling Base Types - core type definitions for the scheduled jobs system, usable anywhere without heavy dependencies",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "2.122.2"
+    "@memberjunction/global": "2.123.1"
   },
   "devDependencies": {
     "@types/node": "20.14.2",
