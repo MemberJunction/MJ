@@ -124,12 +124,17 @@ mj-tab-container .lm_stack.lm_maximised > .lm_items {
 
 /* Target the anonymous ComponentItem div inside lm_items (has no class) */
 /* Created in golden-layout/src/ts/items/component-item.ts:51 without a class */
+/* NOTE: Do NOT set display here - GL uses display:none to hide inactive tabs */
 mj-tab-container .lm_items > div {
   width: 100% !important;
   height: 100% !important;
   box-sizing: border-box !important;
-  display: flex !important;
   flex-direction: column !important;
+}
+
+/* Only apply flex display to the active/visible tab content div */
+mj-tab-container .lm_items > div:not([style*="display: none"]) {
+  display: flex !important;
 }
 
 /* Clearfix for float-based row layout - GL uses float:left for horizontal panes */
