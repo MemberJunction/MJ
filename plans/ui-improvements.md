@@ -31,19 +31,37 @@ mj-tab-container .lm_content {
 ---
 
 ## Issue 2: Golden Layout Browser Resize
-**Status**: Not Started
+**Status**: Complete
 
 **Problem**: When resizing the browser, Golden Layout windows don't always adjust to available width.
 
 **Key Files**:
 - [golden-layout-manager.ts](packages/Angular/Explorer/base-application/src/lib/golden-layout-manager.ts)
+- [tab-container.component.ts](packages/Angular/Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.ts)
 - [tab-container.component.css](packages/Angular/Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.css)
 
-**Current State**: Uses `resizeWithContainerAutomatically = true` which relies on ResizeObserver. There's commented-out delayed resize code that was previously used for timing issues.
+**Root Cause**: Golden Layout creates an anonymous `<div>` without a CSS class between `.lm_items` and `.lm_content` (in `component-item.ts:51`). This div wasn't being properly sized during resize operations because CSS selectors couldn't target it directly.
 
-**Likely Cause**: ResizeObserver may not fire in all resize scenarios, or flex container calculations don't trigger GL's resize detection.
+**Fix Applied** (commit 57dbee298):
 
-**Fix**: May need to add a debounced window resize listener as backup, or manually call `layout.updateSize()`.
+1. **JavaScript Timing Fixes** in `golden-layout-manager.ts`:
+   - Reduced resize debounce interval from 100ms to 50ms for snappier response
+   - Disabled extended debounce so layout resizes during drag, not just after
+   - Re-enabled delayed `setSize()` calls (50ms, 150ms, 300ms) to handle flexbox timing issues on page load
+   - Uncommented and restored the `updateSize()` method for manual resize triggering
+
+2. **Fallback Safety Mechanism** in `tab-container.component.ts`:
+   - Added `@HostListener('window:resize')` as a backup mechanism to catch resize events that ResizeObserver might miss
+
+3. **CSS Fixes** in `tab-container.component.css`:
+   - Added proper sizing for `.lm_goldenlayout`, `.lm_root`, `.lm_items` containers
+   - **Key fix**: Target the anonymous ComponentItem div with `.lm_items > div` selector to ensure 100% width/height
+   - Added clearfix for float-based row layouts (GL uses `float:left` for horizontal panes)
+   - Added `max-width: 100%` constraint on `.lm_content > *` to force content to respect parent bounds
+   - Added proper `box-sizing: border-box` to all GL layout elements
+
+4. **Related Fix** in `conversation-chat-area.component.css`:
+   - Changed `min-width` constraint in chat-messages-pane to respect container bounds
 
 ---
 
