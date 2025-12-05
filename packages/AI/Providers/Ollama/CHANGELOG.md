@@ -1,5 +1,12 @@
 # @memberjunction/ai-ollama
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.123.1
+- @memberjunction/global@2.123.1
+
 ## 2.123.0
 
 ### Patch Changes

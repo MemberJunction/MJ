@@ -1,5 +1,20 @@
 # @memberjunction/ng-testing
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.123.1
+- @memberjunction/ng-base-types@2.123.1
+- @memberjunction/ng-code-editor@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/testing-engine-base@2.123.1
+
 ## 2.123.0
 
 ### Patch Changes

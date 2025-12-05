@@ -1,5 +1,15 @@
 # @memberjunction/testing-cli
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/sqlserver-dataprovider@2.123.1
+- @memberjunction/testing-engine@2.123.1
+
 ## 2.123.0
 
 ### Patch Changes
