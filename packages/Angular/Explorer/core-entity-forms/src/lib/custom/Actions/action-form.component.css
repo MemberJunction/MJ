@@ -941,30 +941,196 @@
     margin: 0;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
+/* ============================================
+   Responsive Styles using Container Queries
+   Actions form renders inside GL panels
+   ============================================ */
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
     .action-hero-header {
         padding: 20px;
     }
-    
+
     .action-identity {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .action-icon-wrapper {
         margin: 0 auto;
     }
-    
+
     .action-title-row {
         justify-content: center;
     }
-    
+
     .action-stats {
         justify-content: center;
     }
-    
+
     .params-grid {
         grid-template-columns: 1fr;
+    }
+
+    .overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .overview-display {
+        grid-template-columns: 1fr;
+    }
+
+    .result-codes-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .execution-stats-row {
+        flex-direction: column;
+    }
+
+    .stat-box {
+        min-width: 100%;
+    }
+
+    .hero-actions {
+        justify-content: center;
+    }
+
+    .code-toolbar {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .generation-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+    .action-hero-header {
+        padding: 16px;
+        margin: -16px -16px 20px -16px;
+    }
+
+    .action-icon-wrapper {
+        width: 60px;
+        height: 60px;
+    }
+
+    .action-icon-wrapper i {
+        font-size: 28px;
+    }
+
+    .action-title {
+        font-size: 1.5em;
+    }
+
+    .action-name-input {
+        font-size: 1.4em;
+        min-width: 100%;
+    }
+
+    .action-stats {
+        gap: 12px;
+    }
+
+    .stat-card {
+        padding: 12px 16px;
+        min-width: 100%;
+    }
+
+    .stat-value {
+        font-size: 1.2em;
+    }
+
+    .section-content {
+        padding: 16px;
+    }
+
+    .section-header {
+        padding: 16px;
+    }
+
+    .section-header h2 {
+        font-size: 1.1em;
+    }
+
+    .param-card {
+        padding: 12px;
+    }
+
+    .result-code-card {
+        padding: 12px;
+    }
+
+    .action-content {
+        padding: 0 12px 12px;
+    }
+
+    .hero-actions kendo-button {
+        width: 100%;
+    }
+
+    .status-badge, .type-badge, .approval-badge {
+        font-size: 0.75em;
+        padding: 4px 10px;
+    }
+
+    .related-entities-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts outside GL panels
+   ============================================ */
+
+@media (max-width: 768px) {
+    .action-hero-header {
+        padding: 20px;
+    }
+
+    .action-identity {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .action-icon-wrapper {
+        margin: 0 auto;
+    }
+
+    .action-title-row {
+        justify-content: center;
+    }
+
+    .action-stats {
+        justify-content: center;
+    }
+
+    .params-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .action-hero-header {
+        padding: 16px;
+    }
+
+    .action-title {
+        font-size: 1.5em;
+    }
+
+    .stat-card {
+        min-width: 100%;
+    }
+
+    .section-content {
+        padding: 16px;
     }
 }

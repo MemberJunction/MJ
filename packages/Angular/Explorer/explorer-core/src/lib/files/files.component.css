@@ -1,3 +1,123 @@
-  .container {
-    display: flex;
-  } 
+:host {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.files-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+}
+
+.files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.files-content {
+  flex: 1;
+  padding: 16px;
+  overflow: auto;
+}
+
+.files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.file-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s;
+}
+
+.file-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* ============================================
+   Responsive Styles using Container Queries
+   Files component renders inside GL panels
+   ============================================ */
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+  .files-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .files-content {
+    padding: 12px;
+  }
+
+  .files-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .file-card {
+    padding: 12px;
+  }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+  .files-header {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .files-content {
+    padding: 8px;
+  }
+
+  .files-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .file-card {
+    padding: 10px;
+  }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts outside GL panels
+   ============================================ */
+
+@media (max-width: 768px) {
+  .files-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .files-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .files-grid {
+    grid-template-columns: 1fr;
+  }
+}

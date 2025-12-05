@@ -856,33 +856,223 @@
   margin-bottom: 16px;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+/* ============================================
+   Responsive Styles using Container Queries
+   AI Agent Run form renders inside GL panels
+   ============================================ */
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
   .header-content {
     flex-direction: column;
     gap: 16px;
   }
-  
+
   .header-stats {
     flex-wrap: wrap;
   }
-  
+
+  .configuration-bar {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
   .json-detail-pane {
     width: 100%;
   }
-  
+
   .timeline {
     padding-left: 30px;
   }
-  
+
   .timeline-marker {
     left: -25px;
     width: 32px;
     height: 32px;
   }
-  
+
   .timeline-content {
     margin-left: 10px;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .json-meta {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .tabs {
+    overflow-x: auto;
+  }
+
+  .tab {
+    padding: 10px 16px;
+    white-space: nowrap;
+  }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+  .header {
+    padding: 16px;
+  }
+
+  .header-left {
+    gap: 12px;
+  }
+
+  .icon-wrapper {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .header-info h2 {
+    font-size: 18px;
+  }
+
+  .meta-info {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .header-stats {
+    gap: 12px;
+  }
+
+  .configuration-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .config-item {
+    gap: 8px;
+  }
+
+  .timeline-container {
+    padding: 12px;
+  }
+
+  .timeline {
+    padding-left: 24px;
+  }
+
+  .timeline::before {
+    left: 14px;
+  }
+
+  .timeline-marker {
+    left: -20px;
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .timeline-content {
+    padding: 12px 16px;
+    margin-left: 8px;
+  }
+
+  .timeline-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .timeline-header h4 {
+    font-size: 14px;
+  }
+
+  .details-grid {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .json-pane-header {
+    padding: 12px 16px;
+  }
+
+  .json-pane-header h3 {
+    font-size: 14px;
+  }
+
+  .json-pane-content {
+    padding: 12px;
+  }
+
+  .json-viewer {
+    padding: 12px;
+  }
+
+  .status-badge {
+    padding: 4px 12px;
+    font-size: 11px;
+  }
+
+  .tab {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .empty-state,
+  .loading-state,
+  .error-state {
+    padding: 40px 16px;
+  }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts outside GL panels
+   ============================================ */
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .header-stats {
+    flex-wrap: wrap;
+  }
+
+  .json-detail-pane {
+    width: 100%;
+  }
+
+  .timeline {
+    padding-left: 30px;
+  }
+
+  .timeline-marker {
+    left: -25px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .timeline-content {
+    margin-left: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 16px;
+  }
+
+  .header-info h2 {
+    font-size: 18px;
+  }
+
+  .timeline-container {
+    padding: 12px;
+  }
+
+  .timeline-content {
+    padding: 12px 16px;
   }
 }
 

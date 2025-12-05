@@ -320,3 +320,91 @@
 .thread-content::-webkit-scrollbar-thumb:hover {
   background: #9CA3AF;
 }
+
+/* ============================================
+   Responsive Styles
+   Thread panel is a fixed overlay, use @media queries
+   ============================================ */
+
+/* Tablet breakpoint */
+@media (max-width: 768px) {
+  .thread-panel {
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  .thread-header {
+    padding: 12px 16px;
+  }
+
+  .thread-title {
+    font-size: 15px;
+  }
+
+  .thread-content {
+    padding: 16px;
+  }
+
+  .parent-message {
+    padding: 12px;
+  }
+
+  .reply-input-container {
+    padding: 12px 16px;
+  }
+}
+
+/* Small phone breakpoint */
+@media (max-width: 480px) {
+  .thread-header {
+    padding: 10px 12px;
+  }
+
+  .thread-title {
+    font-size: 14px;
+    gap: 8px;
+  }
+
+  .thread-content {
+    padding: 12px;
+  }
+
+  .parent-message {
+    padding: 10px;
+    margin-bottom: 16px;
+  }
+
+  .message-body {
+    font-size: 13px;
+  }
+
+  .reply-item {
+    padding: 10px;
+  }
+
+  .reply-body {
+    font-size: 12px;
+  }
+
+  .reply-input-container {
+    padding: 10px 12px;
+  }
+
+  .reply-input {
+    min-height: 50px;
+    font-size: 13px;
+  }
+
+  .btn-send-reply {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .no-replies {
+    padding: 30px 16px;
+  }
+
+  .no-replies i {
+    font-size: 28px;
+  }
+}

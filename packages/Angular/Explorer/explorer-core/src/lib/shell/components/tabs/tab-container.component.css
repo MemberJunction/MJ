@@ -156,6 +156,9 @@ mj-tab-container .lm_content {
   flex-direction: column !important;
   height: 100% !important;
   width: 100% !important;
+  /* Enable container queries for responsive child components */
+  container-type: inline-size;
+  container-name: gl-panel;
 }
 
 mj-tab-container .lm_item_container {
@@ -301,4 +304,104 @@ mj-tab-container .lm_active:hover .lm_close_tab {
 /* Adjust padding for close button */
 mj-tab-container .lm_header .lm_tab {
   padding-right: 24px !important;
+}
+
+/* ============================================
+   Responsive Styles for Tab Header
+   Using @media queries since header is outside .lm_content
+   ============================================ */
+
+/* Enable horizontal scrolling for tab overflow */
+mj-tab-container .lm_tabs {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  scrollbar-width: thin !important;
+}
+
+/* Hide scrollbar but keep functionality */
+mj-tab-container .lm_tabs::-webkit-scrollbar {
+  height: 4px !important;
+}
+
+mj-tab-container .lm_tabs::-webkit-scrollbar-thumb {
+  background: #ccc !important;
+  border-radius: 2px !important;
+}
+
+mj-tab-container .lm_tabs::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+/* Tablet breakpoint */
+@media (max-width: 992px) {
+  mj-tab-container .lm_header .lm_tab {
+    padding: 0 12px !important;
+    padding-right: 22px !important;
+  }
+}
+
+/* Mobile breakpoint */
+@media (max-width: 768px) {
+  mj-tab-container .lm_header {
+    height: 34px !important;
+    padding-left: 2px !important;
+  }
+
+  mj-tab-container .lm_tabs {
+    height: 32px !important;
+  }
+
+  mj-tab-container .lm_header .lm_tab {
+    padding: 0 10px !important;
+    padding-right: 20px !important;
+    font-size: 12px !important;
+    height: 31px !important;
+    line-height: 31px !important;
+  }
+
+  mj-tab-container .lm_header .lm_tab.lm_active {
+    height: 32px !important;
+  }
+
+  /* Adjust items height for smaller header */
+  mj-tab-container .lm_items {
+    height: calc(100% - 34px) !important;
+  }
+}
+
+/* Small phone breakpoint */
+@media (max-width: 480px) {
+  mj-tab-container .lm_header {
+    height: 32px !important;
+  }
+
+  mj-tab-container .lm_tabs {
+    height: 30px !important;
+  }
+
+  mj-tab-container .lm_header .lm_tab {
+    padding: 0 8px !important;
+    padding-right: 18px !important;
+    font-size: 11px !important;
+    height: 29px !important;
+    line-height: 29px !important;
+  }
+
+  mj-tab-container .lm_header .lm_tab.lm_active {
+    height: 30px !important;
+  }
+
+  /* Adjust items height for smaller header */
+  mj-tab-container .lm_items {
+    height: calc(100% - 32px) !important;
+  }
+
+  /* Smaller close button */
+  mj-tab-container .lm_close_tab {
+    width: 14px !important;
+    height: 14px !important;
+    font-size: 9px !important;
+    right: 2px !important;
+  }
 }

@@ -330,7 +330,100 @@
 }
 
 /* ===================================
-   RESPONSIVE DESIGN
+   RESPONSIVE DESIGN - Container Queries
+   Resource browser renders inside GL panels
+   =================================== */
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+    .title-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+
+    .filter-wrapper {
+        justify-content: space-between;
+    }
+
+    .search {
+        max-width: none;
+    }
+
+    .nav-item-icon i,
+    .nav-item-icon span {
+        font-size: 2.5rem;
+    }
+
+    .nav-item-title {
+        font-size: 1.1rem;
+    }
+
+    .nav-item-subtitle {
+        font-size: 0.85rem;
+        -webkit-line-clamp: 2;
+    }
+
+    .card-wrapper {
+        min-width: 240px;
+        min-height: 180px;
+    }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+    .title-flex-display {
+        gap: 10px;
+    }
+
+    .filter-wrapper {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .title-wrapper h4 {
+        font-size: 1.25rem;
+    }
+
+    .nav-item-icon i,
+    .nav-item-icon span {
+        font-size: 2rem;
+    }
+
+    .nav-item-title {
+        font-size: 1rem;
+        margin-bottom: 6px;
+    }
+
+    .nav-item-subtitle {
+        font-size: 0.8rem;
+        margin-bottom: 12px;
+    }
+
+    .nav-item-content {
+        padding: 12px;
+    }
+
+    .card-wrapper {
+        min-width: 200px;
+        min-height: 160px;
+    }
+
+    .title-folder {
+        width: 38px;
+        height: 38px;
+    }
+
+    .btn-cmn {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+    }
+}
+
+/* ===================================
+   Media Query Fallbacks
+   For contexts outside GL panels
    =================================== */
 
 @media (max-width: 768px) {
@@ -339,11 +432,11 @@
         align-items: stretch;
         gap: 15px;
     }
-    
+
     .filter-wrapper {
         justify-content: space-between;
     }
-    
+
     .search {
         max-width: none;
     }
@@ -353,7 +446,7 @@
     .title-flex-display {
         gap: 10px;
     }
-    
+
     .filter-wrapper {
         flex-wrap: wrap;
         gap: 8px;

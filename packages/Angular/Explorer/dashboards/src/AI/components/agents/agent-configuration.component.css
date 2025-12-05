@@ -612,23 +612,169 @@
   font-size: 14px;
 }
 
-/* Responsive Design */
+/* ============================================
+   Responsive Styles using Container Queries
+   Agent configuration renders inside GL panels
+   ============================================ */
+
+/* Large container breakpoint */
+@container gl-panel (max-width: 1024px) {
+  .agents-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .header-info {
+    justify-content: space-between;
+  }
+
+  .header-controls {
+    justify-content: space-between;
+  }
+
+  .agents-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .agents-content {
+    padding: 16px;
+  }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+  .dashboard-header {
+    padding: 12px;
+  }
+
+  .dashboard-title {
+    font-size: 16px;
+  }
+
+  .header-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .control-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .filter-toggle-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .agents-content {
+    padding: 12px;
+  }
+
+  .agent-card .card-header {
+    padding: 16px;
+  }
+
+  .agent-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .agent-icon i {
+    font-size: 16px;
+  }
+
+  .agent-name {
+    font-size: 14px;
+  }
+
+  .agent-info {
+    gap: 12px;
+  }
+
+  .card-body {
+    padding: 0 16px 16px 16px;
+  }
+
+  .card-actions {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+
+  .empty-state {
+    padding: 40px 16px;
+  }
+
+  .empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .empty-state h3 {
+    font-size: 18px;
+  }
+
+  .empty-state p {
+    font-size: 14px;
+  }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts outside GL panels
+   ============================================ */
+
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
   }
+
   .header-info {
     justify-content: space-between;
   }
+
   .header-controls {
     justify-content: space-between;
   }
+
   .agents-grid {
     grid-template-columns: 1fr;
   }
+
   .agent-stats {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-header {
+    padding: 12px;
+  }
+
+  .dashboard-title {
+    font-size: 16px;
+  }
+
+  .agents-content {
+    padding: 12px;
   }
 }

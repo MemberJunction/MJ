@@ -49,3 +49,106 @@
   background: #0078d4;
   color: white;
 }
+
+/* ============================================
+   Responsive Styles using Container Queries
+   Scheduling dashboard renders inside GL panels
+   ============================================ */
+
+/* Large container breakpoint */
+@container gl-panel (max-width: 1024px) {
+  .scheduling-dashboard-nav {
+    flex-wrap: wrap;
+  }
+
+  .nav-item {
+    min-width: 70px;
+    padding: 10px 16px;
+  }
+}
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+  .dashboard-content {
+    padding: 16px;
+  }
+
+  .scheduling-dashboard-nav {
+    padding: 6px;
+    gap: 3px;
+  }
+
+  .nav-item {
+    padding: 10px 14px;
+    min-width: 60px;
+  }
+
+  .nav-item i {
+    font-size: 20px;
+  }
+
+  .nav-item span {
+    font-size: 11px;
+  }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+  .dashboard-content {
+    padding: 12px;
+  }
+
+  .scheduling-dashboard-nav {
+    padding: 4px;
+    gap: 2px;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .nav-item {
+    padding: 8px 10px;
+    min-width: 50px;
+    flex-shrink: 0;
+  }
+
+  .nav-item i {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  .nav-item span {
+    font-size: 10px;
+  }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts outside GL panels
+   ============================================ */
+
+@media (max-width: 768px) {
+  .dashboard-content {
+    padding: 16px;
+  }
+
+  .nav-item {
+    padding: 10px 14px;
+    min-width: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-content {
+    padding: 12px;
+  }
+
+  .scheduling-dashboard-nav {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .nav-item {
+    padding: 8px 10px;
+    flex-shrink: 0;
+  }
+}

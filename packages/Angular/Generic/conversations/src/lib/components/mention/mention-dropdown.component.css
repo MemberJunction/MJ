@@ -138,3 +138,66 @@
   font-size: 13px;
   font-weight: 500;
 }
+
+/* ============================================
+   Responsive Styles
+   Mention dropdown is positioned absolutely/fixed, use @media queries
+   ============================================ */
+
+/* Tablet breakpoint */
+@media (max-width: 768px) {
+  .mention-dropdown {
+    min-width: min(280px, 90vw);
+    max-width: min(400px, 95vw);
+  }
+}
+
+/* Small phone breakpoint */
+@media (max-width: 480px) {
+  .mention-dropdown {
+    min-width: min(260px, 90vw);
+    max-width: min(320px, 95vw);
+    max-height: 250px;
+  }
+
+  .mention-suggestion {
+    padding: 8px 10px;
+    gap: 10px;
+  }
+
+  .suggestion-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .suggestion-icon .suggestion-image {
+    width: 28px;
+    height: 28px;
+  }
+
+  .suggestion-name {
+    font-size: 13px;
+  }
+
+  .suggestion-description {
+    font-size: 11px;
+  }
+
+  .suggestion-type-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  .mention-empty-state {
+    padding: 16px;
+  }
+
+  .mention-empty-state i {
+    font-size: 24px;
+  }
+
+  .mention-empty-state p {
+    font-size: 12px;
+  }
+}

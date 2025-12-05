@@ -275,3 +275,183 @@
     font-weight: 500;
     cursor: pointer;
 }
+
+/* ============================================
+   Responsive Styles using Container Queries
+   Components inside GL panels respond to panel width
+   ============================================ */
+
+/* Large container breakpoint - stack filter items */
+@container gl-panel (max-width: 1024px) {
+    .filter-wrapper {
+        flex-wrap: wrap;
+    }
+
+    .title-wrapper .search {
+        width: min(360px, 100%);
+    }
+}
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+    .title-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px 0;
+    }
+
+    .title-wrapper h4 {
+        font-size: 20px;
+        line-height: 24px;
+    }
+
+    .title-wrapper .search {
+        width: 100%;
+    }
+
+    .filter-wrapper {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .main-fav-wrapper {
+        padding: 12px;
+    }
+
+    .search-bar {
+        width: 100%;
+    }
+
+    .search-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    /* Toolbar adjustments */
+    ::ng-deep .user-view-grid-wrap .k-grid-toolbar {
+        padding: 8px 12px !important;
+        gap: 6px;
+    }
+
+    ::ng-deep .user-view-grid-wrap .k-grid-toolbar button {
+        padding: 6px 10px !important;
+        font-size: 13px !important;
+    }
+
+    /* Cell padding adjustments */
+    ::ng-deep .user-view-grid-wrap .k-grid-aria-root .k-grid-header .k-grid-header-table thead tr th {
+        padding: 10px 12px !important;
+        font-size: 12px !important;
+    }
+
+    ::ng-deep .user-view-grid-wrap .k-grid-aria-root kendo-grid-list .k-grid-table tbody tr td {
+        padding: 10px 12px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+    .title-wrapper {
+        padding: 8px 0;
+        gap: 8px;
+    }
+
+    .title-wrapper h4 {
+        font-size: 18px;
+        line-height: 22px;
+    }
+
+    .title-wrapper .search {
+        height: 40px;
+    }
+
+    .title-wrapper .search input {
+        font-size: 14px;
+        padding-left: 36px;
+    }
+
+    .filter-wrapper {
+        gap: 6px;
+    }
+
+    .btn-cmn {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+    }
+
+    .main-fav-wrapper {
+        padding: 8px;
+    }
+
+    .dialog-wrapper {
+        padding: 10px 15px;
+    }
+
+    .btn-margin-right {
+        margin-right: 15px;
+    }
+
+    /* Toolbar: icon-only mode */
+    ::ng-deep .user-view-grid-wrap .k-grid-toolbar {
+        padding: 6px 8px !important;
+        gap: 4px;
+    }
+
+    ::ng-deep .user-view-grid-wrap .k-grid-toolbar button {
+        padding: 6px 8px !important;
+    }
+
+    /* Tighter table cells */
+    ::ng-deep .user-view-grid-wrap .k-grid-aria-root .k-grid-header .k-grid-header-table thead tr th {
+        padding: 8px !important;
+        font-size: 11px !important;
+    }
+
+    ::ng-deep .user-view-grid-wrap .k-grid-aria-root kendo-grid-list .k-grid-table tbody tr td {
+        padding: 8px !important;
+        font-size: 12px !important;
+    }
+
+    /* Footer adjustments */
+    ::ng-deep .user-view-grid-wrap .k-grid-footer {
+        padding: 8px !important;
+        font-size: 12px !important;
+    }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts where component is not in GL panel
+   ============================================ */
+
+@media (max-width: 768px) {
+    .title-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .title-wrapper .search {
+        width: 100%;
+    }
+
+    .search-bar {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-fav-wrapper {
+        padding: 8px;
+    }
+
+    .btn-cmn {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+    }
+}

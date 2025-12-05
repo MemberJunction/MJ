@@ -115,3 +115,105 @@
 .date-nav-option.jump-to:hover {
   background: none;
 }
+
+/* ============================================
+   Responsive Styles using Container Queries
+   Message list renders inside GL panels
+   ============================================ */
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+  .empty-state {
+    padding: 30px;
+  }
+
+  .empty-state i {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+
+  .empty-state p {
+    font-size: 14px;
+  }
+
+  .sticky-date-button {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .date-nav-dropdown {
+    min-width: 180px;
+  }
+
+  .date-nav-option {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+  .empty-state {
+    padding: 24px 16px;
+  }
+
+  .empty-state i {
+    font-size: 32px;
+    margin-bottom: 10px;
+  }
+
+  .empty-state p {
+    font-size: 13px;
+  }
+
+  .sticky-date-header {
+    top: 8px;
+  }
+
+  .sticky-date-button {
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 12px;
+  }
+
+  .date-nav-dropdown {
+    min-width: 160px;
+  }
+
+  .date-nav-option {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .date-nav-option.jump-to {
+    padding: 6px 10px 3px 10px;
+    font-size: 11px;
+  }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts where component is not in GL panel
+   ============================================ */
+
+@media (max-width: 768px) {
+  .empty-state {
+    padding: 30px;
+  }
+
+  .sticky-date-button {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .empty-state {
+    padding: 24px 16px;
+  }
+
+  .sticky-date-button {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}

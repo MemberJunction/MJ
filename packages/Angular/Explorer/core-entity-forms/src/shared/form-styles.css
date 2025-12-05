@@ -326,3 +326,161 @@ button {
 .collapsible-title .row-count-badge.zero-rows {
   background: #9ca3af;
 }
+
+/* ============================================
+   Responsive Styles using Container Queries
+   Forms render inside GL panels
+   ============================================ */
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+  .record-form-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .record-form-row label {
+    width: 100%;
+  }
+
+  .form-panels-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .collapsible-header {
+    padding: 16px 18px;
+  }
+
+  .collapsible-title h3 {
+    font-size: 16px;
+  }
+
+  .collapsible-title i {
+    font-size: 18px;
+  }
+
+  .form-body {
+    padding: 18px;
+  }
+
+  .form-section-controls {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .form-section-controls .section-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .form-section-controls button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+  .record-form-row {
+    gap: 4px;
+    margin-bottom: 10px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .form-panels-container {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .collapsible-header {
+    padding: 12px 14px;
+  }
+
+  .collapsible-title {
+    gap: 8px;
+  }
+
+  .collapsible-title h3 {
+    font-size: 14px;
+  }
+
+  .collapsible-title i {
+    font-size: 16px;
+  }
+
+  .form-body {
+    padding: 14px;
+  }
+
+  .form-card {
+    border-radius: 6px;
+  }
+
+  .form-section-controls {
+    padding: 10px 12px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-section-controls .control-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .form-section-controls .section-count {
+    margin-left: 0;
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  .section-count-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+  }
+
+  .collapsible-title .row-count-badge {
+    font-size: 11px;
+    padding: 2px 5px;
+  }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts outside GL panels
+   ============================================ */
+
+@media (max-width: 768px) {
+  .record-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-panels-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .collapsible-header {
+    padding: 16px 18px;
+  }
+
+  .form-body {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-panels-container {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .collapsible-header {
+    padding: 12px 14px;
+  }
+
+  .form-body {
+    padding: 14px;
+  }
+}

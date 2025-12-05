@@ -316,3 +316,129 @@
   border-top: 1px solid #E5E7EB;
   background: #F9FAFB;
 }
+
+/* ============================================
+   Responsive Styles
+   Modal is rendered in overlay, use @media queries
+   ============================================ */
+
+/* Tablet breakpoint */
+@media (max-width: 768px) {
+  .share-modal-content {
+    padding: 16px;
+    gap: 20px;
+  }
+
+  .permissions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-item {
+    flex-wrap: wrap;
+  }
+
+  .permission-details {
+    width: 100%;
+  }
+
+  .permission-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  .modal-actions {
+    padding: 12px 16px;
+  }
+}
+
+/* Small phone breakpoint */
+@media (max-width: 480px) {
+  .share-modal-content {
+    padding: 12px;
+    gap: 16px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .add-user-section {
+    padding-bottom: 16px;
+  }
+
+  .selected-user-info {
+    padding: 10px;
+    gap: 10px;
+    margin: 12px 0;
+  }
+
+  .user-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .user-details .user-name {
+    font-size: 13px;
+  }
+
+  .user-details .user-email {
+    font-size: 11px;
+  }
+
+  .permission-checkbox {
+    padding: 10px;
+  }
+
+  .permission-checkbox .permission-label {
+    font-size: 13px;
+  }
+
+  .permission-checkbox .permission-desc {
+    font-size: 11px;
+    margin-left: 24px;
+  }
+
+  .permission-item {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .permission-user .user-name {
+    font-size: 13px;
+  }
+
+  .permission-badge {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .btn-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .btn-icon i {
+    font-size: 12px;
+  }
+
+  .empty-state {
+    padding: 30px 16px;
+  }
+
+  .empty-state i {
+    font-size: 36px;
+  }
+
+  .modal-actions {
+    padding: 10px 12px;
+  }
+}

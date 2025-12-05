@@ -561,3 +561,163 @@
   min-height: 0;
   overflow-y: auto;
 }
+
+/* ============================================
+   Responsive Styles using Container Queries
+   Settings renders inside GL panels
+   ============================================ */
+
+/* Large container breakpoint */
+@container gl-panel (max-width: 992px) {
+  .side-navigation {
+    width: 220px;
+  }
+
+  .nav-item {
+    padding: 0.75rem 1.25rem;
+  }
+}
+
+/* Medium container breakpoint */
+@container gl-panel (max-width: 768px) {
+  .header-content {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .header-title h1 {
+    font-size: 1.5rem;
+  }
+
+  .header-search {
+    max-width: none;
+  }
+
+  .side-navigation {
+    display: none;
+  }
+
+  .content-area {
+    padding: 1rem;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+  }
+
+  .section-description {
+    margin-bottom: 1.5rem;
+  }
+
+  .advanced-tabs {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .advanced-tabs .tab-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Small container breakpoint */
+@container gl-panel (max-width: 480px) {
+  .header-content {
+    padding: 0.75rem;
+  }
+
+  .header-title h1 {
+    font-size: 1.25rem;
+  }
+
+  .header-title .header-icon {
+    font-size: 1.5rem;
+  }
+
+  .content-area {
+    padding: 0.75rem;
+  }
+
+  .section-title {
+    font-size: 1.1rem;
+  }
+
+  .section-description {
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+  }
+
+  .settings-grid {
+    gap: 0.75rem;
+  }
+
+  .card-content {
+    padding: 0.75rem;
+  }
+
+  .advanced-tabs {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .advanced-tabs .tab-btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .advanced-tabs .tab-btn i {
+    font-size: 1rem;
+  }
+
+  .advanced-tab-content {
+    min-height: 400px;
+  }
+
+  .performance-settings,
+  .developer-settings {
+    padding: 1rem;
+  }
+
+  .performance-settings h3,
+  .developer-settings h3 {
+    font-size: 1.1rem;
+  }
+
+  .beta-warning {
+    font-size: 0.8125rem;
+    padding: 0.375rem 0.75rem;
+  }
+}
+
+/* ============================================
+   Media Query Fallbacks
+   For contexts outside GL panels
+   ============================================ */
+
+/* Existing @media (max-width: 768px) for header-content is already in place */
+
+@container gl-panel (max-width: 768px) {
+  .mobile-navigation {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-content {
+    padding: 0.75rem;
+  }
+
+  .header-title h1 {
+    font-size: 1.25rem;
+  }
+
+  .content-area {
+    padding: 0.75rem;
+  }
+}
