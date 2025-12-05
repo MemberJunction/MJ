@@ -1,0 +1,180 @@
+{
+  "Name": "Process Audio Screening",
+  "Description": "Processes a completed audio screening: downloads audio/transcript, evaluates with AI, updates application, and sends interview invitation if passed",
+  "Type": "Flow Agent",
+  "IsActive": true,
+  "Steps": [
+    {
+      "Name": "Check Audio Session Status",
+      "Description": "Check if audio agent session is completed",
+      "Type": "Action",
+      "Sequence": 1,
+      "ActionName": "HTTP Request",
+      "InputMapping": {
+        "URL": "payload.audioSessionStatusURL",
+        "Method": "static:GET",
+        "Headers": {
+          "Authorization": "payload.audioServiceAPIKey"
+        }
+      },
+      "OutputMapping": {
+        "sessionStatus": "output.Status",
+        "audioRecordingURL": "output.AudioURL",
+        "audioTranscriptURL": "output.TranscriptURL"
+      }
+    },
+    {
+      "Name": "Download Audio Transcript",
+      "Description": "Download transcript from audio session",
+      "Type": "Action",
+      "Sequence": 2,
+      "ActionName": "HTTP Request",
+      "InputMapping": {
+        "URL": "payload.audioTranscriptURL",
+        "Method": "static:GET"
+      },
+      "OutputMapping": {
+        "audioTranscript": "output.Body"
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed'"
+    },
+    {
+      "Name": "Get Application Details",
+      "Description": "Get full application details including resume evaluation",
+      "Type": "Action",
+      "Sequence": 3,
+      "ActionName": "Get Records",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "ExtraFilter": "payload.applicationID",
+        "MaxRecords": 1
+      },
+      "OutputMapping": {
+        "application": "output.Records[0]"
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed'"
+    },
+    {
+      "Name": "Get Job Details",
+      "Description": "Get job requisition details",
+      "Type": "Action",
+      "Sequence": 4,
+      "ActionName": "Get Records",
+      "InputMapping": {
+        "EntityName": "static:Job Requisitions",
+        "ExtraFilter": "payload.application.JobRequisitionID",
+        "MaxRecords": 1
+      },
+      "OutputMapping": {
+        "jobRequisition": "output.Records[0]"
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed'"
+    },
+    {
+      "Name": "Evaluate Audio Screening",
+      "Description": "Use AI to evaluate audio conversation quality",
+      "Type": "Prompt",
+      "Sequence": 5,
+      "PromptName": "Evaluate Audio Prescreening",
+      "ModelName": "gemini-2.0-flash-exp",
+      "InputMapping": {
+        "jobTitle": "payload.jobRequisition.Title",
+        "requiredSkills": "payload.jobRequisition.RequiredSkills",
+        "jobDescription": "payload.jobRequisition.Description",
+        "baselinePassingScore": "payload.jobRequisition.BaselinePassingScore",
+        "candidateName": "payload.application.CandidateName",
+        "resumeEvaluationScore": "payload.application.ResumeEvaluationScore",
+        "resumeStrengths": "payload.application.ResumeEvaluationReasoning",
+        "audioTranscript": "payload.audioTranscript",
+        "audioRecordingURL": "payload.audioRecordingURL"
+      },
+      "OutputMapping": {
+        "audioEvaluation": "output.Result"
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed'",
+      "ResponseFormat": "json_object"
+    },
+    {
+      "Name": "Update Application with Audio Evaluation",
+      "Description": "Update application record with audio evaluation results",
+      "Type": "Action",
+      "Sequence": 6,
+      "ActionName": "Update Record",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "RecordID": "payload.applicationID",
+        "Data": {
+          "AudioRecordingURL": "payload.audioRecordingURL",
+          "AudioTranscriptURL": "payload.audioTranscriptURL",
+          "AudioEvaluationScore": "payload.audioEvaluation.audioEvaluationScore",
+          "AudioEvaluationReasoning": "payload.audioEvaluation.reasoning",
+          "AudioEvaluationDimensions": "payload.audioEvaluation.audioEvaluationDimensions",
+          "PassedAudioScreening": "payload.audioEvaluation.passedAudioScreening",
+          "CurrentStage": "static:PreliminaryInterview",
+          "Status": "payload.audioEvaluation.passedAudioScreening ? 'InterviewScheduled' : 'Rejected'"
+        }
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed'"
+    },
+    {
+      "Name": "Create Application Note - Audio Evaluation",
+      "Description": "Create note with audio evaluation details",
+      "Type": "Action",
+      "Sequence": 7,
+      "ActionName": "Create Record",
+      "InputMapping": {
+        "EntityName": "static:Application Notes",
+        "Data": {
+          "ApplicationID": "payload.applicationID",
+          "NoteText": "payload.audioEvaluation.reasoning",
+          "NoteType": "static:AudioEvaluation",
+          "IsSystemGenerated": true
+        }
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed'"
+    },
+    {
+      "Name": "Send Interview Invitation",
+      "Description": "Send email with interview scheduling link if candidate passed",
+      "Type": "Action",
+      "Sequence": 8,
+      "ActionName": "Send Email",
+      "InputMapping": {
+        "To": "payload.application.CandidateEmail",
+        "Subject": "static:Congratulations! Next Steps for {jobTitle}",
+        "Body": "payload.interviewEmailBody",
+        "TemplateID": "static:interview-invitation"
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed' && payload.audioEvaluation.passedAudioScreening === true"
+    },
+    {
+      "Name": "Update Application with Interview Link",
+      "Description": "Update application with interview scheduling link",
+      "Type": "Action",
+      "Sequence": 9,
+      "ActionName": "Update Record",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "RecordID": "payload.applicationID",
+        "Data": {
+          "InterviewSchedulingLink": "payload.interviewSchedulingLink"
+        }
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed' && payload.audioEvaluation.passedAudioScreening === true"
+    },
+    {
+      "Name": "Send Rejection Email",
+      "Description": "Send rejection email with feedback if candidate did not pass",
+      "Type": "Action",
+      "Sequence": 10,
+      "ActionName": "Send Email",
+      "InputMapping": {
+        "To": "payload.application.CandidateEmail",
+        "Subject": "static:Update on Your Application",
+        "Body": "payload.rejectionEmailBody",
+        "TemplateID": "static:audio-screening-rejection"
+      },
+      "ConditionalPath": "payload.sessionStatus === 'completed' && payload.audioEvaluation.passedAudioScreening === false"
+    }
+  ]
+}

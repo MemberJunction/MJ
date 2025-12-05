@@ -1,0 +1,136 @@
+{
+  "Name": "Application Processing Flow",
+  "Description": "Main flow agent that retrieves TypeForm responses for job applications and processes each one",
+  "Type": "Flow Agent",
+  "IsActive": true,
+  "Steps": [
+    {
+      "Name": "Get Active Job Requisitions",
+      "Description": "Get all job requisitions with TypeForm monitoring enabled",
+      "Type": "Action",
+      "Sequence": 1,
+      "ActionName": "Get Records",
+      "InputMapping": {
+        "EntityName": "static:Job Requisitions",
+        "ExtraFilter": "static:TypeformMonitorEnabled = 1 AND Status = 'Open'",
+        "OrderBy": "static:__mj_CreatedAt DESC"
+      },
+      "OutputMapping": {
+        "jobRequisitions": "output.Records"
+      }
+    },
+    {
+      "Name": "Process Each Job Requisition",
+      "Description": "For each job requisition, get TypeForm responses and process applications",
+      "Type": "ForEach",
+      "Sequence": 2,
+      "ItemVariable": "jobReq",
+      "ItemsPath": "payload.jobRequisitions",
+      "Parallelizable": true,
+      "ContinueOnError": true,
+      "Steps": [
+        {
+          "Name": "Calculate Since Date",
+          "Description": "Calculate date to check for new responses (last check or 7 days ago)",
+          "Type": "Action",
+          "Sequence": 1,
+          "ActionName": "Execute JavaScript",
+          "InputMapping": {
+            "Code": "static:const now = new Date(); const sinceDate = new Date(now - 7 * 24 * 60 * 60 * 1000); return sinceDate.toISOString();"
+          },
+          "OutputMapping": {
+            "sinceDate": "output.Result"
+          }
+        },
+        {
+          "Name": "Get TypeForm Responses",
+          "Description": "Get new TypeForm responses for this job",
+          "Type": "Action",
+          "Sequence": 2,
+          "ActionName": "Get Typeform Responses",
+          "InputMapping": {
+            "CompanyID": "jobReq.CompanyID",
+            "FormID": "jobReq.TypeformID",
+            "SinceDate": "payload.sinceDate",
+            "CompletedOnly": true
+          },
+          "OutputMapping": {
+            "typeformResponses": "output.Responses",
+            "totalResponses": "output.TotalItems"
+          }
+        },
+        {
+          "Name": "Process Each Application",
+          "Description": "Process each TypeForm response as an application",
+          "Type": "ForEach",
+          "Sequence": 3,
+          "ItemVariable": "response",
+          "ItemsPath": "payload.typeformResponses",
+          "Parallelizable": true,
+          "ContinueOnError": true,
+          "Steps": [
+            {
+              "Name": "Extract Application Data",
+              "Description": "Extract application data from TypeForm response",
+              "Type": "Action",
+              "Sequence": 1,
+              "ActionName": "Execute JavaScript",
+              "InputMapping": {
+                "Code": "static:const answers = response.answers; return { candidateName: answers.full_name, candidateEmail: answers.email, candidatePhone: answers.phone, resumeURL: answers.resume_upload, linkedInProfile: answers.linkedin, currentTitle: answers.current_title, currentCompany: answers.current_company, yearsExperience: parseInt(answers.years_experience) || 0, typeformAnswers: JSON.stringify(answers) };"
+              },
+              "OutputMapping": {
+                "applicationData": "output.Result"
+              }
+            },
+            {
+              "Name": "Process Application",
+              "Description": "Call sub-agent to process this application",
+              "Type": "SubAgent",
+              "Sequence": 2,
+              "SubAgentName": "Process Single Application",
+              "InputMapping": {
+                "jobRequisitionID": "jobReq.ID",
+                "jobTitle": "jobReq.Title",
+                "jobDescription": "jobReq.Description",
+                "requiredSkills": "jobReq.RequiredSkills",
+                "preferredSkills": "jobReq.PreferredSkills",
+                "minimumYearsExperience": "jobReq.MinimumYearsExperience",
+                "evaluationRubric": "jobReq.EvaluationRubric",
+                "baselinePassingScore": "jobReq.BaselinePassingScore",
+                "typeformResponseID": "response.response_id",
+                "submittedAt": "response.submitted_at",
+                "candidateName": "payload.applicationData.candidateName",
+                "candidateEmail": "payload.applicationData.candidateEmail",
+                "candidatePhone": "payload.applicationData.candidatePhone",
+                "resumeURL": "payload.applicationData.resumeURL",
+                "linkedInProfile": "payload.applicationData.linkedInProfile",
+                "currentTitle": "payload.applicationData.currentTitle",
+                "currentCompany": "payload.applicationData.currentCompany",
+                "yearsExperience": "payload.applicationData.yearsExperience",
+                "typeformAnswers": "payload.applicationData.typeformAnswers",
+                "companyID": "jobReq.CompanyID"
+              },
+              "SubAgentContextPaths": [
+                "*"
+              ]
+            }
+          ]
+        },
+        {
+          "Name": "Send Summary Email to Hiring Manager",
+          "Description": "Send summary of processed applications to hiring manager",
+          "Type": "Action",
+          "Sequence": 4,
+          "ActionName": "Send Email",
+          "InputMapping": {
+            "To": "jobReq.HiringManagerEmail",
+            "Subject": "static:New Applications Processed",
+            "Body": "payload.summaryEmailBody",
+            "TemplateID": "static:application-processing-summary"
+          },
+          "ConditionalPath": "payload.totalResponses > 0 && jobReq.HiringManagerEmail != null"
+        }
+      ]
+    }
+  ]
+}
