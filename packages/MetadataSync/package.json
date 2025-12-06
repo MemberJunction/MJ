@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/metadata-sync",
-  "version": "2.122.2",
+  "version": "2.123.1",
   "description": "MemberJunction metadata synchronization CLI tool",
   "keywords": [
     "metadata",
@@ -26,12 +26,12 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@memberjunction/core": "2.122.2",
-    "@memberjunction/core-entities": "2.122.2",
-    "@memberjunction/core-entities-server": "2.122.2",
-    "@memberjunction/global": "2.122.2",
-    "@memberjunction/graphql-dataprovider": "2.122.2",
-    "@memberjunction/sqlserver-dataprovider": "2.122.2",
+    "@memberjunction/core": "2.123.1",
+    "@memberjunction/core-entities": "2.123.1",
+    "@memberjunction/core-entities-server": "2.123.1",
+    "@memberjunction/global": "2.123.1",
+    "@memberjunction/graphql-dataprovider": "2.123.1",
+    "@memberjunction/sqlserver-dataprovider": "2.123.1",
     "axios": "^1.6.8",
     "chalk": "^4.1.2",
     "chokidar": "^3.6.0",

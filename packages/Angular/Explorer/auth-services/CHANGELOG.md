@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/core@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- 6cefc87: Fix MSAL Login and restore Logout
+  - @memberjunction/core@2.123.0
+  - @memberjunction/global@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes

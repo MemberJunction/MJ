@@ -1,5 +1,37 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.123.1
+- @memberjunction/ai@2.123.1
+- @memberjunction/ng-shared@2.123.1
+- @memberjunction/ng-code-editor@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/ng-shared-generic@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.123.0
+- @memberjunction/ng-shared@2.123.0
+- @memberjunction/ng-notifications@2.123.0
+- @memberjunction/ai-engine-base@2.123.0
+- @memberjunction/ai@2.123.0
+- @memberjunction/ng-shared-generic@2.123.0
+- @memberjunction/ng-code-editor@2.123.0
+- @memberjunction/ng-container-directives@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes

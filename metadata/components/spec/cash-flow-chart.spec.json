@@ -12,21 +12,33 @@
       {
         "name": "Payments",
         "description": "Payment transactions for cash flow tracking",
-        "displayFields": ["PaymentDate", "Amount", "Category"],
+        "displayFields": [
+          "PaymentDate",
+          "Amount",
+          "Category"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Cash inflows from payments"
       },
       {
         "name": "Invoices",
         "description": "Invoice data for cash outflow tracking",
-        "displayFields": ["IssueDate", "TotalAmount", "Category"],
+        "displayFields": [
+          "IssueDate",
+          "TotalAmount",
+          "Category"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Cash outflows from invoices"
       }
     ],
@@ -43,5 +55,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Waterfall chart showing cash flow components"
 }

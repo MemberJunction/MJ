@@ -10,7 +10,8 @@ import {
   createComponent,
   ComponentRef,
   ViewEncapsulation,
-  ChangeDetectorRef
+  ChangeDetectorRef,
+  HostListener
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -242,11 +243,23 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cacheManager.clearCache();
 
     // Cleanup any legacy componentRefs
-    this.componentRefs.forEach((ref, tabId) => {
+    this.componentRefs.forEach((ref, _tabId) => {
       this.appRef.detachView(ref.hostView);
       ref.destroy();
     });
     this.componentRefs.clear();
+  }
+
+  /**
+   * Handle window resize events as a fallback safety mechanism.
+   * Golden Layout's ResizeObserver should handle most cases, but this
+   * ensures the layout is properly sized after browser window changes.
+   */
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    if (this.layoutInitialized && !this.useSingleResourceMode) {
+      this.layoutManager.updateSize();
+    }
   }
 
   /**

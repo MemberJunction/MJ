@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.123.1
+- @memberjunction/actions-base@2.123.1
+- @memberjunction/interactive-component-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- Updated dependencies [0944f59]
+  - @memberjunction/ai-core-plus@2.123.0
+  - @memberjunction/actions-base@2.123.0
+  - @memberjunction/interactive-component-types@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+
 ## 2.122.2
 
 ### Patch Changes

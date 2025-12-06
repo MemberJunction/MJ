@@ -48,5 +48,6 @@
       "version": "^1.11.10",
       "globalVariable": "dayjs"
     }
-  ]
+  ],
+  "description": "Displays historical trends of deal velocity across stages over time"
 }

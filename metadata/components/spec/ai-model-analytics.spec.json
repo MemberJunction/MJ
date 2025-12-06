@@ -4,7 +4,7 @@
   "description": "Analytics panel with charts showing prompt usage distribution, performance metrics, and time series",
   "type": "chart",
   "functionalRequirements": "Display pie chart for prompt usage, bar chart for performance, time series for usage trends",
-  "technicalDesign": "",
+  "technicalDesign": "## Technical Design\n\n### Component Structure\n- Inline analytics panel below the model list\n- Tabbed interface for different visualization types\n- Processes prompt run data for various charts\n\n### Props\n- model: Selected AI model object\n- promptRuns: Array of prompt execution history for this model\n- dateRange: Time range for analytics (default: last 7 days)\n\n### Tabs/Sections\n1. **Usage Distribution**: Pie chart of prompt usage\n2. **Performance**: Bar chart of average execution times\n3. **Trends**: Time series chart of usage over time\n4. **Summary**: Key metrics (total runs, success rate, token usage)\n\n### Data Processing\n- Filter runs by date range and model ID\n- Group runs by prompt\n- Calculate aggregates (count, avg time, success rate)\n- Generate chart data structures\n\n### Chart Implementation\n- Responsive SVG-based charts\n- Interactive tooltips on hover\n- Color coding by status (success/error)\n- Handles empty states gracefully",
   "dataRequirements": {
     "mode": "views",
     "entities": [
@@ -82,7 +82,7 @@
             "isPrimaryKey": false,
             "description": "Relative cost ranking (1-5)"
           }
-        ], 
+        ],
         "usageContext": "Main list of AI models"
       },
       {
@@ -142,7 +142,7 @@
             "isPrimaryKey": false,
             "description": "Vendor type (Model Developer or Inference Provider)"
           }
-        ], 
+        ],
         "usageContext": "Vendor associations for models"
       },
       {
@@ -156,7 +156,7 @@
         "filterFields": [],
         "sortFields": [
           "Name"
-        ], 
+        ],
         "usageContext": "Filter dropdown for model types"
       },
       {
@@ -183,7 +183,7 @@
         "sortFields": [
           "StartTime",
           "TotalExecutionTime"
-        ], 
+        ],
         "usageContext": "Analytics and usage history"
       },
       {
@@ -198,7 +198,7 @@
         "filterFields": [],
         "sortFields": [
           "Name"
-        ], 
+        ],
         "usageContext": "Enrich prompt runs with names"
       }
     ]

@@ -12,11 +12,20 @@
       {
         "name": "Deals",
         "description": "Deal records for list display",
-        "displayFields": ["ID", "Name", "Amount", "Probability", "CloseDate", "Account"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Amount",
+          "Probability",
+          "CloseDate",
+          "Account"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Deal list display"
       }
     ],
@@ -39,5 +48,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Table component for displaying deals in a compact list format"
 }
