@@ -1134,11 +1134,20 @@ export class PayloadManager {
                 }
             } else if (typeof elementToAdd === 'object' && elementToAdd !== null) {
                 // For objects/arrays that aren't being replaced, process nested changes
+                // IMPORTANT: Don't pass newElements for existing array elements -
+                // newElements items should be appended to the array, not merged into existing items
                 elementToAdd = _.cloneDeep(elementToAdd);
+                const changeRequestWithoutNew: AgentPayloadChangeRequest<any> = {
+                    updateElements: changeRequest.updateElements,
+                    removeElements: changeRequest.removeElements,
+                    replaceElements: changeRequest.replaceElements,
+                    reasoning: changeRequest.reasoning
+                    // Intentionally omit newElements
+                };
                 this.processChangeRequest(
                     elementToAdd,
                     original ? original[i] : undefined,
-                    changeRequest,
+                    changeRequestWithoutNew,
                     [...path, i.toString()],
                     counts,
                     warnings,
@@ -1149,7 +1158,18 @@ export class PayloadManager {
             
             newTargetArray.push(elementToAdd);
         }
-        
+
+        // Handle items in updateArray that are beyond target.length
+        // These should be treated as additions (AI put new items in updateElements)
+        if (updateArray && Array.isArray(updateArray)) {
+            for (let i = target.length; i < updateArray.length; i++) {
+                if (this.isSignificantValue(updateArray[i])) {
+                    newTargetArray.push(updateArray[i]);
+                    counts.additions++;
+                }
+            }
+        }
+
         // Add new elements
         if (newArray && Array.isArray(newArray)) {
             for (const item of newArray) {
@@ -1159,7 +1179,7 @@ export class PayloadManager {
                 }
             }
         }
-        
+
         // Replace array contents in-place
         target.length = 0;
         target.push(...newTargetArray);
@@ -1350,10 +1370,23 @@ export class PayloadManager {
         
         // Check for update
         const updateValue = _.get(changeRequest.updateElements, pathStr);
-        
+
         // Be forgiving: if AI put an update in newElements by mistake, treat it as an update
-        const effectiveUpdateValue = (updateValue !== undefined) ? updateValue : 
-                                    (newValue !== undefined && key in target) ? newValue : 
+        // EXCEPTIONS where we should NOT treat newElements as updateElements:
+        // 1. Both are arrays - let processArrayChanges handle append semantics
+        // 2. Both are objects - recurse to find nested arrays that need append semantics
+        const bothAreArrays = Array.isArray(newValue) && Array.isArray(target[key]);
+        const bothAreObjects = newValue !== undefined &&
+                               typeof newValue === 'object' && !Array.isArray(newValue) &&
+                               key in target &&
+                               typeof target[key] === 'object' && !Array.isArray(target[key]) &&
+                               target[key] !== null;
+        const shouldTreatNewAsUpdate = newValue !== undefined &&
+                                       key in target &&
+                                       !bothAreArrays &&
+                                       !bothAreObjects;
+        const effectiveUpdateValue = (updateValue !== undefined) ? updateValue :
+                                    shouldTreatNewAsUpdate ? newValue :
                                     undefined;
         
         if (effectiveUpdateValue !== undefined && key in target) {
@@ -1394,8 +1427,8 @@ export class PayloadManager {
                 counts.updates++;
             }
             
-            // Add a soft warning if we auto-corrected the placement
-            if (updateValue === undefined && newValue !== undefined) {
+            // Add a soft warning if we auto-corrected the placement (but not for arrays which use append semantics)
+            if (updateValue === undefined && newValue !== undefined && shouldTreatNewAsUpdate) {
                 warnings.push(`Auto-corrected: '${key}' was in newElements but already exists (treated as update)`);
             }
         } else if (updateValue !== undefined && !(key in target)) {
@@ -1419,11 +1452,37 @@ export class PayloadManager {
             target[key] = updateValue;
             counts.additions++;
             warnings.push(`Auto-corrected: '${key}' was in updateElements but doesn't exist (treated as addition)`);
-        } else if (removeValue !== undefined && removeValue !== '__DELETE__' && 
+        } else if (removeValue !== undefined && removeValue !== '__DELETE__' &&
                    typeof target[key] === 'object' && target[key] !== null) {
             // Handle case where removeValue exists but isn't a direct deletion
             // This happens with arrays where removeValue is like [{}, '_DELETE_', {}]
             // We need to recurse to process the array removals
+            this.processChangeRequest(
+                target[key],
+                original ? original[key] : undefined,
+                changeRequest,
+                keyPath,
+                counts,
+                warnings,
+                allowedPaths,
+                blockedOperations
+            );
+        } else if (newValue !== undefined && Array.isArray(newValue) && Array.isArray(target[key])) {
+            // Handle array append: newElements has an array for an existing array key
+            // Recurse to let processArrayChanges handle the append
+            this.processChangeRequest(
+                target[key],
+                original ? original[key] : undefined,
+                changeRequest,
+                keyPath,
+                counts,
+                warnings,
+                allowedPaths,
+                blockedOperations
+            );
+        } else if (bothAreObjects) {
+            // Handle object in newElements for existing object key
+            // Recurse to find nested arrays that need append semantics
             this.processChangeRequest(
                 target[key],
                 original ? original[key] : undefined,
