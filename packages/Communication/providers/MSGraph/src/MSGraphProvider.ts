@@ -226,7 +226,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 To: primaryToRecipient,
                 ReplyTo: replyTo,
                 Subject: message.subject || '',
-                Body: contextData?.ReturnAsPlainTex ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
+                Body: contextData?.ReturnAsPlainText ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
                 ExternalSystemRecordID: message.id || '',
                 ThreadID: message.conversationId || '',
                 Headers: headers ? headers[index] : null,
