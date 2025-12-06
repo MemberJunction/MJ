@@ -333,21 +333,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // first, make sure we reset the flag to false so that if another call to this function happens
             // while we are waiting for the async call to finish, we dont do it again
-            this._refresh = false;  
-            
-            // start with fresh metadata
-            this._localMetadata = new AllMetadata(); 
+            this._refresh = false;
 
-            this._cachedVisibleExplorerNavigationItems = null; // reset this so it gets rebuilt next time it is requested
+            // Clear cache so it gets rebuilt next time it is requested
+            this._cachedVisibleExplorerNavigationItems = null;
 
+            // Fetch new metadata without clearing current metadata
+            // This ensures readers always see valid data (old until new is ready)
             const start = new Date().getTime();
             const res = await this.GetAllMetadata(providerToUse);
             const end = new Date().getTime();
             LogStatus(`GetAllMetadata() took ${end - start} ms`);
             if (res) {
-                this.UpdateLocalMetadata(res)
+                // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
+                // Readers now see new metadata instead of old
+                // Uses UpdateLocalMetadata() to maintain consistency with LoadLocalMetadataFromStorage()
+                // and allow potential subclass overrides for extensibility
+                this.UpdateLocalMetadata(res);
                 this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
                 await this.SaveLocalMetadataToStorage();
+            }
+            else {
+                // GetAllMetadata failed - log error but keep existing metadata
+                LogError('GetAllMetadata() returned undefined - metadata not updated');
             }
         }
 
