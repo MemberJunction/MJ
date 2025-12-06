@@ -8,10 +8,10 @@ export * from './lib/generic/resource-container-component';
 export * from './lib/auth-button/auth-button.component'
 export * from './lib/dashboard-browser-component/dashboard-browser.component'
 export * from './lib/data-browser-component/data-browser.component'
-export * from './lib/generic-browse-list/generic-browse-list.component'
+// export * from './lib/generic-browse-list/generic-browse-list.component' // [3.0] DEPRECATED
 export * from './lib/home-component/home.component'
 export * from './lib/home-wrapper/home-wrapper.component'
-export * from './lib/navigation/navigation.component'
+// export * from './lib/navigation/navigation.component' // [3.0] DEPRECATED - replaced by ShellModule
 export * from './lib/report-browser-component/report-browser.component'
 export * from './lib/resource-wrappers/dashboard-resource.component'
 export * from './lib/tabbed-dashboard/tabbed-dashboard.component'

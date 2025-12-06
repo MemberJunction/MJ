@@ -58,7 +58,8 @@ import { DashboardBrowserComponent } from './lib/dashboard-browser-component/das
 import { DataBrowserComponent } from './lib/data-browser-component/data-browser.component';
 import { FavoritesComponent } from './lib/favorites/favorites.component';
 import { FilesComponent } from './lib/files/files.component';
-import { GenericBrowseListComponent } from './lib/generic-browse-list/generic-browse-list.component';
+// [3.0] DEPRECATED - Superseded by GenericBrowserListComponent, unused
+// import { GenericBrowseListComponent } from './lib/generic-browse-list/generic-browse-list.component';
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { HeaderComponent } from './lib/header/header.component';
@@ -67,7 +68,8 @@ import { HomeComponent } from './lib/home-component/home.component';
 import { HomeWrapperComponent } from './lib/home-wrapper/home-wrapper.component';
 import { TabbedDashboardComponent } from './lib/tabbed-dashboard/tabbed-dashboard.component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
-import { NavigationComponent } from './lib/navigation/navigation.component';
+// [3.0] DEPRECATED - Replaced by ShellModule (mj-shell), unused
+// import { NavigationComponent } from './lib/navigation/navigation.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 import { ReportBrowserComponent } from './lib/report-browser-component/report-browser.component';
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
@@ -89,7 +91,8 @@ import { SingleSearchResultComponent } from './lib/single-search-result/single-s
 import { SingleViewComponent } from './lib/single-view/single-view.component';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { UserProfileComponent } from './lib/user-profile/user-profile.component';
-import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
+// [3.0] DEPRECATED - Only used by NavigationComponent, unused
+// import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
 import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';
@@ -103,7 +106,8 @@ import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.c
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 // AI resource components are now in @memberjunction/ng-dashboards directly (no wrappers needed)
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
-import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
+// [3.0] DEPRECATED - Test/demo component, not used in production
+// import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
 @NgModule({
   declarations: [
@@ -113,11 +117,11 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ChatWrapperComponent,
     DashboardBrowserComponent,
     DataBrowserComponent,
-    GenericBrowseListComponent,
+    // GenericBrowseListComponent, // [3.0] DEPRECATED
     GenericBrowserListComponent,
     HomeComponent,
     HomeWrapperComponent,
-    NavigationComponent,
+    // NavigationComponent, // [3.0] DEPRECATED - replaced by ShellModule
     ReportBrowserComponent,
     QueryBrowserComponent,
     DashboardResource,
@@ -142,7 +146,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     EditDashboardComponent,
     UserNotificationsComponent,
     QueryResource,
-    ExpansionPanelComponent,
+    // ExpansionPanelComponent, // [3.0] DEPRECATED
     ApplicationViewComponent,
     ListViewComponent,
     ResourceBrowserComponent,
@@ -154,7 +158,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ArtifactResource,
     TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
-    StyleGuideTestComponent
+    // StyleGuideTestComponent // [3.0] DEPRECATED
   ],
   imports: [
     AppRoutingModule,
@@ -219,11 +223,11 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     AuthButtonComponent,
     DashboardBrowserComponent,
     DataBrowserComponent,
-    GenericBrowseListComponent,
+    // GenericBrowseListComponent, // [3.0] DEPRECATED
     GenericBrowserListComponent,
     HomeComponent,
     HomeWrapperComponent,
-    NavigationComponent,
+    // NavigationComponent, // [3.0] DEPRECATED - replaced by ShellModule
     ReportBrowserComponent,
     DashboardResource,
     EntityRecordResource,
@@ -244,14 +248,14 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DeleteItemComponent,
     EditDashboardComponent,
     UserNotificationsComponent,
-    ExpansionPanelComponent,
+    // ExpansionPanelComponent, // [3.0] DEPRECATED
     ApplicationViewComponent,
     ListViewComponent,
     ResourceBrowserComponent,
     ListDetailResource,
     TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
-    StyleGuideTestComponent
+    // StyleGuideTestComponent // [3.0] DEPRECATED
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },
