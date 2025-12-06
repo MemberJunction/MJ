@@ -1,0 +1,32 @@
+{
+  "entity": "Query Categories",
+  "filePattern": "**/.*.json",
+  "defaults": {
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".query-categories.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "ParentID": {
+        "entity": "Query Categories",
+        "field": "ID"
+      },
+      "UserID": {
+        "entity": "Users",
+        "field": "ID"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

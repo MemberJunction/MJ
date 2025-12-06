@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/ai-model-analytics-dashboard.spec.json",
+  "description": "Valid component demonstrating AI model usage analytics with multiple query integration"
+}
