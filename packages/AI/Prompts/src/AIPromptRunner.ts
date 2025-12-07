@@ -669,7 +669,7 @@ export class AIPromptRunner {
     }
 
     // Execute tasks in parallel
-    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
+    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
