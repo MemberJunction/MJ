@@ -359,35 +359,23 @@ function DataGrid({
         }
       }
 
-      return {
+      const columnDef = {
         title: displayName,
         dataIndex: fieldName,
         key: fieldName,
         align: align,
         width: colDef.width || columnWidth, // Use column-specific width if provided
         ellipsis: false, // We'll handle ellipsis manually for click expansion
-        sorter: (() => {
-          const shouldSort = colDef.sortable !== undefined ? colDef.sortable : sorting;
-          // If explicitly set to true (not a function), return true to show UI without internal sorting
-          // This allows parent components to handle sorting via onSortChanged
-          if (shouldSort === true) return true;
-          // If truthy but not exactly true, create sorter function for internal sorting
-          if (shouldSort) {
-            return (a, b) => {
-              const valA = a[fieldName];
-              const valB = b[fieldName];
-              if (valA == null) return 1;
-              if (valB == null) return -1;
-              if (typeof valA === 'string') {
-                return valA.localeCompare(valB);
-              }
-              return valA - valB;
-            };
+        sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {
+          const valA = a[fieldName];
+          const valB = b[fieldName];
+          if (valA == null) return 1;
+          if (valB == null) return -1;
+          if (typeof valA === 'string') {
+            return valA.localeCompare(valB);
           }
-          // Falsy means no sorting
-          return false;
-        })(),
-        sortOrder: colDef.sortOrder, // Pass through sortOrder for controlled sorting
+          return valA - valB;
+        } : false,
         render: (value, record) => {
           // Check for custom render function first
           if (colDef.render && typeof colDef.render === 'function') {
@@ -566,6 +554,14 @@ function DataGrid({
           return formattedContent;
         }
       };
+
+      // Only add sortOrder if explicitly provided (for controlled sorting)
+      // If undefined, Ant Design uses uncontrolled sorting with the sorter function
+      if (colDef.sortOrder !== undefined) {
+        columnDef.sortOrder = colDef.sortOrder;
+      }
+
+      return columnDef;
     });
   }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
   
