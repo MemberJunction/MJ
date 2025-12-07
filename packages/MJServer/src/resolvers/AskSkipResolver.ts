@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context';
@@ -1948,9 +1948,15 @@ export class AskSkipResolver {
   private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
     try {
       const md = new Metadata();
+
+      // Diagnostic logging
+      console.log(`[refreshSkipEntities] Total entities in metadata: ${md.Entities.length}`);
+      console.log(`[refreshSkipEntities] Config excludeSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.excludeSchemas)}`);
+      console.log(`[refreshSkipEntities] Config includeEntitiesFromExcludedSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas)}`);
+
       const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
         .map((e) => e.trim().toLowerCase());
-  
+
       // get the list of entities
       const entities = md.Entities.filter((e) => {
         if (!configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
@@ -1966,12 +1972,19 @@ export class AskSkipResolver {
         }
         return false;
       });
-  
+
+      console.log(`[refreshSkipEntities] Filtered entities count: ${entities.length}`);
+      if (entities.length === 0) {
+        console.warn(`[refreshSkipEntities] WARNING: No entities passed filtering! This will result in empty Skip entities list.`);
+      }
+
       // now we have our list of entities, pack em up
       const result = await Promise.all(entities.map((e) => this.PackSingleSkipEntityInfo(e, dataSource)));
-  
+
+      console.log(`[refreshSkipEntities] Successfully packed ${result.length} entities for Skip`);
+
       AskSkipResolver.__lastRefreshTime = Date.now(); // Update last refresh time
-      return result;        
+      return result;
     }
     catch (e) {
       LogError(`AskSkipResolver::refreshSkipEntities: ${e}`);
@@ -1992,15 +2005,21 @@ export class AskSkipResolver {
     try {
       const now = Date.now();
       const cacheExpired = (now - AskSkipResolver.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
-  
+      const cacheIsEmpty = AskSkipResolver.__skipEntitiesCache$.value === null;
+
+      console.log(`[BuildSkipEntities] forceRefresh: ${forceRefresh}, cacheExpired: ${cacheExpired}, cacheIsEmpty: ${cacheIsEmpty}`);
+
       // If force refresh is requested OR cache expired OR cache is empty, refresh
-      if (forceRefresh || cacheExpired || AskSkipResolver.__skipEntitiesCache$.value === null) {
-        console.log(`Forcing Skip Entities refresh: ${forceRefresh}, Cache Expired: ${cacheExpired}`);
-        const newData = this.refreshSkipEntities(dataSource);
+      if (forceRefresh || cacheExpired || cacheIsEmpty) {
+        console.log(`[BuildSkipEntities] Refreshing Skip Entities cache...`);
+        const newData = await this.refreshSkipEntities(dataSource);
+        console.log(`[BuildSkipEntities] Refresh complete, setting cache with ${newData.length} entities`);
         AskSkipResolver.__skipEntitiesCache$.next(newData);
       }
-  
-      return AskSkipResolver.__skipEntitiesCache$.pipe(take(1)).toPromise();  
+
+      const result = await firstValueFrom(AskSkipResolver.__skipEntitiesCache$.pipe(take(1)));
+      console.log(`[BuildSkipEntities] Returning ${result?.length || 0} entities from cache`);
+      return result;
     }
     catch (e) {
       LogError(`AskSkipResolver::BuildSkipEntities: ${e}`);
