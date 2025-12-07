@@ -16,7 +16,7 @@
       "ID": "A0B4C65A-8AB0-43B3-A800-6A4F89248487"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.787Z",
+      "lastModified": "2025-12-05T23:55:17.676Z",
       "checksum": "6a08b859324a22367c956717daac20406561b530456af6e78d7c0b7fe7f93eae"
     }
   },
@@ -37,7 +37,7 @@
       "ID": "413182FF-1A5E-45D0-A017-1A969B38B857"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.804Z",
+      "lastModified": "2025-12-06T20:49:47.252Z",
       "checksum": "125946ec7176618615da60f30194d09800123ccf4126e381ecff203b89c86c7b"
     }
   },
@@ -58,7 +58,7 @@
       "ID": "400E240A-3BAD-4397-9F40-7CA355E3DDE6"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.820Z",
+      "lastModified": "2025-12-05T23:54:31.516Z",
       "checksum": "64247b16385f75a13040eb22636c6adcd882653f21b878c591440a9e7ebbd8f6"
     }
   },
@@ -79,7 +79,7 @@
       "ID": "717882BF-310E-4699-91E1-D60061CE55C0"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.838Z",
+      "lastModified": "2025-12-05T23:54:29.952Z",
       "checksum": "5d7942c0e05f4b1071c583d53f8db175b576b27e5e929f8600a1e0ff3f381629"
     }
   },
@@ -100,7 +100,7 @@
       "ID": "35F2A2F2-25F6-4804-ACB2-7CF4CFC39C8A"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.855Z",
+      "lastModified": "2025-12-05T23:54:33.079Z",
       "checksum": "bafa4e29580f892437488c997798572ae25424258746de74f4d129e64137e9c3"
     }
   },
@@ -121,7 +121,7 @@
       "ID": "06A6EE8E-CD45-42CE-A589-7A916BD51E3B"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.870Z",
+      "lastModified": "2025-12-05T23:54:34.641Z",
       "checksum": "7f1b12d0edbb14948aa40f1704fddd6e6f2ddf22f9df4359a269cec5fba27073"
     }
   },
@@ -142,7 +142,7 @@
       "ID": "483EC96B-814C-47EE-A9D6-EFCD9B96D067"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.884Z",
+      "lastModified": "2025-12-06T20:49:46.483Z",
       "checksum": "53d5272303fe6daed76be1f72b6a0b7a331c411e3a9c453b0d62a6cdfa1395fe"
     }
   },
@@ -163,7 +163,7 @@
       "ID": "B474483A-8306-4589-B2BE-CFD0EB8F0BE8"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.901Z",
+      "lastModified": "2025-12-06T20:49:45.647Z",
       "checksum": "4a4b3cb6f9160c95a293ee0ae20757ba3c53959769f76cf6a9e286f5ba788ae1"
     }
   },
@@ -184,7 +184,7 @@
       "ID": "04AED295-6EF7-486E-B3AA-0B79FD69821A"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.914Z",
+      "lastModified": "2025-12-06T20:49:48.793Z",
       "checksum": "730e6572dffa5f7dca97a6f1e6aae9ae59763c63adbb7910648fbe97dea3154d"
     }
   },
@@ -205,8 +205,8 @@
       "ID": "CD225692-FA6C-4F5A-89F9-E8A901B4B370"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:58.929Z",
-      "checksum": "6f210c8ea54f36494a6f34549d3188cbee2162fc052cc534c6432618ed99f86f"
+      "lastModified": "2025-12-06T20:49:48.017Z",
+      "checksum": "95529d5e7f79fd637960404420b50df82be1ea3e628972c77438975a441becca"
     }
   },
   {
@@ -226,8 +226,8 @@
       "ID": "05246C80-6479-4730-9ECB-785EFA9CC3C7"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:59.141Z",
-      "checksum": "0f144a3bb7b9fe5677497acf4b8f466cf8d329bd3365397322041ae718283bcb"
+      "lastModified": "2025-12-06T20:49:54.663Z",
+      "checksum": "ebc66109e986bbf8befee3401232e6a9ccc1a77db5a5ba0ed932bd796b46d023"
     }
   },
   {
@@ -247,8 +247,8 @@
       "ID": "C7ED0A79-8DE3-4279-8F21-3C6FD6F0F4E3"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:59.156Z",
-      "checksum": "ed74b7624919047c73d218325176d2c452e97e103df5673548a16639a5fbad91"
+      "lastModified": "2025-12-06T20:49:57.121Z",
+      "checksum": "e339edfcf21b0a1549612c9e3cf9511be6ad0ed18482a3b523e9fb8afc099a4c"
     }
   },
   {
@@ -268,29 +268,29 @@
       "ID": "13B536D5-C202-4E12-9793-6E4BB1E0D818"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:54:04.737Z",
-      "checksum": "b35437b18c3e4d4602b53f5246e7d6a4c40f156d42019e600a0bc7fb5931618c"
+      "lastModified": "2025-12-07T19:09:03.279Z",
+      "checksum": "5f337494a263bb19a1c9abef1a2a8e9f0ffc22e4beabb5cae71e6f202ad114e1"
     }
   },
   {
     "fields": {
-      "Name": "Invoice Aging Analysis",
+      "Name": "Outstanding Invoices",
       "CategoryID": "@lookup:Query Categories.Name=Demo",
-      "UserQuestion": "Which invoices are overdue? Show me accounts receivable aging by bucket.",
-      "Description": "Aging buckets: SUM(Outstanding), COUNT(*), AVG(DaysOverdue) grouped by AgeBucket (CASE WHEN DaysOverdue < 30 THEN '0-30 days' ...). Returns 4 aging periods for stacked bar chart. **Result Order: CASE AgeBucket (Not Yet Due→0-30 days→30-60 days→60-90 days→90+ days)** - Natural aging progression for bar chart visualization.",
-      "SQL": "@file:SQL/invoice-aging-analysis.sql",
+      "UserQuestion": "Which invoices are outstanding? Show me all unpaid and partially paid invoices with days overdue.",
+      "Description": "Returns all outstanding invoices with calculated DaysOverdue field. Includes invoice details (number, dates, amounts, status) and account info. General-purpose query for aging analysis, payment tracking, and AR dashboards. Client-side code can group into aging buckets, aggregate by account, or filter by overdue threshold. **Result Order: DueDate ASC, BalanceDue DESC** - Oldest invoices with highest balances first for priority review.",
+      "SQL": "@file:SQL/outstanding-invoices.sql",
       "TechnicalDescription": "",
       "Status": "Approved",
       "QualityRank": 9,
-      "ExecutionCostRank": 2,
+      "ExecutionCostRank": 1,
       "UsesTemplate": true
     },
     "primaryKey": {
       "ID": "B0AC0653-32C3-4857-9BF2-C20E06F8506B"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:59.198Z",
-      "checksum": "000bad90940edab1827d0203a24f73c1d43ee8c4f61aa96fe5ee8988f1c921e6"
+      "lastModified": "2025-12-07T19:51:32.882Z",
+      "checksum": "e31659b641537790177d49a02bc147c09d24eb3866bb6207bb7d95e15ab73f2d"
     }
   },
   {
@@ -310,7 +310,7 @@
       "ID": "10059C54-C3C9-409C-9FAB-4CA9E79AE64C"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:54:03.959Z",
+      "lastModified": "2025-12-06T20:49:53.890Z",
       "checksum": "4125c6c18913575fd7a79c389e79f3473d78232495974674d45a6e5453a134b5"
     }
   },
@@ -331,7 +331,7 @@
       "ID": "F3A497D1-6ABA-42F2-85D3-1CC4617FC9AC"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:59.231Z",
+      "lastModified": "2025-12-06T20:49:55.706Z",
       "checksum": "1b7ca092d302774fb5a7d64b69b5f9738d28b0829feb9815cfe9fb99ba148e96"
     }
   },
@@ -352,7 +352,7 @@
       "ID": "6CCEFF70-D195-4082-9091-FED0CE340311"
     },
     "sync": {
-      "lastModified": "2025-12-05T21:53:59.244Z",
+      "lastModified": "2025-12-06T20:49:58.659Z",
       "checksum": "5712ddbbe60c934ce65e49ffe526398376b842556e133bf7af22410bbed124e6"
     }
   }
