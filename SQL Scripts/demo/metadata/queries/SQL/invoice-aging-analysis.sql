@@ -1,1 +1,0 @@
--- SQL query to be implemented
