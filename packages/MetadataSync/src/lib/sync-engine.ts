@@ -959,6 +959,14 @@ export class SyncEngine {
       return obj;
     }
 
+    // Handle top-level strings (important for array elements that are strings with @ syntax)
+    if (typeof obj === 'string') {
+      if (isMetadataKeyword(obj)) {
+        return this.processFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext);
+      }
+      return obj;
+    }
+
     // Handle arrays
     if (Array.isArray(obj)) {
       return Promise.all(

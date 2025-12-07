@@ -221,12 +221,15 @@ export class MSGraphProvider extends BaseCommunicationProvider{
             const replyTo: string[] = message.replyTo?.map((replyTo) => replyTo.emailAddress?.address || '') || [];
             const primaryToRecipient: string = replyTo.length > 0 ? replyTo[0]: '';
 
+            // the blow hokey thing with ReturnAsPlainTex without the t is to have
+            // back-compat with the old code when this typo existed
+
             return {
                 From: message.from?.emailAddress?.address || '',
                 To: primaryToRecipient,
                 ReplyTo: replyTo,
                 Subject: message.subject || '',
-                Body: contextData?.ReturnAsPlainTex ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
+                Body: contextData?.ReturnAsPlainText || contextData?.ReturnAsPlainTex ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
                 ExternalSystemRecordID: message.id || '',
                 ThreadID: message.conversationId || '',
                 Headers: headers ? headers[index] : null,
