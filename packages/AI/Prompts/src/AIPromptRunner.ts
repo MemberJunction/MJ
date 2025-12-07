@@ -1119,7 +1119,7 @@ export class AIPromptRunner {
     contextUser?: UserInfo,
     configurationId?: string,
     vendorId?: string,
-    params?: AIPromptParams
+    params?: AIPromptParams 
   ): Promise<{
     model: AIModelEntityExtended | null;
     vendorDriverClass?: string;
@@ -1917,7 +1917,7 @@ export class AIPromptRunner {
         hasKey = checkedDrivers.get(candidate.driverClass)!;
       } else {
         // Check for API key with robust validation
-        const apiKey = GetAIAPIKey(candidate.driverClass);
+        const apiKey = GetAIAPIKey(candidate.driverClass, params.apiKeys, params.verbose);
         hasKey = this.isValidAPIKey(apiKey);
         checkedDrivers.set(candidate.driverClass, hasKey);
       }
@@ -2623,26 +2623,10 @@ export class AIPromptRunner {
         }
       }
 
+      // Check for local API key first, then fall back to global      
+      const apiKey = GetAIAPIKey(driverClass, params.apiKeys, verbose);
+
       // Create LLM instance with vendor-specific driver class
-      // Check for local API key first, then fall back to global
-      let apiKey: string;
-      if (params.apiKeys && params.apiKeys.length > 0) {
-        const localKey = params.apiKeys.find(k => k.driverClass === driverClass);
-        if (localKey) {
-          apiKey = localKey.apiKey;
-          if (verbose) {
-            console.log(`   Using local API key for driver class: ${driverClass}`);
-          }
-        } else {
-          apiKey = GetAIAPIKey(driverClass);
-          if (verbose) {
-            console.log(`   No local API key found for driver class ${driverClass}, using global key`);
-          }
-        }
-      } else {
-        apiKey = GetAIAPIKey(driverClass);
-      }
-      
       llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
