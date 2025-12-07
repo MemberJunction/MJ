@@ -4,55 +4,341 @@
   "type": "dashboard",
   "userExplanation": "Expert-level sales pipeline dashboard with funnel visualization, velocity heatmap, and stage-specific metrics. Click any pipeline stage to see detailed deal information, value trends, and product breakdowns. Demonstrates complex multi-query coordination with conditional execution and calculated fields.",
   "functionalRequirements": "## Business Objectives\n- Visualize current sales pipeline across all stages (Prospecting, Qualification, Proposal, Negotiation, Closed Won/Lost)\n- Analyze stage transition velocity to identify bottlenecks\n- Track deal values, probability, and days in stage for each pipeline stage\n- Enable drill-down to individual deals and their products\n- Support pipeline health monitoring with time-based trends\n\n## Functional Requirements\n- **Funnel Chart**: Display pipeline stages with deal count and total value (width proportional to deal count)\n- **Velocity Heatmap**: Show average days to transition between stages (color-coded: green=fast, red=slow)\n- **Stage-Specific Metrics**: When stage selected, show KPI cards (total value, deal count, avg days in stage, win rate)\n- **Trend Analysis**: Conditional line chart showing deals entering selected stage over last 90 days\n- **Deal Details Grid**: EntityDataGrid with deals in selected stage, including calculated DaysInStage column\n- **Product Drill-Down**: Click deal row to show EntityDataGrid of deal products\n- **Conditional Queries**: Trend query only executes when stage is selected\n- **Calculated Fields**: Display custom DaysInStage field using SQL DATEDIFF in EntityDataGrid\n- **Multi-Level State**: Track stage selection and optional deal selection\n- **Clear Navigation**: Breadcrumb or back button to return to pipeline overview\n- **Stage Highlighting**: Visual feedback for selected stage in funnel\n- **Loading States**: Independent loading for each query and grid\n- **Empty States**: Handle stages with no deals",
+  "description": "Interactive deal pipeline showing stage distribution, velocity analysis, and stage transition trends with predictive insights.",
   "dataRequirements": {
     "mode": "hybrid",
     "queries": [
       {
         "name": "Deal Pipeline Distribution",
         "categoryPath": "Demo",
-        "description": "Current pipeline by stage: COUNT(*), SUM(Value), AVG(Value), AVG(DATEDIFF(day, CreatedDate, GETDATE())) grouped by Stage where Status='Active'. Returns 5-7 stages for funnel chart.",
-        "entityNames": ["Deals"],
-        "fields": [],
-        "parameters": []
+        "description": "Current pipeline by stage: COUNT(*), SUM(Value), AVG(Value), AVG(DATEDIFF(day, CreatedDate, GETDATE())) grouped by Stage where Status='Active'. Returns 5-7 stages for funnel chart. **Result Order: CASE Stage (Prospecting→Qualification→Proposal→Negotiation→Closed Won→Closed Lost)** - Natural pipeline progression order for funnel visualization.",
+        "entityNames": ["Deals", "Accounts"],
+        "fields": [
+          {
+            "name": "Stage",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Deal pipeline stage (Prospecting, Qualification, Proposal, Negotiation, etc.)"
+          },
+          {
+            "name": "DealCount",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of deals in this stage"
+          },
+          {
+            "name": "TotalValue",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Sum of deal amounts in this stage"
+          },
+          {
+            "name": "AvgDealSize",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average deal size in this stage"
+          },
+          {
+            "name": "TotalExpectedRevenue",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Sum of expected revenue (Amount * Probability)"
+          },
+          {
+            "name": "AvgProbability",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average win probability for deals in this stage"
+          },
+          {
+            "name": "AvgDaysInStage",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average number of days deals have been in this stage"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Stage",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Proposal",
+            "description": "Optional filter by specific stage"
+          },
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by account type"
+          },
+          {
+            "name": "MinAmount",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "10000",
+            "description": "Optional filter by minimum deal amount"
+          }
+        ]
       },
       {
         "name": "Deal Velocity Analysis",
         "categoryPath": "Demo",
-        "description": "Stage transition velocity: AVG(DATEDIFF(day, TransitionDate, PreviousDate)), COUNT(*) grouped by FromStage, ToStage. Returns stage-to-stage transition times for heatmap.",
-        "entityNames": ["Deals"],
-        "fields": [],
-        "parameters": []
+        "description": "Stage transition velocity: AVG(DATEDIFF(day, TransitionDate, PreviousDate)), COUNT(*) grouped by FromStage, ToStage. Returns stage-to-stage transition times for heatmap. **Result Order: AvgDaysInPipeline DESC** - Slowest moving stages first to identify bottlenecks.",
+        "entityNames": ["Deals", "Accounts"],
+        "fields": [
+          {
+            "name": "Stage",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Deal pipeline stage"
+          },
+          {
+            "name": "DealCount",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of deals analyzed"
+          },
+          {
+            "name": "AvgDaysToClose",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average days from creation to close"
+          },
+          {
+            "name": "AvgDaysInPipeline",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average days currently in pipeline"
+          },
+          {
+            "name": "WonCount",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of deals won"
+          },
+          {
+            "name": "LostCount",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of deals lost"
+          },
+          {
+            "name": "WinRate",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Win rate percentage (0-100)"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "MonthsBack",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "6",
+            "description": "Number of months to look back (default: 6)"
+          },
+          {
+            "name": "Stage",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Proposal",
+            "description": "Optional filter by specific stage"
+          },
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by account type"
+          }
+        ]
       },
       {
         "name": "Deal Stage Trends",
         "categoryPath": "Demo",
-        "description": "Conditional trend analysis (executes when stage selected): COUNT(*), SUM(Value) grouped by CAST(CreatedDate AS DATE) for last 90 days where Stage=@Stage. Returns daily deal entry trends for line chart.",
-        "entityNames": ["Deals"],
-        "fields": [],
-        "parameters": []
+        "description": "Conditional trend analysis (executes when stage selected): COUNT(*), SUM(Value) grouped by CAST(CreatedDate AS DATE) for last 90 days where Stage=@Stage. Returns daily deal entry trends for line chart. **Result Order: Date ASC** - Chronological order for time-series trend visualization.",
+        "entityNames": ["Deals", "Accounts"],
+        "fields": [
+          {
+            "name": "Date",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Date deals were created"
+          },
+          {
+            "name": "DealsEntered",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of deals that entered the stage on this date"
+          },
+          {
+            "name": "ValueEntered",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total value of deals entering on this date"
+          },
+          {
+            "name": "AvgDealSize",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average deal size for this date"
+          },
+          {
+            "name": "AvgProbability",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average win probability"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "DaysBack",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "90",
+            "description": "Number of days to look back (default: 90)"
+          },
+          {
+            "name": "Stage",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Proposal",
+            "description": "Optional filter by specific stage"
+          },
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by account type"
+          },
+          {
+            "name": "MinAmount",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "10000",
+            "description": "Optional filter by minimum deal amount"
+          }
+        ]
       }
     ],
     "entities": [
       {
         "name": "Deals",
-        "description": "Deal records shown in EntityDataGrid when drilling down from pipeline stage. Includes calculated DaysInStage column.",
-        "displayFields": ["DealName", "AccountName", "Value", "Probability", "DaysInStage", "NextAction"],
-        "filterFields": ["Stage", "Status"],
-        "sortFields": ["Value", "DaysInStage", "Probability"],
-        "usageContext": "Loaded by EntityDataGrid with filter: Stage = '{selectedStage}' AND Status = 'Active'. DaysInStage calculated using SQL DATEDIFF."
+        "description": "Deal records shown in EntityDataGrid when drilling down from pipeline stage.",
+        "displayFields": ["DealName", "Stage", "Value", "Probability", "NextAction", "AccountName"],
+        "filterFields": ["Stage", "AccountID", "Value"],
+        "sortFields": ["Value", "Probability", "DealName"],
+        "usageContext": "Loaded by EntityDataGrid using SQL filter: Stage = '{selectedStage}' AND AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='{accountType}') AND Value >= {minAmount}"
       },
       {
-        "name": "Deal Products",
-        "description": "Product line items for selected deal (nested drill-down from deal row click).",
-        "displayFields": ["ProductName", "Quantity", "UnitPrice", "Total", "Description"],
-        "filterFields": ["DealID"],
-        "sortFields": ["ProductName"],
-        "usageContext": "Loaded by EntityDataGrid when user clicks deal row: DealID = '{selectedDealId}'"
+        "name": "Accounts",
+        "description": "Account records referenced in SQL filter for account type filtering.",
+        "displayFields": ["Name", "AccountType"],
+        "filterFields": ["ID", "AccountType"],
+        "sortFields": ["Name"],
+        "usageContext": "Referenced in EntityDataGrid extraFilter SQL subquery: SELECT ID FROM CRM.vwAccounts WHERE AccountType='{accountType}'"
       }
     ]
   },
-  "properties": [],
-  "events": [],
+  "properties": [
+    {
+      "name": "onStageClick",
+      "type": "function",
+      "required": false,
+      "description": "Callback fired when user clicks a pipeline stage in the chart",
+      "default": null
+    },
+    {
+      "name": "onDealClick",
+      "type": "function",
+      "required": false,
+      "description": "Callback fired when user clicks a deal row in the EntityDataGrid",
+      "default": null
+    }
+  ],
+  "events": [
+    {
+      "name": "onStageClick",
+      "description": "Fired when user clicks a pipeline stage (bar/slice)",
+      "payload": {
+        "stage": "string - The stage that was clicked (e.g., 'Prospecting', 'Qualification')",
+        "dealCount": "number - Number of deals in this stage",
+        "totalValue": "number - Total value of deals in this stage"
+      },
+      "example": "{ stage: 'Proposal', dealCount: 12, totalValue: 450000.00 }"
+    },
+    {
+      "name": "onDealClick",
+      "description": "Fired when user clicks a deal row in the EntityDataGrid drill-down",
+      "payload": {
+        "dealId": "string - The ID of the clicked deal record",
+        "dealName": "string - Name of the deal",
+        "stage": "string - Current stage of the deal",
+        "value": "number - Deal value/amount",
+        "probability": "number - Win probability percentage"
+      },
+      "example": "{ dealId: 'abc-123', dealName: 'Enterprise Platform Deal', stage: 'Proposal', value: 75000.00, probability: 60 }"
+    }
+  ],
   "dependencies": [
     {
       "name": "SimpleChart",
@@ -68,7 +354,7 @@
     }
   ],
   "location": "embedded",
-  "technicalDesign": "",
+  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Initial Load**: Three concurrent RunQuery calls execute for pipeline distribution, velocity analysis, and stage trends\n2. **Chart Rendering**: Three SimpleChart instances display data independently\n3. **User Interaction**: User clicks stage bar in Pipeline Distribution chart\n4. **Drill-Down**: Component sets selectedSegment state and triggers EntityDataGrid\n5. **Grid Filtering**: EntityDataGrid loads Deals filtered by Stage using SQL filter\n6. **Account Filter**: Optional AccountType filter uses SQL subquery on Accounts entity\n\n### State Management\n- `pipelineData`: Pipeline distribution query results\n- `velocityData`: Velocity analysis query results\n- `trendsData`: Stage trends query results\n- `selectedSegment`: Currently selected pipeline stage (null = chart view, object = grid view)\n- `loading`: Boolean for async operation status\n- `errors`: Object with error messages per query/operation\n- Configuration state: `stage`, `accountType`, `minAmount`, `monthsBack`, `daysBack`, `chartType`\n\n### Query Coordination\n**Three Concurrent Queries**: All execute in parallel on mount/parameter change\n1. Deal Pipeline Distribution - Current pipeline by stage\n2. Deal Velocity Analysis - Historical velocity metrics by stage\n3. Deal Stage Trends - Daily deal entry trends\n\n### Drill-Down Pattern\n**Click Pipeline Chart → EntityDataGrid**:\n- Only Pipeline Distribution chart has click handler\n- Sets `selectedSegment` with clickData structure\n- EntityDataGrid appears BELOW all three charts\n- Blue header shows selected stage name\n- Clear Selection button resets to chart-only view\n\n### EntityDataGrid Integration\n**extraFilter Construction**:\n1. Stage filter: `Stage = '{selectedSegment.label}'`\n2. Account type filter (optional): `AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='{accountType}')`\n3. Minimum amount filter (optional): `Value >= {minAmount}`\n4. Filters combined with AND operator\n\n### Event System\n**onStageClick**: Fires when pipeline stage clicked, provides:\n- stage, dealCount, totalValue\n\n**onDealClick**: Fires when EntityDataGrid row clicked, provides:\n- dealId, dealName, stage, value, probability\n\n### Educational Value\nDemonstrates:\n1. **Multi-Query Coordination**: Three concurrent queries with independent error handling\n2. **Selective Drill-Down**: Only one chart has interactive drill-down\n3. **EntityDataGrid Integration**: Proper SQL filter construction with subqueries\n4. **Error Resilience**: Queries can fail independently without blocking others\n5. **Complex Filtering**: Multi-level filters (stage + account type + amount)\n6. **Event Exposure**: External consumers can listen to user interactions",
   "code": "@file:../../code/query-examples/deal-pipeline-visualization.js",
-  "exampleUsage": ""
+  "exampleUsage": "// Basic usage (no filters)\n<DealPipelineVisualization\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n\n// With event handlers\n<DealPipelineVisualization\n  onStageClick={(event) => {\n    console.log(`Stage ${event.stage}: ${event.dealCount} deals, $${event.totalValue}`);\n  }}\n  onDealClick={(event) => {\n    console.log(`Deal ${event.dealName} clicked`);\n    // Navigate to deal detail page\n    router.push(`/deals/${event.dealId}`);\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n\n// With custom configuration via savedUserSettings\n<DealPipelineVisualization\n  savedUserSettings={{\n    stage: 'Proposal',\n    accountType: 'Enterprise',\n    minAmount: 50000,\n    monthsBack: 12,\n    daysBack: 180,\n    chartType: 'doughnut'\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  onSaveUserSettings={onSaveUserSettings}\n/>"
 }

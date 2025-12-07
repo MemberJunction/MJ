@@ -11,7 +11,7 @@
       {
         "name": "Monthly Invoice Revenue",
         "categoryPath": "Demo",
-        "description": "Aggregates invoices by YEAR/MONTH and calculates comprehensive revenue metrics: TotalAmount (revenue), SubTotal, TaxAmount, AmountPaid, BalanceDue, invoice count, and average. Dynamic GROUP BY: adds Status column when multiple statuses provided (e.g., 'Paid,Sent'). Uses STRING_SPLIT for comma-delimited status lists. Defaults to Status='Paid' if no StatusList parameter. Supports Year, Month, StartDate, EndDate filters.",
+        "description": "Aggregates invoices by YEAR/MONTH and calculates comprehensive revenue metrics: TotalAmount (revenue), SubTotal, TaxAmount, AmountPaid, BalanceDue, invoice count, and average. Dynamic GROUP BY: adds Status column when multiple statuses provided (e.g., 'Paid,Sent'). Uses STRING_SPLIT for comma-delimited status lists. Defaults to Status='Paid' if no StatusList parameter. Supports Year, Month, StartDate, EndDate filters. **Result Order: Year DESC, Month DESC, Status** - Most recent periods first, with status comparison when multiple statuses selected.",
         "entityNames": ["Invoices"],
         "fields": [
           {
