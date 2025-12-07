@@ -169,21 +169,15 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
     GridModule,
     DialogsModule,
     ExcelExportModule,
-    CompareRecordsModule,
+    // CompareRecordsModule, // [3.0] DEPRECATED - no component usage in templates
     IndicatorsModule,
-    CommonModule,
-    FormsModule,
-    GridModule,
-    ChartsModule,
+    // ChartsModule, // [3.0] DEPRECATED - no kendo-chart usage in templates
     ButtonsModule,
     TabStripModule,
     ExcelModule,
     PDFModule,
-    IndicatorsModule,
-    DialogsModule,
     InputsModule,
     LabelModule,
-    CompareRecordsModule,
     RecordChangesModule,
     ContainerDirectivesModule,
     BaseFormsModule,
@@ -191,14 +185,14 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
     TreeViewModule,
     UserViewGridModule,
     QueryGridModule,
-    SortableModule,
+    // SortableModule, // [3.0] DEPRECATED - no kendoSortable usage in templates
     LayoutModule,
-    FilterModule,
+    // FilterModule, // [3.0] DEPRECATED - no kendo-filter usage in templates
     DropDownsModule,
     MemberJunctionSharedModule,
     ConversationsModule,
     DashboardsModule,
-    EntityPermissionsModule,
+    // EntityPermissionsModule, // [3.0] DEPRECATED - no component usage in templates
     ExplorerSettingsModule,
     FileStorageModule,
     UserViewPropertiesDialogModule,
@@ -212,7 +206,7 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
     DragDropModule,
     CardModule,
     AvatarModule,
-    AITestHarnessModule,
+    // AITestHarnessModule, // [3.0] DEPRECATED - no component usage in templates
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule
