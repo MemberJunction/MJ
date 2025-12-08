@@ -1,5 +1,18 @@
 # @memberjunction/metadata-sync
 
+## 2.124.0
+
+### Patch Changes
+
+- 4be0ffa: no migration
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/graphql-dataprovider@2.124.0
+  - @memberjunction/core-entities-server@2.124.0
+  - @memberjunction/sqlserver-dataprovider@2.124.0
+  - @memberjunction/global@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes
