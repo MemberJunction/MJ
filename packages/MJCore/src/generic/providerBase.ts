@@ -335,9 +335,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // while we are waiting for the async call to finish, we dont do it again
             this._refresh = false;
 
-            // Clear cache so it gets rebuilt next time it is requested
-            this._cachedVisibleExplorerNavigationItems = null;
-
             // Fetch new metadata without clearing current metadata
             // This ensures readers always see valid data (old until new is ready)
             const start = new Date().getTime();
