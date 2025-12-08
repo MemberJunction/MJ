@@ -1,8 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
-import { BehaviorSubject, firstValueFrom } from 'rxjs';
-import { take } from 'rxjs/operators';
+import { BehaviorSubject } from 'rxjs';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context';
 import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
@@ -1935,8 +1934,9 @@ export class AskSkipResolver {
 
   // SKIP ENTITIES CACHING
   // Static variables shared across all instances
-  private static __skipEntitiesCache$: BehaviorSubject<Promise<SkipEntityInfo[]> | null> = new BehaviorSubject<Promise<SkipEntityInfo[]> | null>(null);
+  private static __skipEntitiesCache$: BehaviorSubject<SkipEntityInfo[] | null> = new BehaviorSubject<SkipEntityInfo[] | null>(null);
   private static __lastRefreshTime: number = 0;
+  private static __refreshInProgress: Promise<SkipEntityInfo[]> | null = null;
 
   /**
    * Refreshes the Skip entities cache
@@ -1994,8 +1994,9 @@ export class AskSkipResolver {
 
   /**
    * Builds or retrieves Skip entities from cache
-   * Uses caching to avoid expensive rebuilding of entity information
-   * 
+   * Uses caching with request deduplication to avoid expensive rebuilding of entity information
+   * Multiple concurrent calls will share the same refresh operation
+   *
    * @param dataSource Database connection
    * @param forceRefresh Whether to force a refresh regardless of cache state
    * @param refreshIntervalMinutes Minutes before cache expires
@@ -2011,14 +2012,30 @@ export class AskSkipResolver {
 
       // If force refresh is requested OR cache expired OR cache is empty, refresh
       if (forceRefresh || cacheExpired || cacheIsEmpty) {
-        console.log(`[BuildSkipEntities] Refreshing Skip Entities cache...`);
-        const newData = await this.refreshSkipEntities(dataSource);
-        console.log(`[BuildSkipEntities] Refresh complete, setting cache with ${newData.length} entities`);
-        AskSkipResolver.__skipEntitiesCache$.next(newData);
+        // Check if a refresh is already in progress - deduplicate concurrent requests
+        if (AskSkipResolver.__refreshInProgress) {
+          console.log(`[BuildSkipEntities] Refresh already in progress, waiting for it to complete...`);
+          return await AskSkipResolver.__refreshInProgress;
+        }
+
+        console.log(`[BuildSkipEntities] Starting new refresh operation...`);
+
+        // Start the refresh and store the Promise for request deduplication
+        AskSkipResolver.__refreshInProgress = this.refreshSkipEntities(dataSource);
+
+        try {
+          const newData = await AskSkipResolver.__refreshInProgress;
+          AskSkipResolver.__skipEntitiesCache$.next(newData);
+          console.log(`[BuildSkipEntities] Refresh complete, cached ${newData.length} entities`);
+          return newData;
+        } finally {
+          // Clear the in-progress marker so future requests can trigger new refreshes
+          AskSkipResolver.__refreshInProgress = null;
+        }
       }
 
-      const result = await firstValueFrom(AskSkipResolver.__skipEntitiesCache$.pipe(take(1)));
-      console.log(`[BuildSkipEntities] Returning ${result?.length || 0} entities from cache`);
+      const result = AskSkipResolver.__skipEntitiesCache$.value || [];
+      console.log(`[BuildSkipEntities] Returning ${result.length} entities from cache`);
       return result;
     }
     catch (e) {
