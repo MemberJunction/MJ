@@ -32,6 +32,25 @@ function DealPipelineVisualization({
   // Get components from registry
   const { SimpleChart, EntityDataGrid } = components;
 
+  // Helper function: Sort pipeline stages by natural progression order
+  // SQL now returns alphabetical order, JavaScript handles business logic sorting
+  const sortPipelineStages = useCallback((stages) => {
+    const stageOrder = {
+      'Prospecting': 1,
+      'Qualification': 2,
+      'Proposal': 3,
+      'Negotiation': 4,
+      'Closed Won': 5,
+      'Closed Lost': 6
+    };
+
+    return [...stages].sort((a, b) => {
+      const orderA = stageOrder[a.Stage] || 999;
+      const orderB = stageOrder[b.Stage] || 999;
+      return orderA - orderB;
+    });
+  }, []);
+
   // Load pipeline and velocity queries on mount or parameter change
   useEffect(() => {
     const loadData = async () => {
@@ -67,7 +86,9 @@ function DealPipelineVisualization({
 
         // Process pipeline distribution result
         if (pipelineResult && pipelineResult.Success && pipelineResult.Results) {
-          setPipelineData(pipelineResult.Results);
+          // Sort stages by pipeline progression (Prospecting → Qualification → ... → Closed Won/Lost)
+          const sortedStages = sortPipelineStages(pipelineResult.Results);
+          setPipelineData(sortedStages);
         } else {
           setErrors(prev => ({ ...prev, pipeline: pipelineResult?.ErrorMessage || 'Failed to load pipeline data' }));
         }

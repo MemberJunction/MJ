@@ -1,7 +1,8 @@
 -- Account Payment History Query
 -- Detailed payment history for selected account with invoice details
--- Conditional query executed when account clicked from top accounts list
--- Returns payment transactions suitable for detail table visualization
+-- Returns raw payment transactions with dates for client-side categorization
+-- Note: PaymentStatus bucketing (On Time/Late/Overdue/Pending) handled client-side
+-- This general-purpose query supports multiple dashboard views and reports
 
 SELECT
   i.InvoiceNumber,
@@ -15,13 +16,7 @@ SELECT
   p.Amount AS PaymentAmount,
   p.PaymentMethod,
   p.ReferenceNumber,
-  DATEDIFF(day, i.InvoiceDate, p.PaymentDate) AS DaysToPayment,
-  CASE
-    WHEN p.PaymentDate <= i.DueDate THEN 'On Time'
-    WHEN p.PaymentDate > i.DueDate THEN 'Late'
-    WHEN i.Status NOT IN ('Paid', 'Cancelled') AND GETDATE() > i.DueDate THEN 'Overdue'
-    ELSE 'Pending'
-  END AS PaymentStatus
+  DATEDIFF(day, i.InvoiceDate, p.PaymentDate) AS DaysToPayment
 FROM CRM.vwInvoices i
 LEFT JOIN CRM.vwPayments p ON p.InvoiceID = i.ID
 WHERE 1=1

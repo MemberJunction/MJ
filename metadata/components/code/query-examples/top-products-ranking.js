@@ -31,7 +31,7 @@ function TopProductsRanking({
       try {
         // Execute the query with all supported parameters
         const result = await utilities.rq.RunQuery({
-          QueryName: 'Top Products Ranking',
+          QueryName: 'Product Ranking',
           CategoryPath: 'Demo',
           Parameters: {
             TopN: topN,

@@ -1,7 +1,9 @@
--- Top Products Ranking Query
+-- Product Ranking Query
 -- Ranks products by total revenue from invoice line items
--- Supports filtering by category, date range, and configurable top N
--- Returns product performance metrics suitable for bar/table visualization
+-- Returns top N products by revenue with optional category filtering
+-- When Category parameter omitted, ranks across all categories
+-- When Category parameter provided, ranks within that category
+-- Replaces both top-products-ranking.sql and category-top-products.sql
 
 SELECT TOP ({% if TopN %}{{ TopN | sqlNumber }}{% else %}10{% endif %})
   p.Name AS ProductName,

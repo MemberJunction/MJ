@@ -87,7 +87,7 @@
       {
         "name": "AI Model Analytics - Costs",
         "categoryPath": "Demo",
-        "description": "Cost analysis: SUM(InputTokens * InputCostPerToken + OutputTokens * OutputCostPerToken) grouped by vendor. Returns vendor cost totals for bar chart. **Result Order: TotalTokens DESC** - Highest token usage vendors first for cost analysis.",
+        "description": "Aggregates AI prompt run costs by vendor and optionally by model. Groups by VendorName with optional ModelName dimension when ModelName parameter provided. Calculates token usage totals (prompt, completion, combined) and estimated cost. Supports date range filtering (StartDate/EndDate) and vendor/model filtering. General-purpose query for cost analysis at vendor or vendor+model granularity. **Result Order: TotalTokens DESC** - Highest token usage first for cost prioritization.",
         "entityNames": ["MJ: AI Prompt Runs", "AI Models", "MJ: AI Vendors"],
         "fields": [
           {
@@ -100,17 +100,26 @@
             "description": "Name of the AI vendor"
           },
           {
-            "name": "RunCount",
+            "name": "ModelName",
             "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Name of the AI model (only included when ModelName parameter is provided)"
+          },
+          {
+            "name": "RunCount",
+            "sequence": 3,
             "defaultInView": true,
             "type": "int",
             "allowsNull": false,
             "isPrimaryKey": false,
-            "description": "Total number of prompt runs for this vendor"
+            "description": "Total number of prompt runs for this vendor/model"
           },
           {
             "name": "TotalInputTokens",
-            "sequence": 3,
+            "sequence": 4,
             "defaultInView": true,
             "type": "bigint",
             "allowsNull": true,
@@ -119,7 +128,7 @@
           },
           {
             "name": "TotalOutputTokens",
-            "sequence": 4,
+            "sequence": 5,
             "defaultInView": true,
             "type": "bigint",
             "allowsNull": true,
@@ -128,7 +137,7 @@
           },
           {
             "name": "TotalTokens",
-            "sequence": 5,
+            "sequence": 6,
             "defaultInView": true,
             "type": "bigint",
             "allowsNull": true,
@@ -137,7 +146,7 @@
           },
           {
             "name": "EstimatedCostUSD",
-            "sequence": 6,
+            "sequence": 7,
             "defaultInView": true,
             "type": "decimal(18,6)",
             "allowsNull": true,
@@ -166,6 +175,13 @@
             "type": "string",
             "sampleValue": "OpenAI",
             "description": "Optional filter by AI vendor name"
+          },
+          {
+            "name": "ModelName",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "gpt-4",
+            "description": "Optional filter by AI model name. When provided, adds ModelName to GROUP BY for vendor+model cost breakdown."
           }
         ]
       },
@@ -312,6 +328,13 @@
       "required": false,
       "defaultValue": null,
       "description": "Optional filter by AI vendor name"
+    },
+    {
+      "name": "modelName",
+      "type": "string",
+      "required": false,
+      "defaultValue": null,
+      "description": "Optional filter by AI model name. When provided to Costs query, enables vendor+model cost breakdown."
     },
     {
       "name": "daysBack",

@@ -11,7 +11,7 @@
       {
         "name": "Outstanding Invoices",
         "categoryPath": "Demo",
-        "description": "Returns raw invoice records with outstanding balances and calculated DaysOverdue field. Client-side JavaScript aggregates data into aging buckets for visualization. **Result Order: InvoiceDate DESC** - Most recent invoices first for display and aggregation.",
+        "description": "Returns raw outstanding invoice records with calculated DaysOverdue field. NO GROUP BY - returns individual invoices for flexible client-side aggregation. Joins vwInvoices with vwAccounts to include AccountType. General-purpose query for aging analysis, payment tracking, AR dashboards. Client-side code can: group into aging buckets, aggregate by account, filter by overdue threshold, calculate totals. Query pair source for top-accounts-by-outstanding.sql. **Result Order: DueDate ASC, BalanceDue DESC** - Oldest invoices with highest balances first for priority review.",
         "entityNames": ["Invoices", "Accounts"],
         "fields": [
           {
@@ -51,8 +51,17 @@
             "description": "Account name (denormalized from view)"
           },
           {
-            "name": "InvoiceDate",
+            "name": "AccountType",
             "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Account type from joined vwAccounts table"
+          },
+          {
+            "name": "InvoiceDate",
+            "sequence": 6,
             "defaultInView": true,
             "type": "date",
             "allowsNull": false,
@@ -61,7 +70,7 @@
           },
           {
             "name": "DueDate",
-            "sequence": 6,
+            "sequence": 7,
             "defaultInView": true,
             "type": "date",
             "allowsNull": false,
@@ -70,7 +79,7 @@
           },
           {
             "name": "Status",
-            "sequence": 7,
+            "sequence": 8,
             "defaultInView": true,
             "type": "nvarchar(50)",
             "allowsNull": false,
@@ -79,7 +88,7 @@
           },
           {
             "name": "TotalAmount",
-            "sequence": 8,
+            "sequence": 9,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": false,
@@ -88,7 +97,7 @@
           },
           {
             "name": "AmountPaid",
-            "sequence": 9,
+            "sequence": 10,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": true,
@@ -97,7 +106,7 @@
           },
           {
             "name": "BalanceDue",
-            "sequence": 10,
+            "sequence": 11,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": false,
@@ -106,7 +115,7 @@
           },
           {
             "name": "DaysOverdue",
-            "sequence": 11,
+            "sequence": 12,
             "defaultInView": true,
             "type": "int",
             "allowsNull": false,
@@ -237,7 +246,7 @@
       {
         "name": "Top Accounts by Outstanding",
         "categoryPath": "Demo",
-        "description": "Conditional query (executes when aging bucket selected): TOP 10 accounts with most outstanding in selected bucket. Returns AccountName, InvoiceCount, TotalOutstanding. **Result Order: TotalOutstanding DESC** - Highest outstanding balances first for priority focus.",
+        "description": "Aggregates outstanding invoices by account, returning TOP N accounts with highest balances. Groups by AccountName and AccountType with metrics: invoice count, total outstanding, average outstanding, average days overdue, max days overdue. General-purpose account-level aggregation query. Aging bucket filtering should be handled client-side using outstanding-invoices.sql. Query pair with outstanding-invoices.sql (aggregation + raw data pattern). **Result Order: TotalOutstanding DESC** - Highest outstanding balances first for priority focus.",
         "entityNames": ["Accounts", "Invoices"],
         "fields": [
           {
@@ -313,13 +322,6 @@
             "description": "Number of top accounts to return (default: 10)"
           },
           {
-            "name": "AgeBucket",
-            "isRequired": false,
-            "type": "string",
-            "sampleValue": "30-60 days",
-            "description": "Optional filter by aging bucket (Not Yet Due, 0-30 days, 30-60 days, 60-90 days, 90+ days)"
-          },
-          {
             "name": "MinOutstanding",
             "isRequired": false,
             "type": "number",
@@ -338,7 +340,7 @@
       {
         "name": "Account Payment History",
         "categoryPath": "Demo",
-        "description": "Conditional query (executes when account clicked): InvoiceNumber, InvoiceDate, Total, PaidAmount, Outstanding, LastPaymentDate for AccountID=@AccountID. Returns account invoice history. **Result Order: InvoiceDate DESC, PaymentDate DESC** - Most recent invoices and payments first for account review.",
+        "description": "Returns raw payment transaction records for account detail view. LEFT JOIN invoices with payments to show both paid and unpaid invoices. Includes calculated DaysToPayment field. PaymentStatus bucketing (On Time/Late/Overdue/Pending) handled client-side for flexibility. General-purpose query for account payment analysis, payment tracking, and invoice history. Supports filtering by AccountID, AccountName, and date range. **Result Order: InvoiceDate DESC, PaymentDate DESC** - Most recent invoices and payments first for account review.",
         "entityNames": ["Invoices", "Payments", "Accounts"],
         "fields": [
           {
@@ -448,15 +450,6 @@
             "allowsNull": true,
             "isPrimaryKey": false,
             "description": "Days from invoice date to payment date"
-          },
-          {
-            "name": "PaymentStatus",
-            "sequence": 13,
-            "defaultInView": true,
-            "type": "nvarchar(50)",
-            "allowsNull": false,
-            "isPrimaryKey": false,
-            "description": "Payment status (On Time, Late, Overdue, Pending)"
           }
         ],
         "parameters": [

@@ -9,6 +9,7 @@ SELECT
   i.InvoiceNumber,
   i.AccountID,
   i.Account,
+  a.AccountType,
   i.InvoiceDate,
   i.DueDate,
   i.Status,
@@ -17,10 +18,11 @@ SELECT
   i.BalanceDue,
   DATEDIFF(day, i.DueDate, GETDATE()) AS DaysOverdue
 FROM CRM.vwInvoices i
+INNER JOIN CRM.vwAccounts a ON a.ID = i.AccountID
 WHERE i.Status NOT IN ('Paid', 'Cancelled')
   AND i.BalanceDue > 0
 {% if MinOutstanding %}  AND i.BalanceDue >= {{ MinOutstanding | sqlNumber }}
-{% endif %}{% if AccountType %}  AND i.AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType = {{ AccountType | sqlString }})
+{% endif %}{% if AccountType %}  AND a.AccountType = {{ AccountType | sqlString }}
 {% endif %}{% if AccountID %}  AND i.AccountID = {{ AccountID | sqlNumber }}
 {% endif %}{% if AccountName %}  AND i.Account = {{ AccountName | sqlString }}
 {% endif %}ORDER BY i.DueDate ASC, i.BalanceDue DESC

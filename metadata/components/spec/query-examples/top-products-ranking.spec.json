@@ -10,9 +10,9 @@
     "description": "Uses RunQuery for aggregated product rankings and RunView for drill-down to invoice line item details when user clicks a product",
     "queries": [
       {
-        "name": "Top Products Ranking",
+        "name": "Product Ranking",
         "categoryPath": "Demo",
-        "description": "Ranks products by revenue with TOP N, joins InvoiceLineItem → Product → Product Category. Groups by Product and calculates total revenue and order count. **Result Order: TotalRevenue DESC** - Highest revenue products first for performance ranking.",
+        "description": "Unified product ranking query that ranks products by revenue with optional category filtering. Replaces both top-products-ranking.sql and category-top-products.sql. When Category parameter omitted, ranks across all categories. When Category provided, ranks within that category. Returns TOP N products (default 10) with revenue, quantity, invoice count, and average price metrics. General-purpose query for product performance analysis. **Result Order: TotalRevenue DESC** - Highest revenue products first for performance ranking.",
         "entityNames": ["Invoice Line Items", "Products", "Invoices"],
         "fields": [
           {

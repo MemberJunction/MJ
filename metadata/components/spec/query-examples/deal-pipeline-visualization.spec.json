@@ -11,7 +11,7 @@
       {
         "name": "Deal Pipeline Distribution",
         "categoryPath": "Demo",
-        "description": "Current pipeline by stage: COUNT(*), SUM(Value), AVG(Value), AVG(DATEDIFF(day, CreatedDate, GETDATE())) grouped by Stage where Status='Active'. Returns 5-7 stages for funnel chart. **Result Order: CASE Stage (Prospecting→Qualification→Proposal→Negotiation→Closed Won→Closed Lost)** - Natural pipeline progression order for funnel visualization.",
+        "description": "Aggregates active deals by stage with comprehensive metrics: deal count, total value, average deal size, expected revenue, probability, and days in stage. Groups by Stage with optional filtering (Stage, AccountType, MinAmount, date range). Excludes 'Closed Won'/'Closed Lost' by default unless Stage parameter specified. Query pair with deal-pipeline-details.sql for drilldown. Stage ordering handled client-side for flexibility. **Result Order: Stage** - Alphabetical, client sorts by pipeline sequence.",
         "entityNames": ["Deals", "Accounts"],
         "fields": [
           {

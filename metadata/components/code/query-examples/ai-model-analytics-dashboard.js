@@ -5,6 +5,7 @@ function AIModelAnalyticsDashboard({
   startDate = null,
   endDate = null,
   vendorName = null,
+  modelName = null,
   daysBack = 30
 }) {
   // State management
@@ -41,7 +42,8 @@ function AIModelAnalyticsDashboard({
             Parameters: {
               StartDate: startDate,
               EndDate: endDate,
-              VendorName: vendorName
+              VendorName: vendorName,
+              ModelName: modelName
             }
           }),
           utilities.rq.RunQuery({
@@ -93,7 +95,7 @@ function AIModelAnalyticsDashboard({
     };
 
     loadData();
-  }, [startDate, endDate, vendorName, daysBack, utilities]);
+  }, [startDate, endDate, vendorName, modelName, daysBack, utilities]);
 
   // Calculate KPI metrics
   const calculateKPIs = () => {
