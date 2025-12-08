@@ -2,6 +2,7 @@
   "name": "ProductCategoryAnalysis",
   "title": "Product Category Analysis",
   "type": "dashboard",
+  "namespace": "CRM/Sales",
   "userExplanation": "Comprehensive product category performance dashboard with dual drill-down paths. Shows category revenue totals, then when a category is selected, displays both top products in that category and all invoice line items. Demonstrates progressive disclosure: Category → Products → Line Items.",
   "functionalRequirements": "## Business Objectives\n- Analyze revenue performance across product categories\n- Identify top-performing products within each category\n- Enable drill-down to see individual line item sales\n- Demonstrate multi-level drill-down with conditional query execution\n\n## Functional Requirements\n- **Category Overview**: Bar chart showing total revenue by product category\n- **Category Metrics**: Display product count, average revenue, and total revenue per category\n- **Primary Drill-Down**: When user clicks category, show two panels side-by-side\n- **Top Products Panel**: Run conditional query showing top 5 products in selected category (by revenue)\n- **Line Items Panel**: EntityDataGrid showing all invoice line items for products in selected category\n- **Secondary Drill-Down**: When user clicks a product in top products list, filter line items grid to that specific product\n- **Conditional Query**: Top products query only executes when category is selected (performance optimization)\n- **Back Navigation**: Clear selection button returns to category overview\n- **Breadcrumb Trail**: Show current selection path (Category → Product)\n- **State Management**: Track both category selection and optional product selection\n- **Loading States**: Show loading for conditional queries\n- **Empty States**: Handle categories with no products or line items",
   "description": "Multi-level product category analysis showing category totals and top products within each category with drill-down navigation.",
@@ -12,7 +13,11 @@
         "name": "Category Totals",
         "categoryPath": "Demo",
         "description": "Category-level aggregates: SUM(Revenue), COUNT(DISTINCT ProductID), AVG(Revenue) grouped by CategoryName. Returns ~10-15 category summary rows for bar chart. **Result Order: TotalRevenue DESC** - Highest revenue categories first for ranking comparison.",
-        "entityNames": ["Products", "Invoice Line Items", "Invoices"],
+        "entityNames": [
+          "Products",
+          "Invoice Line Items",
+          "Invoices"
+        ],
         "fields": [
           {
             "name": "Category",
@@ -97,7 +102,11 @@
         "name": "Category Top Products",
         "categoryPath": "Demo",
         "description": "Conditional query (executes when category selected): TOP 5 products by revenue in selected category. Returns ProductName, Revenue for top products list. **Result Order: TotalRevenue DESC** - Highest revenue products first within selected category.",
-        "entityNames": ["Products", "Invoice Line Items", "Invoices"],
+        "entityNames": [
+          "Products",
+          "Invoice Line Items",
+          "Invoices"
+        ],
         "fields": [
           {
             "name": "ProductName",
@@ -190,17 +199,41 @@
       {
         "name": "Products",
         "description": "Product records used in SQL filter for drill-down. The Category and Name columns are used to filter invoice line items.",
-        "displayFields": ["Name", "Category", "Description"],
-        "filterFields": ["ID", "Category", "Name"],
-        "sortFields": ["Name", "Category"],
+        "displayFields": [
+          "Name",
+          "Category",
+          "Description"
+        ],
+        "filterFields": [
+          "ID",
+          "Category",
+          "Name"
+        ],
+        "sortFields": [
+          "Name",
+          "Category"
+        ],
         "usageContext": "Referenced in EntityDataGrid extraFilter SQL subquery: SELECT ID FROM CRM.vwProducts WHERE Category='{selectedCategory}' OR Name='{selectedProduct}'"
       },
       {
         "name": "Invoice Line Items",
         "description": "Line item records shown in EntityDataGrid for selected category or product. Primary drill-down entity for sales detail.",
-        "displayFields": ["InvoiceDate", "ProductName", "Quantity", "UnitPrice", "Total", "AccountName"],
-        "filterFields": ["ProductID", "InvoiceDate"],
-        "sortFields": ["InvoiceDate", "Total"],
+        "displayFields": [
+          "InvoiceDate",
+          "ProductName",
+          "Quantity",
+          "UnitPrice",
+          "Total",
+          "AccountName"
+        ],
+        "filterFields": [
+          "ProductID",
+          "InvoiceDate"
+        ],
+        "sortFields": [
+          "InvoiceDate",
+          "Total"
+        ],
         "usageContext": "Loaded by EntityDataGrid using SQL filter: ProductID IN (SELECT ID FROM CRM.vwProducts WHERE Category = '{selectedCategory}' OR Name='{selectedProduct}') AND InvoiceDate >= '{startDate}' AND InvoiceDate <= '{endDate}'"
       }
     ]

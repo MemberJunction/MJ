@@ -2,6 +2,7 @@
   "name": "AIModelAnalyticsDashboard",
   "title": "AI Model Analytics Dashboard",
   "type": "dashboard",
+  "namespace": "AI/Analytics",
   "userExplanation": "Comprehensive dashboard showing AI model usage statistics, costs, and trends. Displays multiple charts including model distribution pie chart, cost analysis by vendor, and usage trends over time. Demonstrates coordinating multiple independent queries with Promise.all() for efficient parallel loading.",
   "functionalRequirements": "## Business Objectives\n- Monitor AI model usage across the organization\n- Track costs by vendor and model type\n- Identify usage trends and patterns over time\n- Provide KPIs for total runs, total cost, and average cost per run\n- Support date range filtering for trend analysis\n\n## Functional Requirements\n- **Multi-Panel Dashboard**: Display 3-4 visualizations in cohesive layout (KPI cards, pie chart, bar chart, line chart)\n- **Model Usage Distribution**: Doughnut chart showing distribution of prompt runs by model\n- **Cost Analysis**: Bar chart showing total costs by AI vendor\n- **Usage Trends**: Line chart showing daily usage counts over selected time period\n- **KPI Cards**: Display total runs, total cost, average cost per run, and most-used model (4 cards in grid layout)\n- **Model Performance Summary**: Bottom panel showing total models used, average success rate across models, and total failures\n- **Dynamic Title**: Dashboard title shows vendor name when filtered (e.g., \"AI Model Analytics Dashboard - OpenAI\")\n- **Parallel Query Loading**: Load all 3 queries concurrently using Promise.all() for performance\n- **Date Range Filter**: Support filtering trends by date range (default: last 30 days)\n- **Vendor Filter**: Optional filter to show stats for specific AI vendor\n- **Loading States**: Show loading indicators during data fetch\n- **Empty States**: Handle cases with no data gracefully (per-chart empty states)\n- **No Drill-Down**: Pure visualization dashboard without interactive drill-down",
   "description": "Multi-panel dashboard displaying AI model usage statistics, cost analysis, and usage trends. Shows KPI cards (total runs, total cost, average cost per run, most-used model), model distribution doughnut chart, vendor costs bar chart, daily usage trends line chart, and model performance summary statistics. Pure visualization component with no interactive drill-down.",
@@ -12,7 +13,10 @@
         "name": "AI Model Analytics - Models",
         "categoryPath": "Demo",
         "description": "Model usage counts: GROUP BY ModelName with COUNT(*) from AI Prompt Runs. Returns model distribution for pie chart. **Result Order: RunCount DESC** - Most frequently used models first for usage ranking.",
-        "entityNames": ["MJ: AI Prompt Runs", "AI Models"],
+        "entityNames": [
+          "MJ: AI Prompt Runs",
+          "AI Models"
+        ],
         "fields": [
           {
             "name": "ModelName",
@@ -88,7 +92,11 @@
         "name": "AI Model Analytics - Costs",
         "categoryPath": "Demo",
         "description": "Aggregates AI prompt run costs by vendor and optionally by model. Groups by VendorName with optional ModelName dimension when ModelName parameter provided. Calculates token usage totals (prompt, completion, combined) and estimated cost. Supports date range filtering (StartDate/EndDate) and vendor/model filtering. General-purpose query for cost analysis at vendor or vendor+model granularity. **Result Order: TotalTokens DESC** - Highest token usage first for cost prioritization.",
-        "entityNames": ["MJ: AI Prompt Runs", "AI Models", "MJ: AI Vendors"],
+        "entityNames": [
+          "MJ: AI Prompt Runs",
+          "AI Models",
+          "MJ: AI Vendors"
+        ],
         "fields": [
           {
             "name": "VendorName",
@@ -189,7 +197,9 @@
         "name": "AI Model Analytics - Trends",
         "categoryPath": "Demo",
         "description": "Time-based trends: Daily usage counts for configurable time period (default last 30 days). Returns date and count for line chart. **Result Order: Date ASC** - Chronological order for time-series trend visualization.",
-        "entityNames": ["MJ: AI Prompt Runs"],
+        "entityNames": [
+          "MJ: AI Prompt Runs"
+        ],
         "fields": [
           {
             "name": "Date",
@@ -284,25 +294,60 @@
       {
         "name": "MJ: AI Prompt Runs",
         "description": "Core entity containing AI prompt execution records. All three queries aggregate and analyze data from this entity.",
-        "displayFields": ["Model", "Vendor", "Success", "RunAt", "CompletedAt", "TokensPrompt", "TokensCompletion", "TokensUsed"],
-        "filterFields": ["ModelID", "RunAt", "CompletedAt", "Success"],
-        "sortFields": ["RunAt", "CompletedAt"],
+        "displayFields": [
+          "Model",
+          "Vendor",
+          "Success",
+          "RunAt",
+          "CompletedAt",
+          "TokensPrompt",
+          "TokensCompletion",
+          "TokensUsed"
+        ],
+        "filterFields": [
+          "ModelID",
+          "RunAt",
+          "CompletedAt",
+          "Success"
+        ],
+        "sortFields": [
+          "RunAt",
+          "CompletedAt"
+        ],
         "usageContext": "Main data source for all dashboard queries. Models query groups by ModelName, Costs query groups by VendorName and calculates token costs, Trends query groups by date for time-series analysis."
       },
       {
         "name": "AI Models",
         "description": "Referenced entity providing model metadata (name, vendor, pricing). Joined in queries to get model names and vendor information.",
-        "displayFields": ["Name", "VendorName", "MaxInputTokens", "MaxOutputTokens"],
-        "filterFields": ["ID", "VendorID"],
-        "sortFields": ["Name"],
+        "displayFields": [
+          "Name",
+          "VendorName",
+          "MaxInputTokens",
+          "MaxOutputTokens"
+        ],
+        "filterFields": [
+          "ID",
+          "VendorID"
+        ],
+        "sortFields": [
+          "Name"
+        ],
         "usageContext": "Joined with AI Prompt Runs to provide ModelName view field used in grouping and display."
       },
       {
         "name": "MJ: AI Vendors",
         "description": "Referenced entity providing vendor information for cost analysis and filtering.",
-        "displayFields": ["Name", "Description"],
-        "filterFields": ["ID", "Name"],
-        "sortFields": ["Name"],
+        "displayFields": [
+          "Name",
+          "Description"
+        ],
+        "filterFields": [
+          "ID",
+          "Name"
+        ],
+        "sortFields": [
+          "Name"
+        ],
         "usageContext": "Joined with AI Models to provide VendorName view field for cost grouping and vendor filter parameter."
       }
     ]
