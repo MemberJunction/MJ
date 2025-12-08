@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Monthly Invoice Revenue",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What is the monthly revenue from invoices? Show me invoice trends by month. Compare paid vs sent invoices.",
+      "Description": "Aggregates invoices by YEAR/MONTH and calculates comprehensive revenue metrics: TotalAmount (revenue), SubTotal, TaxAmount, AmountPaid, BalanceDue, invoice count, and average. Dynamic GROUP BY: adds Status column when multiple statuses provided (e.g., 'Paid,Sent'). Uses STRING_SPLIT for comma-delimited status lists. Defaults to Status='Paid' if no StatusList parameter. Supports Year, Month, StartDate, EndDate filters. **Result Order: Year DESC, Month DESC, Status** - Most recent periods first, with status comparison when multiple statuses selected.",
+      "SQL": "@file:SQL/monthly-invoice-revenue.sql",
+      "TechnicalDescription": "Groups invoices by YEAR/MONTH and calculates comprehensive revenue metrics: TotalAmount (revenue), SubTotal, TaxAmount, AmountPaid, BalanceDue, invoice count, and average. Dynamic GROUP BY: adds Status column when multiple statuses provided (e.g., 'Paid,Sent'). Uses STRING_SPLIT for comma-delimited status lists. Defaults to Status='Paid' if no StatusList parameter. Supports Year, Month, StartDate, EndDate filters. Valid status values: Draft, Sent, Paid, Overdue, Canceled. Parameters auto-detected: StatusList (nvarchar), Year (int), Month (int), StartDate (datetime), EndDate (datetime).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "A0B4C65A-8AB0-43B3-A800-6A4F89248487"
+    },
+    "sync": {
+      "lastModified": "2025-12-05T23:55:17.676Z",
+      "checksum": "6a08b859324a22367c956717daac20406561b530456af6e78d7c0b7fe7f93eae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Model Analytics - Models",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which AI models are we using most? Show me model performance statistics.",
+      "Description": "Model usage counts: GROUP BY ModelName with COUNT(*) from AI Prompt Runs. Returns model distribution for pie chart. **Result Order: RunCount DESC** - Most frequently used models first for usage ranking.",
+      "SQL": "@file:SQL/ai-model-analytics-models.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "400E240A-3BAD-4397-9F40-7CA355E3DDE6"
+    },
+    "sync": {
+      "lastModified": "2025-12-05T23:54:31.516Z",
+      "checksum": "64247b16385f75a13040eb22636c6adcd882653f21b878c591440a9e7ebbd8f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Model Analytics - Costs",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How much are we spending on AI models? Show me cost breakdown by vendor and model.",
+      "Description": "Aggregates AI prompt run costs by vendor and optionally by model. Groups by VendorName with optional ModelName dimension when ModelName parameter provided. Calculates token usage totals (prompt, completion, combined) and estimated cost. Supports date range filtering (StartDate/EndDate) and vendor/model filtering. General-purpose query for cost analysis at vendor or vendor+model granularity. **Result Order: TotalTokens DESC** - Highest token usage first for cost prioritization.",
+      "SQL": "@file:SQL/ai-model-analytics-costs.sql",
+      "TechnicalDescription": "Groups successful AI prompt runs (Success=1) by Vendor and conditionally by Model. Dynamic GROUP BY: adds ModelName column when ModelName parameter provided. Returns: VendorName, [ModelName], RunCount, TotalInputTokens, TotalOutputTokens, TotalTokens, EstimatedCostUSD (placeholder calculation). Supports filtering: StartDate, EndDate, VendorName, ModelName. ISNULL() handles NULL token values. Cost calculation is simplified placeholder - actual implementation would join to AIModelCosts table.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "717882BF-310E-4699-91E1-D60061CE55C0"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T03:14:44.595Z",
+      "checksum": "7993dd41ea6e18946f2e99c90e501049f2498d9f3a31964ebcb6a8188c3fe248"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Model Analytics - Trends",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How is our AI model usage trending? Show me usage patterns over time.",
+      "Description": "Time-based trends: Daily usage counts for configurable time period (default last 30 days). Returns date and count for line chart. **Result Order: Date ASC** - Chronological order for time-series trend visualization.",
+      "SQL": "@file:SQL/ai-model-analytics-trends.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "35F2A2F2-25F6-4804-ACB2-7CF4CFC39C8A"
+    },
+    "sync": {
+      "lastModified": "2025-12-05T23:54:33.079Z",
+      "checksum": "bafa4e29580f892437488c997798572ae25424258746de74f4d129e64137e9c3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Account Revenue by Type",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How does revenue vary by account type? Show me revenue by customer, partner, prospect.",
+      "Description": "Aggregates total revenue by AccountType. Joins Account → AccountType → Invoice where Status='Paid'. Returns AccountType, AccountCount, TotalRevenue for chart. **Result Order: TotalRevenue DESC** - Highest revenue account types first for ranking comparison.",
+      "SQL": "@file:SQL/account-revenue-by-type.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "06A6EE8E-CD45-42CE-A589-7A916BD51E3B"
+    },
+    "sync": {
+      "lastModified": "2025-12-05T23:54:34.641Z",
+      "checksum": "7f1b12d0edbb14948aa40f1704fddd6e6f2ddf22f9df4359a269cec5fba27073"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Category Totals",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which product categories perform best? Show me category revenue totals.",
+      "Description": "Category-level aggregates: SUM(Revenue), COUNT(DISTINCT ProductID), AVG(Revenue) grouped by CategoryName. Returns ~10-15 category summary rows for bar chart. **Result Order: TotalRevenue DESC** - Highest revenue categories first for ranking comparison.",
+      "SQL": "@file:SQL/category-totals.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "483EC96B-814C-47EE-A9D6-EFCD9B96D067"
+    },
+    "sync": {
+      "lastModified": "2025-12-06T20:49:46.483Z",
+      "checksum": "53d5272303fe6daed76be1f72b6a0b7a331c411e3a9c453b0d62a6cdfa1395fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Submission Status Summary",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What is the status of event submissions? Show me submission counts by status.",
+      "Description": "Returns raw submission records with speaker and review counts (SpeakerCount, ReviewCount, AvgReviewScore). NO GROUP BY - JavaScript handles aggregation by status for flexible client-side analytics. Uses pre-aggregated subquery JOINs for optimal performance (3 table scans vs 18 with scalar subqueries). General-purpose query for status dashboards, KPI calculations, and drill-down analysis. **Result Order: SubmittedAt DESC** - Most recent submissions first.",
+      "SQL": "@file:SQL/submission-status-summary.sql",
+      "TechnicalDescription": "Returns individual submission records with calculated metrics via pre-aggregated LEFT JOIN subqueries. Avoids Cartesian product by aggregating speakers and reviews before joining. Each row = 1 submission with: ID, EventID, Event, Status, SubmissionTitle, SubmittedAt, AIEvaluationScore, FinalDecision, SpeakerCount (COALESCE 0), ReviewCount (COALESCE 0), AvgReviewScore. Supports EventID and Status filters. Client-side code groups by Status for charts, calculates total unique speakers, and computes weighted average review scores.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "04AED295-6EF7-486E-B3AA-0B79FD69821A"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T00:18:33.500Z",
+      "checksum": "669ce0696e9ae674ba4c6f18613b85c3d07c49b5bfcd18977ad940862727d31d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Submission Review Timeline",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How is the submission review process progressing? Show me review activity over time.",
+      "Description": "Conditional review activity timeline (executes when status clicked): COUNT(*), AVG(Score) grouped by CAST(ReviewDate AS DATE) for selected status. Returns daily review counts for line chart. **Result Order: Date ASC** - Chronological order for time-series trend visualization.",
+      "SQL": "@file:SQL/submission-review-timeline.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "CD225692-FA6C-4F5A-89F9-E8A901B4B370"
+    },
+    "sync": {
+      "lastModified": "2025-12-06T20:49:48.017Z",
+      "checksum": "95529d5e7f79fd637960404420b50df82be1ea3e628972c77438975a441becca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deal Pipeline Distribution",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What does our sales pipeline look like? Show me deals by stage.",
+      "Description": "Aggregates active deals by stage with comprehensive metrics: deal count, total value, average deal size, expected revenue, probability, and days in stage. Groups by Stage with optional filtering (Stage, AccountType, MinAmount, date range). Excludes 'Closed Won'/'Closed Lost' by default unless Stage parameter specified. Query pair with deal-pipeline-details.sql for drilldown. Stage ordering handled client-side for flexibility. **Result Order: Stage** - Alphabetical, client sorts by pipeline sequence.",
+      "SQL": "@file:SQL/deal-pipeline-distribution.sql",
+      "TechnicalDescription": "Groups active deals by Stage with COUNT, SUM(Amount), AVG(Amount), SUM(ExpectedRevenue), AVG(Probability), AVG(DATEDIFF days in stage). Default filter: Stage NOT IN ('Closed Won', 'Closed Lost'). Supports Stage, AccountType (subquery filter), MinAmount, StartDate/EndDate filters. Returns 5-7 stage rows for funnel visualization. Stage ordering moved to client-side - SQL orders alphabetically, JavaScript applies pipeline sequence (Prospecting→Qualification→Proposal→Negotiation→Closed Won/Lost).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "05246C80-6479-4730-9ECB-785EFA9CC3C7"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T03:03:14.301Z",
+      "checksum": "40ec06ec44cb281e21ef9b31c2fa925afb9b7b340daf9f919220cf4eef7cbbd0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deal Velocity Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How fast are deals moving through the pipeline? Show me stage transition times.",
+      "Description": "Stage transition velocity: AVG(DATEDIFF(day, TransitionDate, PreviousDate)), COUNT(*) grouped by FromStage, ToStage. Returns stage-to-stage transition times for heatmap. **Result Order: AvgDaysInPipeline DESC** - Slowest moving stages first to identify bottlenecks.",
+      "SQL": "@file:SQL/deal-velocity-analysis.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "C7ED0A79-8DE3-4279-8F21-3C6FD6F0F4E3"
+    },
+    "sync": {
+      "lastModified": "2025-12-06T20:49:57.121Z",
+      "checksum": "e339edfcf21b0a1549612c9e3cf9511be6ad0ed18482a3b523e9fb8afc099a4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deal Stage Trends",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How are new deals entering the pipeline? Show me deal entry trends by stage.",
+      "Description": "Conditional trend analysis (executes when stage selected): COUNT(*), SUM(Value) grouped by CAST(CreatedDate AS DATE) for last 90 days where Stage=@Stage. Returns daily deal entry trends for line chart. **Result Order: Date ASC** - Chronological order for time-series trend visualization.",
+      "SQL": "@file:SQL/deal-stage-trends.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "13B536D5-C202-4E12-9793-6E4BB1E0D818"
+    },
+    "sync": {
+      "lastModified": "2025-12-07T19:09:03.279Z",
+      "checksum": "5f337494a263bb19a1c9abef1a2a8e9f0ffc22e4beabb5cae71e6f202ad114e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Outstanding Invoices",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which invoices are outstanding? Show me all unpaid and partially paid invoices with days overdue.",
+      "Description": "Returns raw outstanding invoice records with calculated DaysOverdue field. NO GROUP BY - returns individual invoices for flexible client-side aggregation. Joins vwInvoices with vwAccounts to include AccountType. General-purpose query for aging analysis, payment tracking, AR dashboards. Client-side code can: group into aging buckets, aggregate by account, filter by overdue threshold, calculate totals. Query pair source for top-accounts-by-outstanding.sql. **Result Order: DueDate ASC, BalanceDue DESC** - Oldest invoices with highest balances first for priority review.",
+      "SQL": "@file:SQL/outstanding-invoices.sql",
+      "TechnicalDescription": "Returns individual invoice records (Status NOT IN 'Paid'/'Cancelled', BalanceDue > 0) with calculated DaysOverdue = DATEDIFF(day, DueDate, GETDATE()). INNER JOIN with vwAccounts provides AccountType field. Returns: ID, InvoiceNumber, AccountID, Account, AccountType, InvoiceDate, DueDate, Status, TotalAmount, AmountPaid, BalanceDue, DaysOverdue. Supports filtering: MinOutstanding, AccountType (via JOIN), AccountID, AccountName. Uses JOIN pattern instead of subquery for better performance.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "B0AC0653-32C3-4857-9BF2-C20E06F8506B"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T03:03:21.710Z",
+      "checksum": "2f40a391d8a2cd174b15f5857d711c234bf596f1cd77078d5205b4389d12c0cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Payment Trends",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "How are customer payments trending? Show me monthly payment patterns.",
+      "Description": "Monthly payment trends: SUM(Amount), COUNT(*), AVG(DATEDIFF(day, InvoiceDate, PaymentDate)) grouped by YEAR/MONTH for last 12 months. Returns dual-axis chart data. **Result Order: Year ASC, Month ASC** - Chronological order for time-series payment trend visualization.",
+      "SQL": "@file:SQL/payment-trends.sql",
+      "TechnicalDescription": "",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "10059C54-C3C9-409C-9FAB-4CA9E79AE64C"
+    },
+    "sync": {
+      "lastModified": "2025-12-06T20:49:53.890Z",
+      "checksum": "4125c6c18913575fd7a79c389e79f3473d78232495974674d45a6e5453a134b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Top Accounts by Outstanding",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which customers owe us the most? Show me top accounts by outstanding balance.",
+      "Description": "Aggregates outstanding invoices by account, returning TOP N accounts with highest balances. Groups by AccountName and AccountType with metrics: invoice count, total outstanding, average outstanding, average days overdue, max days overdue. General-purpose account-level aggregation query. Aging bucket filtering should be handled client-side using outstanding-invoices.sql. Query pair with outstanding-invoices.sql (aggregation + raw data pattern). **Result Order: TotalOutstanding DESC** - Highest outstanding balances first for priority focus.",
+      "SQL": "@file:SQL/top-accounts-by-outstanding.sql",
+      "TechnicalDescription": "Aggregates invoices (Status NOT IN 'Paid'/'Cancelled', BalanceDue > 0) by account with GROUP BY AccountName, AccountType. TOP N configurable (default 10). Returns: AccountName, AccountType, InvoiceCount, TotalOutstanding (SUM), AvgOutstanding (AVG), AvgDaysOverdue (AVG DATEDIFF), MaxDaysOverdue (MAX DATEDIFF). Supports filtering: MinOutstanding, AccountType. Aging bucket filtering removed - use outstanding-invoices.sql with client-side bucketing for more flexible analysis.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "F3A497D1-6ABA-42F2-85D3-1CC4617FC9AC"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T03:03:18.636Z",
+      "checksum": "ba8cff24bf0e1d2aad1d1d7927867c0531108736fe123bfee0dfc8b76d1df949"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Account Payment History",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "What is the payment history for this account? Show me their invoices and payments.",
+      "Description": "Returns raw payment transaction records for account detail view. LEFT JOIN invoices with payments to show both paid and unpaid invoices. Includes calculated DaysToPayment field. PaymentStatus bucketing (On Time/Late/Overdue/Pending) handled client-side for flexibility. General-purpose query for account payment analysis, payment tracking, and invoice history. Supports filtering by AccountID, AccountName, and date range. **Result Order: InvoiceDate DESC, PaymentDate DESC** - Most recent invoices and payments first for account review.",
+      "SQL": "@file:SQL/account-payment-history.sql",
+      "TechnicalDescription": "Returns individual invoice+payment records via LEFT JOIN (includes unpaid invoices). Returns: InvoiceNumber, InvoiceDate, DueDate, TotalAmount, AmountPaid, BalanceDue, Status, PaymentDate, PaymentAmount, PaymentMethod, ReferenceNumber, DaysToPayment (DATEDIFF InvoiceDate to PaymentDate). PaymentStatus CASE statement removed - client-side categorizes as: On Time (paid by due date), Late (paid after due date), Overdue (unpaid past due date), Pending (unpaid not yet due). Supports AccountID, AccountName (subquery), StartDate, EndDate filters.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "6CCEFF70-D195-4082-9091-FED0CE340311"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T03:03:20.709Z",
+      "checksum": "91fa63839ea5980851a6a6b20371a867116a73a7ec8a1da3d4d112ba167752d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deal Pipeline Details",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Show me the individual deals in this pipeline stage.",
+      "Description": "Returns raw deal records for drilldown from pipeline distribution charts. Query pair with deal-pipeline-distribution.sql (aggregation + detail pattern). Eliminates need for complex buildEntityFilter() logic in components. Includes comprehensive deal fields: amounts, dates, account info, owner, calculated days in stage and days to close. Supports same filtering parameters as distribution query for consistency (Stage, AccountType, MinAmount, date range). **Result Order: Amount DESC, OpenDate DESC** - Highest value deals first, then most recent.",
+      "SQL": "@file:SQL/deal-pipeline-details.sql",
+      "TechnicalDescription": "Returns individual deal records from vwDeals with calculated metrics. Returns: ID, DealName, Stage, Amount, ExpectedRevenue, Probability, OpenDate, ExpectedCloseDate, ActualCloseDate, AccountID, Account, AccountType, OwnerID, Owner, DaysInStage (DATEDIFF OpenDate to today), DaysToClose (DATEDIFF OpenDate to ActualCloseDate, NULL if open). Default filter: Stage NOT IN ('Closed Won', 'Closed Lost'). Supports Stage, AccountType, MinAmount, StartDate, EndDate filters. Use this query instead of EntityDataGrid with buildEntityFilter() for cleaner drilldown implementation.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "1AE4C006-FE06-4F5E-8B14-ACAB769C2C4F"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T03:54:17.203Z",
+      "checksum": "451a706d9ce49468d26a91905ab5cb6bc7ee943ca429cf551e806cbd84a76217"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Product Ranking",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which products are our top performers? Show me best-selling products by revenue, optionally filtered by category.",
+      "Description": "Unified product ranking query that ranks products by revenue with optional category filtering. Replaces both top-products-ranking.sql and category-top-products.sql. When Category parameter omitted, ranks across all categories. When Category provided, ranks within that category. Returns TOP N products (default 10) with revenue, quantity, invoice count, and average price metrics. General-purpose query for product performance analysis. **Result Order: TotalRevenue DESC** - Highest revenue products first for performance ranking.",
+      "SQL": "@file:SQL/product-ranking.sql",
+      "TechnicalDescription": "Groups paid invoice line items by ProductName and Category. TOP N configurable (default 10). Returns: ProductName, Category, TotalRevenue (SUM), TotalQuantity (SUM), InvoiceCount (COUNT DISTINCT), AvgPrice (AVG). Joins vwProducts → vwInvoiceLineItems → vwInvoices with filters: Status='Paid', IsActive=1. Supports optional Category filter (when provided, acts like category-top-products; when omitted, acts like top-products-ranking). Also supports StartDate, EndDate filters. This consolidation eliminates query duplication while maintaining backward compatibility.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "F2018C52-F48B-4537-AD8A-2708778A378F"
+    },
+    "sync": {
+      "lastModified": "2025-12-08T03:03:19.636Z",
+      "checksum": "2ffcf61bb47cfb5eb70ea1f9aac3c4ffee876f940e038adee7188b572f33eaa9"
+    }
+  }
+]

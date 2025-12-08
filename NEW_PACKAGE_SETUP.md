@@ -2,6 +2,14 @@
 
 This document provides step-by-step instructions for registering new MemberJunction packages with npm before creating a new build.
 
+## ⚠️ Automated Validation
+
+The publish workflow now **automatically checks** for missing packages and will **fail early** if any `@memberjunction` packages don't exist on npm. This prevents partial publish failures.
+
+**When the workflow fails with missing packages:**
+1. Follow Steps 2-3 below to create placeholders and configure OIDC
+2. Re-run the workflow after setup is complete
+
 ## Prerequisites
 
 - npm account with publish permissions for `@memberjunction` scope
@@ -12,10 +20,13 @@ This document provides step-by-step instructions for registering new MemberJunct
 
 ### Step 1: Identify New Packages
 
-Determine which packages are new and not yet published to npm.
+The publish workflow will automatically identify new packages, but you can check manually:
 
 ```bash
-# Check if a package exists on npm
+# Run the validation script locally
+./.github/scripts/validate-npm-packages.sh
+
+# Or check a specific package
 npm view @memberjunction/package-name version 2>&1 | grep -q "404" && echo "NEW" || echo "EXISTS"
 ```
 
@@ -99,6 +110,89 @@ Expected output: The version number matching your build (e.g., `2.118.0`)
 - Check GitHub Actions logs for specific error messages
 - Verify npm permissions for `@memberjunction` scope
 - Ensure package.json has correct package name and version
+
+**npm ci fails with "Missing from lock file":**
+- This is usually a case-sensitivity issue (macOS vs Linux)
+- Run `./.github/scripts/validate-package-lock-case.sh` to detect mismatches
+- See "Case-Sensitivity Issues" section below for details
+
+## Case-Sensitivity Issues (macOS)
+
+### The Problem
+
+macOS filesystems are **case-insensitive** but **case-preserving**, while Linux (GitHub Actions) is **case-sensitive**. This can cause issues when:
+
+1. A developer on macOS creates or renames a package directory
+2. The directory name has different casing than what git stores
+3. `npm install` generates `package-lock.json` using the filesystem casing
+4. GitHub Actions (Linux) checks out the git casing
+5. `npm ci` fails because paths don't match
+
+### Example
+
+```bash
+# macOS filesystem shows:
+packages/Angular/Generic/Shared/
+
+# But git stores:
+packages/Angular/Generic/shared/  # lowercase 's'
+
+# package-lock.json references the macOS casing:
+"packages/Angular/Generic/Shared": { ... }
+
+# GitHub Actions checks out git's lowercase version
+# npm ci looks for 'Shared' but finds 'shared' → FAIL
+```
+
+### Prevention
+
+**The workflow now automatically validates** case-sensitivity before running `npm ci`. If it detects a mismatch, it will fail with clear instructions.
+
+### Fixing Case Mismatches
+
+1. **Check git's actual casing:**
+   ```bash
+   git ls-files packages/ | grep -i <package-name>
+   ```
+
+2. **Rename local directory to match git:**
+   ```bash
+   # macOS requires intermediate rename due to case-insensitive filesystem
+   mv packages/Path packages/temp-rename
+   mv packages/temp-rename packages/path  # Match git's casing
+   ```
+
+3. **Regenerate package-lock.json:**
+   ```bash
+   rm package-lock.json
+   npm install
+   ```
+
+4. **Verify the fix:**
+   ```bash
+   ./.github/scripts/validate-package-lock-case.sh
+   ```
+
+### When Renaming Packages
+
+If you need to change the casing of a package directory:
+
+1. **Use two-step rename in git:**
+   ```bash
+   # Step 1: Rename to temporary name
+   git mv packages/OldName packages/temporary-name
+   git commit -m "Step 1: Rename to temp"
+
+   # Step 2: Rename to final name
+   git mv packages/temporary-name packages/newname
+   git commit -m "Step 2: Rename to final casing"
+   ```
+
+2. **Regenerate lockfile after merge:**
+   ```bash
+   rm package-lock.json
+   npm install
+   ```
 
 ## Reference
 

@@ -1,0 +1,300 @@
+{
+  "name": "ProductCategoryAnalysis",
+  "title": "Product Category Analysis",
+  "type": "dashboard",
+  "userExplanation": "Comprehensive product category performance dashboard with dual drill-down paths. Shows category revenue totals, then when a category is selected, displays both top products in that category and all invoice line items. Demonstrates progressive disclosure: Category → Products → Line Items.",
+  "functionalRequirements": "## Business Objectives\n- Analyze revenue performance across product categories\n- Identify top-performing products within each category\n- Enable drill-down to see individual line item sales\n- Demonstrate multi-level drill-down with conditional query execution\n\n## Functional Requirements\n- **Category Overview**: Bar chart showing total revenue by product category\n- **Category Metrics**: Display product count, average revenue, and total revenue per category\n- **Primary Drill-Down**: When user clicks category, show two panels side-by-side\n- **Top Products Panel**: Run conditional query showing top 5 products in selected category (by revenue)\n- **Line Items Panel**: EntityDataGrid showing all invoice line items for products in selected category\n- **Secondary Drill-Down**: When user clicks a product in top products list, filter line items grid to that specific product\n- **Conditional Query**: Top products query only executes when category is selected (performance optimization)\n- **Back Navigation**: Clear selection button returns to category overview\n- **Breadcrumb Trail**: Show current selection path (Category → Product)\n- **State Management**: Track both category selection and optional product selection\n- **Loading States**: Show loading for conditional queries\n- **Empty States**: Handle categories with no products or line items",
+  "description": "Multi-level product category analysis showing category totals and top products within each category with drill-down navigation.",
+  "dataRequirements": {
+    "mode": "hybrid",
+    "queries": [
+      {
+        "name": "Category Totals",
+        "categoryPath": "Demo",
+        "description": "Category-level aggregates: SUM(Revenue), COUNT(DISTINCT ProductID), AVG(Revenue) grouped by CategoryName. Returns ~10-15 category summary rows for bar chart. **Result Order: TotalRevenue DESC** - Highest revenue categories first for ranking comparison.",
+        "entityNames": ["Products", "Invoice Line Items", "Invoices"],
+        "fields": [
+          {
+            "name": "Category",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Product category name"
+          },
+          {
+            "name": "ProductCount",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of distinct products in this category"
+          },
+          {
+            "name": "TotalRevenue",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total revenue from all products in this category"
+          },
+          {
+            "name": "AvgRevenue",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average revenue per line item in this category"
+          },
+          {
+            "name": "TotalQuantity",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total units sold in this category"
+          },
+          {
+            "name": "InvoiceCount",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of distinct invoices containing products from this category"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Category",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Software",
+            "description": "Optional filter by specific category"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
+      },
+      {
+        "name": "Category Top Products",
+        "categoryPath": "Demo",
+        "description": "Conditional query (executes when category selected): TOP 5 products by revenue in selected category. Returns ProductName, Revenue for top products list. **Result Order: TotalRevenue DESC** - Highest revenue products first within selected category.",
+        "entityNames": ["Products", "Invoice Line Items", "Invoices"],
+        "fields": [
+          {
+            "name": "ProductName",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Name of the product"
+          },
+          {
+            "name": "Category",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Product category"
+          },
+          {
+            "name": "TotalRevenue",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total revenue from this product"
+          },
+          {
+            "name": "TotalQuantity",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total units sold"
+          },
+          {
+            "name": "InvoiceCount",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of invoices containing this product"
+          },
+          {
+            "name": "AvgPrice",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average unit price across all sales"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "TopN",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "5",
+            "description": "Number of top products to return (default: 5)"
+          },
+          {
+            "name": "Category",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Software",
+            "description": "Optional filter by product category"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product records used in SQL filter for drill-down. The Category and Name columns are used to filter invoice line items.",
+        "displayFields": ["Name", "Category", "Description"],
+        "filterFields": ["ID", "Category", "Name"],
+        "sortFields": ["Name", "Category"],
+        "usageContext": "Referenced in EntityDataGrid extraFilter SQL subquery: SELECT ID FROM CRM.vwProducts WHERE Category='{selectedCategory}' OR Name='{selectedProduct}'"
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Line item records shown in EntityDataGrid for selected category or product. Primary drill-down entity for sales detail.",
+        "displayFields": ["InvoiceDate", "ProductName", "Quantity", "UnitPrice", "Total", "AccountName"],
+        "filterFields": ["ProductID", "InvoiceDate"],
+        "sortFields": ["InvoiceDate", "Total"],
+        "usageContext": "Loaded by EntityDataGrid using SQL filter: ProductID IN (SELECT ID FROM CRM.vwProducts WHERE Category = '{selectedCategory}' OR Name='{selectedProduct}') AND InvoiceDate >= '{startDate}' AND InvoiceDate <= '{endDate}'"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "category",
+      "type": "string",
+      "required": false,
+      "description": "Optional filter by specific product category (e.g., 'Software', 'Hardware'). If provided, shows only that category.",
+      "default": null
+    },
+    {
+      "name": "startDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional start date filter (ISO format: '2024-01-01'). Returns line items with InvoiceDate >= startDate. If null, user can set via date filter UI.",
+      "default": null
+    },
+    {
+      "name": "endDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional end date filter (ISO format: '2024-12-31'). Returns line items with InvoiceDate <= endDate. If null, user can set via date filter UI.",
+      "default": null
+    },
+    {
+      "name": "topN",
+      "type": "number",
+      "required": false,
+      "description": "Number of top products to show in drill-down (e.g., 5, 10). Controls how many top products are displayed when a category is selected.",
+      "default": 5
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "required": false,
+      "description": "Custom chart title. If not provided, uses default title.",
+      "default": "Product Category Analysis"
+    }
+  ],
+  "events": [
+    {
+      "name": "onCategoryClick",
+      "description": "Fired when user clicks a category bar in the chart",
+      "payload": {
+        "category": "string - The category name that was clicked (e.g., 'Software', 'Hardware')",
+        "value": "number - Total revenue for this category",
+        "recordCount": "number - Number of records in the clicked segment"
+      },
+      "example": "{ category: 'Software', value: 125000.50, recordCount: 15 }"
+    },
+    {
+      "name": "onProductClick",
+      "description": "Fired when user clicks a product in the top products list",
+      "payload": {
+        "productName": "string - Name of the clicked product",
+        "category": "string - Category the product belongs to",
+        "totalRevenue": "number - Total revenue for this product",
+        "totalQuantity": "number - Total quantity sold"
+      },
+      "example": "{ productName: 'Premium License', category: 'Software', totalRevenue: 45000.00, totalQuantity: 150 }"
+    },
+    {
+      "name": "onRecordClick",
+      "description": "Fired when user clicks a row in the EntityDataGrid (line items)",
+      "payload": {
+        "lineItemId": "string - The ID of the clicked line item record",
+        "invoiceDate": "string - Invoice date (ISO format)",
+        "productName": "string - Name of the product",
+        "quantity": "number - Quantity sold",
+        "unitPrice": "number - Unit price",
+        "total": "number - Line item total",
+        "accountName": "string - Name of the account"
+      },
+      "example": "{ lineItemId: 'abc-123', invoiceDate: '2024-03-15', productName: 'Premium License', quantity: 5, unitPrice: 199.99, total: 999.95, accountName: 'Acme Corp' }"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "EntityDataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Initial Load**: RunQuery executes 'Category Totals' with optional filters (category, startDate, endDate)\n2. **Chart Rendering**: SimpleChart displays aggregated category revenue data\n3. **Primary Drill-Down**: User clicks category → RunQuery loads 'Category Top Products' (conditional)\n4. **Dual View**: Display both top products list AND EntityDataGrid with line items\n5. **Secondary Drill-Down**: User clicks product → EntityDataGrid filters to that specific product\n6. **Date Consistency**: Date filters applied to all queries and EntityDataGrid extraFilter\n\n### State Management\n- `categoryData`: Array of category totals from initial query\n- `productData`: Array of top products from conditional query (null until category clicked)\n- `loading`: Boolean for initial data load\n- `loadingProducts`: Boolean for conditional product query\n- `error`: String for error messages\n- `selectedSegment`: Object with label/value/records from clicked category (null = overview)\n- `selectedProduct`: String for clicked product name (null = all products in category)\n- `internalStartDate/EndDate`: User-controlled date filters (only when props are null)\n\n### Conditional UI Controls\n**Date Filter Panel**: Only rendered when both `startDate` and `endDate` props are null. Allows user to set date range filters with:\n- Start Date input (HTML date picker)\n- End Date input (HTML date picker)\n- Apply Filters button (requires both dates)\n- Clear Dates button (shown when filters applied)\n\n### Filter Coordination\n**effectiveStartDate/endDate**: Computed values that prioritize props over internal state\n- Used in RunQuery Parameters for both queries\n- Used in EntityDataGrid extraFilter for consistency\n\n### Multi-Level Drill-Down\n**Level 1 - Category Selection**:\n1. User clicks category bar in chart\n2. Sets `selectedSegment` state with clickData from SimpleChart\n3. Triggers conditional query for top products\n4. Shows two panels: top products list + EntityDataGrid with all line items in category\n5. Chart remains visible above drill-down\n\n**Level 2 - Product Selection**:\n1. User clicks product in top products list\n2. Sets `selectedProduct` state\n3. EntityDataGrid filter updates to show only that product's line items\n4. Top products list remains visible with selection highlighted\n\n### EntityDataGrid Integration\n**extraFilter Construction**:\n1. Product filter (dynamic based on selection level):\n   - Level 1: `ProductID IN (SELECT ID FROM CRM.vwProducts WHERE Category='{selectedSegment.label}')`\n   - Level 2: `ProductID IN (SELECT ID FROM CRM.vwProducts WHERE Name='{selectedProduct}')`\n2. Date filters (when provided):\n   - Start: `InvoiceDate >= '{effectiveStartDate}'`\n   - End: `InvoiceDate <= '{effectiveEndDate}'`\n3. Filters combined with AND operator\n\n### Event System\n**onCategoryClick**: Fires when category bar clicked, provides:\n- category, value, recordCount\n\n**onProductClick**: Fires when product in list clicked, provides:\n- productName, category, totalRevenue, totalQuantity\n\n**onRecordClick**: Fires when EntityDataGrid row clicked, provides:\n- lineItemId, invoiceDate, productName, quantity, unitPrice, total, accountName\n\n### Educational Value\nDemonstrates:\n1. **Multi-Level Drill-Down**: Category → Products → Line Items with state management\n2. **Conditional Queries**: Second query only executes when category selected\n3. **Dual Panels**: Side-by-side reference list + detail grid\n4. **SQL Filter Construction**: Subquery pattern for related entity filtering\n5. **Filter Consistency**: Same date filters applied across all data loads\n6. **Chart Persistence**: Chart stays visible during drill-down for context",
+  "code": "@file:../../code/query-examples/product-category-analysis.js",
+  "exampleUsage": "// Basic usage (no filters)\n<ProductCategoryAnalysis\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// With date filters controlled externally\n<ProductCategoryAnalysis\n  startDate=\"2024-01-01\"\n  endDate=\"2024-12-31\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// With custom top N and event handlers\n<ProductCategoryAnalysis\n  topN={10}\n  onCategoryClick={(event) => {\n    console.log(`Clicked ${event.category}: $${event.value}`);\n  }}\n  onProductClick={(event) => {\n    console.log(`Product ${event.productName} selected`);\n  }}\n  onRecordClick={(event) => {\n    console.log(`Line item ${event.lineItemId} clicked`);\n    // Navigate to invoice detail page\n    router.push(`/invoices/${event.invoiceId}`);\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// Let user control date filters (no props provided)\n<ProductCategoryAnalysis\n  title=\"Product Category Performance\"\n  topN={5}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>"
+}
