@@ -1045,6 +1045,26 @@ export interface ActionChange {
      * Required when scope is 'specific', ignored otherwise.
      */
     agentIds?: string[];
+
+    /**
+     * Optional execution limits for actions being added.
+     * Maps action IDs to their maximum executions per agent run.
+     * Only applies when mode is 'add'. Ignored for 'remove' mode.
+     *
+     * @example
+     * ```typescript
+     * const change: ActionChange = {
+     *   scope: 'global',
+     *   mode: 'add',
+     *   actionIds: ['search-action-id', 'email-action-id'],
+     *   actionLimits: {
+     *     'search-action-id': 10,    // Max 10 searches per run
+     *     'email-action-id': 5       // Max 5 emails per run
+     *   }
+     * };
+     * ```
+     */
+    actionLimits?: Record<string, number>;
 }
 
 
