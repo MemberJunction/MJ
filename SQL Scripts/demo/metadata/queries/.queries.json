@@ -172,20 +172,20 @@
       "Name": "Submission Status Summary",
       "CategoryID": "@lookup:Query Categories.Name=Demo",
       "UserQuestion": "What is the status of event submissions? Show me submission counts by status.",
-      "Description": "Status distribution: COUNT(*), COUNT(DISTINCT SpeakerID), AVG(ReviewScore) grouped by SubmissionStatus. Returns 5-8 status categories for stacked bar chart. **Result Order: CASE Status (Accepted→Under Review→Passed Initial→Waitlisted→Rejected→Failed Initial→Analyzing→New)** - Workflow progression order for status comparison.",
+      "Description": "Returns raw submission records with speaker and review counts (SpeakerCount, ReviewCount, AvgReviewScore). NO GROUP BY - JavaScript handles aggregation by status for flexible client-side analytics. Uses pre-aggregated subquery JOINs for optimal performance (3 table scans vs 18 with scalar subqueries). General-purpose query for status dashboards, KPI calculations, and drill-down analysis. **Result Order: SubmittedAt DESC** - Most recent submissions first.",
       "SQL": "@file:SQL/submission-status-summary.sql",
-      "TechnicalDescription": "",
+      "TechnicalDescription": "Returns individual submission records with calculated metrics via pre-aggregated LEFT JOIN subqueries. Avoids Cartesian product by aggregating speakers and reviews before joining. Each row = 1 submission with: ID, EventID, Event, Status, SubmissionTitle, SubmittedAt, AIEvaluationScore, FinalDecision, SpeakerCount (COALESCE 0), ReviewCount (COALESCE 0), AvgReviewScore. Supports EventID and Status filters. Client-side code groups by Status for charts, calculates total unique speakers, and computes weighted average review scores.",
       "Status": "Approved",
       "QualityRank": 9,
-      "ExecutionCostRank": 2,
+      "ExecutionCostRank": 1,
       "UsesTemplate": true
     },
     "primaryKey": {
       "ID": "04AED295-6EF7-486E-B3AA-0B79FD69821A"
     },
     "sync": {
-      "lastModified": "2025-12-06T20:49:48.793Z",
-      "checksum": "730e6572dffa5f7dca97a6f1e6aae9ae59763c63adbb7910648fbe97dea3154d"
+      "lastModified": "2025-12-08T00:18:33.500Z",
+      "checksum": "669ce0696e9ae674ba4c6f18613b85c3d07c49b5bfcd18977ad940862727d31d"
     }
   },
   {
