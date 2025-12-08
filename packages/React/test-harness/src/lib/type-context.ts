@@ -29,6 +29,8 @@ export interface TypeInfo {
   nullable?: boolean;
   /** Whether this type came from metadata (vs inferred) */
   fromMetadata?: boolean;
+  /** For constant literals, the actual value (e.g., '' for empty string, '2024-01-01' for date literal) */
+  literalValue?: string | number | boolean | null;
 }
 
 /**

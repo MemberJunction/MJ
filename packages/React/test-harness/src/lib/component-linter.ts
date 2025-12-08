@@ -3136,11 +3136,50 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       code: suggestion || `${paramName}: <${expectedType} value>`,
                     });
                   }
+
+                  // NOTE: Date parameter validation has been moved to TypeInferenceEngine
+                  // and is surfaced via the 'type-inference-errors' rule
                 }
               }
             }
           },
         });
+
+        return violations;
+      },
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    // TYPE INFERENCE ERRORS RULE
+    // Surfaces errors found by TypeInferenceEngine (e.g., date parameter validation)
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    {
+      name: 'type-inference-errors',
+      appliesTo: 'all',
+      test: (ast: t.File, _componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Create type inference engine
+        const typeEngine = new TypeInferenceEngine(componentSpec);
+
+        // Run analysis synchronously (validateQueryParameters is called during traversal)
+        // The async part of analyze() is not needed for date validation
+        typeEngine.analyze(ast);
+
+        // Get errors collected during analysis
+        const errors = typeEngine.getErrors();
+
+        // Convert type inference errors to violations
+        for (const error of errors) {
+          violations.push({
+            rule: 'type-inference-errors',
+            severity: error.type === 'error' ? 'high' : 'medium',
+            line: error.line,
+            column: error.column,
+            message: error.message,
+            code: error.code || ''
+          });
+        }
 
         return violations;
       },
