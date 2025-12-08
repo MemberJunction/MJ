@@ -99,6 +99,20 @@
             "type": "number",
             "sampleValue": "10000",
             "description": "Optional filter by minimum deal amount"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Optional filter by open date start"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-12-31",
+            "description": "Optional filter by open date end"
           }
         ]
       },
@@ -193,6 +207,20 @@
             "type": "string",
             "sampleValue": "Enterprise",
             "description": "Optional filter by account type"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Optional filter by open date start"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-12-31",
+            "description": "Optional filter by open date end"
           }
         ]
       },
@@ -250,13 +278,6 @@
         ],
         "parameters": [
           {
-            "name": "DaysBack",
-            "isRequired": false,
-            "type": "number",
-            "sampleValue": "90",
-            "description": "Number of days to look back (default: 90)"
-          },
-          {
             "name": "Stage",
             "isRequired": false,
             "type": "string",
@@ -276,6 +297,20 @@
             "type": "number",
             "sampleValue": "10000",
             "description": "Optional filter by minimum deal amount"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Optional filter by open date start"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-12-31",
+            "description": "Optional filter by open date end"
           }
         ]
       },

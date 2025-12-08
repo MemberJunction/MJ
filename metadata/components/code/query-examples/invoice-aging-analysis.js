@@ -170,7 +170,6 @@ function InvoiceAgingAnalysis({
             CategoryPath: 'Demo',
             Parameters: {
               TopN: appliedTopN,
-              AgeBucket: null,
               MinOutstanding: appliedMinOutstanding,
               AccountType: appliedAccountType
             }
