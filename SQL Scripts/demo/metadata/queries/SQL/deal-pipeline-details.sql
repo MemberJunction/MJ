@@ -12,13 +12,13 @@ SELECT
   d.ExpectedRevenue,
   d.Probability,
   d.OpenDate,
-  d.ExpectedCloseDate,
+  d.CloseDate AS ExpectedCloseDate,
   d.ActualCloseDate,
   d.AccountID,
   d.Account,
-  d.AccountType,
+  a.AccountType,
   d.OwnerID,
-  d.Owner,
+  owner.FullName AS Owner,
   DATEDIFF(day, d.OpenDate, GETDATE()) AS DaysInStage,
   CASE
     WHEN d.ActualCloseDate IS NOT NULL
@@ -26,10 +26,12 @@ SELECT
     ELSE NULL
   END AS DaysToClose
 FROM CRM.vwDeals d
+LEFT JOIN CRM.vwAccounts a ON a.ID = d.AccountID
+LEFT JOIN CRM.vwContacts owner ON owner.ID = d.OwnerID
 WHERE 1=1
 {% if Stage %}  AND d.Stage = {{ Stage | sqlString }}
 {% else %}  AND d.Stage NOT IN ('Closed Won', 'Closed Lost')
-{% endif %}{% if AccountType %}  AND d.AccountType = {{ AccountType | sqlString }}
+{% endif %}{% if AccountType %}  AND a.AccountType = {{ AccountType | sqlString }}
 {% endif %}{% if MinAmount %}  AND d.Amount >= {{ MinAmount | sqlNumber }}
 {% endif %}{% if StartDate %}  AND d.OpenDate >= {{ StartDate | sqlDate }}
 {% endif %}{% if EndDate %}  AND d.OpenDate <= {{ EndDate | sqlDate }}

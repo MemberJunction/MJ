@@ -278,24 +278,205 @@
             "description": "Optional filter by minimum deal amount"
           }
         ]
+      },
+      {
+        "name": "Deal Pipeline Details",
+        "categoryPath": "Demo",
+        "description": "Returns raw deal records for drilldown from pipeline distribution charts. Query pair with deal-pipeline-distribution.sql (aggregation + detail pattern). Eliminates need for complex buildEntityFilter() logic in components. Supports same filtering parameters as distribution query for consistency.",
+        "entityNames": ["Deals", "Accounts"],
+        "fields": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the deal"
+          },
+          {
+            "name": "DealName",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Name of the deal"
+          },
+          {
+            "name": "Stage",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Current pipeline stage"
+          },
+          {
+            "name": "Amount",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Deal amount"
+          },
+          {
+            "name": "ExpectedRevenue",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Expected revenue (Amount * Probability)"
+          },
+          {
+            "name": "Probability",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Win probability percentage"
+          },
+          {
+            "name": "OpenDate",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Date deal was opened"
+          },
+          {
+            "name": "ExpectedCloseDate",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Expected close date"
+          },
+          {
+            "name": "ActualCloseDate",
+            "sequence": 9,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Actual close date"
+          },
+          {
+            "name": "AccountID",
+            "sequence": 10,
+            "defaultInView": true,
+            "type": "uniqueidentifier",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Associated account ID"
+          },
+          {
+            "name": "Account",
+            "sequence": 11,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Account name"
+          },
+          {
+            "name": "AccountType",
+            "sequence": 12,
+            "defaultInView": true,
+            "type": "nvarchar(100)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Account type (Enterprise, Mid-Market, etc.)"
+          },
+          {
+            "name": "OwnerID",
+            "sequence": 13,
+            "defaultInView": true,
+            "type": "uniqueidentifier",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Deal owner user ID"
+          },
+          {
+            "name": "Owner",
+            "sequence": 14,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Deal owner name"
+          },
+          {
+            "name": "DaysInStage",
+            "sequence": 15,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Days deal has been in current stage"
+          },
+          {
+            "name": "DaysToClose",
+            "sequence": 16,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Days from open to close (null if not closed)"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Stage",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Proposal",
+            "description": "Optional filter by specific stage"
+          },
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by account type"
+          },
+          {
+            "name": "MinAmount",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "10000",
+            "description": "Optional filter by minimum deal amount"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Optional filter by open date start"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-12-31",
+            "description": "Optional filter by open date end"
+          }
+        ]
       }
     ],
     "entities": [
       {
         "name": "Deals",
-        "description": "Deal records shown in EntityDataGrid when drilling down from pipeline stage.",
-        "displayFields": ["DealName", "Stage", "Value", "Probability", "NextAction", "AccountName"],
-        "filterFields": ["Stage", "AccountID", "Value"],
-        "sortFields": ["Value", "Probability", "DealName"],
-        "usageContext": "Loaded by EntityDataGrid using SQL filter: Stage = '{selectedStage}' AND AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='{accountType}') AND Value >= {minAmount}"
-      },
-      {
-        "name": "Accounts",
-        "description": "Account records referenced in SQL filter for account type filtering.",
-        "displayFields": ["Name", "AccountType"],
-        "filterFields": ["ID", "AccountType"],
-        "sortFields": ["Name"],
-        "usageContext": "Referenced in EntityDataGrid extraFilter SQL subquery: SELECT ID FROM CRM.vwAccounts WHERE AccountType='{accountType}'"
+        "description": "Deal records shown in DataGrid when drilling down from pipeline stage. Loaded via Deal Pipeline Details query.",
+        "displayFields": ["DealName", "Stage", "Amount", "Probability", "ExpectedCloseDate", "Account", "Owner"],
+        "filterFields": ["Stage", "AccountType", "Amount"],
+        "sortFields": ["Amount", "Probability", "DealName"],
+        "usageContext": "Loaded by Deal Pipeline Details query with parameters: Stage, AccountType, MinAmount, StartDate, EndDate"
       }
     ]
   },
@@ -347,14 +528,14 @@
       "version": "^1.0.0"
     },
     {
-      "name": "EntityDataGrid",
+      "name": "DataGrid",
       "location": "registry",
       "namespace": "Generic/UI/Table",
       "version": "^1.0.0"
     }
   ],
   "location": "embedded",
-  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Initial Load**: Three concurrent RunQuery calls execute for pipeline distribution, velocity analysis, and stage trends\n2. **Chart Rendering**: Three SimpleChart instances display data independently\n3. **User Interaction**: User clicks stage bar in Pipeline Distribution chart\n4. **Drill-Down**: Component sets selectedSegment state and triggers EntityDataGrid\n5. **Grid Filtering**: EntityDataGrid loads Deals filtered by Stage using SQL filter\n6. **Account Filter**: Optional AccountType filter uses SQL subquery on Accounts entity\n\n### State Management\n- `pipelineData`: Pipeline distribution query results\n- `velocityData`: Velocity analysis query results\n- `trendsData`: Stage trends query results\n- `selectedSegment`: Currently selected pipeline stage (null = chart view, object = grid view)\n- `loading`: Boolean for async operation status\n- `errors`: Object with error messages per query/operation\n- Configuration state: `stage`, `accountType`, `minAmount`, `monthsBack`, `daysBack`, `chartType`\n\n### Query Coordination\n**Three Concurrent Queries**: All execute in parallel on mount/parameter change\n1. Deal Pipeline Distribution - Current pipeline by stage\n2. Deal Velocity Analysis - Historical velocity metrics by stage\n3. Deal Stage Trends - Daily deal entry trends\n\n### Drill-Down Pattern\n**Click Pipeline Chart → EntityDataGrid**:\n- Only Pipeline Distribution chart has click handler\n- Sets `selectedSegment` with clickData structure\n- EntityDataGrid appears BELOW all three charts\n- Blue header shows selected stage name\n- Clear Selection button resets to chart-only view\n\n### EntityDataGrid Integration\n**extraFilter Construction**:\n1. Stage filter: `Stage = '{selectedSegment.label}'`\n2. Account type filter (optional): `AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='{accountType}')`\n3. Minimum amount filter (optional): `Value >= {minAmount}`\n4. Filters combined with AND operator\n\n### Event System\n**onStageClick**: Fires when pipeline stage clicked, provides:\n- stage, dealCount, totalValue\n\n**onDealClick**: Fires when EntityDataGrid row clicked, provides:\n- dealId, dealName, stage, value, probability\n\n### Educational Value\nDemonstrates:\n1. **Multi-Query Coordination**: Three concurrent queries with independent error handling\n2. **Selective Drill-Down**: Only one chart has interactive drill-down\n3. **EntityDataGrid Integration**: Proper SQL filter construction with subqueries\n4. **Error Resilience**: Queries can fail independently without blocking others\n5. **Complex Filtering**: Multi-level filters (stage + account type + amount)\n6. **Event Exposure**: External consumers can listen to user interactions",
+  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Initial Load**: Three concurrent RunQuery calls execute for pipeline distribution, velocity analysis, and stage trends\n2. **Chart Rendering**: Three SimpleChart instances display data independently\n3. **User Interaction**: User clicks stage bar in Pipeline Distribution chart\n4. **Drill-Down**: Component sets selectedSegment state and triggers Deal Pipeline Details query\n5. **Grid Rendering**: DataGrid displays query results with OpenEntityRecord enabled\n6. **Record Navigation**: Row click opens deal record via callbacks.OpenEntityRecord\n\n### State Management\n- `pipelineData`: Pipeline distribution query results\n- `velocityData`: Velocity analysis query results\n- `trendsData`: Stage trends query results\n- `dealsData`: Deal Pipeline Details query results (for drilldown)\n- `selectedSegment`: Currently selected pipeline stage (null = chart view, object = grid view)\n- `loading`: Boolean for async operation status\n- `dealsLoading`: Boolean for deals query loading\n- `errors`: Object with error messages per query/operation\n- Configuration state: `stage`, `accountType`, `minAmount`, `monthsBack`, `daysBack`, `chartType`\n\n### Query Coordination\n**Three Base Queries**: Execute in parallel on mount/parameter change\n1. Deal Pipeline Distribution - Current pipeline by stage\n2. Deal Velocity Analysis - Historical velocity metrics by stage\n3. Deal Stage Trends - Daily deal entry trends\n\n**Conditional Detail Query**: Executes when stage selected\n4. Deal Pipeline Details - Raw deal records for drilldown grid\n\n### Drill-Down Pattern (Query Pair)\n**Click Pipeline Chart → Deal Pipeline Details Query → DataGrid**:\n- Only Pipeline Distribution chart has click handler\n- Sets `selectedSegment` with clickData structure\n- Executes Deal Pipeline Details query with Stage parameter\n- DataGrid appears BELOW all three charts with query results\n- Blue header shows selected stage name\n- Clear Selection button resets to chart-only view\n- DataGrid has OpenEntityRecord enabled for direct record access\n\n### DataGrid Integration\n**Query Pair Pattern**:\n- Aggregation query (Deal Pipeline Distribution) for charts\n- Detail query (Deal Pipeline Details) for drilldown grid\n- No SQL filter construction needed - query handles all filtering\n- Parameters passed directly to query: Stage, AccountType, MinAmount, StartDate, EndDate\n\n**OpenEntityRecord Feature**:\n- Enabled by passing `entityName=\"Deals\"` and `entityPrimaryKeys={['ID']}`\n- Requires `callbacks` prop for OpenEntityRecord function\n- Row click automatically opens deal record in entity viewer\n- No custom onRowClick handler needed\n\n### Event System\n**onStageClick**: Fires when pipeline stage clicked, provides:\n- stage, dealCount, totalValue\n\n### Educational Value\nDemonstrates:\n1. **Multi-Query Coordination**: Four queries (3 base + 1 conditional) with independent error handling\n2. **Query Pair Pattern**: Aggregation + detail queries for dashboard with drilldown\n3. **DataGrid with OpenEntityRecord**: Direct entity record navigation without custom handlers\n4. **Selective Drill-Down**: Only one chart has interactive drill-down\n5. **Error Resilience**: Queries can fail independently without blocking others\n6. **Parameterized Queries**: Clean query parameter passing without SQL filter construction\n7. **Event Exposure**: External consumers can listen to user interactions",
   "code": "@file:../../code/query-examples/deal-pipeline-visualization.js",
   "exampleUsage": "// Basic usage (no filters)\n<DealPipelineVisualization\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n\n// With event handlers\n<DealPipelineVisualization\n  onStageClick={(event) => {\n    console.log(`Stage ${event.stage}: ${event.dealCount} deals, $${event.totalValue}`);\n  }}\n  onDealClick={(event) => {\n    console.log(`Deal ${event.dealName} clicked`);\n    // Navigate to deal detail page\n    router.push(`/deals/${event.dealId}`);\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n\n// With custom configuration via savedUserSettings\n<DealPipelineVisualization\n  savedUserSettings={{\n    stage: 'Proposal',\n    accountType: 'Enterprise',\n    minAmount: 50000,\n    monthsBack: 12,\n    daysBack: 180,\n    chartType: 'doughnut'\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  onSaveUserSettings={onSaveUserSettings}\n/>"
 }

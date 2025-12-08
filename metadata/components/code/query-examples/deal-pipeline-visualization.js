@@ -25,12 +25,14 @@ function DealPipelineVisualization({
   const [pipelineData, setPipelineData] = useState([]);
   const [velocityData, setVelocityData] = useState([]);
   const [trendsData, setTrendsData] = useState([]);
+  const [dealsData, setDealsData] = useState([]);
   const [selectedSegment, setSelectedSegment] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dealsLoading, setDealsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
   // Get components from registry
-  const { SimpleChart, EntityDataGrid } = components;
+  const { SimpleChart, DataGrid } = components;
 
   // Helper function: Sort pipeline stages by natural progression order
   // SQL now returns alphabetical order, JavaScript handles business logic sorting
@@ -146,6 +148,44 @@ function DealPipelineVisualization({
     loadTrends();
   }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate, utilities]);
 
+  // Load deal details when a segment is selected (query pair pattern)
+  useEffect(() => {
+    if (!selectedSegment) {
+      setDealsData([]);
+      return;
+    }
+
+    const loadDeals = async () => {
+      setDealsLoading(true);
+      try {
+        const dealsResult = await utilities.rq.RunQuery({
+          QueryName: 'Deal Pipeline Details',
+          CategoryPath: 'Demo',
+          Parameters: {
+            Stage: selectedSegment.label,
+            AccountType: accountType,
+            MinAmount: minAmount,
+            StartDate: appliedStartDate,
+            EndDate: appliedEndDate
+          }
+        });
+
+        if (dealsResult && dealsResult.Success && dealsResult.Results) {
+          setDealsData(dealsResult.Results);
+        } else {
+          setErrors(prev => ({ ...prev, deals: dealsResult?.ErrorMessage || 'Failed to load deal details' }));
+        }
+      } catch (err) {
+        console.error('Error loading deal details:', err);
+        setErrors(prev => ({ ...prev, deals: err.message || 'Failed to load deal details' }));
+      } finally {
+        setDealsLoading(false);
+      }
+    };
+
+    loadDeals();
+  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate, utilities]);
+
   // Apply date filters
   const handleApplyFilters = () => {
     setAppliedStartDate(pendingStartDate);
@@ -177,52 +217,10 @@ function DealPipelineVisualization({
     }
   };
 
-  // Handle EntityDataGrid row click
-  const handleDealClick = (event) => {
-    if (onDealClick) {
-      onDealClick({
-        dealId: event.record?.ID,
-        dealName: event.record?.DealName,
-        stage: event.record?.Stage,
-        value: event.record?.Value,
-        probability: event.record?.Probability
-      });
-    }
-  };
-
   // Clear selection
   const handleClearSelection = () => {
     setSelectedSegment(null);
-  };
-
-  // Build EntityDataGrid extraFilter
-  const buildEntityFilter = () => {
-    const filters = [];
-
-    // Filter by selected stage
-    if (selectedSegment) {
-      filters.push(`Stage='${selectedSegment.label}'`);
-    }
-
-    // Add accountType filter for consistency
-    if (accountType) {
-      filters.push(`AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='${accountType}')`);
-    }
-
-    // Add minAmount filter
-    if (minAmount != null) {
-      filters.push(`Amount >= ${minAmount}`);
-    }
-
-    // Add date range filters
-    if (appliedStartDate) {
-      filters.push(`OpenDate >= '${appliedStartDate}'`);
-    }
-    if (appliedEndDate) {
-      filters.push(`OpenDate <= '${appliedEndDate}'`);
-    }
-
-    return filters.length > 0 ? filters.join(' AND ') : undefined;
+    setDealsData([]);
   };
 
   // Loading state
@@ -474,25 +472,82 @@ function DealPipelineVisualization({
             </button>
           </div>
 
-          {/* EntityDataGrid */}
-          <EntityDataGrid
-            entityName="Deals"
-            extraFilter={buildEntityFilter()}
-            fields={['DealName', 'Stage', 'Amount', 'Probability', 'NextAction', 'AccountName']}
-            orderBy="Amount DESC"
-            pageSize={20}
-            maxCachedRows={100}
-            enablePageCache={true}
-            showPageSizeChanger={true}
-            enableSorting={true}
-            enableFiltering={true}
-            showRefreshButton={true}
-            onRowClick={handleDealClick}
-            utilities={utilities}
-            styles={styles}
-            components={components}
-            callbacks={callbacks}
-          />
+          {/* Deals Loading State */}
+          {dealsLoading && (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <div>Loading deal details...</div>
+            </div>
+          )}
+
+          {/* Deals Error State */}
+          {errors.deals && !dealsLoading && (
+            <div style={{
+              marginBottom: '16px',
+              padding: '16px',
+              backgroundColor: '#fff2e8',
+              border: '1px solid #ffbb96',
+              borderRadius: '4px',
+              color: '#d4380d'
+            }}>
+              Deal Details Error: {errors.deals}
+            </div>
+          )}
+
+          {/* DataGrid */}
+          {!dealsLoading && !errors.deals && dealsData && dealsData.length > 0 && (
+            <DataGrid
+              entityName="Deals"
+              entityPrimaryKeys={['ID']}
+              data={dealsData}
+              columns={[
+                { field: 'DealName', header: 'Deal Name', sortable: true },
+                { field: 'Stage', header: 'Stage', sortable: true },
+                {
+                  field: 'Amount',
+                  header: 'Amount',
+                  sortable: true,
+                  render: (value) => {
+                    return value != null ? `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
+                  }
+                },
+                {
+                  field: 'Probability',
+                  header: 'Probability',
+                  sortable: true,
+                  render: (value) => {
+                    return value != null ? `${Number(value).toFixed(0)}%` : '0%';
+                  }
+                },
+                { field: 'ExpectedCloseDate', header: 'Expected Close', sortable: true },
+                { field: 'Account', header: 'Account', sortable: true },
+                { field: 'Owner', header: 'Owner', sortable: true },
+                {
+                  field: 'DaysInStage',
+                  header: 'Days in Stage',
+                  sortable: true,
+                  render: (value) => {
+                    return value != null ? Number(value).toLocaleString() : '0';
+                  }
+                }
+              ]}
+              sorting={true}
+              paging={true}
+              pageSize={20}
+              showPageSizeChanger={true}
+              filtering={true}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+            />
+          )}
+
+          {/* Empty State */}
+          {!dealsLoading && !errors.deals && (!dealsData || dealsData.length === 0) && (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#8c8c8c' }}>
+              <div style={{ fontSize: '14px' }}>No deals found in {selectedSegment.label} stage</div>
+            </div>
+          )}
         </div>
       )}
     </div>
