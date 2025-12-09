@@ -284,6 +284,401 @@ export type CreateDraftResult<T = Record<string, any>> = BaseMessageResult & {
     Result?: T;
 };
 
+// ============================================================================
+// NEW OPTIONAL OPERATIONS - Types for extended provider capabilities
+// These operations are optional and providers return "not supported" by default
+// ============================================================================
+
+/**
+ * Parameters for getting a single message by ID
+ */
+export type GetSingleMessageParams<T = Record<string, any>> = {
+    /**
+     * The ID of the message to retrieve
+     */
+    MessageID: string;
+    /**
+     * Optional, include the headers in the response (defaults to false)
+     */
+    IncludeHeaders?: boolean;
+    /**
+     * Optional, include attachments metadata in the response (defaults to false)
+     */
+    IncludeAttachments?: boolean;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of getting a single message
+ */
+export type GetSingleMessageResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * The retrieved message in standardized format
+     */
+    Message?: GetMessageMessage;
+    /**
+     * If populated, holds provider-specific data that is returned from the provider
+     */
+    SourceData?: T;
+};
+
+/**
+ * Parameters for deleting a message
+ */
+export type DeleteMessageParams<T = Record<string, any>> = {
+    /**
+     * The ID of the message to delete
+     */
+    MessageID: string;
+    /**
+     * If true, permanently delete the message. If false, move to trash (if supported).
+     * Defaults to false.
+     */
+    PermanentDelete?: boolean;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of deleting a message
+ */
+export type DeleteMessageResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
+/**
+ * Parameters for moving a message to a different folder
+ */
+export type MoveMessageParams<T = Record<string, any>> = {
+    /**
+     * The ID of the message to move
+     */
+    MessageID: string;
+    /**
+     * The ID of the destination folder
+     */
+    DestinationFolderID: string;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of moving a message
+ */
+export type MoveMessageResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * The new message ID after moving (some providers assign new IDs)
+     */
+    NewMessageID?: string;
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
+/**
+ * Represents a folder/mailbox in the provider's system
+ */
+export type MessageFolder = {
+    /**
+     * The unique ID of the folder
+     */
+    ID: string;
+    /**
+     * The display name of the folder
+     */
+    Name: string;
+    /**
+     * The ID of the parent folder, if any
+     */
+    ParentFolderID?: string;
+    /**
+     * The number of messages in the folder (if available)
+     */
+    MessageCount?: number;
+    /**
+     * The number of unread messages in the folder (if available)
+     */
+    UnreadCount?: number;
+    /**
+     * Whether this is a system folder (Inbox, Sent, Drafts, etc.)
+     */
+    IsSystemFolder?: boolean;
+    /**
+     * The type of system folder if IsSystemFolder is true
+     */
+    SystemFolderType?: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'archive' | 'other';
+};
+
+/**
+ * Parameters for listing folders
+ */
+export type ListFoldersParams<T = Record<string, any>> = {
+    /**
+     * Optional, the ID of the parent folder to list children of.
+     * If not provided, lists root-level folders.
+     */
+    ParentFolderID?: string;
+    /**
+     * Optional, include message counts in the response (defaults to false)
+     */
+    IncludeCounts?: boolean;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of listing folders
+ */
+export type ListFoldersResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * The list of folders
+     */
+    Folders?: MessageFolder[];
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
+/**
+ * Parameters for marking message(s) as read or unread
+ */
+export type MarkAsReadParams<T = Record<string, any>> = {
+    /**
+     * The ID(s) of the message(s) to mark
+     */
+    MessageIDs: string[];
+    /**
+     * Whether to mark as read (true) or unread (false)
+     */
+    IsRead: boolean;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of marking message(s) as read/unread
+ */
+export type MarkAsReadResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
+/**
+ * Parameters for archiving a message
+ */
+export type ArchiveMessageParams<T = Record<string, any>> = {
+    /**
+     * The ID of the message to archive
+     */
+    MessageID: string;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of archiving a message
+ */
+export type ArchiveMessageResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
+/**
+ * Parameters for searching messages
+ */
+export type SearchMessagesParams<T = Record<string, any>> = {
+    /**
+     * The search query string
+     */
+    Query: string;
+    /**
+     * Maximum number of results to return
+     */
+    MaxResults?: number;
+    /**
+     * Optional folder ID to limit search scope
+     */
+    FolderID?: string;
+    /**
+     * Optional date range start
+     */
+    FromDate?: Date;
+    /**
+     * Optional date range end
+     */
+    ToDate?: Date;
+    /**
+     * Optional, search only in specific fields
+     */
+    SearchIn?: ('subject' | 'body' | 'from' | 'to' | 'all')[];
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of searching messages
+ */
+export type SearchMessagesResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * Messages matching the search criteria
+     */
+    Messages?: GetMessageMessage[];
+    /**
+     * Total number of matches (may be greater than returned results)
+     */
+    TotalCount?: number;
+    /**
+     * If populated, holds provider-specific result data
+     */
+    SourceData?: T[];
+};
+
+/**
+ * Represents an attachment on a message
+ */
+export type MessageAttachment = {
+    /**
+     * The unique ID of the attachment
+     */
+    ID: string;
+    /**
+     * The filename of the attachment
+     */
+    Filename: string;
+    /**
+     * The MIME type of the attachment
+     */
+    ContentType: string;
+    /**
+     * The size of the attachment in bytes
+     */
+    Size: number;
+    /**
+     * Whether this is an inline attachment (embedded in message body)
+     */
+    IsInline?: boolean;
+    /**
+     * Content ID for inline attachments
+     */
+    ContentID?: string;
+};
+
+/**
+ * Parameters for listing attachments on a message
+ */
+export type ListAttachmentsParams<T = Record<string, any>> = {
+    /**
+     * The ID of the message to list attachments for
+     */
+    MessageID: string;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of listing attachments
+ */
+export type ListAttachmentsResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * The list of attachments
+     */
+    Attachments?: MessageAttachment[];
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
+/**
+ * Parameters for downloading an attachment
+ */
+export type DownloadAttachmentParams<T = Record<string, any>> = {
+    /**
+     * The ID of the message containing the attachment
+     */
+    MessageID: string;
+    /**
+     * The ID of the attachment to download
+     */
+    AttachmentID: string;
+    /**
+     * Optional, provider-specific context data
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of downloading an attachment
+ */
+export type DownloadAttachmentResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * The attachment content as a Buffer
+     */
+    Content?: Buffer;
+    /**
+     * The attachment content as a base64-encoded string
+     */
+    ContentBase64?: string;
+    /**
+     * The filename of the attachment
+     */
+    Filename?: string;
+    /**
+     * The MIME type of the attachment
+     */
+    ContentType?: string;
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
+/**
+ * Enumeration of all supported provider operations.
+ * Use with getSupportedOperations() to discover provider capabilities.
+ */
+export type ProviderOperation =
+    | 'SendSingleMessage'
+    | 'GetMessages'
+    | 'GetSingleMessage'
+    | 'ForwardMessage'
+    | 'ReplyToMessage'
+    | 'CreateDraft'
+    | 'DeleteMessage'
+    | 'MoveMessage'
+    | 'ListFolders'
+    | 'MarkAsRead'
+    | 'ArchiveMessage'
+    | 'SearchMessages'
+    | 'ListAttachments'
+    | 'DownloadAttachment';
+
 
 /**
  * Base class for all communication providers. Each provider sub-classes this base class and implements functionality specific to the provider.
@@ -370,6 +765,190 @@ export abstract class BaseCommunicationProvider {
         params: CreateDraftParams,
         credentials?: ProviderCredentialsBase
     ): Promise<CreateDraftResult>
+
+    // ========================================================================
+    // OPTIONAL OPERATIONS - Override in subclasses to provide implementation
+    // Default implementations return "not supported" error
+    // ========================================================================
+
+    /**
+     * Returns the name of this provider for use in error messages.
+     * Override in subclasses to provide a more descriptive name.
+     */
+    protected get ProviderName(): string {
+        return this.constructor.name;
+    }
+
+    /**
+     * Returns the list of operations supported by this provider.
+     * Override in subclasses to accurately reflect capabilities.
+     * Default implementation returns only the core abstract methods.
+     */
+    public getSupportedOperations(): ProviderOperation[] {
+        return ['SendSingleMessage', 'GetMessages', 'ForwardMessage', 'ReplyToMessage', 'CreateDraft'];
+    }
+
+    /**
+     * Checks if this provider supports a specific operation.
+     * @param operation - The operation to check
+     * @returns true if the operation is supported
+     */
+    public supportsOperation(operation: ProviderOperation): boolean {
+        return this.getSupportedOperations().includes(operation);
+    }
+
+    /**
+     * Gets a single message by ID.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for retrieving the message
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<GetSingleMessageResult> - The retrieved message
+     */
+    public async GetSingleMessage(
+        params: GetSingleMessageParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<GetSingleMessageResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support GetSingleMessage (MessageID: ${params.MessageID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Deletes a message.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for deleting the message
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<DeleteMessageResult> - Result of the delete operation
+     */
+    public async DeleteMessage(
+        params: DeleteMessageParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<DeleteMessageResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support DeleteMessage (MessageID: ${params.MessageID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Moves a message to a different folder.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for moving the message
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<MoveMessageResult> - Result of the move operation
+     */
+    public async MoveMessage(
+        params: MoveMessageParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<MoveMessageResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support MoveMessage (MessageID: ${params.MessageID}, DestinationFolderID: ${params.DestinationFolderID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Lists folders/mailboxes available in the provider.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for listing folders
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<ListFoldersResult> - The list of folders
+     */
+    public async ListFolders(
+        params: ListFoldersParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<ListFoldersResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support ListFolders (ParentFolderID: ${params.ParentFolderID || 'root'}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Marks message(s) as read or unread.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for marking messages
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<MarkAsReadResult> - Result of the operation
+     */
+    public async MarkAsRead(
+        params: MarkAsReadParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<MarkAsReadResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support MarkAsRead (MessageIDs: ${params.MessageIDs.length} message(s), IsRead: ${params.IsRead}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Archives a message.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for archiving the message
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<ArchiveMessageResult> - Result of the archive operation
+     */
+    public async ArchiveMessage(
+        params: ArchiveMessageParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<ArchiveMessageResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support ArchiveMessage (MessageID: ${params.MessageID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Searches messages using a query string.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for searching messages
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<SearchMessagesResult> - Messages matching the search criteria
+     */
+    public async SearchMessages(
+        params: SearchMessagesParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<SearchMessagesResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support SearchMessages (Query: ${params.Query}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Lists attachments on a message.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for listing attachments
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<ListAttachmentsResult> - The list of attachments
+     */
+    public async ListAttachments(
+        params: ListAttachmentsParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<ListAttachmentsResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support ListAttachments (MessageID: ${params.MessageID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Downloads an attachment from a message.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters for downloading the attachment
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<DownloadAttachmentResult> - The attachment content
+     */
+    public async DownloadAttachment(
+        params: DownloadAttachmentParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<DownloadAttachmentResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support DownloadAttachment (MessageID: ${params.MessageID}, AttachmentID: ${params.AttachmentID}, credentials provided: ${!!credentials})`
+        };
+    }
 
 }
 

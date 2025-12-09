@@ -1,5 +1,9 @@
 # MemberJunction 3.0: Unified Credential Management System
 
+> **Status**: Draft
+> **Last Updated**: December 2025
+> **Target Release**: MemberJunction 3.0
+
 ## Overview
 
 This document outlines the design for a unified, metadata-driven credential management system for MemberJunction 3.0. The system will provide secure, centralized credential storage with encryption, multi-tenancy support, audit logging, and per-request credential selection across all MJ subsystems.

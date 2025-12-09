@@ -6,6 +6,27 @@ import {
     ForwardMessageResult,
     GetMessagesParams,
     GetMessagesResult,
+    GetSingleMessageParams,
+    GetSingleMessageResult,
+    DeleteMessageParams,
+    DeleteMessageResult,
+    MoveMessageParams,
+    MoveMessageResult,
+    ListFoldersParams,
+    ListFoldersResult,
+    MarkAsReadParams,
+    MarkAsReadResult,
+    ArchiveMessageParams,
+    ArchiveMessageResult,
+    SearchMessagesParams,
+    SearchMessagesResult,
+    ListAttachmentsParams,
+    ListAttachmentsResult,
+    DownloadAttachmentParams,
+    DownloadAttachmentResult,
+    MessageFolder,
+    MessageAttachment,
+    ProviderOperation,
     MessageResult,
     ProcessedMessage,
     ProviderCredentialsBase,
@@ -646,6 +667,613 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 ErrorMessage: 'Error creating draft'
             };
         }
+    }
+
+    // ========================================================================
+    // EXTENDED OPERATIONS - MS Graph supports full mailbox access
+    // ========================================================================
+
+    /**
+     * Returns the list of operations supported by MS Graph provider.
+     * MS Graph supports all mailbox operations.
+     */
+    public override getSupportedOperations(): ProviderOperation[] {
+        return [
+            'SendSingleMessage',
+            'GetMessages',
+            'GetSingleMessage',
+            'ForwardMessage',
+            'ReplyToMessage',
+            'CreateDraft',
+            'DeleteMessage',
+            'MoveMessage',
+            'ListFolders',
+            'MarkAsRead',
+            'ArchiveMessage',
+            'SearchMessages',
+            'ListAttachments',
+            'DownloadAttachment'
+        ];
+    }
+
+    /**
+     * Gets a single message by ID from MS Graph.
+     */
+    public override async GetSingleMessage(
+        params: GetSingleMessageParams,
+        credentials?: MSGraphCredentials
+    ): Promise<GetSingleMessageResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            const messagePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}`;
+            const msgResponse = await client.api(messagePath).get();
+
+            if (!msgResponse) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Message not found'
+                };
+            }
+
+            const msgTyped = msgResponse as Message;
+            const replyTo = msgTyped.replyTo?.map(r => r.emailAddress?.address || '') || [];
+
+            return {
+                Success: true,
+                Message: {
+                    From: msgTyped.from?.emailAddress?.address || '',
+                    To: replyTo.length > 0 ? replyTo[0] : '',
+                    ReplyTo: replyTo,
+                    Subject: msgTyped.subject || '',
+                    Body: msgTyped.body?.content || '',
+                    ExternalSystemRecordID: msgTyped.id || '',
+                    ThreadID: msgTyped.conversationId || '',
+                    CreatedAt: msgTyped.createdDateTime ? new Date(msgTyped.createdDateTime) : undefined,
+                    LastModifiedAt: msgTyped.lastModifiedDateTime ? new Date(msgTyped.lastModifiedDateTime) : undefined,
+                    ReceivedAt: msgTyped.receivedDateTime ? new Date(msgTyped.receivedDateTime) : undefined,
+                    SentAt: msgTyped.sentDateTime ? new Date(msgTyped.sentDateTime) : undefined
+                },
+                SourceData: msgResponse
+            };
+        } catch (ex) {
+            LogError('Error getting single message via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error getting message: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Deletes a message using MS Graph.
+     * If PermanentDelete is false, moves to Deleted Items folder.
+     */
+    public override async DeleteMessage(
+        params: DeleteMessageParams,
+        credentials?: MSGraphCredentials
+    ): Promise<DeleteMessageResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            const messagePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}`;
+
+            if (params.PermanentDelete) {
+                // Permanently delete the message
+                await client.api(messagePath).delete();
+            } else {
+                // Move to Deleted Items (soft delete)
+                const deletedItemsFolder = await this.findSystemFolder(client, user.id, 'deleteditems');
+                if (deletedItemsFolder) {
+                    await client.api(`${messagePath}/move`).post({
+                        destinationId: deletedItemsFolder
+                    });
+                } else {
+                    // Fall back to permanent delete if we can't find Deleted Items
+                    await client.api(messagePath).delete();
+                }
+            }
+
+            LogStatus(`Message ${params.MessageID} deleted via MS Graph`);
+            return { Success: true };
+        } catch (ex) {
+            LogError('Error deleting message via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error deleting message: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Moves a message to a different folder using MS Graph.
+     */
+    public override async MoveMessage(
+        params: MoveMessageParams,
+        credentials?: MSGraphCredentials
+    ): Promise<MoveMessageResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            const movePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/move`;
+            const result = await client.api(movePath).post({
+                destinationId: params.DestinationFolderID
+            });
+
+            LogStatus(`Message ${params.MessageID} moved to folder ${params.DestinationFolderID}`);
+            return {
+                Success: true,
+                NewMessageID: result?.id,
+                Result: result
+            };
+        } catch (ex) {
+            LogError('Error moving message via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error moving message: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Lists mail folders using MS Graph.
+     */
+    public override async ListFolders(
+        params: ListFoldersParams,
+        credentials?: MSGraphCredentials
+    ): Promise<ListFoldersResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            let foldersPath: string;
+            if (params.ParentFolderID) {
+                foldersPath = `${this.getApiUri()}/${user.id}/mailFolders/${params.ParentFolderID}/childFolders`;
+            } else {
+                foldersPath = `${this.getApiUri()}/${user.id}/mailFolders`;
+            }
+
+            const response = await client.api(foldersPath).get();
+
+            if (!response?.value) {
+                return {
+                    Success: true,
+                    Folders: []
+                };
+            }
+
+            const folders: MessageFolder[] = response.value.map((folder: Record<string, unknown>) => ({
+                ID: folder.id as string,
+                Name: folder.displayName as string,
+                ParentFolderID: folder.parentFolderId as string | undefined,
+                MessageCount: params.IncludeCounts ? folder.totalItemCount as number : undefined,
+                UnreadCount: params.IncludeCounts ? folder.unreadItemCount as number : undefined,
+                IsSystemFolder: this.isSystemFolder(folder.displayName as string),
+                SystemFolderType: this.mapSystemFolderType(folder.displayName as string)
+            }));
+
+            return {
+                Success: true,
+                Folders: folders,
+                Result: response.value
+            };
+        } catch (ex) {
+            LogError('Error listing folders via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error listing folders: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Marks messages as read or unread using MS Graph.
+     */
+    public override async MarkAsRead(
+        params: MarkAsReadParams,
+        credentials?: MSGraphCredentials
+    ): Promise<MarkAsReadResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            // Update each message
+            const updatePromises = params.MessageIDs.map(async (messageId) => {
+                const updatePath = `${this.getApiUri()}/${user.id}/messages/${messageId}`;
+                return client.api(updatePath).update({ isRead: params.IsRead });
+            });
+
+            await Promise.all(updatePromises);
+
+            LogStatus(`Marked ${params.MessageIDs.length} message(s) as ${params.IsRead ? 'read' : 'unread'}`);
+            return { Success: true };
+        } catch (ex) {
+            LogError('Error marking messages as read via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error marking messages: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Archives a message by moving it to the Archive folder using MS Graph.
+     */
+    public override async ArchiveMessage(
+        params: ArchiveMessageParams,
+        credentials?: MSGraphCredentials
+    ): Promise<ArchiveMessageResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            // Find or create the Archive folder
+            let archiveFolderId = await this.findSystemFolder(client, user.id, 'archive');
+            if (!archiveFolderId) {
+                // Try to create an Archive folder
+                archiveFolderId = await this.createMailFolder(client, user.id, 'Archive');
+            }
+
+            if (!archiveFolderId) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Could not find or create Archive folder'
+                };
+            }
+
+            // Move the message to Archive
+            const movePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/move`;
+            await client.api(movePath).post({
+                destinationId: archiveFolderId
+            });
+
+            LogStatus(`Message ${params.MessageID} archived`);
+            return { Success: true };
+        } catch (ex) {
+            LogError('Error archiving message via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error archiving message: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Searches messages using MS Graph search or filter.
+     */
+    public override async SearchMessages(
+        params: SearchMessagesParams,
+        credentials?: MSGraphCredentials
+    ): Promise<SearchMessagesResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            // Build search path - use $search for full-text search
+            let messagesPath: string;
+            if (params.FolderID) {
+                messagesPath = `${this.getApiUri()}/${user.id}/mailFolders/${params.FolderID}/messages`;
+            } else {
+                messagesPath = `${this.getApiUri()}/${user.id}/messages`;
+            }
+
+            // Build filter conditions
+            const filters: string[] = [];
+
+            // Date range filters
+            if (params.FromDate) {
+                filters.push(`receivedDateTime ge ${params.FromDate.toISOString()}`);
+            }
+            if (params.ToDate) {
+                filters.push(`receivedDateTime le ${params.ToDate.toISOString()}`);
+            }
+
+            let apiRequest = client.api(messagesPath);
+
+            // Use $search for text queries (MS Graph supports KQL)
+            if (params.Query) {
+                apiRequest = apiRequest.search(`"${params.Query}"`);
+            }
+
+            if (filters.length > 0) {
+                apiRequest = apiRequest.filter(filters.join(' and '));
+            }
+
+            if (params.MaxResults) {
+                apiRequest = apiRequest.top(params.MaxResults);
+            }
+
+            const response = await apiRequest.get();
+
+            if (!response?.value) {
+                return {
+                    Success: true,
+                    Messages: []
+                };
+            }
+
+            const messages = response.value.map((msg: Message) => ({
+                From: msg.from?.emailAddress?.address || '',
+                To: msg.toRecipients?.[0]?.emailAddress?.address || '',
+                Subject: msg.subject || '',
+                Body: msg.bodyPreview || '',
+                ExternalSystemRecordID: msg.id || '',
+                ThreadID: msg.conversationId || '',
+                CreatedAt: msg.createdDateTime ? new Date(msg.createdDateTime) : undefined,
+                ReceivedAt: msg.receivedDateTime ? new Date(msg.receivedDateTime) : undefined
+            }));
+
+            return {
+                Success: true,
+                Messages: messages,
+                TotalCount: response['@odata.count'],
+                SourceData: response.value
+            };
+        } catch (ex) {
+            LogError('Error searching messages via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error searching messages: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Lists attachments on a message using MS Graph.
+     */
+    public override async ListAttachments(
+        params: ListAttachmentsParams,
+        credentials?: MSGraphCredentials
+    ): Promise<ListAttachmentsResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            const attachmentsPath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/attachments`;
+            const response = await client.api(attachmentsPath).get();
+
+            if (!response?.value) {
+                return {
+                    Success: true,
+                    Attachments: []
+                };
+            }
+
+            const attachments: MessageAttachment[] = response.value.map((att: Record<string, unknown>) => ({
+                ID: att.id as string,
+                Filename: att.name as string,
+                ContentType: att.contentType as string,
+                Size: att.size as number,
+                IsInline: att.isInline as boolean,
+                ContentID: att.contentId as string | undefined
+            }));
+
+            return {
+                Success: true,
+                Attachments: attachments,
+                Result: response.value
+            };
+        } catch (ex) {
+            LogError('Error listing attachments via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error listing attachments: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Downloads an attachment from a message using MS Graph.
+     */
+    public override async DownloadAttachment(
+        params: DownloadAttachmentParams,
+        credentials?: MSGraphCredentials
+    ): Promise<DownloadAttachmentResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+
+            const user = await this.GetServiceAccountWithClient(client, emailToUse);
+            if (!user || !user.id) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            const attachmentPath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/attachments/${params.AttachmentID}`;
+            const response = await client.api(attachmentPath).get();
+
+            if (!response) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Attachment not found'
+                };
+            }
+
+            // MS Graph returns file attachments with contentBytes as base64
+            const contentBase64 = response.contentBytes as string;
+
+            return {
+                Success: true,
+                ContentBase64: contentBase64,
+                Content: contentBase64 ? Buffer.from(contentBase64, 'base64') : undefined,
+                Filename: response.name,
+                ContentType: response.contentType,
+                Result: response
+            };
+        } catch (ex) {
+            LogError('Error downloading attachment via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error downloading attachment: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    // ========================================================================
+    // HELPER METHODS
+    // ========================================================================
+
+    /**
+     * Finds a system folder by well-known name.
+     */
+    private async findSystemFolder(client: Client, userId: string, folderName: string): Promise<string | null> {
+        try {
+            // MS Graph well-known folder names
+            const wellKnownNames: Record<string, string> = {
+                'inbox': 'inbox',
+                'sent': 'sentitems',
+                'drafts': 'drafts',
+                'deleteditems': 'deleteditems',
+                'trash': 'deleteditems',
+                'junkemail': 'junkemail',
+                'spam': 'junkemail',
+                'archive': 'archive'
+            };
+
+            const normalizedName = folderName.toLowerCase();
+            const graphFolderName = wellKnownNames[normalizedName] || normalizedName;
+
+            // Try well-known folder endpoint first
+            const folderPath = `${this.getApiUri()}/${userId}/mailFolders/${graphFolderName}`;
+            const folder = await client.api(folderPath).get();
+            return folder?.id || null;
+        } catch {
+            // Folder not found or access denied - try search
+            try {
+                const foldersPath = `${this.getApiUri()}/${userId}/mailFolders`;
+                const response = await client.api(foldersPath)
+                    .filter(`displayName eq '${folderName}'`)
+                    .get();
+
+                if (response?.value?.length > 0) {
+                    return response.value[0].id;
+                }
+            } catch {
+                // Ignore search errors
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Creates a new mail folder.
+     */
+    private async createMailFolder(client: Client, userId: string, folderName: string): Promise<string | null> {
+        try {
+            const foldersPath = `${this.getApiUri()}/${userId}/mailFolders`;
+            const result = await client.api(foldersPath).post({
+                displayName: folderName
+            });
+            LogStatus(`Created mail folder '${folderName}' with ID: ${result.id}`);
+            return result.id;
+        } catch (ex) {
+            LogError(`Error creating mail folder '${folderName}'`, undefined, ex);
+            return null;
+        }
+    }
+
+    /**
+     * Checks if a folder name is a system folder.
+     */
+    private isSystemFolder(displayName: string): boolean {
+        const systemFolders = [
+            'inbox', 'sent items', 'drafts', 'deleted items', 'junk email',
+            'archive', 'outbox', 'conversation history', 'scheduled'
+        ];
+        return systemFolders.includes(displayName.toLowerCase());
+    }
+
+    /**
+     * Maps folder display name to system folder type.
+     */
+    private mapSystemFolderType(displayName: string): MessageFolder['SystemFolderType'] {
+        const mapping: Record<string, MessageFolder['SystemFolderType']> = {
+            'inbox': 'inbox',
+            'sent items': 'sent',
+            'drafts': 'drafts',
+            'deleted items': 'trash',
+            'junk email': 'spam',
+            'archive': 'archive'
+        };
+        return mapping[displayName.toLowerCase()] || 'other';
     }
 }
 
