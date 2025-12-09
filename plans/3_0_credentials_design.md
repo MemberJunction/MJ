@@ -1,7 +1,7 @@
 # MemberJunction 3.0: Unified Credential Management System
 
 > **Status**: Draft
-> **Last Updated**: December 2025
+> **Last Updated**: December 9, 2025
 > **Target Release**: MemberJunction 3.0
 
 ## Overview
