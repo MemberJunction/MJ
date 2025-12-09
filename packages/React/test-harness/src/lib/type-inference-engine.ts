@@ -92,6 +92,7 @@ export class TypeInferenceEngine {
    */
   private async collectVariableTypes(ast: t.File): Promise<void> {
     const self = this;
+    let functionCounter = 0; // Counter for anonymous functions
 
     traverse(ast, {
       // Track variable declarations
@@ -112,18 +113,50 @@ export class TypeInferenceEngine {
         self.inferAssignmentType(path);
       },
 
-      // Track function parameters and return types
-      FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
-        self.inferFunctionParameterTypes(path);
+      // Track function parameters and return types with scoping
+      FunctionDeclaration: {
+        enter(path: NodePath<t.FunctionDeclaration>) {
+          const functionName = path.node.id?.name || `anon_func_${functionCounter++}`;
+          self.typeContext.enterScope(functionName);
+          self.inferFunctionParameterTypes(path);
 
-        // Track return type of named functions
-        if (path.node.id) {
-          self.trackFunctionReturnType(path.node.id.name, path.node);
+          // Track return type of named functions
+          if (path.node.id) {
+            self.trackFunctionReturnType(path.node.id.name, path.node);
+          }
+        },
+        exit(path: NodePath<t.FunctionDeclaration>) {
+          self.typeContext.exitScope();
         }
       },
 
-      ArrowFunctionExpression(path: NodePath<t.ArrowFunctionExpression>) {
-        self.inferArrowFunctionParameterTypes(path);
+      // Track arrow function scoping
+      ArrowFunctionExpression: {
+        enter(path: NodePath<t.ArrowFunctionExpression>) {
+          // Find the function name from parent if it's a variable declarator
+          let functionName = `anon_arrow_${functionCounter++}`;
+          const parent = path.parent;
+          if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+            functionName = parent.id.name;
+          }
+
+          self.typeContext.enterScope(functionName);
+          self.inferArrowFunctionParameterTypes(path);
+        },
+        exit(path: NodePath<t.ArrowFunctionExpression>) {
+          self.typeContext.exitScope();
+        }
+      },
+
+      // Track function expression scoping
+      FunctionExpression: {
+        enter(path: NodePath<t.FunctionExpression>) {
+          const functionName = path.node.id?.name || `anon_func_expr_${functionCounter++}`;
+          self.typeContext.enterScope(functionName);
+        },
+        exit(path: NodePath<t.FunctionExpression>) {
+          self.typeContext.exitScope();
+        }
       }
     });
   }
