@@ -1,4 +1,20 @@
-import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ProviderCredentialsBase, ReplyToMessageParams, ReplyToMessageResult, resolveCredentialValue, validateRequiredCredentials } from "@memberjunction/communication-types";
+import {
+  BaseCommunicationProvider,
+  CreateDraftParams,
+  CreateDraftResult,
+  ForwardMessageParams,
+  ForwardMessageResult,
+  GetMessagesParams,
+  GetMessagesResult,
+  MessageResult,
+  ProcessedMessage,
+  ProviderCredentialsBase,
+  ReplyToMessageParams,
+  ReplyToMessageResult,
+  resolveCredentialValue,
+  validateRequiredCredentials,
+  ProviderOperation
+} from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import twilio, { Twilio } from 'twilio';
@@ -46,6 +62,22 @@ export class TwilioProvider extends BaseCommunicationProvider {
 
   /** Cache of Twilio clients for per-request credentials */
   private clientCache: Map<string, Twilio> = new Map();
+
+  /**
+   * Returns the list of operations supported by the Twilio provider.
+   * Twilio is a messaging provider (SMS, WhatsApp, Messenger) and does not support
+   * mailbox operations like folders, archiving, or attachments.
+   */
+  public override getSupportedOperations(): ProviderOperation[] {
+    return [
+      'SendSingleMessage',
+      'GetMessages',
+      'ForwardMessage',
+      'ReplyToMessage'
+      // Note: CreateDraft is NOT supported - Twilio is real-time messaging only
+      // Mailbox operations (folders, archive, attachments) are not applicable to SMS/messaging
+    ];
+  }
 
   /**
    * Resolves credentials by merging request credentials with environment fallback

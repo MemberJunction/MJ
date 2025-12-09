@@ -1,4 +1,41 @@
-import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessageMessage, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ProviderCredentialsBase, ReplyToMessageParams, ReplyToMessageResult, resolveCredentialValue, validateRequiredCredentials } from "@memberjunction/communication-types";
+import {
+  BaseCommunicationProvider,
+  CreateDraftParams,
+  CreateDraftResult,
+  ForwardMessageParams,
+  ForwardMessageResult,
+  GetMessageMessage,
+  GetMessagesParams,
+  GetMessagesResult,
+  MessageResult,
+  ProcessedMessage,
+  ProviderCredentialsBase,
+  ReplyToMessageParams,
+  ReplyToMessageResult,
+  resolveCredentialValue,
+  validateRequiredCredentials,
+  ProviderOperation,
+  GetSingleMessageParams,
+  GetSingleMessageResult,
+  DeleteMessageParams,
+  DeleteMessageResult,
+  MoveMessageParams,
+  MoveMessageResult,
+  ListFoldersParams,
+  ListFoldersResult,
+  MessageFolder,
+  MarkAsReadParams,
+  MarkAsReadResult,
+  ArchiveMessageParams,
+  ArchiveMessageResult,
+  SearchMessagesParams,
+  SearchMessagesResult,
+  ListAttachmentsParams,
+  ListAttachmentsResult,
+  MessageAttachment,
+  DownloadAttachmentParams,
+  DownloadAttachmentResult
+} from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
@@ -679,6 +716,662 @@ export class GmailProvider extends BaseCommunicationProvider {
         ErrorMessage: errorMessage
       };
     }
+  }
+
+  // ========================================================================
+  // EXTENDED OPERATIONS - Gmail supports all mailbox operations via labels
+  // ========================================================================
+
+  /**
+   * Returns the list of operations supported by the Gmail provider.
+   * Gmail supports all operations through its label-based system.
+   */
+  public override getSupportedOperations(): ProviderOperation[] {
+    return [
+      'SendSingleMessage',
+      'GetMessages',
+      'GetSingleMessage',
+      'ForwardMessage',
+      'ReplyToMessage',
+      'CreateDraft',
+      'DeleteMessage',
+      'MoveMessage',
+      'ListFolders',       // Gmail uses labels instead of folders
+      'MarkAsRead',
+      'ArchiveMessage',
+      'SearchMessages',
+      'ListAttachments',
+      'DownloadAttachment'
+    ];
+  }
+
+  /**
+   * Gets a single message by ID
+   * @param params - Parameters for retrieving the message
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async GetSingleMessage(
+    params: GetSingleMessageParams,
+    credentials?: GmailCredentials
+  ): Promise<GetSingleMessageResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      const response = await cached.client.users.messages.get({
+        userId: 'me',
+        id: params.MessageID,
+        format: 'full'
+      });
+
+      if (!response.data) {
+        return {
+          Success: false,
+          ErrorMessage: 'Message not found'
+        };
+      }
+
+      const message = this.parseGmailMessage(response.data);
+
+      return {
+        Success: true,
+        Message: message,
+        SourceData: response.data
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error getting message';
+      LogError(`Error getting message ${params.MessageID} from Gmail`, undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Deletes a message from Gmail
+   * @param params - Parameters for deleting the message
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async DeleteMessage(
+    params: DeleteMessageParams,
+    credentials?: GmailCredentials
+  ): Promise<DeleteMessageResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      if (params.PermanentDelete) {
+        // Permanently delete the message
+        await cached.client.users.messages.delete({
+          userId: 'me',
+          id: params.MessageID
+        });
+      } else {
+        // Move to trash (adds TRASH label, removes INBOX)
+        await cached.client.users.messages.trash({
+          userId: 'me',
+          id: params.MessageID
+        });
+      }
+
+      LogStatus(`Message ${params.MessageID} deleted from Gmail (permanent: ${params.PermanentDelete})`);
+      return {
+        Success: true
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error deleting message';
+      LogError(`Error deleting message ${params.MessageID} from Gmail`, undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Moves a message to a different label (Gmail's equivalent of folders)
+   * In Gmail, moving is done by adding/removing labels
+   * @param params - Parameters for moving the message
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async MoveMessage(
+    params: MoveMessageParams,
+    credentials?: GmailCredentials
+  ): Promise<MoveMessageResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      // First get current labels on the message
+      const message = await cached.client.users.messages.get({
+        userId: 'me',
+        id: params.MessageID,
+        format: 'minimal'
+      });
+
+      const currentLabels = message.data.labelIds || [];
+
+      // Remove INBOX and other category labels, add the destination label
+      const labelsToRemove = currentLabels.filter(label =>
+        label === 'INBOX' ||
+        label === 'CATEGORY_PERSONAL' ||
+        label === 'CATEGORY_SOCIAL' ||
+        label === 'CATEGORY_PROMOTIONS' ||
+        label === 'CATEGORY_UPDATES' ||
+        label === 'CATEGORY_FORUMS'
+      );
+
+      await cached.client.users.messages.modify({
+        userId: 'me',
+        id: params.MessageID,
+        requestBody: {
+          addLabelIds: [params.DestinationFolderID],
+          removeLabelIds: labelsToRemove
+        }
+      });
+
+      LogStatus(`Message ${params.MessageID} moved to label ${params.DestinationFolderID}`);
+      return {
+        Success: true,
+        NewMessageID: params.MessageID // Gmail doesn't change message ID on move
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error moving message';
+      LogError(`Error moving message ${params.MessageID} in Gmail`, undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Lists Gmail labels (Gmail's equivalent of folders)
+   * @param params - Parameters for listing labels
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async ListFolders(
+    params: ListFoldersParams,
+    credentials?: GmailCredentials
+  ): Promise<ListFoldersResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      const response = await cached.client.users.labels.list({
+        userId: 'me'
+      });
+
+      if (!response.data.labels) {
+        return {
+          Success: true,
+          Folders: []
+        };
+      }
+
+      // Get detailed info for each label if counts requested
+      let labels = response.data.labels;
+
+      if (params.IncludeCounts) {
+        const detailedLabels = await Promise.all(
+          labels.map(async (label) => {
+            if (!label.id) return label;
+            try {
+              const detail = await cached.client.users.labels.get({
+                userId: 'me',
+                id: label.id
+              });
+              return detail.data;
+            } catch {
+              return label;
+            }
+          })
+        );
+        labels = detailedLabels;
+      }
+
+      const folders: MessageFolder[] = labels.map(label => ({
+        ID: label.id || '',
+        Name: label.name || '',
+        MessageCount: label.messagesTotal || undefined,
+        UnreadCount: label.messagesUnread || undefined,
+        IsSystemFolder: label.type === 'system',
+        SystemFolderType: this.mapGmailLabelToSystemFolder(label.id || '')
+      }));
+
+      // Filter by parent if specified (Gmail doesn't have nested labels in the API the same way)
+      // User labels can have "/" in names to simulate hierarchy
+      if (params.ParentFolderID) {
+        const parent = folders.find(f => f.ID === params.ParentFolderID);
+        if (parent) {
+          const parentPrefix = parent.Name + '/';
+          return {
+            Success: true,
+            Folders: folders.filter(f => f.Name.startsWith(parentPrefix)),
+            Result: labels
+          };
+        }
+      }
+
+      return {
+        Success: true,
+        Folders: folders,
+        Result: labels
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error listing labels';
+      LogError('Error listing labels from Gmail', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Marks messages as read or unread
+   * @param params - Parameters for marking messages
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async MarkAsRead(
+    params: MarkAsReadParams,
+    credentials?: GmailCredentials
+  ): Promise<MarkAsReadResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      // Process all messages
+      await Promise.all(
+        params.MessageIDs.map(async (messageId) => {
+          await cached.client.users.messages.modify({
+            userId: 'me',
+            id: messageId,
+            requestBody: params.IsRead
+              ? { removeLabelIds: ['UNREAD'] }
+              : { addLabelIds: ['UNREAD'] }
+          });
+        })
+      );
+
+      LogStatus(`Marked ${params.MessageIDs.length} message(s) as ${params.IsRead ? 'read' : 'unread'}`);
+      return {
+        Success: true
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error marking messages';
+      LogError('Error marking messages as read/unread in Gmail', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Archives a message (removes INBOX label in Gmail)
+   * @param params - Parameters for archiving the message
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async ArchiveMessage(
+    params: ArchiveMessageParams,
+    credentials?: GmailCredentials
+  ): Promise<ArchiveMessageResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      // In Gmail, archiving is simply removing the INBOX label
+      await cached.client.users.messages.modify({
+        userId: 'me',
+        id: params.MessageID,
+        requestBody: {
+          removeLabelIds: ['INBOX']
+        }
+      });
+
+      LogStatus(`Message ${params.MessageID} archived in Gmail`);
+      return {
+        Success: true
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error archiving message';
+      LogError(`Error archiving message ${params.MessageID} in Gmail`, undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Searches messages using Gmail's search syntax
+   * @param params - Parameters for searching messages
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async SearchMessages(
+    params: SearchMessagesParams,
+    credentials?: GmailCredentials
+  ): Promise<SearchMessagesResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      // Build Gmail search query
+      let query = params.Query;
+
+      // Add date filters if specified
+      if (params.FromDate) {
+        const fromDateStr = this.formatDateForGmail(params.FromDate);
+        query += ` after:${fromDateStr}`;
+      }
+      if (params.ToDate) {
+        const toDateStr = this.formatDateForGmail(params.ToDate);
+        query += ` before:${toDateStr}`;
+      }
+
+      // Add folder/label filter
+      if (params.FolderID) {
+        query += ` label:${params.FolderID}`;
+      }
+
+      // Search messages
+      const response = await cached.client.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: params.MaxResults || 50
+      });
+
+      if (!response.data.messages || response.data.messages.length === 0) {
+        return {
+          Success: true,
+          Messages: [],
+          TotalCount: 0
+        };
+      }
+
+      // Get full message details
+      const fullMessages = await Promise.all(
+        response.data.messages.map(async (msg) => {
+          const full = await cached.client.users.messages.get({
+            userId: 'me',
+            id: msg.id || '',
+            format: 'full'
+          });
+          return full.data;
+        })
+      );
+
+      const messages = fullMessages.map(msg => this.parseGmailMessage(msg));
+
+      return {
+        Success: true,
+        Messages: messages,
+        TotalCount: response.data.resultSizeEstimate || messages.length,
+        SourceData: fullMessages
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error searching messages';
+      LogError('Error searching messages in Gmail', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Lists attachments on a message
+   * @param params - Parameters for listing attachments
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async ListAttachments(
+    params: ListAttachmentsParams,
+    credentials?: GmailCredentials
+  ): Promise<ListAttachmentsResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      const response = await cached.client.users.messages.get({
+        userId: 'me',
+        id: params.MessageID,
+        format: 'full'
+      });
+
+      if (!response.data.payload) {
+        return {
+          Success: true,
+          Attachments: []
+        };
+      }
+
+      const attachments: MessageAttachment[] = [];
+      this.extractAttachments(response.data.payload, attachments);
+
+      return {
+        Success: true,
+        Attachments: attachments,
+        Result: response.data
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error listing attachments';
+      LogError(`Error listing attachments for message ${params.MessageID}`, undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Downloads an attachment from a message
+   * @param params - Parameters for downloading the attachment
+   * @param credentials - Optional credentials override for this request
+   */
+  public override async DownloadAttachment(
+    params: DownloadAttachmentParams,
+    credentials?: GmailCredentials
+  ): Promise<DownloadAttachmentResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      // First get attachment metadata to find filename and content type
+      const message = await cached.client.users.messages.get({
+        userId: 'me',
+        id: params.MessageID,
+        format: 'full'
+      });
+
+      let attachmentInfo: { filename: string; contentType: string } | null = null;
+      if (message.data.payload) {
+        attachmentInfo = this.findAttachmentInfo(message.data.payload, params.AttachmentID);
+      }
+
+      // Download the attachment
+      const response = await cached.client.users.messages.attachments.get({
+        userId: 'me',
+        messageId: params.MessageID,
+        id: params.AttachmentID
+      });
+
+      if (!response.data.data) {
+        return {
+          Success: false,
+          ErrorMessage: 'Attachment content not found'
+        };
+      }
+
+      // Gmail returns base64url encoded data, convert to standard base64
+      const base64Data = response.data.data.replace(/-/g, '+').replace(/_/g, '/');
+      const content = Buffer.from(base64Data, 'base64');
+
+      return {
+        Success: true,
+        Content: content,
+        ContentBase64: base64Data,
+        Filename: attachmentInfo?.filename || 'attachment',
+        ContentType: attachmentInfo?.contentType || 'application/octet-stream',
+        Result: response.data
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error downloading attachment';
+      LogError(`Error downloading attachment ${params.AttachmentID}`, undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: errorMessage
+      };
+    }
+  }
+
+  // ========================================================================
+  // HELPER METHODS
+  // ========================================================================
+
+  /**
+   * Parses a Gmail message into the standard GetMessageMessage format
+   */
+  private parseGmailMessage(message: googleApis.gmail_v1.Schema$Message): GetMessageMessage {
+    const headers = message.payload?.headers || [];
+    const getHeader = (name: string) => {
+      const header = headers.find(h => h.name?.toLowerCase() === name.toLowerCase());
+      return header ? header.value : '';
+    };
+
+    const from = getHeader('from');
+    const to = getHeader('to');
+    const subject = getHeader('subject');
+    const replyTo = getHeader('reply-to') ? [getHeader('reply-to')] : [from];
+    const dateStr = getHeader('date');
+
+    // Extract body
+    let body = '';
+    if (message.payload?.body?.data) {
+      body = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
+    } else if (message.payload?.parts) {
+      const textPart = message.payload.parts.find(part => part.mimeType === 'text/plain');
+      if (textPart && textPart.body?.data) {
+        body = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
+      }
+    }
+
+    // Parse date
+    let receivedAt: Date | undefined;
+    if (dateStr) {
+      try {
+        receivedAt = new Date(dateStr);
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    // Internal date from Gmail (epoch milliseconds)
+    let createdAt: Date | undefined;
+    if (message.internalDate) {
+      createdAt = new Date(parseInt(message.internalDate, 10));
+    }
+
+    return {
+      From: from || '',
+      To: to || '',
+      ReplyTo: replyTo.map(r => r || '').filter(r => r !== ''),
+      Subject: subject || '',
+      Body: body,
+      ExternalSystemRecordID: message.id || '',
+      ThreadID: message.threadId || '',
+      ReceivedAt: receivedAt,
+      CreatedAt: createdAt
+    };
+  }
+
+  /**
+   * Maps Gmail label IDs to system folder types
+   */
+  private mapGmailLabelToSystemFolder(labelId: string): MessageFolder['SystemFolderType'] {
+    const labelMap: Record<string, MessageFolder['SystemFolderType']> = {
+      'INBOX': 'inbox',
+      'SENT': 'sent',
+      'DRAFT': 'drafts',
+      'TRASH': 'trash',
+      'SPAM': 'spam',
+      'STARRED': 'other',
+      'IMPORTANT': 'other',
+      'UNREAD': 'other',
+      'CATEGORY_PERSONAL': 'other',
+      'CATEGORY_SOCIAL': 'other',
+      'CATEGORY_PROMOTIONS': 'other',
+      'CATEGORY_UPDATES': 'other',
+      'CATEGORY_FORUMS': 'other'
+    };
+    return labelMap[labelId] || undefined;
+  }
+
+  /**
+   * Formats a date for Gmail search query (YYYY/MM/DD)
+   */
+  private formatDateForGmail(date: Date): string {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}/${month}/${day}`;
+  }
+
+  /**
+   * Recursively extracts attachment information from message parts
+   */
+  private extractAttachments(
+    part: googleApis.gmail_v1.Schema$MessagePart,
+    attachments: MessageAttachment[]
+  ): void {
+    // Check if this part is an attachment
+    if (part.filename && part.body?.attachmentId) {
+      attachments.push({
+        ID: part.body.attachmentId,
+        Filename: part.filename,
+        ContentType: part.mimeType || 'application/octet-stream',
+        Size: part.body.size || 0,
+        IsInline: part.headers?.some(h =>
+          h.name?.toLowerCase() === 'content-disposition' &&
+          h.value?.toLowerCase().includes('inline')
+        ) || false,
+        ContentID: part.headers?.find(h =>
+          h.name?.toLowerCase() === 'content-id'
+        )?.value?.replace(/[<>]/g, '') || undefined
+      });
+    }
+
+    // Recursively process nested parts
+    if (part.parts) {
+      for (const nestedPart of part.parts) {
+        this.extractAttachments(nestedPart, attachments);
+      }
+    }
+  }
+
+  /**
+   * Finds attachment info (filename, content type) by attachment ID
+   */
+  private findAttachmentInfo(
+    part: googleApis.gmail_v1.Schema$MessagePart,
+    attachmentId: string
+  ): { filename: string; contentType: string } | null {
+    if (part.body?.attachmentId === attachmentId) {
+      return {
+        filename: part.filename || 'attachment',
+        contentType: part.mimeType || 'application/octet-stream'
+      };
+    }
+
+    if (part.parts) {
+      for (const nestedPart of part.parts) {
+        const result = this.findAttachmentInfo(nestedPart, attachmentId);
+        if (result) return result;
+      }
+    }
+
+    return null;
   }
 }
 

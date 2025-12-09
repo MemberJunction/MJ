@@ -12,7 +12,8 @@ import {
     ReplyToMessageParams,
     ReplyToMessageResult,
     resolveCredentialValue,
-    validateRequiredCredentials
+    validateRequiredCredentials,
+    ProviderOperation
 } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired } from '@sendgrid/mail';
@@ -71,6 +72,20 @@ export interface SendGridCredentials extends ProviderCredentialsBase {
  */
 @RegisterClass(BaseCommunicationProvider, 'SendGrid')
 export class SendGridProvider extends BaseCommunicationProvider {
+    /**
+     * Returns the list of operations supported by the SendGrid provider.
+     * SendGrid is a transactional email service (send-only) and does not support
+     * mailbox operations like fetching messages, folders, or attachments.
+     */
+    public override getSupportedOperations(): ProviderOperation[] {
+        return [
+            'SendSingleMessage'
+            // Note: SendGrid is send-only - no inbox access, no fetching, no drafts
+            // GetMessages, ForwardMessage, ReplyToMessage throw errors
+            // CreateDraft returns not supported
+        ];
+    }
+
     /**
      * Sends a single message using SendGrid.
      * @param message - The processed message to send
