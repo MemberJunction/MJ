@@ -71,17 +71,53 @@ Located in the [providers](./providers) subdirectory:
 
 ### Provider Capabilities
 
+#### Core Operations
+
 | Feature | SendGrid | Gmail | MS Graph | Twilio |
 |---------|----------|-------|----------|--------|
 | Send Single | ✅ | ✅ | ✅ | ✅ |
 | Get Messages | ❌ | ✅ | ✅ | ✅ |
+| Get Single Message | ❌ | ✅ | ✅ | ❌ |
 | Forward | ❌ | ✅ | ✅ | ✅ |
 | Reply | ❌ | ✅ | ✅ | ✅ |
-| **Create Draft** | **❌** | **✅** | **✅** | **❌** |
+| Create Draft | ❌ | ✅ | ✅ | ❌ |
+
+#### Extended Mailbox Operations
+
+| Feature | SendGrid | Gmail | MS Graph | Twilio |
+|---------|----------|-------|----------|--------|
+| Delete Message | ❌ | ✅ | ✅ | ❌ |
+| Move Message | ❌ | ✅ | ✅ | ❌ |
+| List Folders | ❌ | ✅ | ✅ | ❌ |
+| Mark As Read | ❌ | ✅ | ✅ | ❌ |
+| Archive Message | ❌ | ✅ | ✅ | ❌ |
+| Search Messages | ❌ | ✅ | ✅ | ❌ |
+| List Attachments | ❌ | ✅ | ✅ | ❌ |
+| Download Attachment | ❌ | ✅ | ✅ | ❌ |
+
+#### Additional Features
+
+| Feature | SendGrid | Gmail | MS Graph | Twilio |
+|---------|----------|-------|----------|--------|
 | Scheduled Send | ✅ | ❌ | ❌ | ❌ |
 | HTML/Text | ✅ | ✅ | ✅ | Limited |
 | Threading | ❌ | ✅ | ✅ | ❌ |
 | CC/BCC | ✅ | ✅ | ✅ | ❌ |
+
+#### Capability Discovery
+
+Providers now support runtime capability discovery via `getSupportedOperations()`:
+
+```typescript
+const provider = engine.getProvider('Gmail');
+const operations = provider.getSupportedOperations();
+// Returns: ['SendSingleMessage', 'GetMessages', 'GetSingleMessage', ...]
+
+// Check specific capability
+if (provider.supportsOperation('SearchMessages')) {
+    const results = await provider.SearchMessages({ Query: 'invoice' });
+}
+```
 
 ## Architecture
 
