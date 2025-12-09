@@ -1,6 +1,7 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { ProviderCredentialsBase } from "./CredentialUtils";
 
 /**
  * Information about a single recipient
@@ -286,36 +287,89 @@ export type CreateDraftResult<T = Record<string, any>> = BaseMessageResult & {
 
 /**
  * Base class for all communication providers. Each provider sub-classes this base class and implements functionality specific to the provider.
+ *
+ * @remarks
+ * All methods accept an optional `credentials` parameter that allows per-request credential overrides.
+ * When credentials are provided, they take precedence over environment variables.
+ * Set `credentials.disableEnvironmentFallback = true` to disable environment variable fallback.
+ *
+ * Each provider defines its own credential interface that extends `ProviderCredentialsBase`.
+ * For example, `SendGridCredentials`, `MSGraphCredentials`, etc.
+ *
+ * @example
+ * ```typescript
+ * // Use environment credentials (default behavior)
+ * await provider.SendSingleMessage(message);
+ *
+ * // Override with request credentials
+ * await provider.SendSingleMessage(message, { apiKey: 'SG.xxx' });
+ *
+ * // Require explicit credentials (no env fallback)
+ * await provider.SendSingleMessage(message, {
+ *     apiKey: 'SG.xxx',
+ *     disableEnvironmentFallback: true
+ * });
+ * ```
  */
 export abstract class BaseCommunicationProvider {
     /**
-     *
+     * Sends a single message using the provider
+     * @param message - The processed message to send
+     * @param credentials - Optional credentials override for this request.
+     *                      Provider-specific credential interface (e.g., SendGridCredentials).
+     *                      If not provided, uses environment variables.
+     * @returns Promise<MessageResult> - Result of the send operation
      */
-    public abstract SendSingleMessage(message: ProcessedMessage): Promise<MessageResult>
+    public abstract SendSingleMessage(
+        message: ProcessedMessage,
+        credentials?: ProviderCredentialsBase
+    ): Promise<MessageResult>
 
     /**
      * Fetches messages using the provider
+     * @param params - Parameters for fetching messages
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<GetMessagesResult> - Retrieved messages
      */
-    public abstract GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>
+    public abstract GetMessages(
+        params: GetMessagesParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<GetMessagesResult>
 
     /**
      * Forwards a message to another client using the provider
+     * @param params - Parameters for forwarding the message
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<ForwardMessageResult> - Result of the forward operation
      */
-    public abstract ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>
+    public abstract ForwardMessage(
+        params: ForwardMessageParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<ForwardMessageResult>
 
     /**
      * Replies to a message using the provider
+     * @param params - Parameters for replying to the message
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<ReplyToMessageResult> - Result of the reply operation
      */
-    public abstract ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>
+    public abstract ReplyToMessage(
+        params: ReplyToMessageParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<ReplyToMessageResult>
 
     /**
      * Creates a draft message using the provider.
      * Providers that don't support drafts should return Success: false
      * with an appropriate error message.
      * @param params - Parameters for creating the draft
+     * @param credentials - Optional credentials override for this request
      * @returns Promise<CreateDraftResult> - Result containing draft ID if successful
      */
-    public abstract CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult>
+    public abstract CreateDraft(
+        params: CreateDraftParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<CreateDraftResult>
 
 }
 

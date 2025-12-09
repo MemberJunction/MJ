@@ -1,59 +1,166 @@
-import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessageMessage, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessageMessage, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ProviderCredentialsBase, ReplyToMessageParams, ReplyToMessageResult, resolveCredentialValue, validateRequiredCredentials } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
 import * as googleApis from 'googleapis';
 
 /**
+ * Credentials for Gmail provider using OAuth2.
+ * Extend ProviderCredentialsBase to support per-request credential override.
+ *
+ * @remarks
+ * **TEMPORARY INTERFACE**: This interface is part of the interim credential solution for 2.x patch release.
+ * In MemberJunction 3.0, this will be integrated with the comprehensive credential management system.
+ */
+export interface GmailCredentials extends ProviderCredentialsBase {
+  /** Google OAuth2 Client ID */
+  clientId?: string;
+  /** Google OAuth2 Client Secret */
+  clientSecret?: string;
+  /** OAuth2 Redirect URI */
+  redirectUri?: string;
+  /** OAuth2 Refresh Token */
+  refreshToken?: string;
+  /** Service account email (optional) */
+  serviceAccountEmail?: string;
+}
+
+/**
+ * Resolved Gmail credentials after merging request credentials with environment fallback
+ */
+interface ResolvedGmailCredentials {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  refreshToken: string;
+  serviceAccountEmail: string;
+}
+
+/**
+ * Cached Gmail client with associated user email
+ */
+interface CachedGmailClient {
+  client: googleApis.gmail_v1.Gmail;
+  userEmail: string | null;
+}
+
+/**
  * Implementation of the Gmail provider for sending and receiving messages
  */
 @RegisterClass(BaseCommunicationProvider, 'Gmail')
 export class GmailProvider extends BaseCommunicationProvider {
-  private userEmail: string | null = null;
-  private gmailClient: googleApis.gmail_v1.Gmail;
-  
-  constructor() {
-    super();
-    
+  /** Cached Gmail client for environment credentials */
+  private envGmailClient: CachedGmailClient | null = null;
+
+  /** Cache of Gmail clients for per-request credentials */
+  private clientCache: Map<string, CachedGmailClient> = new Map();
+
+  /**
+   * Resolves credentials by merging request credentials with environment fallback
+   */
+  private resolveCredentials(credentials?: GmailCredentials): ResolvedGmailCredentials {
+    const disableFallback = credentials?.disableEnvironmentFallback ?? false;
+
+    const clientId = resolveCredentialValue(credentials?.clientId, Config.GMAIL_CLIENT_ID, disableFallback);
+    const clientSecret = resolveCredentialValue(credentials?.clientSecret, Config.GMAIL_CLIENT_SECRET, disableFallback);
+    const redirectUri = resolveCredentialValue(credentials?.redirectUri, Config.GMAIL_REDIRECT_URI, disableFallback);
+    const refreshToken = resolveCredentialValue(credentials?.refreshToken, Config.GMAIL_REFRESH_TOKEN, disableFallback);
+    const serviceAccountEmail = resolveCredentialValue(credentials?.serviceAccountEmail, Config.GMAIL_SERVICE_ACCOUNT_EMAIL, disableFallback);
+
+    // Validate required credentials
+    validateRequiredCredentials(
+      { clientId, clientSecret, redirectUri, refreshToken },
+      ['clientId', 'clientSecret', 'redirectUri', 'refreshToken'],
+      'Gmail'
+    );
+
+    return {
+      clientId: clientId!,
+      clientSecret: clientSecret!,
+      redirectUri: redirectUri!,
+      refreshToken: refreshToken!,
+      serviceAccountEmail: serviceAccountEmail || ''
+    };
+  }
+
+  /**
+   * Creates a Gmail client with the given credentials
+   */
+  private createGmailClient(creds: ResolvedGmailCredentials): googleApis.gmail_v1.Gmail {
     // Create OAuth2 client
     const oauth2Client = new googleApis.google.auth.OAuth2(
-      Config.GMAIL_CLIENT_ID,
-      Config.GMAIL_CLIENT_SECRET,
-      Config.GMAIL_REDIRECT_URI
+      creds.clientId,
+      creds.clientSecret,
+      creds.redirectUri
     );
 
     // Set refresh token to automatically refresh access tokens
     oauth2Client.setCredentials({
-      refresh_token: Config.GMAIL_REFRESH_TOKEN
+      refresh_token: creds.refreshToken
     });
 
     // Create Gmail API client
-    this.gmailClient = googleApis.google.gmail({
+    return googleApis.google.gmail({
       version: 'v1',
       auth: oauth2Client
     });
   }
 
   /**
-   * Gets the authenticated user's email address
+   * Gets a Gmail client for the given credentials, using caching for efficiency
    */
-  private async getUserEmail(): Promise<string | null> {
-    if (this.userEmail) {
-      return this.userEmail;
+  private getGmailClient(creds: ResolvedGmailCredentials): CachedGmailClient {
+    // Check if using environment credentials (can use shared client)
+    const isEnvCredentials =
+      creds.clientId === Config.GMAIL_CLIENT_ID &&
+      creds.clientSecret === Config.GMAIL_CLIENT_SECRET &&
+      creds.refreshToken === Config.GMAIL_REFRESH_TOKEN;
+
+    if (isEnvCredentials) {
+      if (!this.envGmailClient) {
+        this.envGmailClient = {
+          client: this.createGmailClient(creds),
+          userEmail: null
+        };
+      }
+      return this.envGmailClient;
+    }
+
+    // For per-request credentials, use cached client by credential key
+    const cacheKey = `${creds.clientId}:${creds.refreshToken.substring(0, 10)}`;
+    let cached = this.clientCache.get(cacheKey);
+
+    if (!cached) {
+      cached = {
+        client: this.createGmailClient(creds),
+        userEmail: null
+      };
+      this.clientCache.set(cacheKey, cached);
+    }
+
+    return cached;
+  }
+
+  /**
+   * Gets the authenticated user's email address for a given cached client
+   */
+  private async getUserEmail(cached: CachedGmailClient): Promise<string | null> {
+    if (cached.userEmail) {
+      return cached.userEmail;
     }
 
     try {
       // Get user profile to verify authentication
-      const response = await this.gmailClient.users.getProfile({
+      const response = await cached.client.users.getProfile({
         userId: 'me'
       });
-      
+
       if (response.data && response.data.emailAddress) {
-        this.userEmail = response.data.emailAddress;
-        return this.userEmail;
+        cached.userEmail = response.data.emailAddress;
+        return cached.userEmail;
       }
       return null;
-    } catch (error: any) {
+    } catch (error: unknown) {
       LogError('Failed to get Gmail user email', undefined, error);
       return null;
     }
@@ -62,9 +169,9 @@ export class GmailProvider extends BaseCommunicationProvider {
   /**
    * Encode and format email content for Gmail API
    */
-  private createEmailContent(message: ProcessedMessage): string {
+  private createEmailContent(message: ProcessedMessage, creds: ResolvedGmailCredentials): string {
     // Get sender email
-    const from = message.From || Config.GMAIL_SERVICE_ACCOUNT_EMAIL;
+    const from = message.From || creds.serviceAccountEmail;
     const fromName = message.FromName || '';
     const fromHeader = fromName ? `${fromName} <${from}>` : from;
 
@@ -120,11 +227,22 @@ export class GmailProvider extends BaseCommunicationProvider {
 
   /**
    * Sends a single message using the Gmail API
+   * @param message - The message to send
+   * @param credentials - Optional credentials override for this request.
+   *                      If not provided, uses environment variables.
+   *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
    */
-  public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
+  public async SendSingleMessage(
+    message: ProcessedMessage,
+    credentials?: GmailCredentials
+  ): Promise<MessageResult> {
     try {
+      // Resolve credentials (request credentials with env fallback)
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
       // Get user email
-      const userEmail = await this.getUserEmail();
+      const userEmail = await this.getUserEmail(cached);
       if (!userEmail) {
         return {
           Message: message,
@@ -134,10 +252,10 @@ export class GmailProvider extends BaseCommunicationProvider {
       }
 
       // Create raw email content in base64 URL-safe format
-      const raw = this.createEmailContent(message);
+      const raw = this.createEmailContent(message, creds);
 
       // Send the email
-      const result = await this.gmailClient.users.messages.send({
+      const result = await cached.client.users.messages.send({
         userId: 'me',
         requestBody: {
           raw
@@ -159,22 +277,34 @@ export class GmailProvider extends BaseCommunicationProvider {
           Error: `Failed to send email: ${result?.statusText || 'Unknown error'}`
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error sending message';
       LogError('Error sending message via Gmail', undefined, error);
       return {
         Message: message,
         Success: false,
-        Error: error.message || 'Error sending message'
+        Error: errorMessage
       };
     }
   }
 
   /**
    * Gets messages from Gmail
+   * @param params - Parameters for fetching messages
+   * @param credentials - Optional credentials override for this request.
+   *                      If not provided, uses environment variables.
+   *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
    */
-  public async GetMessages(params: GetMessagesParams): Promise<GetMessagesResult> {
+  public async GetMessages(
+    params: GetMessagesParams,
+    credentials?: GmailCredentials
+  ): Promise<GetMessagesResult> {
     try {
-      const userEmail = await this.getUserEmail();
+      // Resolve credentials (request credentials with env fallback)
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      const userEmail = await this.getUserEmail(cached);
       if (!userEmail) {
         return {
           Success: false,
@@ -190,11 +320,11 @@ export class GmailProvider extends BaseCommunicationProvider {
       }
 
       if (params.ContextData?.query) {
-        query = params.ContextData.query;
+        query = params.ContextData.query as string;
       }
 
       // Get messages
-      const response = await this.gmailClient.users.messages.list({
+      const response = await cached.client.users.messages.list({
         userId: 'me',
         maxResults: params.NumMessages,
         q: query
@@ -209,7 +339,7 @@ export class GmailProvider extends BaseCommunicationProvider {
 
       // Get full message details for each message ID
       const messagePromises = response.data.messages.map(async (message) => {
-        const fullMessage = await this.gmailClient.users.messages.get({
+        const fullMessage = await cached.client.users.messages.get({
           userId: 'me',
           id: message.id || '',
           format: 'full'
@@ -262,7 +392,7 @@ export class GmailProvider extends BaseCommunicationProvider {
       if (params.ContextData?.MarkAsRead) {
         for (const message of fullMessages) {
           if (message.id) {
-            await this.markMessageAsRead(message.id);
+            await this.markMessageAsRead(cached.client, message.id);
           }
         }
       }
@@ -272,20 +402,28 @@ export class GmailProvider extends BaseCommunicationProvider {
         Messages: processedMessages,
         SourceData: fullMessages
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error getting messages';
       LogError('Error getting messages from Gmail', undefined, error);
       return {
         Success: false,
         Messages: [],
-        ErrorMessage: error.message || 'Error getting messages'
+        ErrorMessage: errorMessage
       };
     }
   }
 
   /**
    * Reply to a message using Gmail API
+   * @param params - Parameters for replying to a message
+   * @param credentials - Optional credentials override for this request.
+   *                      If not provided, uses environment variables.
+   *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
    */
-  public async ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
+  public async ReplyToMessage(
+    params: ReplyToMessageParams,
+    credentials?: GmailCredentials
+  ): Promise<ReplyToMessageResult> {
     try {
       if (!params.MessageID) {
         return {
@@ -294,8 +432,12 @@ export class GmailProvider extends BaseCommunicationProvider {
         };
       }
 
+      // Resolve credentials (request credentials with env fallback)
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
       // Get the original message to obtain threadId
-      const originalMessage = await this.gmailClient.users.messages.get({
+      const originalMessage = await cached.client.users.messages.get({
         userId: 'me',
         id: params.MessageID
       });
@@ -308,10 +450,10 @@ export class GmailProvider extends BaseCommunicationProvider {
       }
 
       // Create raw email content
-      const raw = this.createEmailContent(params.Message);
+      const raw = this.createEmailContent(params.Message, creds);
 
       // Send the reply in the same thread
-      const result = await this.gmailClient.users.messages.send({
+      const result = await cached.client.users.messages.send({
         userId: 'me',
         requestBody: {
           raw,
@@ -330,19 +472,27 @@ export class GmailProvider extends BaseCommunicationProvider {
           ErrorMessage: `Failed to reply to message: ${result?.statusText || 'Unknown error'}`
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error replying to message';
       LogError('Error replying to message via Gmail', undefined, error);
       return {
         Success: false,
-        ErrorMessage: error.message || 'Error replying to message'
+        ErrorMessage: errorMessage
       };
     }
   }
 
   /**
    * Forward a message using Gmail API
+   * @param params - Parameters for forwarding a message
+   * @param credentials - Optional credentials override for this request.
+   *                      If not provided, uses environment variables.
+   *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
    */
-  public async ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult> {
+  public async ForwardMessage(
+    params: ForwardMessageParams,
+    credentials?: GmailCredentials
+  ): Promise<ForwardMessageResult> {
     try {
       if (!params.MessageID) {
         return {
@@ -351,8 +501,12 @@ export class GmailProvider extends BaseCommunicationProvider {
         };
       }
 
+      // Resolve credentials (request credentials with env fallback)
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
       // Get the original message
-      const originalMessage = await this.gmailClient.users.messages.get({
+      const originalMessage = await cached.client.users.messages.get({
         userId: 'me',
         id: params.MessageID,
         format: 'raw'
@@ -369,32 +523,32 @@ export class GmailProvider extends BaseCommunicationProvider {
       const rawContent = Buffer.from(originalMessage.data.raw, 'base64').toString('utf-8');
 
       // Build forwarded message
-      const userEmail = await this.getUserEmail();
+      const userEmail = await this.getUserEmail(cached);
       const to = params.ToRecipients.join(', ');
       const cc = params.CCRecipients?.join(', ') || '';
       const bcc = params.BCCRecipients?.join(', ') || '';
-      
+
       // Parse the original email to extract subject
       const subjectMatch = rawContent.match(/Subject: (.*?)(\r?\n)/);
       const subject = subjectMatch ? `Fwd: ${subjectMatch[1]}` : 'Fwd: ';
-      
+
       // Headers for new message
-      let emailContent = [
+      const emailContent = [
         `From: ${userEmail}`,
         `To: ${to}`,
         `Subject: ${subject}`
       ];
-      
+
       // Add CC and BCC if present
       if (cc) emailContent.push(`Cc: ${cc}`);
       if (bcc) emailContent.push(`Bcc: ${bcc}`);
-      
+
       // Add content type
       const boundary = `boundary_${Math.random().toString(36).substring(2)}`;
       emailContent.push('MIME-Version: 1.0');
       emailContent.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
       emailContent.push('');
-      
+
       // Forward comment
       if (params.Message) {
         emailContent.push(`--${boundary}`);
@@ -403,7 +557,7 @@ export class GmailProvider extends BaseCommunicationProvider {
         emailContent.push(params.Message);
         emailContent.push('');
       }
-      
+
       // Original message as attachment
       emailContent.push(`--${boundary}`);
       emailContent.push('Content-Type: message/rfc822; name="forwarded_message.eml"');
@@ -411,17 +565,17 @@ export class GmailProvider extends BaseCommunicationProvider {
       emailContent.push('');
       emailContent.push(rawContent);
       emailContent.push('');
-      
+
       emailContent.push(`--${boundary}--`);
-      
+
       // Encode email content
       const raw = Buffer.from(emailContent.join('\r\n')).toString('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
-      
+
       // Send the forwarded message
-      const result = await this.gmailClient.users.messages.send({
+      const result = await cached.client.users.messages.send({
         userId: 'me',
         requestBody: {
           raw
@@ -439,11 +593,12 @@ export class GmailProvider extends BaseCommunicationProvider {
           ErrorMessage: `Failed to forward message: ${result?.statusText || 'Unknown error'}`
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error forwarding message';
       LogError('Error forwarding message via Gmail', undefined, error);
       return {
         Success: false,
-        ErrorMessage: error.message || 'Error forwarding message'
+        ErrorMessage: errorMessage
       };
     }
   }
@@ -451,9 +606,9 @@ export class GmailProvider extends BaseCommunicationProvider {
   /**
    * Helper to mark a message as read
    */
-  private async markMessageAsRead(messageId: string): Promise<boolean> {
+  private async markMessageAsRead(gmailClient: googleApis.gmail_v1.Gmail, messageId: string): Promise<boolean> {
     try {
-      await this.gmailClient.users.messages.modify({
+      await gmailClient.users.messages.modify({
         userId: 'me',
         id: messageId,
         requestBody: {
@@ -461,7 +616,7 @@ export class GmailProvider extends BaseCommunicationProvider {
         }
       });
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       LogError(`Error marking message ${messageId} as read`, undefined, error);
       return false;
     }
@@ -469,10 +624,21 @@ export class GmailProvider extends BaseCommunicationProvider {
 
   /**
    * Creates a draft message in Gmail
+   * @param params - Parameters for creating a draft
+   * @param credentials - Optional credentials override for this request.
+   *                      If not provided, uses environment variables.
+   *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
    */
-  public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+  public async CreateDraft(
+    params: CreateDraftParams,
+    credentials?: GmailCredentials
+  ): Promise<CreateDraftResult> {
     try {
-      const userEmail = await this.getUserEmail();
+      // Resolve credentials (request credentials with env fallback)
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+
+      const userEmail = await this.getUserEmail(cached);
       if (!userEmail) {
         return {
           Success: false,
@@ -481,10 +647,10 @@ export class GmailProvider extends BaseCommunicationProvider {
       }
 
       // Reuse existing email content creation logic
-      const raw = this.createEmailContent(params.Message);
+      const raw = this.createEmailContent(params.Message, creds);
 
       // Create draft using Gmail API
-      const result = await this.gmailClient.users.drafts.create({
+      const result = await cached.client.users.drafts.create({
         userId: 'me',
         requestBody: {
           message: { raw }
@@ -505,11 +671,12 @@ export class GmailProvider extends BaseCommunicationProvider {
           ErrorMessage: `Failed to create draft: ${result?.statusText || 'Unknown error'}`
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error creating draft';
       LogError('Error creating draft via Gmail', undefined, error);
       return {
         Success: false,
-        ErrorMessage: error.message || 'Error creating draft'
+        ErrorMessage: errorMessage
       };
     }
   }
