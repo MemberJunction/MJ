@@ -65,14 +65,16 @@ const mockActionRegistry: MockAction[] = [
 
 /**
  * Applies runtime action changes to a base set of actions.
+ * Also returns any dynamic action limits that were specified.
  */
 function applyActionChanges(
     baseActions: MockAction[],
     actionChanges: ActionChange[],
     agentId: string,
     isRoot: boolean
-): MockAction[] {
+): { actions: MockAction[], dynamicLimits: Record<string, number> } {
     let actions = [...baseActions];
+    const dynamicLimits: Record<string, number> = {};
 
     for (const change of actionChanges) {
         if (!doesChangeScopeApply(change.scope, agentId, isRoot, change.agentIds)) {
@@ -85,6 +87,10 @@ function applyActionChanges(
                     const actionToAdd = mockActionRegistry.find(a => a.ID === actionId);
                     if (actionToAdd) {
                         actions.push(actionToAdd);
+                        // Store execution limit if provided
+                        if (change.actionLimits?.[actionId] != null) {
+                            dynamicLimits[actionId] = change.actionLimits[actionId];
+                        }
                     }
                 }
             }
@@ -93,7 +99,7 @@ function applyActionChanges(
         }
     }
 
-    return actions;
+    return { actions, dynamicLimits };
 }
 
 /**
@@ -245,7 +251,7 @@ testGroup('applyActionChanges - add mode with global scope', () => {
         { scope: 'global', mode: 'add', actionIds: ['action-5', 'action-6'] }
     ];
 
-    const result = applyActionChanges(baseActions, changes, 'agent-1', true);
+    const { actions: result } = applyActionChanges(baseActions, changes, 'agent-1', true);
 
     assert(result.length === 3, 'should have 3 actions after adding 2');
     assert(
@@ -268,7 +274,7 @@ testGroup('applyActionChanges - add mode does not duplicate', () => {
         { scope: 'global', mode: 'add', actionIds: ['action-5', 'action-6'] }
     ];
 
-    const result = applyActionChanges(baseActions, changes, 'agent-1', true);
+    const { actions: result } = applyActionChanges(baseActions, changes, 'agent-1', true);
 
     assert(result.length === 3, 'should have 3 actions (no duplicate action-5)');
     assert(
@@ -288,7 +294,7 @@ testGroup('applyActionChanges - remove mode', () => {
         { scope: 'global', mode: 'remove', actionIds: ['action-3', 'action-4'] }
     ];
 
-    const result = applyActionChanges(baseActions, changes, 'agent-1', true);
+    const { actions: result } = applyActionChanges(baseActions, changes, 'agent-1', true);
 
     assert(result.length === 1, 'should have 1 action after removing 2');
     assert(
@@ -306,8 +312,8 @@ testGroup('applyActionChanges - scope filtering (root only)', () => {
         { scope: 'root', mode: 'add', actionIds: ['action-5'] }
     ];
 
-    const rootResult = applyActionChanges(baseActions, changes, 'root-agent', true);
-    const subAgentResult = applyActionChanges(baseActions, changes, 'sub-agent', false);
+    const { actions: rootResult } = applyActionChanges(baseActions, changes, 'root-agent', true);
+    const { actions: subAgentResult } = applyActionChanges(baseActions, changes, 'sub-agent', false);
 
     assert(rootResult.length === 2, 'root agent should have 2 actions');
     assert(subAgentResult.length === 1, 'sub-agent should still have 1 action (change not applied)');
@@ -323,8 +329,8 @@ testGroup('applyActionChanges - scope filtering (all-subagents)', () => {
         { scope: 'all-subagents', mode: 'remove', actionIds: ['action-3'] }
     ];
 
-    const rootResult = applyActionChanges(baseActions, changes, 'root-agent', true);
-    const subAgentResult = applyActionChanges(baseActions, changes, 'sub-agent', false);
+    const { actions: rootResult } = applyActionChanges(baseActions, changes, 'root-agent', true);
+    const { actions: subAgentResult } = applyActionChanges(baseActions, changes, 'sub-agent', false);
 
     assert(rootResult.length === 2, 'root agent should still have 2 actions (change not applied)');
     assert(subAgentResult.length === 1, 'sub-agent should have 1 action after removal');
@@ -344,8 +350,8 @@ testGroup('applyActionChanges - scope filtering (specific)', () => {
         }
     ];
 
-    const normalResult = applyActionChanges(baseActions, changes, 'normal-agent', false);
-    const specialResult = applyActionChanges(baseActions, changes, 'special-agent', false);
+    const { actions: normalResult } = applyActionChanges(baseActions, changes, 'normal-agent', false);
+    const { actions: specialResult } = applyActionChanges(baseActions, changes, 'special-agent', false);
 
     assert(normalResult.length === 1, 'normal agent should have 1 action (not in agentIds)');
     assert(specialResult.length === 2, 'special agent should have 2 actions (in agentIds)');
@@ -364,7 +370,7 @@ testGroup('applyActionChanges - multiple changes applied in order', () => {
         { scope: 'global', mode: 'add', actionIds: ['action-5'] }
     ];
 
-    const result = applyActionChanges(baseActions, changes, 'agent-1', true);
+    const { actions: result } = applyActionChanges(baseActions, changes, 'agent-1', true);
 
     assert(result.length === 2, 'should have 2 actions');
     assert(
@@ -375,6 +381,75 @@ testGroup('applyActionChanges - multiple changes applied in order', () => {
         result.some(a => a.ID === 'action-5'),
         'should have action-5 (added)'
     );
+});
+
+testGroup('applyActionChanges - actionLimits stored for added actions', () => {
+    const baseActions: MockAction[] = [
+        { ID: 'action-1', Name: 'Send Email', Status: 'Active' },
+    ];
+
+    const changes: ActionChange[] = [
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['action-5', 'action-6'],
+            actionLimits: {
+                'action-5': 10,
+                'action-6': 5
+            }
+        }
+    ];
+
+    const { actions, dynamicLimits } = applyActionChanges(baseActions, changes, 'agent-1', true);
+
+    assert(actions.length === 3, 'should have 3 actions after adding 2');
+    assert(dynamicLimits['action-5'] === 10, 'action-5 should have limit of 10');
+    assert(dynamicLimits['action-6'] === 5, 'action-6 should have limit of 5');
+    assert(dynamicLimits['action-1'] === undefined, 'action-1 should have no limit (was in base)');
+});
+
+testGroup('applyActionChanges - actionLimits partial (some actions without limits)', () => {
+    const baseActions: MockAction[] = [];
+
+    const changes: ActionChange[] = [
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['action-5', 'action-6'],
+            actionLimits: {
+                'action-5': 3  // Only action-5 has a limit
+            }
+        }
+    ];
+
+    const { actions, dynamicLimits } = applyActionChanges(baseActions, changes, 'agent-1', true);
+
+    assert(actions.length === 2, 'should have 2 actions');
+    assert(dynamicLimits['action-5'] === 3, 'action-5 should have limit of 3');
+    assert(dynamicLimits['action-6'] === undefined, 'action-6 should have no limit');
+});
+
+testGroup('applyActionChanges - actionLimits ignored for remove mode', () => {
+    const baseActions: MockAction[] = [
+        { ID: 'action-1', Name: 'Send Email', Status: 'Active' },
+        { ID: 'action-5', Name: 'LMS Query', Status: 'Active' },
+    ];
+
+    const changes: ActionChange[] = [
+        {
+            scope: 'global',
+            mode: 'remove',
+            actionIds: ['action-5'],
+            actionLimits: {
+                'action-5': 10  // Should be ignored for remove mode
+            }
+        }
+    ];
+
+    const { actions, dynamicLimits } = applyActionChanges(baseActions, changes, 'agent-1', true);
+
+    assert(actions.length === 1, 'should have 1 action after removal');
+    assert(Object.keys(dynamicLimits).length === 0, 'should have no dynamic limits (remove mode)');
 });
 
 // ============================================================================

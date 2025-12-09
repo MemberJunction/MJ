@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.124.0
+
+### Patch Changes
+
+- 75058a9: Fix metadata provider race conditions, add EntityDataGrid component validation, and enforce Component entity Specification field as single source of truth
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/interactive-component-types@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes

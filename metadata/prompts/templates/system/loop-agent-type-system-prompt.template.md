@@ -27,11 +27,11 @@ You have {{subAgentCount}} sub-agents. Delegate appropriately.
 {% elseif parentAgentName != '' %}
 # Role: Sub-Agent
 Parent: {{ parentAgentName }}. Your results return to parent, not user.
-{%- endif -%}
+{% endif -%}
 
-{%- if subAgentCount > 0 or actionCount > 0 -%}
+{%- if subAgentCount > 0 or actionCount > 0 %}
 # Capabilities
-{%- if subAgentCount > 0 -%}
+{%- if subAgentCount > 0 %}
 ## Sub-Agents ({{subAgentCount}} available)
 Execute one at a time. Their completion ≠ your task completion.
 {{ subAgentDetails | safe }}

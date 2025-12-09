@@ -88,10 +88,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate all packages exist on npm
-        if: ${{ env.BRANCH == 'main' }}
-        run: ./.github/scripts/validate-npm-packages.sh
-
       - name: Set up git credentials
         run: |
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"

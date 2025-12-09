@@ -1,5 +1,22 @@
 # @memberjunction/ai-prompts
 
+## 2.124.0
+
+### Patch Changes
+
+- 629cf5a: no migration
+- Updated dependencies [75058a9]
+- Updated dependencies [cabe329]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-core-plus@2.124.0
+  - @memberjunction/ai-engine-base@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/templates-base-types@2.124.0
+  - @memberjunction/templates@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes
