@@ -122,7 +122,7 @@ function ProductCategoryAnalysis({
         QueryName: 'Invoice Line Items by Product',
         CategoryPath: 'Demo',
         Parameters: {
-          ProductName: undefined, // Not filtering by specific product
+          ProductID: undefined, // Not filtering by specific product
           Category: clickData.label,
           StartDate: effectiveStartDate,
           EndDate: effectiveEndDate
@@ -160,12 +160,12 @@ function ProductCategoryAnalysis({
     setLoadingDrilldown(true);
 
     try {
-      // Load line items for specific product
+      // Load line items for specific product using ProductID (robust ID-based filtering)
       const result = await utilities.rq.RunQuery({
         QueryName: 'Invoice Line Items by Product',
         CategoryPath: 'Demo',
         Parameters: {
-          ProductName: product.ProductName,
+          ProductID: product.ProductID,
           Category: undefined, // Not filtering by category when filtering by specific product
           StartDate: effectiveStartDate,
           EndDate: effectiveEndDate

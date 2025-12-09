@@ -109,8 +109,17 @@
         ],
         "fields": [
           {
-            "name": "ProductName",
+            "name": "ProductID",
             "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Product ID (used for ID-based filtering)"
+          },
+          {
+            "name": "ProductName",
+            "sequence": 2,
             "defaultInView": true,
             "type": "nvarchar(255)",
             "allowsNull": false,
@@ -119,7 +128,7 @@
           },
           {
             "name": "Category",
-            "sequence": 2,
+            "sequence": 3,
             "defaultInView": true,
             "type": "nvarchar(255)",
             "allowsNull": true,
@@ -128,7 +137,7 @@
           },
           {
             "name": "TotalRevenue",
-            "sequence": 3,
+            "sequence": 4,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": true,
@@ -137,7 +146,7 @@
           },
           {
             "name": "TotalQuantity",
-            "sequence": 4,
+            "sequence": 5,
             "defaultInView": true,
             "type": "int",
             "allowsNull": true,
@@ -146,7 +155,7 @@
           },
           {
             "name": "InvoiceCount",
-            "sequence": 5,
+            "sequence": 6,
             "defaultInView": true,
             "type": "int",
             "allowsNull": false,
@@ -155,7 +164,7 @@
           },
           {
             "name": "AvgPrice",
-            "sequence": 6,
+            "sequence": 7,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": true,
@@ -288,11 +297,11 @@
         ],
         "parameters": [
           {
-            "name": "ProductName",
+            "name": "ProductID",
             "isRequired": false,
-            "type": "string",
-            "sampleValue": "Premium License",
-            "description": "Optional filter by specific product name (for product-level drill-down)"
+            "type": "number",
+            "sampleValue": "15",
+            "description": "Optional filter by specific product ID (for product-level drill-down, uses robust ID-based filtering)"
           },
           {
             "name": "Category",

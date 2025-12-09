@@ -1,8 +1,8 @@
 -- Invoice Line Items by Product Query
--- Returns invoice line item records filtered by product name or category
+-- Returns invoice line item records filtered by product ID or category
 -- Joins line items with products for drill-down display
 -- Used by ProductCategoryAnalysis component for DataGrid drill-down
--- Note: Filters by human-readable fields (Name, Category) for consistency with other golden examples
+-- Note: ProductID uses ID-based filtering (robust), Category remains string-based (no FK in demo schema)
 
 SELECT
   ili.ID,
@@ -20,7 +20,7 @@ FROM
   LEFT JOIN CRM.vwInvoices i ON ili.InvoiceID = i.ID
 WHERE
   p.IsActive = 1
-  {% if ProductName %}AND p.Name = {{ ProductName | sqlString }}
+  {% if ProductID %}AND p.ID = {{ ProductID }}
   {% else %}AND p.Category = {{ Category | sqlString }}
   {% endif %}{% if StartDate %}  AND i.InvoiceDate >= {{ StartDate | sqlDate }}
 {% endif %}{% if EndDate %}  AND i.InvoiceDate <= {{ EndDate | sqlDate }}
