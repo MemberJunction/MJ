@@ -31,13 +31,15 @@ function InvoiceAgingAnalysis({
 
   // Selection state
   const [selectedSegment, setSelectedSegment] = useState(null);
+  const [drilldownData, setDrilldownData] = useState(null);
+  const [loadingDrilldown, setLoadingDrilldown] = useState(false);
 
   // UI state
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState({});
 
   // Get components from registry
-  const { SimpleChart, EntityDataGrid } = components;
+  const { SimpleChart, DataGrid } = components;
 
   // Get D3 from utilities library unwrapper
   // D3 is loaded by library loader and available in closure scope
@@ -374,11 +376,58 @@ function InvoiceAgingAnalysis({
   };
 
   // Handle aging bucket click
-  const handleBucketClick = (clickData) => {
+  const handleBucketClick = async (clickData) => {
     console.log('Bucket clicked:', clickData);
 
     // Set selected segment
     setSelectedSegment(clickData);
+    setLoadingDrilldown(true);
+
+    // Map bucket label to age range (minDays, maxDays)
+    const bucketRanges = {
+      'Not Yet Due': { minDays: -999999, maxDays: -1 },
+      '0-30 days': { minDays: 0, maxDays: 30 },
+      '30-60 days': { minDays: 31, maxDays: 60 },
+      '60-90 days': { minDays: 61, maxDays: 90 },
+      '90+ days': { minDays: 91, maxDays: 999999 }
+    };
+
+    const range = bucketRanges[clickData.label];
+    if (!range) {
+      console.error('Unknown bucket label:', clickData.label);
+      setDrilldownData([]);
+      setLoadingDrilldown(false);
+      return;
+    }
+
+    try {
+      // Load invoices via query - Outstanding Invoices already supports AccountType filter
+      const result = await utilities.rq.RunQuery({
+        QueryName: 'Outstanding Invoices',
+        CategoryPath: 'Demo',
+        Parameters: {
+          AccountType: appliedAccountType || undefined,
+          MinOutstanding: appliedMinOutstanding > 0 ? appliedMinOutstanding : undefined
+        }
+      });
+
+      if (result && result.Success && result.Results) {
+        // Filter client-side by bucket age range
+        const filtered = result.Results.filter(invoice => {
+          const daysOverdue = invoice.DaysOverdue || 0;
+          return daysOverdue >= range.minDays && daysOverdue <= range.maxDays;
+        });
+        setDrilldownData(filtered);
+      } else {
+        console.error('Failed to load invoices:', result?.ErrorMessage);
+        setDrilldownData([]);
+      }
+    } catch (err) {
+      console.error('Error loading invoices:', err);
+      setDrilldownData([]);
+    } finally {
+      setLoadingDrilldown(false);
+    }
 
     // Fire external event if provided
     if (onBucketClick) {
@@ -392,15 +441,15 @@ function InvoiceAgingAnalysis({
 
   // Account row click removed - EntityDataGrid default behavior opens account detail page
 
-  // Handle invoice row click in payment history grid
-  const handleInvoiceClick = (event) => {
+  // Handle invoice row click in DataGrid
+  const handleInvoiceClick = (record) => {
     if (onInvoiceClick) {
       onInvoiceClick({
-        invoiceId: event.record?.ID,
-        invoiceNumber: event.record?.InvoiceNumber,
-        totalAmount: event.record?.TotalAmount,
-        balanceDue: event.record?.BalanceDue,
-        status: event.record?.Status
+        invoiceId: record?.ID,
+        invoiceNumber: record?.InvoiceNumber,
+        totalAmount: record?.TotalAmount,
+        balanceDue: record?.BalanceDue,
+        status: record?.Status
       });
     }
   };
@@ -408,47 +457,9 @@ function InvoiceAgingAnalysis({
   // Clear all selections
   const handleClearSelection = () => {
     setSelectedSegment(null);
+    setDrilldownData(null);
   };
 
-  // Build filter for invoices in selected bucket
-  // NOTE: DaysOverdue is calculated in the query but not stored in the view
-  // So we convert aging bucket ranges to date-based filters using DueDate
-  const buildInvoiceFilter = () => {
-    const filters = [];
-
-    // Add aging bucket filter based on selected segment
-    if (selectedSegment) {
-      const bucket = selectedSegment.label;
-      // Map bucket name to date-based filters (DaysOverdue = DATEDIFF(day, DueDate, GETDATE()))
-      if (bucket === 'Not Yet Due') {
-        filters.push(`DueDate > GETDATE()`);
-      } else if (bucket === '0-30 days') {
-        filters.push(`DueDate BETWEEN DATEADD(day, -30, GETDATE()) AND GETDATE()`);
-      } else if (bucket === '30-60 days') {
-        filters.push(`DueDate BETWEEN DATEADD(day, -60, GETDATE()) AND DATEADD(day, -30, GETDATE())`);
-      } else if (bucket === '60-90 days') {
-        filters.push(`DueDate BETWEEN DATEADD(day, -90, GETDATE()) AND DATEADD(day, -60, GETDATE())`);
-      } else if (bucket === '90+ days') {
-        filters.push(`DueDate < DATEADD(day, -90, GETDATE())`);
-      }
-    }
-
-    // Add outstanding invoice base filter
-    filters.push(`Status NOT IN ('Paid', 'Cancelled')`);
-    filters.push(`BalanceDue > 0`);
-
-    // Add account type filter for consistency
-    if (appliedAccountType) {
-      filters.push(`AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='${appliedAccountType}')`);
-    }
-
-    // Add minimum outstanding filter
-    if (appliedMinOutstanding > 0) {
-      filters.push(`BalanceDue >= ${appliedMinOutstanding}`);
-    }
-
-    return filters.length > 0 ? filters.join(' AND ') : undefined;
-  };
 
   // Payment history filter removed - no longer using account drill-down
 
@@ -704,18 +715,12 @@ function InvoiceAgingAnalysis({
           <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>
             Top {appliedTopN} Accounts by Outstanding Balance
           </h3>
-          <EntityDataGrid
-            entityName="Accounts"
-            extraFilter={appliedAccountType ? `AccountType='${appliedAccountType}'` : undefined}
-            fields={['Name', 'AccountType', 'Status']}
-            orderBy="Name ASC"
-            pageSize={appliedTopN}
-            maxCachedRows={appliedTopN * 2}
-            enablePageCache={true}
-            showPageSizeChanger={true}
-            enableSorting={true}
-            enableFiltering={true}
-            showRefreshButton={true}
+          <DataGrid
+            data={topAccountsData}
+            columns={['AccountName', 'AccountType', 'InvoiceCount', 'TotalOutstanding', 'AvgOutstanding', 'AvgDaysOverdue', 'MaxDaysOverdue']}
+            sorting={true}
+            paging={false}
+            filtering={false}
             utilities={utilities}
             styles={styles}
             components={components}
@@ -770,25 +775,34 @@ function InvoiceAgingAnalysis({
             </button>
           </div>
 
-          {/* EntityDataGrid for invoices */}
-          <EntityDataGrid
-            entityName="Invoices"
-            extraFilter={buildInvoiceFilter()}
-            fields={['InvoiceNumber', 'InvoiceDate', 'DueDate', 'Account', 'TotalAmount', 'AmountPaid', 'BalanceDue', 'Status']}
-            orderBy="DueDate ASC"
-            pageSize={20}
-            maxCachedRows={100}
-            enablePageCache={true}
-            showPageSizeChanger={true}
-            enableSorting={true}
-            enableFiltering={true}
-            showRefreshButton={true}
-            onRowClick={handleInvoiceClick}
-            utilities={utilities}
-            styles={styles}
-            components={components}
-            callbacks={callbacks}
-          />
+          {/* DataGrid for invoices */}
+          {loadingDrilldown ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <div>Loading invoices...</div>
+            </div>
+          ) : drilldownData && drilldownData.length > 0 ? (
+            <DataGrid
+              data={drilldownData}
+              columns={['InvoiceNumber', 'Account', 'AccountType', 'InvoiceDate', 'DueDate', 'TotalAmount', 'BalanceDue', 'Status', 'DaysOverdue']}
+              entityName="Invoices"
+              entityPrimaryKeys={['ID']}
+              sorting={true}
+              paging={true}
+              filtering={true}
+              onRowClick={handleInvoiceClick}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+            />
+          ) : drilldownData && drilldownData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#8c8c8c' }}>
+              <div style={{ fontSize: '16px' }}>No Invoices Found</div>
+              <div style={{ marginTop: '8px' }}>
+                No invoices found in this aging bucket
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 

@@ -7,7 +7,7 @@
   "functionalRequirements": "## Business Objectives\n- Analyze revenue performance across product categories\n- Identify top-performing products within each category\n- Enable drill-down to see individual line item sales\n- Demonstrate multi-level drill-down with conditional query execution\n\n## Functional Requirements\n- **Category Overview**: Bar chart showing total revenue by product category\n- **Category Metrics**: Display product count, average revenue, and total revenue per category\n- **Primary Drill-Down**: When user clicks category, show two panels side-by-side\n- **Top Products Panel**: Run conditional query showing top 5 products in selected category (by revenue)\n- **Line Items Panel**: EntityDataGrid showing all invoice line items for products in selected category\n- **Secondary Drill-Down**: When user clicks a product in top products list, filter line items grid to that specific product\n- **Conditional Query**: Top products query only executes when category is selected (performance optimization)\n- **Back Navigation**: Clear selection button returns to category overview\n- **Breadcrumb Trail**: Show current selection path (Category → Product)\n- **State Management**: Track both category selection and optional product selection\n- **Loading States**: Show loading for conditional queries\n- **Empty States**: Handle categories with no products or line items",
   "description": "Multi-level product category analysis showing category totals and top products within each category with drill-down navigation.",
   "dataRequirements": {
-    "mode": "hybrid",
+    "mode": "queries",
     "queries": [
       {
         "name": "Category Totals",
@@ -193,53 +193,132 @@
             "description": "Optional end date filter in YYYY-MM-DD format"
           }
         ]
-      }
-    ],
-    "entities": [
-      {
-        "name": "Products",
-        "description": "Product records used in SQL filter for drill-down. The Category and Name columns are used to filter invoice line items.",
-        "displayFields": [
-          "Name",
-          "Category",
-          "Description"
-        ],
-        "filterFields": [
-          "ID",
-          "Category",
-          "Name"
-        ],
-        "sortFields": [
-          "Name",
-          "Category"
-        ],
-        "usageContext": "Referenced in EntityDataGrid extraFilter SQL subquery: SELECT ID FROM CRM.vwProducts WHERE Category='{selectedCategory}' OR Name='{selectedProduct}'"
       },
       {
-        "name": "Invoice Line Items",
-        "description": "Line item records shown in EntityDataGrid for selected category or product. Primary drill-down entity for sales detail.",
-        "displayFields": [
-          "InvoiceDate",
-          "ProductName",
-          "Product",
-          "Quantity",
-          "UnitPrice",
-          "Total",
-          "TotalPrice",
-          "Description",
-          "AccountName"
+        "name": "Invoice Line Items by Product",
+        "categoryPath": "Demo",
+        "description": "Returns invoice line item records filtered by product name or category. Used for DataGrid drill-down display when user clicks category or product. Replaces EntityDataGrid extraFilter subquery pattern.",
+        "entityNames": [
+          "Invoice Line Items",
+          "Products",
+          "Invoices"
         ],
-        "filterFields": [
-          "ProductID",
-          "InvoiceDate"
+        "fields": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Line item ID"
+          },
+          {
+            "name": "Product",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Product name"
+          },
+          {
+            "name": "Quantity",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Quantity sold"
+          },
+          {
+            "name": "UnitPrice",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Unit price"
+          },
+          {
+            "name": "TotalPrice",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "numeric(38,4)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total line item price"
+          },
+          {
+            "name": "Description",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "nvarchar(max)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Line item description"
+          },
+          {
+            "name": "InvoiceDate",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice date"
+          },
+          {
+            "name": "AccountName",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Account name"
+          },
+          {
+            "name": "Category",
+            "sequence": 9,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Product category"
+          }
         ],
-        "sortFields": [
-          "InvoiceDate",
-          "Total"
-        ],
-        "usageContext": "Loaded by EntityDataGrid using SQL filter: ProductID IN (SELECT ID FROM CRM.vwProducts WHERE Category = '{selectedCategory}' OR Name='{selectedProduct}') AND InvoiceDate >= '{startDate}' AND InvoiceDate <= '{endDate}'"
+        "parameters": [
+          {
+            "name": "ProductName",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Premium License",
+            "description": "Optional filter by specific product name (for product-level drill-down)"
+          },
+          {
+            "name": "Category",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Software",
+            "description": "Optional filter by product category (for category-level drill-down)"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
       }
-    ]
+    ],
+    "entities": []
   },
   "properties": [
     {
@@ -323,7 +402,7 @@
       "version": "^1.0.0"
     },
     {
-      "name": "EntityDataGrid",
+      "name": "DataGrid",
       "location": "registry",
       "namespace": "Generic/UI/Table",
       "version": "^1.0.0"
