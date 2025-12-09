@@ -221,9 +221,12 @@
         "displayFields": [
           "InvoiceDate",
           "ProductName",
+          "Product",
           "Quantity",
           "UnitPrice",
           "Total",
+          "TotalPrice",
+          "Description",
           "AccountName"
         ],
         "filterFields": [

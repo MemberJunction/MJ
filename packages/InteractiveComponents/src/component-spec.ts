@@ -1,12 +1,19 @@
 import { ComponentEvent, ComponentProperty } from "./component-props-events";
 import { ComponentDataRequirements } from "./data-requirements";
 import { ComponentLibraryDependency } from "./library-dependency";
+import { ComponentTypeDefinition } from "./component-constraints";
 
 /**
  * Specification for an interactive component
  */
 export class ComponentSpec {
     name: string;
+
+    /**
+     * Optional: Custom type definitions for complex prop types (e.g., ColumnDef, FieldDefinition).
+     * Similar to TypeScript interfaces, used for lint-time validation of object literals.
+     */
+    typeDefinitions?: Record<string, ComponentTypeDefinition>;
 
     /**
      * Components can be embedded or registry. Registry means we don't have the

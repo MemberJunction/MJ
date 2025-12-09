@@ -12,6 +12,10 @@ import { StylesTypeAnalyzer } from './styles-type-analyzer';
 import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo, StandardTypes } from './type-context';
 import { TypeInferenceEngine } from './type-inference-engine';
 import { ControlFlowAnalyzer } from './control-flow-analyzer';
+import { ValidationContext, BaseConstraintValidator } from './constraint-validators';
+import { PropValueExtractor } from './prop-value-extractor';
+import type { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
+import { MJGlobal } from '@memberjunction/global';
 
 export interface LintResult {
   success: boolean;
@@ -7946,6 +7950,231 @@ const result = await utilities.rq.RunQuery({
             },
           });
         }
+
+        return violations;
+      },
+    },
+
+    {
+      name: 'validate-component-props',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Only validate if component spec exists
+        if (!componentSpec || !componentSpec.dependencies || componentSpec.dependencies.length === 0) {
+          return violations;
+        }
+
+        // Build a map of dependency components to their full specs
+        // Pattern from dependency-prop-validation rule
+        const dependencySpecs = new Map<string, ComponentSpec>();
+
+        for (const dep of componentSpec.dependencies) {
+          if (dep && typeof dep === 'object' && dep.name) {
+            if (dep.location === 'registry') {
+              let match;
+              if (dep.registry) {
+                match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
+              } else {
+                match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace);
+              }
+
+              if (match) {
+                dependencySpecs.set(dep.name, match.spec);
+              }
+            } else {
+              // Embedded dependencies have their spec inline
+              dependencySpecs.set(dep.name, dep);
+            }
+          }
+        }
+
+        // Build validation context helpers from parent spec's dataRequirements
+        const getEntityFields = (entityName: string) => {
+          if (!componentSpec.dataRequirements?.entities) return [];
+          const entity = componentSpec.dataRequirements.entities.find(e => e.name === entityName);
+          if (!entity) return [];
+
+          // Prefer fieldMetadata if available (provides type info, allowsNull, isPrimaryKey, etc.)
+          if (entity.fieldMetadata && Array.isArray(entity.fieldMetadata) && entity.fieldMetadata.length > 0) {
+            return entity.fieldMetadata.map((f: any) => ({
+              name: f.name,
+              type: f.type || 'string',
+              required: !f.allowsNull,
+              allowedValues: f.possibleValues || undefined,
+              isPrimaryKey: f.isPrimaryKey || false,
+            }));
+          }
+
+          // Fallback: Collect all field names from display/filter/sort arrays
+          const allFieldNames = new Set<string>();
+          if (entity.displayFields) entity.displayFields.forEach((f: string) => allFieldNames.add(f));
+          if (entity.filterFields) entity.filterFields.forEach((f: string) => allFieldNames.add(f));
+          if (entity.sortFields) entity.sortFields.forEach((f: string) => allFieldNames.add(f));
+
+          // Convert to EntityFieldInfo format (we don't have type info from field name lists)
+          return Array.from(allFieldNames).map(name => ({
+            name,
+            type: 'string', // Unknown type from field name lists
+            required: false,
+            allowedValues: undefined,
+          }));
+        };
+
+        const getEntityFieldType = (entityName: string, fieldName: string) => {
+          const fields = getEntityFields(entityName);
+          const field = fields.find((f: any) => f.name === fieldName);
+          return field?.type || null;
+        };
+
+        const hasEntity = (entityName: string) => {
+          if (!componentSpec.dataRequirements?.entities) return false;
+          return componentSpec.dataRequirements.entities.some(e => e.name === entityName);
+        };
+
+        // GENERIC validation for ALL components with constraints
+        traverse(ast, {
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            let elementName = '';
+
+            if (t.isJSXIdentifier(openingElement.name)) {
+              elementName = openingElement.name.name;
+            } else if (t.isJSXMemberExpression(openingElement.name)) {
+              // Handle cases like <components.EntityDataGrid> - skip for now
+              return;
+            }
+
+            // Get the spec for this dependency component
+            const depSpec = dependencySpecs.get(elementName);
+            if (!depSpec || !depSpec.properties) return;
+
+            // Check if this component has any properties with constraints
+            const hasConstraints = depSpec.properties.some(p => p.constraints && p.constraints.length > 0);
+            if (!hasConstraints) return;
+
+            // Extract all props into a map for sibling prop lookups
+            const siblingProps = new Map<string, any>();
+            for (const attr of openingElement.attributes) {
+              if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+                const extractedValue = PropValueExtractor.extract(attr);
+                siblingProps.set(attr.name.name, extractedValue);
+              }
+            }
+
+            // GENERIC: Iterate through all properties with constraints
+            for (const property of depSpec.properties) {
+              if (!property.constraints || property.constraints.length === 0) {
+                continue;
+              }
+
+              // Find the JSX attribute for this property
+              const propAttr = openingElement.attributes.find(
+                (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === property.name
+              );
+
+              if (!propAttr || !t.isJSXAttribute(propAttr)) {
+                continue;
+              }
+
+              // Extract the property value
+              const propValue = PropValueExtractor.extract(propAttr);
+
+              // Skip dynamic values
+              if (PropValueExtractor.isDynamicValue(propValue)) {
+                continue;
+              }
+
+              // Run all validators for this property's constraints
+              for (const constraint of property.constraints) {
+                // Use ClassFactory to instantiate validator by constraint type
+                const validator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseConstraintValidator>(
+                  BaseConstraintValidator,
+                  constraint.type
+                );
+
+                if (!validator) {
+                  // Validator not registered for this constraint type
+                  console.warn(`No validator registered for constraint type: ${constraint.type}`);
+                  continue;
+                }
+
+                // Build ValidationContext
+                const context: ValidationContext = {
+                  node: propAttr,
+                  path: path as any,
+                  componentName: elementName,
+                  componentSpec: depSpec,
+                  propertyName: property.name,
+                  propertyValue: propValue,
+                  siblingProps,
+                  entities: new Map(),
+                  queries: new Map(),
+                  typeEngine: null as any,
+
+                  getEntityFields,
+                  getEntityFieldType,
+                  findSimilarFieldNames: (fieldName: string, entityName: string, maxResults?: number) => {
+                    const fields = getEntityFields(entityName);
+                    const fieldNames = fields.map((f: any) => f.name);
+                    const similar: Array<{ name: string; distance: number }> = [];
+
+                    // Simple Levenshtein distance calculation
+                    const levenshtein = (a: string, b: string): number => {
+                      const matrix: number[][] = [];
+                      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+                      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+                      for (let i = 1; i <= b.length; i++) {
+                        for (let j = 1; j <= a.length; j++) {
+                          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                            matrix[i][j] = matrix[i - 1][j - 1];
+                          } else {
+                            matrix[i][j] = Math.min(
+                              matrix[i - 1][j - 1] + 1,
+                              matrix[i][j - 1] + 1,
+                              matrix[i - 1][j] + 1
+                            );
+                          }
+                        }
+                      }
+                      return matrix[b.length][a.length];
+                    };
+
+                    for (const fn of fieldNames) {
+                      const distance = levenshtein(fieldName.toLowerCase(), fn.toLowerCase());
+                      if (distance <= 3) {
+                        similar.push({ name: fn, distance });
+                      }
+                    }
+                    similar.sort((a, b) => a.distance - b.distance);
+                    return similar.slice(0, maxResults || 3).map(s => s.name);
+                  },
+                  getQueryParameters: () => [],
+                  hasQuery: () => false,
+                  hasEntity,
+                };
+
+                // Run the validator
+                try {
+                  const constraintViolations = validator.validate(context, constraint);
+                  for (const cv of constraintViolations) {
+                    violations.push({
+                      rule: 'validate-component-props',
+                      severity: cv.severity,
+                      line: propAttr.loc?.start.line || 0,
+                      column: propAttr.loc?.start.column || 0,
+                      message: cv.message,
+                      code: cv.suggestion || '',
+                    });
+                  }
+                } catch (error) {
+                  console.error(`Error validating ${property.name} constraint (${constraint.type}):`, error);
+                }
+              }
+            }
+          },
+        });
 
         return violations;
       },

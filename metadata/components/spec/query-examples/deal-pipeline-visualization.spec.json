@@ -522,13 +522,15 @@
         "name": "Deals",
         "description": "Deal records shown in DataGrid when drilling down from pipeline stage. Loaded via Deal Pipeline Details query.",
         "displayFields": [
+          "ID",
           "DealName",
           "Stage",
           "Amount",
           "Probability",
           "ExpectedCloseDate",
           "Account",
-          "Owner"
+          "Owner",
+          "DaysInStage"
         ],
         "filterFields": [
           "Stage",

@@ -507,7 +507,7 @@
           "InvoiceNumber",
           "InvoiceDate",
           "DueDate",
-          "AccountName",
+          "Account",
           "TotalAmount",
           "AmountPaid",
           "BalanceDue",
@@ -517,7 +517,7 @@
           "DaysOverdue",
           "AccountID",
           "BalanceDue",
-          "AccountName"
+          "Account"
         ],
         "sortFields": [
           "DaysOverdue",

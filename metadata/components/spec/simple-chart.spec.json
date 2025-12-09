@@ -14,8 +14,8 @@
     {
       "name": "entityName",
       "type": "string",
-      "description": "Name of the entity being visualized",
-      "required": true
+      "description": "Optional entity name for metadata-aware formatting (dates, money, value lists). If omitted, component uses basic type detection and works with any data array.",
+      "required": false
     },
     {
       "name": "data",
@@ -26,14 +26,25 @@
     {
       "name": "groupBy",
       "type": "string",
-      "description": "Field name to group data by",
+      "description": "Field name to group data by. Works with any field in the data array.",
       "required": true
     },
     {
       "name": "valueField",
       "type": "string",
       "description": "Field name to aggregate for chart values. REQUIRED when using aggregateMethod 'sum', 'average', 'min', or 'max'. OMIT when using 'count' (counts records regardless of field values). Examples: 'Total' for revenue, 'Amount' for sales, 'Quantity' for inventory. Component groups records by groupBy field and aggregates this valueField according to aggregateMethod.",
-      "required": false
+      "required": false,
+      "constraints": [
+        {
+          "type": "required-when",
+          "dependsOn": "aggregateMethod",
+          "description": "valueField is required when aggregateMethod is sum, average, min, or max",
+          "config": {
+            "condition": "siblingProp === 'sum' || siblingProp === 'average' || siblingProp === 'min' || siblingProp === 'max'"
+          },
+          "errorTemplate": "valueField is required when aggregateMethod is '{aggregateMethod}'"
+        }
+      ]
     },
     {
       "name": "aggregateMethod",
