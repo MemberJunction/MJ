@@ -613,12 +613,18 @@ export class SkipSDK {
     private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
         try {
             const md = new Metadata();
+
+            // Diagnostic logging
+            LogStatus(`[SkipSDK.refreshSkipEntities] Total entities in metadata: ${md.Entities.length}`);
+            LogStatus(`[SkipSDK.refreshSkipEntities] Config excludeSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.excludeSchemas)}`);
+            LogStatus(`[SkipSDK.refreshSkipEntities] Config includeEntitiesFromExcludedSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas)}`);
+
             const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
                 .map((e) => e.trim().toLowerCase());
 
             // Get the list of entities
             const entities = md.Entities.filter((e) => {
-                if (!configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
+                if (!(configInfo.askSkip?.entitiesToSend?.excludeSchemas ?? []).includes(e.SchemaName) ||
                     skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
                     const sd = e.ScopeDefault?.trim();
                     if (sd && sd.length > 0) {
@@ -632,8 +638,15 @@ export class SkipSDK {
                 return false;
             });
 
+            LogStatus(`[SkipSDK.refreshSkipEntities] Filtered entities count: ${entities.length}`);
+            if (entities.length === 0) {
+                LogError(`[SkipSDK.refreshSkipEntities] WARNING: No entities passed filtering! This will result in empty Skip entities list.`);
+            }
+
             // Now we have our list of entities, pack em up
             const result = await Promise.all(entities.map((e) => this.packSingleSkipEntityInfo(e, dataSource)));
+
+            LogStatus(`[SkipSDK.refreshSkipEntities] Successfully packed ${result.length} entities for Skip`);
 
             SkipSDK.__lastRefreshTime = Date.now(); // Update last refresh time
             return result;
