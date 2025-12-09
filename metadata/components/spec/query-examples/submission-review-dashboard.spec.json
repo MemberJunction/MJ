@@ -1,0 +1,292 @@
+{
+  "name": "SubmissionReviewDashboard",
+  "title": "Submission Review Dashboard",
+  "type": "dashboard",
+  "userExplanation": "Comprehensive submission review dashboard showing status distribution charts, review timeline, and top reviewers list. Demonstrates complex hybrid pattern: uses multiple queries for charts, direct RunView for reviewer stats, and EntityDataGrid for drilling into submissions by status.",
+  "functionalRequirements": "## Business Objectives\n- Monitor event submission review process across all statuses\n- Track review activity and timeline trends\n- Identify top-performing reviewers by volume and quality\n- Enable drill-down into submissions by status for detailed review\n- Demonstrate mixing multiple data loading patterns in one component\n\n## Functional Requirements\n- **Status Summary Chart**: Stacked bar or pie chart showing submission counts by status (Pending, Under Review, Accepted, Rejected, etc.)\n- **Review Timeline Chart**: Line chart showing review activity over time (daily or weekly counts)\n- **Top Reviewers Panel**: Display top 10 reviewers with submission count, average score, and review count\n- **KPI Cards**: Show total submissions, average score, unique speakers, and pending count\n- **Click-to-Drill-Down**: When user clicks status segment, show EntityDataGrid with submissions in that status\n- **Multi-Query Coordination**: Load status summary and timeline queries in parallel\n- **RunView for Reference Data**: Load reviewer records via RunView, aggregate client-side for top reviewers list\n- **Mixed Data Sources**: Demonstrate using RunQuery for charts, RunView for aggregation, EntityDataGrid for drill-down\n- **State Management**: Track selected status and coordinate updates across all panels\n- **Conditional Loading**: Only load drill-down grid when status is selected\n- **Clear Selection**: Return to overview when clearing status filter\n- **Loading States**: Show loading indicators for each panel independently\n- **Empty States**: Handle cases with no submissions or no reviews",
+  "description": "Event submission review dashboard showing status distribution, review timeline, and reviewer activity with drill-down to submission details.",
+  "dataRequirements": {
+    "mode": "hybrid",
+    "description": "Uses multiple RunQuery calls for status summary and timeline charts, RunView for top reviewers reference data, and EntityDataGrid for drill-down into submissions by status",
+    "queries": [
+      {
+        "name": "Submission Status Summary",
+        "categoryPath": "Demo",
+        "description": "Status distribution: COUNT(*), COUNT(DISTINCT SpeakerID), AVG(ReviewScore) grouped by SubmissionStatus. Returns 5-8 status categories for stacked bar chart. **Result Order: CASE Status (Accepted→Under Review→Passed Initial→Waitlisted→Rejected→Failed Initial→Analyzing→New)** - Workflow progression order for status comparison.",
+        "entityNames": ["Submissions", "Submission Speakers", "Submission Reviews"],
+        "fields": [
+          {
+            "name": "Status",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Submission status (Accepted, Under Review, Rejected, etc.)"
+          },
+          {
+            "name": "SubmissionCount",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of submissions with this status"
+          },
+          {
+            "name": "UniqueSpeakers",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of distinct speakers with submissions in this status"
+          },
+          {
+            "name": "AvgAIScore",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average AI evaluation score for submissions in this status"
+          },
+          {
+            "name": "ReviewCount",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Total number of reviews for submissions in this status"
+          },
+          {
+            "name": "AvgReviewScore",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average overall review score for this status"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "EventID",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "12345",
+            "description": "Optional filter by specific event ID (UNIQUEIDENTIFIER as string)"
+          },
+          {
+            "name": "Status",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Under Review",
+            "description": "Optional filter by submission status"
+          }
+        ]
+      },
+      {
+        "name": "Submission Review Timeline",
+        "categoryPath": "Demo",
+        "description": "Conditional review activity timeline (executes when status clicked): COUNT(*), AVG(Score) grouped by CAST(ReviewDate AS DATE) for selected status. Returns daily review counts for line chart. **Result Order: Date DESC** - Most recent review activity first for timeline analysis.",
+        "entityNames": ["Submission Reviews", "Submissions"],
+        "fields": [
+          {
+            "name": "Date",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Date of review activity"
+          },
+          {
+            "name": "ReviewCount",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of reviews on this date"
+          },
+          {
+            "name": "AvgOverallScore",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average overall score given on this date"
+          },
+          {
+            "name": "AvgRelevanceScore",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average relevance score"
+          },
+          {
+            "name": "AvgQualityScore",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average quality score"
+          },
+          {
+            "name": "AvgExperienceScore",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(5,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average speaker experience score"
+          },
+          {
+            "name": "UniqueReviewers",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of distinct reviewers active on this date"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "EventID",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "12345",
+            "description": "Optional filter by specific event ID (UNIQUEIDENTIFIER as string)"
+          },
+          {
+            "name": "Status",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Under Review",
+            "description": "Optional filter by submission status"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "name": "Submissions",
+        "description": "Event submissions shown in EntityDataGrid when drilling down from status chart",
+        "displayFields": ["SubmissionTitle", "SubmittedAt", "Status", "EventName", "AIEvaluationScore", "FinalDecision"],
+        "filterFields": ["Status", "EventID"],
+        "sortFields": ["SubmittedAt", "AIEvaluationScore"],
+        "usageContext": "Loaded by EntityDataGrid when user clicks on a status segment in the status summary chart"
+      },
+      {
+        "name": "Submission Reviews",
+        "description": "Review records loaded via RunView to calculate top reviewers",
+        "displayFields": ["ReviewerName", "ReviewDate", "Rating", "SubmissionTitle"],
+        "filterFields": ["ReviewDate"],
+        "sortFields": ["ReviewDate"],
+        "usageContext": "Loaded via RunView to aggregate reviewer statistics and display top reviewers list"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "eventID",
+      "type": "string",
+      "required": false,
+      "description": "Optional event ID filter (UNIQUEIDENTIFIER as string). If provided, shows only submissions for that specific event.",
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "required": false,
+      "description": "Optional submission status filter (e.g., 'Pending', 'Under Review', 'Accepted', 'Rejected'). If provided, shows only submissions with that status.",
+      "default": null
+    },
+    {
+      "name": "startDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional start date filter for review timeline (ISO format: '2024-01-01'). Returns reviews with ReviewDate >= startDate. If null, user can set via date filter UI.",
+      "default": null
+    },
+    {
+      "name": "endDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional end date filter for review timeline (ISO format: '2024-12-31'). Returns reviews with ReviewDate <= endDate. If null, user can set via date filter UI.",
+      "default": null
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "required": false,
+      "description": "Custom dashboard title. If not provided, uses default title.",
+      "default": "Submission Review Dashboard"
+    }
+  ],
+  "events": [
+    {
+      "name": "onSegmentClick",
+      "description": "Fired when user clicks a status segment in the chart or table row",
+      "payload": {
+        "status": "string - The submission status that was clicked (e.g., 'Pending', 'Under Review', 'Accepted')",
+        "value": "number - Number of submissions with this status",
+        "recordCount": "number - Number of records in the clicked segment"
+      },
+      "example": "{ status: 'Under Review', value: 42, recordCount: 42 }"
+    },
+    {
+      "name": "onRecordClick",
+      "description": "Fired when user clicks a row in the EntityDataGrid (submissions)",
+      "payload": {
+        "submissionId": "string - The ID of the clicked submission record",
+        "submissionTitle": "string - Title of the submission",
+        "submittedAt": "string - Submission date (ISO format)",
+        "status": "string - Current submission status",
+        "eventName": "string - Name of the event",
+        "aiScore": "number - AI evaluation score",
+        "finalDecision": "string - Final decision on submission"
+      },
+      "example": "{ submissionId: 'abc-123', submissionTitle: 'AI in Healthcare', submittedAt: '2024-03-15T10:30:00Z', status: 'Under Review', eventName: 'TechConf 2024', aiScore: 8.5, finalDecision: 'Pending' }"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "EntityDataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Initial Load**: Executes two RunQuery calls in parallel\n   - 'Submission Status Summary' for status distribution\n   - 'Submission Review Timeline' for timeline chart\n2. **Chart Rendering**: Displays two SimpleCharts (status doughnut + timeline line)\n3. **User Interaction**: User clicks status chart segment OR table row\n4. **Drill-Down**: Component sets selectedSegment state and triggers EntityDataGrid\n5. **Grid Filtering**: EntityDataGrid loads Submissions filtered by status and eventID\n6. **Date Consistency**: Date filters applied to timeline query\n\n### State Management\n- `statusData`: Array of status summary results (SubmissionCount, AvgScore, etc.)\n- `timelineData`: Array of timeline results (Date, ReviewCount, etc.)\n- `loading`: Boolean for async operation status\n- `error`: String for error messages\n- `selectedSegment`: Object with label/value/records from clicked status (null = dashboard view)\n- `internalStartDate/EndDate`: User-controlled date filters (only when props are null)\n\n### Conditional UI Controls\n**Date Filter Panel**: Only rendered when both `startDate` and `endDate` props are null. Allows user to set date range filters with:\n- Start Date input (HTML date picker)\n- End Date input (HTML date picker)\n- Apply Filters button (requires both dates)\n- Clear Dates button (shown when filters applied)\n\n### Filter Coordination\n**effectiveStartDate/endDate**: Computed values that prioritize props over internal state\n- Used in RunQuery Parameters for timeline query\n- Only affects timeline chart, not status summary\n\n### Multi-Chart Dashboard\n**Overview Mode** (no selection):\n1. KPI Cards: Total submissions, avg score, unique speakers, pending count\n2. Status Doughnut Chart: Clickable status segments\n3. Timeline Line Chart: Review activity over time\n4. Status Breakdown Table: Clickable rows for drill-down\n5. Dashboard stays visible during drill-down\n\n**Drill-Down Mode** (status selected):\n1. Dashboard remains visible above\n2. EntityDataGrid renders BELOW with submissions filtered by status\n3. Clear Selection button returns to overview focus\n\n### EntityDataGrid Integration\n**extraFilter Construction**:\n1. Status filter: `Status='{selectedSegment.label}'`\n2. Event filter (when provided): `EventID='{eventID}'`\n3. Filters combined with AND operator\n\n### Event System\n**onSegmentClick**: Fires when status chart/table clicked, provides:\n- status, value, recordCount\n\n**onRecordClick**: Fires when EntityDataGrid row clicked, provides:\n- submissionId, submissionTitle, submittedAt, status, eventName, aiScore, finalDecision\n\n### Educational Value\nDemonstrates:\n1. **Multiple Charts**: Status distribution + timeline in single dashboard\n2. **Parallel Queries**: Load multiple datasets concurrently\n3. **KPI Calculations**: Client-side aggregation from status data\n4. **Multiple Interaction Points**: Chart click, table row click\n5. **Dashboard Persistence**: Charts stay visible during drill-down\n6. **Mixed Visualizations**: Doughnut chart + line chart + table + grid",
+  "code": "@file:../../code/query-examples/submission-review-dashboard.js",
+  "exampleUsage": "// Basic usage (no filters)\n<SubmissionReviewDashboard\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// Filtered by specific event\n<SubmissionReviewDashboard\n  eventID=\"12345-abcde-67890\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// With date filters for timeline\n<SubmissionReviewDashboard\n  startDate=\"2024-01-01\"\n  endDate=\"2024-12-31\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// With event handlers and custom title\n<SubmissionReviewDashboard\n  title=\"Conference Submission Dashboard\"\n  eventID=\"12345-abcde-67890\"\n  onSegmentClick={(event) => {\n    console.log(`Status ${event.status} clicked: ${event.value} submissions`);\n  }}\n  onRecordClick={(event) => {\n    console.log(`Submission ${event.submissionTitle} clicked`);\n    // Navigate to submission detail page\n    router.push(`/submissions/${event.submissionId}`);\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// Let user control date filters (no date props provided)\n<SubmissionReviewDashboard\n  title=\"Submission Review Analytics\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>"
+}

@@ -1,5 +1,28 @@
 # @memberjunction/ai-agents
 
+## 2.124.0
+
+### Minor Changes
+
+- cabe329: migration due to tweak in loop agent system prompt (migration needs to be created)
+
+### Patch Changes
+
+- 4b2181d: no migration
+- Updated dependencies [75058a9]
+- Updated dependencies [cabe329]
+- Updated dependencies [629cf5a]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-core-plus@2.124.0
+  - @memberjunction/ai-prompts@2.124.0
+  - @memberjunction/ai-engine-base@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/actions-base@2.124.0
+  - @memberjunction/actions@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes

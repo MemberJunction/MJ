@@ -1,5 +1,17 @@
 # @memberjunction/react-test-harness
 
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/ai-vectors-memory@2.124.0
+  - @memberjunction/interactive-component-types@2.124.0
+  - @memberjunction/react-runtime@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes

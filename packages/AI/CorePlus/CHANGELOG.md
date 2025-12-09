@@ -1,5 +1,20 @@
 # @memberjunction/ai-core-plus
 
+## 2.124.0
+
+### Minor Changes
+
+- cabe329: migration due to tweak in loop agent system prompt (migration needs to be created)
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/actions-base@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes
