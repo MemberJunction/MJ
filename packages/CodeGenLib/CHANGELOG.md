@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ai-core-plus@2.125.0
+  - @memberjunction/aiengine@2.125.0
+  - @memberjunction/ai-prompts@2.125.0
+  - @memberjunction/actions-base@2.125.0
+  - @memberjunction/actions@2.125.0
+  - @memberjunction/core-entities-server@2.125.0
+  - @memberjunction/sqlserver-dataprovider@2.125.0
+  - @memberjunction/ai-provider-bundle@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

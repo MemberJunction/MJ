@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.125.0
+
+### Minor Changes
+
+- bd4aa3d: Migration file
+
+### Patch Changes
+
+- @memberjunction/global@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

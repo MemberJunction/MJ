@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-entity-permissions
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ng-compare-records@2.125.0
+  - @memberjunction/ng-shared@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-shared-generic@2.125.0
+  - @memberjunction/global@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

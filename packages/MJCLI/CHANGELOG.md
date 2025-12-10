@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/cli
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ai-cli@2.125.0
+  - @memberjunction/codegen-lib@2.125.0
+  - @memberjunction/db-auto-doc@2.125.0
+  - @memberjunction/metadata-sync@2.125.0
+  - @memberjunction/sqlserver-dataprovider@2.125.0
+  - @memberjunction/testing-cli@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes
