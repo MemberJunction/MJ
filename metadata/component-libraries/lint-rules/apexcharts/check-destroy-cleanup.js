@@ -23,64 +23,98 @@
         if (t.isArrowFunctionExpression(effectFn) || t.isFunctionExpression(effectFn)) {
           const body = effectFn.body;
           let hasCleanup = false;
-          
-          if (t.isBlockStatement(body)) {
-            for (const stmt of body.body) {
+
+          // Helper function to recursively search for return statements with cleanup
+          const findCleanupReturn = (statements) => {
+            for (const stmt of statements) {
+              // Direct return statement
               if (t.isReturnStatement(stmt) && stmt.argument) {
+                return stmt;
+              }
+              // Return inside if-statement
+              if (t.isIfStatement(stmt)) {
+                const consequent = t.isBlockStatement(stmt.consequent) ? stmt.consequent.body : [stmt.consequent];
+                const returnStmt = findCleanupReturn(consequent);
+                if (returnStmt) return returnStmt;
+
+                if (stmt.alternate) {
+                  const alternate = t.isBlockStatement(stmt.alternate) ? stmt.alternate.body : [stmt.alternate];
+                  const altReturnStmt = findCleanupReturn(alternate);
+                  if (altReturnStmt) return altReturnStmt;
+                }
+              }
+            }
+            return null;
+          };
+
+          if (t.isBlockStatement(body)) {
+            const returnStmt = findCleanupReturn(body.body);
+            if (returnStmt && returnStmt.argument) {
+              const stmt = returnStmt;
                 // Check if the return contains destroy call
                 const returnArg = stmt.argument;
                 if (t.isArrowFunctionExpression(returnArg) || t.isFunctionExpression(returnArg)) {
                   // Check if cleanup function actually calls destroy()
                   const cleanupBody = returnArg.body;
-                  const cleanupStatements = t.isBlockStatement(cleanupBody) ? cleanupBody.body : [cleanupBody];
 
-                  // Look for destroy() call in cleanup function
-                  for (const cleanupStmt of cleanupStatements) {
-                    if (t.isExpressionStatement(cleanupStmt) && t.isCallExpression(cleanupStmt.expression)) {
-                      const call = cleanupStmt.expression;
-                      // Check if this is a call to destroy() - handles:
-                      // - chart.destroy()
-                      // - chartInstance.current.destroy()
-                      // - this.chart.destroy()
-                      if (t.isMemberExpression(call.callee) &&
-                          t.isIdentifier(call.callee.property) &&
-                          call.callee.property.name === 'destroy') {
-                        hasCleanup = true;
-                        break;
-                      }
+                  // Handle single-expression arrow functions: () => chart.destroy()
+                  if (t.isCallExpression(cleanupBody)) {
+                    if (t.isMemberExpression(cleanupBody.callee) &&
+                        t.isIdentifier(cleanupBody.callee.property) &&
+                        cleanupBody.callee.property.name === 'destroy') {
+                      hasCleanup = true;
                     }
-                    // Also handle optional chaining: chart?.destroy() or ref.current?.destroy()
-                    else if (t.isExpressionStatement(cleanupStmt) && t.isOptionalCallExpression(cleanupStmt.expression)) {
-                      const call = cleanupStmt.expression;
-                      if (t.isOptionalMemberExpression(call.callee) &&
-                          t.isIdentifier(call.callee.property) &&
-                          call.callee.property.name === 'destroy') {
-                        hasCleanup = true;
-                        break;
+                  } else {
+                    // Handle block-body functions
+                    const cleanupStatements = t.isBlockStatement(cleanupBody) ? cleanupBody.body : [cleanupBody];
+
+                    // Look for destroy() call in cleanup function
+                    for (const cleanupStmt of cleanupStatements) {
+                      if (t.isExpressionStatement(cleanupStmt) && t.isCallExpression(cleanupStmt.expression)) {
+                        const call = cleanupStmt.expression;
+                        // Check if this is a call to destroy() - handles:
+                        // - chart.destroy()
+                        // - chartInstance.current.destroy()
+                        // - this.chart.destroy()
+                        if (t.isMemberExpression(call.callee) &&
+                            t.isIdentifier(call.callee.property) &&
+                            call.callee.property.name === 'destroy') {
+                          hasCleanup = true;
+                          break;
+                        }
                       }
-                    }
-                    // Also check if-statements with destroy calls: if (chartInstance.current) { chartInstance.current.destroy(); }
-                    else if (t.isIfStatement(cleanupStmt)) {
-                      const checkIfHasDestroy = (node) => {
-                        if (t.isBlockStatement(node)) {
-                          return node.body.some(s => checkIfHasDestroy(s));
+                      // Also handle optional chaining: chart?.destroy() or ref.current?.destroy()
+                      else if (t.isExpressionStatement(cleanupStmt) && t.isOptionalCallExpression(cleanupStmt.expression)) {
+                        const call = cleanupStmt.expression;
+                        if (t.isOptionalMemberExpression(call.callee) &&
+                            t.isIdentifier(call.callee.property) &&
+                            call.callee.property.name === 'destroy') {
+                          hasCleanup = true;
+                          break;
                         }
-                        if (t.isExpressionStatement(node) && t.isCallExpression(node.expression)) {
-                          const call = node.expression;
-                          return t.isMemberExpression(call.callee) &&
-                                 t.isIdentifier(call.callee.property) &&
-                                 call.callee.property.name === 'destroy';
+                      }
+                      // Also check if-statements with destroy calls: if (chartInstance.current) { chartInstance.current.destroy(); }
+                      else if (t.isIfStatement(cleanupStmt)) {
+                        const checkIfHasDestroy = (node) => {
+                          if (t.isBlockStatement(node)) {
+                            return node.body.some(s => checkIfHasDestroy(s));
+                          }
+                          if (t.isExpressionStatement(node) && t.isCallExpression(node.expression)) {
+                            const call = node.expression;
+                            return t.isMemberExpression(call.callee) &&
+                                   t.isIdentifier(call.callee.property) &&
+                                   call.callee.property.name === 'destroy';
+                          }
+                          return false;
+                        };
+                        if (checkIfHasDestroy(cleanupStmt.consequent)) {
+                          hasCleanup = true;
+                          break;
                         }
-                        return false;
-                      };
-                      if (checkIfHasDestroy(cleanupStmt.consequent)) {
-                        hasCleanup = true;
-                        break;
                       }
                     }
                   }
                 }
-              }
             }
           }
           
