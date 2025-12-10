@@ -85,7 +85,7 @@ function ProductCategoryAnalysis({
     };
 
     loadCategoryData();
-  }, [category, effectiveStartDate, effectiveEndDate, utilities]);
+  }, [category, effectiveStartDate, effectiveEndDate]);
 
   // Load top products when category is selected
   const handleCategoryClick = async (clickData) => {
@@ -122,7 +122,6 @@ function ProductCategoryAnalysis({
         QueryName: 'Invoice Line Items by Product',
         CategoryPath: 'Demo',
         Parameters: {
-          ProductID: undefined, // Not filtering by specific product
           Category: clickData.label,
           StartDate: effectiveStartDate,
           EndDate: effectiveEndDate
@@ -166,7 +165,6 @@ function ProductCategoryAnalysis({
         CategoryPath: 'Demo',
         Parameters: {
           ProductID: product.ProductID,
-          Category: undefined, // Not filtering by category when filtering by specific product
           StartDate: effectiveStartDate,
           EndDate: effectiveEndDate
         }

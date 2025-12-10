@@ -127,6 +127,27 @@
   },
   {
     "fields": {
+      "Name": "Category Top Products",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which products perform best in this category? Show me top products within a specific category.",
+      "Description": "Conditional query (executes when category selected): TOP 5 products by revenue in selected category. Returns ProductID, ProductName, Revenue for top products list. **Result Order: TotalRevenue DESC** - Highest revenue products first within selected category.",
+      "SQL": "@file:SQL/category-top-products.sql",
+      "TechnicalDescription": "Groups paid invoice line items by ProductID, ProductName, and Category within a specific category. TOP N configurable (default 10). Returns: ProductID (for ID-based filtering), ProductName, Category, TotalRevenue (SUM), TotalQuantity (SUM), InvoiceCount (COUNT DISTINCT), AvgPrice (AVG). Joins vwProducts → vwInvoiceLineItems → vwInvoices with filters: Status='Paid', IsActive=1, Category filter required. Supports optional StartDate, EndDate filters. Used by ProductCategoryAnalysis component for category drill-down.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "B474483A-8306-4589-B2BE-CFD0EB8F0BE8"
+    },
+    "sync": {
+      "lastModified": "2025-12-10T03:51:33.508Z",
+      "checksum": "1b1b7124b593b99ad2e26d90d440dfeb16cfb03b799f6b644b03bfba27fc5f84"
+    }
+  },
+  {
+    "fields": {
       "Name": "Submission Status Summary",
       "CategoryID": "@lookup:Query Categories.Name=Demo",
       "UserQuestion": "What is the status of event submissions? Show me submission counts by status.",
