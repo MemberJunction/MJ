@@ -121,7 +121,7 @@ function DealPipelineVisualization({
     };
 
     loadData();
-  }, [stage, accountType, minAmount, monthsBack, appliedStartDate, appliedEndDate, utilities]);
+  }, [stage, accountType, minAmount, monthsBack, appliedStartDate, appliedEndDate]);
 
   // Load trends query only when a segment is clicked (conditional query)
   useEffect(() => {
@@ -156,7 +156,7 @@ function DealPipelineVisualization({
     };
 
     loadTrends();
-  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate, utilities]);
+  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate]);
 
   // Load deal details when a segment is selected (query pair pattern)
   useEffect(() => {
@@ -194,7 +194,7 @@ function DealPipelineVisualization({
     };
 
     loadDeals();
-  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate, utilities]);
+  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate]);
 
   // Render ApexCharts funnel chart when pipelineData changes
   useEffect(() => {

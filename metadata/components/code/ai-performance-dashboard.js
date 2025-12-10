@@ -142,7 +142,7 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
     };
     
     loadData();
-  }, [timeRange, utilities.rv, getDateRange]);
+  }, [timeRange, getDateRange]);
   
   // Aggregate data by time period
   const aggregateData = useCallback((data, dateField, grouping) => {
@@ -398,7 +398,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
     } finally {
       setLoadingInsights(false);
     }
-  }, [activeTab, agentRuns, promptRuns, utilities.ai]);
+  }, [activeTab, agentRuns, promptRuns]);
   
   console.log('[AIPerformanceDashboard] Current state:', {
     timeRange,

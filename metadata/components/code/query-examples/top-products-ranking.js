@@ -55,7 +55,7 @@ function TopProductsRanking({
     };
 
     loadData();
-  }, [topN, category, startDate, endDate, utilities]);
+  }, [topN, category, startDate, endDate]);
 
   // Handle product click for drill-down
   const handleProductClick = async (product) => {

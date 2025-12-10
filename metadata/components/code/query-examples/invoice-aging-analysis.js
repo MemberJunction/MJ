@@ -223,7 +223,7 @@ function InvoiceAgingAnalysis({
     };
 
     loadData();
-  }, [appliedMinOutstanding, appliedAccountType, appliedMonthsBack, appliedPaymentMethod, appliedTopN, utilities]);
+  }, [appliedMinOutstanding, appliedAccountType, appliedMonthsBack, appliedPaymentMethod, appliedTopN]);
 
   // Render D3 aging bucket visualization when agingData changes
   useEffect(() => {

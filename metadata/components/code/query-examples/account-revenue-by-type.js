@@ -65,7 +65,7 @@ function AccountRevenueByType({
     };
 
     loadData();
-  }, [accountType, effectiveStartDate, effectiveEndDate, utilities]);
+  }, [accountType, effectiveStartDate, effectiveEndDate]);
 
   // Apply date filters
   const handleApplyFilters = () => {
