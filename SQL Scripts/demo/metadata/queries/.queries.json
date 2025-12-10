@@ -127,6 +127,27 @@
   },
   {
     "fields": {
+      "Name": "Category Top Products",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Which products perform best in this category? Show me top products within a specific category.",
+      "Description": "Conditional query (executes when category selected): TOP 5 products by revenue in selected category. Returns ProductID, ProductName, Revenue for top products list. **Result Order: TotalRevenue DESC** - Highest revenue products first within selected category.",
+      "SQL": "@file:SQL/category-top-products.sql",
+      "TechnicalDescription": "Groups paid invoice line items by ProductID, ProductName, and Category within a specific category. TOP N configurable (default 10). Returns: ProductID (for ID-based filtering), ProductName, Category, TotalRevenue (SUM), TotalQuantity (SUM), InvoiceCount (COUNT DISTINCT), AvgPrice (AVG). Joins vwProducts → vwInvoiceLineItems → vwInvoices with filters: Status='Paid', IsActive=1, Category filter required. Supports optional StartDate, EndDate filters. Used by ProductCategoryAnalysis component for category drill-down.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "B474483A-8306-4589-B2BE-CFD0EB8F0BE8"
+    },
+    "sync": {
+      "lastModified": "2025-12-10T03:51:33.508Z",
+      "checksum": "1b1b7124b593b99ad2e26d90d440dfeb16cfb03b799f6b644b03bfba27fc5f84"
+    }
+  },
+  {
+    "fields": {
       "Name": "Submission Status Summary",
       "CategoryID": "@lookup:Query Categories.Name=Demo",
       "UserQuestion": "What is the status of event submissions? Show me submission counts by status.",
@@ -352,8 +373,50 @@
       "ID": "F2018C52-F48B-4537-AD8A-2708778A378F"
     },
     "sync": {
-      "lastModified": "2025-12-08T03:03:19.636Z",
-      "checksum": "2ffcf61bb47cfb5eb70ea1f9aac3c4ffee876f940e038adee7188b572f33eaa9"
+      "lastModified": "2025-12-09T20:35:14.901Z",
+      "checksum": "2538a14dc4e275cdf00dfe50c14def39f6415279ff72bc29339ba562344717dd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Invoices by Account Type",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Show me all invoices for accounts of this type. What are the invoice details for customer/prospect/partner accounts?",
+      "Description": "Returns raw invoice records filtered by account type with date range support. Joins invoices and accounts to enable drill-down by account type. Used for DataGrid drill-down from revenue charts. Replaces EntityDataGrid extraFilter subquery pattern with proper query-driven approach. Supports StartDate/EndDate filtering for consistency with aggregation charts. **Result Order: InvoiceDate DESC** - Most recent invoices first for drill-down review.",
+      "SQL": "@file:SQL/invoices-by-account-type.sql",
+      "TechnicalDescription": "Returns individual invoice records via INNER JOIN of vwInvoices and vwAccounts filtered by AccountType (required parameter). Returns: ID, InvoiceNumber, InvoiceDate, DueDate, AccountName, AccountType, TotalAmount, AmountPaid, BalanceDue, Status. Supports required AccountType parameter plus optional StartDate/EndDate filters. No GROUP BY - returns raw records for DataGrid display. This query replaces the anti-pattern of building SQL subqueries in component code (AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType=...)).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "5659E065-FDCF-4375-9FA4-F60CE7FD084E"
+    },
+    "sync": {
+      "lastModified": "2025-12-09T18:37:15.656Z",
+      "checksum": "ac582c56920cecc587a1bc0e9f186d2fa9bd5ffa0254cbf54e4b6d8ea70e4dfb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Invoice Line Items by Product",
+      "CategoryID": "@lookup:Query Categories.Name=Demo",
+      "UserQuestion": "Show me all line items for this product or category. What are the sales details for products in this category?",
+      "Description": "Returns invoice line item records filtered by product name or category. Used for DataGrid drill-down from product/category charts. Replaces EntityDataGrid extraFilter subquery pattern with proper query-driven approach. Supports two-level drill-down: category-level (all products in category) or product-level (specific product). **Result Order: ID DESC** - Most recent line items first for drill-down review.",
+      "SQL": "@file:SQL/invoice-line-items-by-product.sql",
+      "TechnicalDescription": "Returns individual line item records via JOIN of vwInvoiceLineItems, vwProducts, and vwInvoices. Conditional filtering: if ProductName provided, filters by p.Name; otherwise filters by p.Category. Returns: ID, Product, Quantity, UnitPrice, TotalPrice, Description, InvoiceDate, AccountName, Category. Supports ProductName (for product-level drill-down), Category (for category-level drill-down), plus optional StartDate/EndDate filters. No GROUP BY - returns raw records for DataGrid display. This query replaces the anti-pattern of building SQL subqueries in component code (ProductID IN (SELECT ID FROM CRM.vwProducts WHERE...)).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "C02804E8-9F28-40E4-A665-8709B7466E80"
+    },
+    "sync": {
+      "lastModified": "2025-12-09T20:35:14.072Z",
+      "checksum": "7985be0a3badfcfe42ddd5363039aef859697bf4264736540d4ff977ac475023"
     }
   }
 ]

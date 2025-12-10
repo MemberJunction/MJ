@@ -58,7 +58,7 @@ function MonthlyInvoiceRevenue({
     };
 
     loadData();
-  }, [year, month, statusList, startDate, endDate, utilities]);
+  }, [year, month, statusList, startDate, endDate]);
 
   // Loading state
   if (loading) {

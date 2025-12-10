@@ -6,6 +6,7 @@
 -- Replaces both top-products-ranking.sql and category-top-products.sql
 
 SELECT TOP ({% if TopN %}{{ TopN | sqlNumber }}{% else %}10{% endif %})
+  p.ID AS ProductID,
   p.Name AS ProductName,
   p.Category,
   SUM(ili.TotalPrice) AS TotalRevenue,
@@ -20,5 +21,5 @@ WHERE i.Status = 'Paid'
 {% if Category %}  AND p.Category = {{ Category | sqlString }}
 {% endif %}{% if StartDate %}  AND i.InvoiceDate >= {{ StartDate | sqlDate }}
 {% endif %}{% if EndDate %}  AND i.InvoiceDate <= {{ EndDate | sqlDate }}
-{% endif %}GROUP BY p.Name, p.Category
+{% endif %}GROUP BY p.ID, p.Name, p.Category
 ORDER BY TotalRevenue DESC

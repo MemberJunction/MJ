@@ -171,7 +171,7 @@ function SubmissionReviewDashboard({
     };
 
     loadData();
-  }, [eventID, status, effectiveStartDate, effectiveEndDate, utilities]);
+  }, [eventID, status, effectiveStartDate, effectiveEndDate]);
 
   // Handle status segment click - SimpleChart passes clickData with label, value, records array
   const handleStatusClick = useCallback((clickData) => {

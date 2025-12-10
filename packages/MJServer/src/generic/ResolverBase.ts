@@ -673,6 +673,13 @@ export class ResolverBase {
       const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
         if (event) {
           const baseEntity = <BaseEntity>event.args?.baseEntity;
+
+          // Only process events for the entity type this subscription was created for
+          // This prevents duplicate CloudEvents when multiple entity types have active subscriptions
+          if (baseEntity?.EntityInfo?.Name !== uniqueKey) {
+            return;
+          }
+
           const baseEntityValues = baseEntity ? baseEntity.GetAll() : null;
           const eventToLog = { entityName: entityObject.EntityInfo.Name, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
           LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);

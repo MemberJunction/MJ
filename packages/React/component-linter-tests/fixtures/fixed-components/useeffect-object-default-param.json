@@ -1,0 +1,30 @@
+{
+  "title": "useEffect with Object Default Parameter - Fixed",
+  "type": "report",
+  "name": "ObjectDefaultParamExampleFixed",
+  "userExplanation": "Fixed version: removed object default parameter from useEffect dependencies to prevent infinite render loops.",
+  "functionalRequirements": "Test component to validate linter does not flag correct usage pattern.",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [],
+    "entities": []
+  },
+  "properties": [
+    {
+      "name": "queryParameters",
+      "type": "object",
+      "required": false,
+      "description": "Query parameters object with default {}"
+    },
+    {
+      "name": "showActive",
+      "type": "boolean",
+      "required": false,
+      "description": "Filter flag"
+    }
+  ],
+  "code": "function ObjectDefaultParamExampleFixed({ queryParameters = {}, showActive = true }) {\n  const [data, setData] = useState([]);\n\n  useEffect(() => {\n    console.log('Loading data with params:', queryParameters);\n    setData([]);\n  }, [showActive]);\n\n  return <div>Test Component</div>;\n}",
+  "namespace": "test/fixed",
+  "version": "1.0.0",
+  "registry": "Test"
+}

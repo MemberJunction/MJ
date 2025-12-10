@@ -65,7 +65,7 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
     };
     
     loadEntities();
-  }, [filters, sortBy, sortDirection, searchQuery, utilities.rv]);
+  }, [filters, sortBy, sortDirection, searchQuery]);
   
   // Load entity details when selection changes
   useEffect(() => {
@@ -112,7 +112,7 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
     };
     
     loadEntityDetails();
-  }, [selectedEntityId, utilities.rv]);
+  }, [selectedEntityId]);
   
   // Handle entity selection
   const handleSelectEntity = useCallback((entityId) => {

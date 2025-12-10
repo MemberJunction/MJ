@@ -1,0 +1,37 @@
+{
+  "name": "ReportWithLogicalOr",
+  "type": "report",
+  "description": "Report using logical OR for date fallback - tests variable validation with || operator",
+  "namespace": "reports/test",
+  "version": "1.0.0",
+  "registry": "Test",
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "Sales Report",
+        "categoryPath": "Reports/Sales",
+        "description": "Sales data by date",
+        "parameters": [
+          {
+            "name": "ReportDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Optional date for the report"
+          }
+        ],
+        "fields": [
+          {
+            "name": "SaleDate",
+            "type": "date"
+          },
+          {
+            "name": "Amount",
+            "type": "money"
+          }
+        ]
+      }
+    ]
+  },
+  "code": "function ReportWithLogicalOr({ utilities }) {\n  const [data, setData] = React.useState([]);\n  const [userDate, setUserDate] = React.useState(null);\n  const fallbackDate = '';\n\n  React.useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales Report',\n        CategoryPath: 'Reports/Sales',\n        Parameters: {\n          ReportDate: userDate || fallbackDate\n        }\n      });\n      if (result?.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, [userDate]);\n\n  return (\n    <div>\n      <h1>Sales Report</h1>\n      <input type=\"date\" onChange={(e) => setUserDate(e.target.value)} />\n      <div>Records: {data.length}</div>\n    </div>\n  );\n}"
+}

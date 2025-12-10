@@ -21,7 +21,19 @@
       "name": "groupBy",
       "type": "string",
       "description": "Field name to group data by",
-      "required": true
+      "required": true,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "Validates that the groupBy field exists on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "groupBy field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     },
     {
       "name": "entityName",
@@ -34,13 +46,46 @@
       "type": "Array<string>",
       "description": "REQUIRED TO ENABLE OPEN RECORD: Array of field names that constitute the primary key(s) for the entity. When provided along with entityName (and showSingleRecordView is false), this ENABLES the 'Open Record' feature - clicking any row in the drill-down grid will open the full entity record form via OpenEntityRecord callback. Without this property, rows are NOT clickable for record opening. Example: ['ID'] for single-key entities, ['OrderID', 'LineNumber'] for composite keys. If showSingleRecordView is true, this property is ignored and SingleRecordView panel displays instead.",
       "required": false,
-      "exampleValue": "[\"ID\"]"
+      "exampleValue": "[\"ID\"]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that primary key field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": true
+          },
+          "errorTemplate": "Primary key field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     },
     {
       "name": "valueField",
       "type": "string",
       "description": "Field name to aggregate for chart values. REQUIRED when using aggregateMethod 'sum', 'average', 'min', or 'max'. OMIT when using 'count' (counts records regardless of field values). Examples: 'Total' for revenue, 'Amount' for sales, 'Quantity' for inventory. The component will group records by groupBy field and aggregate this valueField according to aggregateMethod.",
-      "required": false
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When provided, validates that the valueField exists on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "valueField '{field}' does not exist on entity '{entityName}'"
+        },
+        {
+          "type": "required-when",
+          "dependsOn": "aggregateMethod",
+          "description": "valueField is required when aggregateMethod is sum, average, min, or max",
+          "config": {
+            "condition": "siblingProp === 'sum' || siblingProp === 'average' || siblingProp === 'min' || siblingProp === 'max'"
+          },
+          "errorTemplate": "valueField is required when aggregateMethod is '{aggregateMethod}'"
+        }
+      ]
     },
     {
       "name": "aggregateMethod",
@@ -66,7 +111,19 @@
       "name": "gridFields",
       "type": "Array<string>",
       "description": "Fields to show in drill-down grid",
-      "required": false
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that grid field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Grid field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     },
     {
       "name": "showDrilldown",
@@ -93,7 +150,19 @@
       "name": "singleRecordViewFields",
       "type": "Array<string>",
       "description": "Fields to display in the SingleRecordView",
-      "required": false
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that SingleRecordView field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "SingleRecordView field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     }
   ],
   "events": [

@@ -16,6 +16,8 @@ function AccountRevenueByType({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedSegment, setSelectedSegment] = useState(null);
+  const [drilldownData, setDrilldownData] = useState(null);
+  const [loadingDrilldown, setLoadingDrilldown] = useState(false);
 
   // Internal filter state (only used when external props are null)
   const [pendingStartDate, setPendingStartDate] = useState(null);
@@ -29,7 +31,7 @@ function AccountRevenueByType({
   const showDateFilters = startDate === null && endDate === null;
 
   // Get components from registry
-  const { SimpleChart, EntityDataGrid } = components;
+  const { SimpleChart, DataGrid } = components;
 
   // Load data on mount or when parameters change
   useEffect(() => {
@@ -63,7 +65,7 @@ function AccountRevenueByType({
     };
 
     loadData();
-  }, [accountType, effectiveStartDate, effectiveEndDate, utilities]);
+  }, [accountType, effectiveStartDate, effectiveEndDate]);
 
   // Apply date filters
   const handleApplyFilters = () => {
@@ -80,11 +82,37 @@ function AccountRevenueByType({
   };
 
   // Handle chart segment click - SimpleChart passes clickData with label, value, records array
-  const handleChartClick = (clickData) => {
+  const handleChartClick = async (clickData) => {
     console.log('Chart clicked:', clickData);
 
     // Set selected segment (using the full clickData structure from SimpleChart)
     setSelectedSegment(clickData);
+    setLoadingDrilldown(true);
+
+    try {
+      // Load drilldown data using query instead of EntityDataGrid extraFilter
+      const result = await utilities.rq.RunQuery({
+        QueryName: 'Invoices by Account Type',
+        CategoryPath: 'Demo',
+        Parameters: {
+          AccountType: clickData.label,
+          StartDate: effectiveStartDate,
+          EndDate: effectiveEndDate
+        }
+      });
+
+      if (result && result.Success && result.Results) {
+        setDrilldownData(result.Results);
+      } else {
+        console.error('Failed to load drilldown data:', result?.ErrorMessage);
+        setDrilldownData([]);
+      }
+    } catch (err) {
+      console.error('Error loading drilldown data:', err);
+      setDrilldownData([]);
+    } finally {
+      setLoadingDrilldown(false);
+    }
 
     // Fire external event if provided
     if (onSegmentClick) {
@@ -96,15 +124,15 @@ function AccountRevenueByType({
     }
   };
 
-  // Handle EntityDataGrid row click
-  const handleRecordClick = (event) => {
+  // Handle DataGrid row click
+  const handleRecordClick = (record) => {
     if (onRecordClick) {
       onRecordClick({
-        invoiceId: event.record?.ID,
-        invoiceNumber: event.record?.InvoiceNumber,
-        accountName: event.record?.AccountName,
-        totalAmount: event.record?.TotalAmount,
-        status: event.record?.Status
+        invoiceId: record?.ID,
+        invoiceNumber: record?.InvoiceNumber,
+        accountName: record?.AccountName,
+        totalAmount: record?.TotalAmount,
+        status: record?.Status
       });
     }
   };
@@ -112,26 +140,7 @@ function AccountRevenueByType({
   // Clear selection
   const handleClearSelection = () => {
     setSelectedSegment(null);
-  };
-
-  // Build EntityDataGrid extraFilter with correct column name and date filters
-  const buildEntityFilter = () => {
-    const filters = [];
-
-    // Filter by selected account type (using correct column name: AccountType)
-    if (selectedSegment) {
-      filters.push(`AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='${selectedSegment.label}')`);
-    }
-
-    // Add date filters for consistency with chart
-    if (effectiveStartDate) {
-      filters.push(`InvoiceDate >= '${effectiveStartDate}'`);
-    }
-    if (effectiveEndDate) {
-      filters.push(`InvoiceDate <= '${effectiveEndDate}'`);
-    }
-
-    return filters.length > 0 ? filters.join(' AND ') : undefined;
+    setDrilldownData(null);
   };
 
   // Render component - keep filters visible at all times
@@ -358,25 +367,34 @@ function AccountRevenueByType({
             </button>
           </div>
 
-          {/* EntityDataGrid */}
-          <EntityDataGrid
-            entityName="Invoices"
-            extraFilter={buildEntityFilter()}
-            fields={['InvoiceNumber', 'InvoiceDate', 'AccountName', 'TotalAmount', 'Status', 'AmountPaid', 'BalanceDue']}
-            orderBy="InvoiceDate DESC"
-            pageSize={20}
-            maxCachedRows={100}
-            enablePageCache={true}
-            showPageSizeChanger={true}
-            enableSorting={true}
-            enableFiltering={true}
-            showRefreshButton={true}
-            onRowClick={handleRecordClick}
-            utilities={utilities}
-            styles={styles}
-            components={components}
-            callbacks={callbacks}
-          />
+          {/* DataGrid with query-driven data */}
+          {loadingDrilldown ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <div>Loading invoices...</div>
+            </div>
+          ) : drilldownData && drilldownData.length > 0 ? (
+            <DataGrid
+              data={drilldownData}
+              columns={['InvoiceNumber', 'InvoiceDate', 'AccountName', 'TotalAmount', 'Status', 'AmountPaid', 'BalanceDue']}
+              entityName="Invoices"
+              entityPrimaryKeys={['ID']}
+              sorting={true}
+              paging={true}
+              filtering={true}
+              onRowClick={handleRecordClick}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+            />
+          ) : drilldownData && drilldownData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#8c8c8c' }}>
+              <div style={{ fontSize: '16px' }}>No Invoices Found</div>
+              <div style={{ marginTop: '8px' }}>
+                No invoice records found for this account type
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

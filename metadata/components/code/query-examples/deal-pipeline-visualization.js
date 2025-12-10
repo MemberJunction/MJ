@@ -34,6 +34,16 @@ function DealPipelineVisualization({
   // Get components from registry
   const { SimpleChart, DataGrid } = components;
 
+  // ApexCharts is loaded by library loader and available in closure scope
+  // Unwrap it to handle various package formats (UMD, ESM, etc.)
+  const ApexChartsLib = React.useMemo(() => {
+    return utilities?.unwrapLibraryComponents?.(ApexCharts, 'ApexCharts') || ApexCharts;
+  }, [utilities]);
+
+  // Ref for ApexCharts funnel chart
+  const funnelChartRef = useRef(null);
+  const funnelChartInstance = useRef(null);
+
   // Helper function: Sort pipeline stages by natural progression order
   // SQL now returns alphabetical order, JavaScript handles business logic sorting
   const sortPipelineStages = useCallback((stages) => {
@@ -111,7 +121,7 @@ function DealPipelineVisualization({
     };
 
     loadData();
-  }, [stage, accountType, minAmount, monthsBack, appliedStartDate, appliedEndDate, utilities]);
+  }, [stage, accountType, minAmount, monthsBack, appliedStartDate, appliedEndDate]);
 
   // Load trends query only when a segment is clicked (conditional query)
   useEffect(() => {
@@ -146,7 +156,7 @@ function DealPipelineVisualization({
     };
 
     loadTrends();
-  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate, utilities]);
+  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate]);
 
   // Load deal details when a segment is selected (query pair pattern)
   useEffect(() => {
@@ -184,7 +194,122 @@ function DealPipelineVisualization({
     };
 
     loadDeals();
-  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate, utilities]);
+  }, [selectedSegment, accountType, minAmount, appliedStartDate, appliedEndDate]);
+
+  // Render ApexCharts funnel chart when pipelineData changes
+  useEffect(() => {
+    if (!funnelChartRef.current || !pipelineData || pipelineData.length === 0 || !ApexChartsLib) {
+      return;
+    }
+
+    // Destroy existing chart instance before creating new one
+    if (funnelChartInstance.current) {
+      funnelChartInstance.current.destroy();
+      funnelChartInstance.current = null;
+    }
+
+    // Prepare data for funnel (sorted stages)
+    const sortedData = sortPipelineStages(pipelineData);
+    const funnelData = sortedData.map(item => ({
+      x: item.Stage,
+      y: item.TotalValue
+    }));
+
+    // ApexCharts funnel configuration
+    const options = {
+      chart: {
+        type: 'bar',
+        height: 350,
+        events: {
+          dataPointSelection: (event, chartContext, config) => {
+            const dataPointIndex = config.dataPointIndex;
+            const clickedStage = sortedData[dataPointIndex];
+
+            // Call handleStageClick with compatible format
+            handleStageClick({
+              label: clickedStage.Stage,
+              value: clickedStage.TotalValue,
+              records: [] // ApexCharts doesn't track records, but structure matches SimpleChart
+            });
+          }
+        }
+      },
+      plotOptions: {
+        bar: {
+          horizontal: true,
+          distributed: true,
+          barHeight: '80%',
+          isFunnel: true
+        }
+      },
+      colors: [
+        '#3B82F6', // Prospecting - Blue
+        '#10B981', // Qualification - Green
+        '#F59E0B', // Proposal - Amber
+        '#EF4444', // Negotiation - Red
+        '#8B5CF6', // Closed Won - Purple
+        '#6B7280'  // Closed Lost - Gray
+      ],
+      dataLabels: {
+        enabled: true,
+        formatter: function(val, opts) {
+          return '$' + val.toLocaleString();
+        },
+        dropShadow: {
+          enabled: false
+        }
+      },
+      title: {
+        text: '',
+        align: 'center'
+      },
+      xaxis: {
+        categories: sortedData.map(item => item.Stage),
+      },
+      yaxis: {
+        labels: {
+          formatter: function(val) {
+            return '$' + val.toLocaleString();
+          }
+        }
+      },
+      legend: {
+        show: false
+      },
+      tooltip: {
+        y: {
+          formatter: function(val) {
+            return '$' + val.toLocaleString();
+          }
+        }
+      }
+    };
+
+    const series = [{
+      name: 'Total Value',
+      data: funnelData.map(d => d.y)
+    }];
+
+    // Create new chart instance
+    try {
+      funnelChartInstance.current = new ApexChartsLib(funnelChartRef.current, {
+        ...options,
+        series
+      });
+      funnelChartInstance.current.render();
+    } catch (err) {
+      console.error('Error rendering ApexCharts funnel:', err);
+      setErrors(prev => ({ ...prev, funnel: 'Failed to render funnel chart' }));
+    }
+
+    // Cleanup function - destroy chart instance on unmount or before re-render
+    return () => {
+      if (funnelChartInstance.current) {
+        funnelChartInstance.current.destroy();
+        funnelChartInstance.current = null;
+      }
+    };
+  }, [pipelineData, ApexChartsLib, sortPipelineStages]);
 
   // Apply date filters
   const handleApplyFilters = () => {
@@ -331,27 +456,25 @@ function DealPipelineVisualization({
         )}
       </div>
 
-      {/* Pipeline Distribution Chart */}
+      {/* Pipeline Distribution Funnel (ApexCharts) */}
       {!errors.pipeline && pipelineData.length > 0 && (
         <div style={{ marginBottom: '32px' }}>
           <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>
-            Pipeline Distribution by Stage
+            Pipeline Distribution by Stage (Funnel)
           </h3>
-          <SimpleChart
-            entityName="Deals"
-            data={pipelineData}
-            chartType={chartType}
-            groupBy="Stage"
-            valueField="TotalValue"
-            aggregateMethod="sum"
-            onDataPointClick={handleStageClick}
-            title=""
-            showLegend={false}
-            height="300px"
-            utilities={utilities}
-            styles={styles}
-            components={components}
-          />
+          <div ref={funnelChartRef} style={{ width: '100%', height: '350px' }} />
+          {errors.funnel && (
+            <div style={{
+              padding: '12px',
+              backgroundColor: '#fff2e8',
+              border: '1px solid #ffbb96',
+              borderRadius: '4px',
+              color: '#d4380d',
+              marginTop: '8px'
+            }}>
+              {errors.funnel}
+            </div>
+          )}
         </div>
       )}
       {errors.pipeline && (
