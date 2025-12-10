@@ -29,6 +29,8 @@ export interface TypeInfo {
   nullable?: boolean;
   /** Whether this type came from metadata (vs inferred) */
   fromMetadata?: boolean;
+  /** For constant literals, the actual value (e.g., '' for empty string, '2024-01-01' for date literal) */
+  literalValue?: string | number | boolean | null;
 }
 
 /**
@@ -246,16 +248,14 @@ export class TypeContext {
    * Exit the current scope
    */
   exitScope(): void {
-    const scopePrefix = this.getCurrentScopePrefix();
-
-    // Remove all variables in this scope
-    for (const key of this.variableTypes.keys()) {
-      if (key.startsWith(scopePrefix)) {
-        this.variableTypes.delete(key);
-      }
-    }
-
+    // For static analysis, we keep variables around even after exiting scope
+    // This allows the linter to check them during subsequent traversals
+    // We just pop the scope stack to update the "current" scope
     this.scopeStack.pop();
+
+    // Note: Variables are NOT deleted. They remain in the typeContext with their
+    // fully-qualified scoped names (e.g., "fillMissingMonths:result").
+    // The getVariableType() method will still find them by searching parent scopes.
   }
 
   /**
@@ -299,8 +299,24 @@ export class TypeContext {
       }
     }
 
-    // Finally check global scope (no prefix)
-    return this.variableTypes.get(name);
+    // Check global scope (no prefix)
+    if (this.variableTypes.has(name)) {
+      return this.variableTypes.get(name);
+    }
+
+    // Fallback: If scope stack is empty (e.g., during violation-checking phase),
+    // search all variables for any that end with ":name" (scoped variables)
+    // This handles the case where variables were defined in nested scopes during
+    // the analysis phase, but we're now checking them without proper scope context
+    if (this.scopeStack.length === 0) {
+      for (const [key, value] of this.variableTypes.entries()) {
+        if (key.endsWith(`:${name}`)) {
+          return value;
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**

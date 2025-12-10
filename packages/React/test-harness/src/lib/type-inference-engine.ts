@@ -81,10 +81,18 @@ export class TypeInferenceEngine {
   }
 
   /**
+   * Get type inference errors found during analysis
+   */
+  getErrors(): TypeInferenceError[] {
+    return this.errors;
+  }
+
+  /**
    * First pass: collect variable types from declarations and assignments
    */
   private async collectVariableTypes(ast: t.File): Promise<void> {
     const self = this;
+    let functionCounter = 0; // Counter for anonymous functions
 
     traverse(ast, {
       // Track variable declarations
@@ -105,18 +113,50 @@ export class TypeInferenceEngine {
         self.inferAssignmentType(path);
       },
 
-      // Track function parameters and return types
-      FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
-        self.inferFunctionParameterTypes(path);
+      // Track function parameters and return types with scoping
+      FunctionDeclaration: {
+        enter(path: NodePath<t.FunctionDeclaration>) {
+          const functionName = path.node.id?.name || `anon_func_${functionCounter++}`;
+          self.typeContext.enterScope(functionName);
+          self.inferFunctionParameterTypes(path);
 
-        // Track return type of named functions
-        if (path.node.id) {
-          self.trackFunctionReturnType(path.node.id.name, path.node);
+          // Track return type of named functions
+          if (path.node.id) {
+            self.trackFunctionReturnType(path.node.id.name, path.node);
+          }
+        },
+        exit(path: NodePath<t.FunctionDeclaration>) {
+          self.typeContext.exitScope();
         }
       },
 
-      ArrowFunctionExpression(path: NodePath<t.ArrowFunctionExpression>) {
-        self.inferArrowFunctionParameterTypes(path);
+      // Track arrow function scoping
+      ArrowFunctionExpression: {
+        enter(path: NodePath<t.ArrowFunctionExpression>) {
+          // Find the function name from parent if it's a variable declarator
+          let functionName = `anon_arrow_${functionCounter++}`;
+          const parent = path.parent;
+          if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+            functionName = parent.id.name;
+          }
+
+          self.typeContext.enterScope(functionName);
+          self.inferArrowFunctionParameterTypes(path);
+        },
+        exit(path: NodePath<t.ArrowFunctionExpression>) {
+          self.typeContext.exitScope();
+        }
+      },
+
+      // Track function expression scoping
+      FunctionExpression: {
+        enter(path: NodePath<t.FunctionExpression>) {
+          const functionName = path.node.id?.name || `anon_func_expr_${functionCounter++}`;
+          self.typeContext.enterScope(functionName);
+        },
+        exit(path: NodePath<t.FunctionExpression>) {
+          self.typeContext.exitScope();
+        }
       }
     });
   }
@@ -447,18 +487,22 @@ export class TypeInferenceEngine {
    * Infer the type of an expression
    */
   inferExpressionType(node: t.Expression | t.SpreadElement | t.JSXNamespacedName | t.ArgumentPlaceholder, path?: NodePath): TypeInfo {
-    // Literals
-    if (t.isStringLiteral(node) || t.isTemplateLiteral(node)) {
+    // Literals - now track actual values for constant analysis
+    if (t.isStringLiteral(node)) {
+      return { ...StandardTypes.string, literalValue: node.value };
+    }
+    if (t.isTemplateLiteral(node)) {
+      // For template literals, we can't always know the final value
       return StandardTypes.string;
     }
     if (t.isNumericLiteral(node)) {
-      return StandardTypes.number;
+      return { ...StandardTypes.number, literalValue: node.value };
     }
     if (t.isBooleanLiteral(node)) {
-      return StandardTypes.boolean;
+      return { ...StandardTypes.boolean, literalValue: node.value };
     }
     if (t.isNullLiteral(node)) {
-      return StandardTypes.null;
+      return { ...StandardTypes.null, literalValue: null };
     }
     if (t.isArrayExpression(node)) {
       return this.inferArrayType(node, path);
@@ -782,22 +826,234 @@ export class TypeInferenceEngine {
    * Infer type for RunQuery result
    */
   private inferRunQueryResultType(node: t.CallExpression): TypeInfo {
-    // Try to extract QueryName from the arguments
+    // Try to extract QueryName and Parameters from the arguments
     let queryName: string | undefined;
+    let parametersNode: t.ObjectExpression | undefined;
 
     if (node.arguments.length > 0 && t.isObjectExpression(node.arguments[0])) {
       for (const prop of node.arguments[0].properties) {
-        if (t.isObjectProperty(prop) &&
-            t.isIdentifier(prop.key) &&
-            prop.key.name === 'QueryName' &&
-            t.isStringLiteral(prop.value)) {
-          queryName = prop.value.value;
-          break;
+        if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+          if (prop.key.name === 'QueryName' && t.isStringLiteral(prop.value)) {
+            queryName = prop.value.value;
+          } else if (prop.key.name === 'Parameters' && t.isObjectExpression(prop.value)) {
+            parametersNode = prop.value;
+          }
         }
       }
     }
 
+    // Validate query parameters if we have both queryName and parameters
+    if (queryName && parametersNode) {
+      this.validateQueryParameters(queryName, parametersNode);
+    }
+
     return this.typeContext.createRunQueryResultType(queryName || 'unknown');
+  }
+
+  /**
+   * Validate query parameters, especially date parameters
+   */
+  private validateQueryParameters(queryName: string, parametersNode: t.ObjectExpression): void {
+    // Get the query definition from component spec
+    const query = this.componentSpec?.dataRequirements?.queries?.find(
+      q => q.name === queryName
+    );
+
+    if (!query?.parameters) {
+      return;
+    }
+
+    // Build a map of parameter types with isRequired flag
+    const paramTypeMap = new Map<string, { type: string; sqlType: string; isRequired: boolean }>();
+    for (const param of query.parameters) {
+      const extParam = param as { name: string; type?: string; isRequired?: boolean };
+      if (extParam.type) {
+        paramTypeMap.set(param.name.toLowerCase(), {
+          type: mapSQLTypeToJSType(extParam.type),
+          sqlType: extParam.type,
+          isRequired: extParam.isRequired === true
+        });
+      }
+    }
+
+    // Validate each parameter value
+    for (const prop of parametersNode.properties) {
+      if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+        const paramName = prop.key.name;
+        const paramTypeInfo = paramTypeMap.get(paramName.toLowerCase());
+
+        if (!paramTypeInfo) {
+          continue;
+        }
+
+        // Check for date/datetime types
+        const isDateType = ['date', 'datetime', 'datetime2', 'smalldatetime', 'datetimeoffset']
+          .includes(paramTypeInfo.sqlType.toLowerCase());
+
+        if (isDateType) {
+          // Handle string literals: StartDate: '2024-01-01'
+          if (t.isStringLiteral(prop.value)) {
+            this.validateDateParameter(paramName, prop.value.value, paramTypeInfo.isRequired, prop.loc);
+          }
+          // Handle variables: StartDate: effectiveStartDate
+          else if (t.isIdentifier(prop.value)) {
+            this.validateDateVariable(paramName, prop.value.name, paramTypeInfo.isRequired, prop.loc);
+          }
+          // Handle logical expressions: StartDate: startDate || appliedStartDate
+          else if (t.isLogicalExpression(prop.value)) {
+            // For logical expressions, check each operand
+            this.validateDateLogicalExpression(paramName, prop.value, paramTypeInfo.isRequired, prop.loc);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Validate a date variable used as a parameter
+   */
+  private validateDateVariable(paramName: string, variableName: string, isRequired: boolean, loc?: t.SourceLocation | null): void {
+    // Look up the variable type in the type context
+    const varType = this.typeContext.getVariableType(variableName);
+
+    if (!varType) {
+      // Variable type unknown - could be a function parameter with no type info
+      // We'll allow this for now (no warning)
+      return;
+    }
+
+    // Handle 'unknown' type - common with React useState(null)
+    if (varType.type === 'unknown') {
+      // For optional parameters, unknown is acceptable (likely React state)
+      // For required parameters, emit a warning suggesting validation
+      if (isRequired) {
+        this.errors.push({
+          type: 'warning',
+          message: `Parameter "${paramName}" is required but variable "${variableName}" has unknown type. If "${variableName}" comes from React state (useState), ensure it's validated before calling RunQuery. Add a guard: if (!${variableName}) { return; }`,
+          line: loc?.start.line || 0,
+          column: loc?.start.column || 0,
+          code: `// Add validation before RunQuery:\nif (!${variableName}) {\n  return; // or show error to user\n}`
+        });
+      }
+      // For optional parameters with unknown type, allow silently
+      return;
+    }
+
+    // Check if the variable is typed as string (dates are passed as ISO strings)
+    if (varType.type !== 'string') {
+      this.errors.push({
+        type: 'error',
+        message: `Parameter "${paramName}" expects a date string, but variable "${variableName}" has type "${varType.type}". Date parameters must be ISO date strings (e.g., '2024-01-01').`,
+        line: loc?.start.line || 0,
+        column: loc?.start.column || 0,
+        code: `// Ensure ${variableName} contains a valid ISO date string`
+      });
+      return; // Stop further validation if type is wrong
+    }
+
+    // If we know the literal value (constant), validate it as a date string
+    if (varType.literalValue !== undefined && typeof varType.literalValue === 'string') {
+      this.validateDateParameter(paramName, varType.literalValue, isRequired, loc);
+      return; // Already validated the literal value
+    }
+
+    // If the variable is nullable and the parameter is required, flag it
+    if (isRequired && varType.nullable) {
+      this.errors.push({
+        type: 'error',
+        message: `Parameter "${paramName}" is required but variable "${variableName}" may be null/undefined. Ensure "${variableName}" always has a valid date value before calling RunQuery.`,
+        line: loc?.start.line || 0,
+        column: loc?.start.column || 0,
+        code: `// Add validation:\nif (!${variableName}) {\n  throw new Error('${paramName} is required');\n}`
+      });
+    }
+  }
+
+  /**
+   * Validate a logical expression (e.g., startDate || appliedStartDate)
+   */
+  private validateDateLogicalExpression(paramName: string, node: t.LogicalExpression, isRequired: boolean, loc?: t.SourceLocation | null): void {
+    // For || (OR) expressions, validate that at least one operand provides a valid date
+    // For && (AND) expressions, validate the right operand (result of the expression)
+    // For ?? (nullish coalescing), validate the right operand (fallback value)
+
+    const operator = node.operator;
+
+    if (operator === '||' || operator === '??') {
+      // Validate both sides - if left is null/undefined, right will be used
+      if (t.isIdentifier(node.left)) {
+        this.validateDateVariable(paramName, node.left.name, false, loc); // Left can be nullable
+      } else if (t.isStringLiteral(node.left)) {
+        this.validateDateParameter(paramName, node.left.value, false, loc);
+      }
+
+      if (t.isIdentifier(node.right)) {
+        this.validateDateVariable(paramName, node.right.name, isRequired, loc); // Right inherits requirement
+      } else if (t.isStringLiteral(node.right)) {
+        this.validateDateParameter(paramName, node.right.value, isRequired, loc);
+      }
+    } else if (operator === '&&') {
+      // For AND, only the right side matters as the result
+      if (t.isIdentifier(node.right)) {
+        this.validateDateVariable(paramName, node.right.name, isRequired, loc);
+      } else if (t.isStringLiteral(node.right)) {
+        this.validateDateParameter(paramName, node.right.value, isRequired, loc);
+      }
+    }
+  }
+
+  /**
+   * Validate a date parameter value
+   */
+  private validateDateParameter(paramName: string, value: string, isRequired: boolean, loc?: t.SourceLocation | null): void {
+    // Empty strings are invalid for date parameters
+    if (value === '') {
+      let message: string;
+      let code: string;
+
+      if (isRequired) {
+        message = `Parameter "${paramName}" is required and must have a valid ISO date value (e.g., '2024-01-01'). Empty strings are not allowed.`;
+        code = `${paramName}: '2024-01-01'  // Required parameter`;
+      } else {
+        message = `Parameter "${paramName}" is an optional date parameter but has an empty string value. Either provide a valid ISO date (e.g., '2024-01-01') or omit the parameter entirely from the Parameters object.`;
+        code = `// Option 1: Provide valid date\n${paramName}: '2024-01-01'\n\n// Option 2: Remove parameter entirely\nParameters: {\n  // ${paramName}: <omitted>\n}`;
+      }
+
+      this.errors.push({
+        type: 'error',
+        message,
+        line: loc?.start.line || 0,
+        column: loc?.start.column || 0,
+        code
+      });
+      return;
+    }
+
+    // Validate ISO date format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
+    const isoDatePattern = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+    if (!isoDatePattern.test(value)) {
+      this.errors.push({
+        type: 'error',
+        message: `Parameter "${paramName}" is a date parameter but value '${value}' is not a valid ISO date format. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS format.`,
+        line: loc?.start.line || 0,
+        column: loc?.start.column || 0,
+        code: `${paramName}: '2024-01-01'  // or '2024-01-01T00:00:00'`
+      });
+      return;
+    }
+
+    // Validate that it's an actual valid date (not 2024-13-45)
+    const parsedDate = new Date(value);
+    if (isNaN(parsedDate.getTime())) {
+      this.errors.push({
+        type: 'error',
+        message: `Parameter "${paramName}" has an invalid date value '${value}'. The date format is correct but the date itself is invalid (e.g., month > 12, day > 31).`,
+        line: loc?.start.line || 0,
+        column: loc?.start.column || 0,
+        code: `${paramName}: '2024-01-01'  // Use a valid date`
+      });
+    }
   }
 
   /**

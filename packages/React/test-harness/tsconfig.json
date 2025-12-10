@@ -10,8 +10,10 @@
     "outDir": "dist",
     "skipLibCheck": true,
     "strict": true,
-    "lib": ["es2020", "dom"]
+    "lib": ["es2020", "dom"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts", "tests/**/*", "examples/**/*"]
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "tests/**/*", "examples/**/*"]
 }

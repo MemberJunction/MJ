@@ -2,9 +2,10 @@
   "name": "AIModelAnalyticsDashboard",
   "title": "AI Model Analytics Dashboard",
   "type": "dashboard",
+  "namespace": "AI/Analytics",
   "userExplanation": "Comprehensive dashboard showing AI model usage statistics, costs, and trends. Displays multiple charts including model distribution pie chart, cost analysis by vendor, and usage trends over time. Demonstrates coordinating multiple independent queries with Promise.all() for efficient parallel loading.",
-  "functionalRequirements": "## Business Objectives\n- Monitor AI model usage across the organization\n- Track costs by vendor and model type\n- Identify usage trends and patterns over time\n- Provide KPIs for total runs, total cost, and average cost per run\n- Support date range filtering for trend analysis\n\n## Functional Requirements\n- **Multi-Panel Dashboard**: Display 3-4 visualizations in cohesive layout (KPI cards, pie chart, bar chart, line chart)\n- **Model Usage Distribution**: Pie chart showing distribution of prompt runs by model\n- **Cost Analysis**: Bar chart showing total costs by AI vendor\n- **Usage Trends**: Line chart showing daily usage counts over selected time period\n- **KPI Cards**: Display total runs, total cost, average cost per run, and most-used model\n- **Parallel Query Loading**: Load all 3 queries concurrently using Promise.all() for performance\n- **Date Range Filter**: Support filtering trends by date range (default: last 30 days)\n- **Vendor Filter**: Optional filter to show stats for specific AI vendor\n- **Auto-Refresh**: Optional auto-refresh capability with configurable interval\n- **Loading States**: Show loading indicators for each panel during data fetch\n- **Empty States**: Handle cases with no data gracefully\n- **No Drill-Down**: Pure visualization dashboard without interactive drill-down",
-  "description": "Comprehensive AI model usage analytics showing model performance, cost analysis, and usage trends with drill-down to prompt run details.",
+  "functionalRequirements": "## Business Objectives\n- Monitor AI model usage across the organization\n- Track costs by vendor and model type\n- Identify usage trends and patterns over time\n- Provide KPIs for total runs, total cost, and average cost per run\n- Support date range filtering for trend analysis\n\n## Functional Requirements\n- **Multi-Panel Dashboard**: Display 3-4 visualizations in cohesive layout (KPI cards, pie chart, bar chart, line chart)\n- **Model Usage Distribution**: Doughnut chart showing distribution of prompt runs by model\n- **Cost Analysis**: Bar chart showing total costs by AI vendor\n- **Usage Trends**: Line chart showing daily usage counts over selected time period\n- **KPI Cards**: Display total runs, total cost, average cost per run, and most-used model (4 cards in grid layout)\n- **Model Performance Summary**: Bottom panel showing total models used, average success rate across models, and total failures\n- **Dynamic Title**: Dashboard title shows vendor name when filtered (e.g., \"AI Model Analytics Dashboard - OpenAI\")\n- **Parallel Query Loading**: Load all 3 queries concurrently using Promise.all() for performance\n- **Date Range Filter**: Support filtering trends by date range (default: last 30 days)\n- **Vendor Filter**: Optional filter to show stats for specific AI vendor\n- **Loading States**: Show loading indicators during data fetch\n- **Empty States**: Handle cases with no data gracefully (per-chart empty states)\n- **No Drill-Down**: Pure visualization dashboard without interactive drill-down",
+  "description": "Multi-panel dashboard displaying AI model usage statistics, cost analysis, and usage trends. Shows KPI cards (total runs, total cost, average cost per run, most-used model), model distribution doughnut chart, vendor costs bar chart, daily usage trends line chart, and model performance summary statistics. Pure visualization component with no interactive drill-down.",
   "dataRequirements": {
     "mode": "queries",
     "queries": [
@@ -12,7 +13,10 @@
         "name": "AI Model Analytics - Models",
         "categoryPath": "Demo",
         "description": "Model usage counts: GROUP BY ModelName with COUNT(*) from AI Prompt Runs. Returns model distribution for pie chart. **Result Order: RunCount DESC** - Most frequently used models first for usage ranking.",
-        "entityNames": ["MJ: AI Prompt Runs", "AI Models"],
+        "entityNames": [
+          "MJ: AI Prompt Runs",
+          "AI Models"
+        ],
         "fields": [
           {
             "name": "ModelName",
@@ -88,7 +92,11 @@
         "name": "AI Model Analytics - Costs",
         "categoryPath": "Demo",
         "description": "Aggregates AI prompt run costs by vendor and optionally by model. Groups by VendorName with optional ModelName dimension when ModelName parameter provided. Calculates token usage totals (prompt, completion, combined) and estimated cost. Supports date range filtering (StartDate/EndDate) and vendor/model filtering. General-purpose query for cost analysis at vendor or vendor+model granularity. **Result Order: TotalTokens DESC** - Highest token usage first for cost prioritization.",
-        "entityNames": ["MJ: AI Prompt Runs", "AI Models", "MJ: AI Vendors"],
+        "entityNames": [
+          "MJ: AI Prompt Runs",
+          "AI Models",
+          "MJ: AI Vendors"
+        ],
         "fields": [
           {
             "name": "VendorName",
@@ -189,7 +197,9 @@
         "name": "AI Model Analytics - Trends",
         "categoryPath": "Demo",
         "description": "Time-based trends: Daily usage counts for configurable time period (default last 30 days). Returns date and count for line chart. **Result Order: Date ASC** - Chronological order for time-series trend visualization.",
-        "entityNames": ["MJ: AI Prompt Runs"],
+        "entityNames": [
+          "MJ: AI Prompt Runs"
+        ],
         "fields": [
           {
             "name": "Date",
@@ -284,25 +294,60 @@
       {
         "name": "MJ: AI Prompt Runs",
         "description": "Core entity containing AI prompt execution records. All three queries aggregate and analyze data from this entity.",
-        "displayFields": ["Model", "Vendor", "Success", "RunAt", "CompletedAt", "TokensPrompt", "TokensCompletion", "TokensUsed"],
-        "filterFields": ["ModelID", "RunAt", "CompletedAt", "Success"],
-        "sortFields": ["RunAt", "CompletedAt"],
+        "displayFields": [
+          "Model",
+          "Vendor",
+          "Success",
+          "RunAt",
+          "CompletedAt",
+          "TokensPrompt",
+          "TokensCompletion",
+          "TokensUsed"
+        ],
+        "filterFields": [
+          "ModelID",
+          "RunAt",
+          "CompletedAt",
+          "Success"
+        ],
+        "sortFields": [
+          "RunAt",
+          "CompletedAt"
+        ],
         "usageContext": "Main data source for all dashboard queries. Models query groups by ModelName, Costs query groups by VendorName and calculates token costs, Trends query groups by date for time-series analysis."
       },
       {
         "name": "AI Models",
         "description": "Referenced entity providing model metadata (name, vendor, pricing). Joined in queries to get model names and vendor information.",
-        "displayFields": ["Name", "VendorName", "MaxInputTokens", "MaxOutputTokens"],
-        "filterFields": ["ID", "VendorID"],
-        "sortFields": ["Name"],
+        "displayFields": [
+          "Name",
+          "VendorName",
+          "MaxInputTokens",
+          "MaxOutputTokens"
+        ],
+        "filterFields": [
+          "ID",
+          "VendorID"
+        ],
+        "sortFields": [
+          "Name"
+        ],
         "usageContext": "Joined with AI Prompt Runs to provide ModelName view field used in grouping and display."
       },
       {
         "name": "MJ: AI Vendors",
         "description": "Referenced entity providing vendor information for cost analysis and filtering.",
-        "displayFields": ["Name", "Description"],
-        "filterFields": ["ID", "Name"],
-        "sortFields": ["Name"],
+        "displayFields": [
+          "Name",
+          "Description"
+        ],
+        "filterFields": [
+          "ID",
+          "Name"
+        ],
+        "sortFields": [
+          "Name"
+        ],
         "usageContext": "Joined with AI Models to provide VendorName view field for cost grouping and vendor filter parameter."
       }
     ]
@@ -359,7 +404,7 @@
     }
   ],
   "location": "embedded",
-  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Parallel Query Loading**: Uses Promise.all() to execute all 3 queries concurrently for optimal performance\n2. **Models Query**: Aggregates prompt runs by ModelName with success/failure counts and rates\n3. **Costs Query**: Aggregates token usage and estimated costs by VendorName\n4. **Trends Query**: Groups prompt runs by date for time-series visualization\n5. **KPI Calculation**: Component computes summary metrics client-side from query results\n6. **Visualization**: Multiple SimpleChart instances render data in different chart types\n\n### State Management\n- `modelsData`: Array of model usage statistics (from Models query)\n- `costsData`: Array of vendor cost data (from Costs query)\n- `trendsData`: Array of daily usage counts (from Trends query)\n- `loading`: Boolean for initial load state (all queries loading)\n- `errors`: Object with per-query error states (models, costs, trends, general)\n\n### Multi-Query Pattern\n**Parallel Loading Strategy**:\n- All 3 queries execute simultaneously using Promise.all()\n- Independent error handling per query (one failure doesn't block others)\n- Component displays available data even if some queries fail\n- No dependencies between queries (truly parallel execution)\n\n### KPI Calculation\n**Client-Side Aggregation**:\n- `totalRuns`: Sum of RunCount from modelsData\n- `totalCost`: Sum of EstimatedCostUSD from costsData\n- `avgCostPerRun`: totalCost / totalRuns\n- `mostUsedModel`: Model with highest RunCount from modelsData\n\n### Error Handling Strategy\n- **Per-Chart Errors**: Each chart section can fail independently\n- **Graceful Degradation**: Shows available charts even if others fail\n- **Empty States**: Handles no-data gracefully for each chart\n- **General Error**: Catches Promise.all() failures that affect all queries\n\n### Chart Configuration\n**Model Usage Distribution** (Doughnut Chart):\n- Data: modelsData grouped by ModelName\n- Value: RunCount (sum aggregation)\n- Shows relative distribution of model usage\n\n**Cost by Vendor** (Bar Chart):\n- Data: costsData grouped by VendorName\n- Value: EstimatedCostUSD (sum aggregation)\n- Horizontal bars for vendor cost comparison\n\n**Usage Trends** (Line Chart):\n- Data: trendsData grouped by Date\n- Value: RunCount (sum aggregation)\n- Time-series showing usage over time\n- Note: sortBy=undefined to preserve query's natural date ordering\n\n### Date Filter Handling\n- `startDate`/`endDate`: Applied to Models and Costs queries\n- `daysBack`: Applied to Trends query (different parameter for time-series)\n- `vendorName`: Applied to all 3 queries for consistent filtering\n- Filters controlled externally via props (no internal UI)\n\n### Educational Value\nDemonstrates:\n1. **Multi-Query Coordination**: Parallel loading with Promise.all()\n2. **Independent Error Handling**: Per-query error states\n3. **Client-Side KPIs**: Aggregating across query results\n4. **Dashboard Layout**: Multi-panel visualization with KPI cards\n5. **Pure Visualization**: No drill-down, just display\n6. **Graceful Degradation**: Show what works even if some fails",
+  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Parallel Query Loading**: Uses Promise.all() to execute all 3 queries concurrently for optimal performance\n2. **Models Query**: Aggregates prompt runs by ModelName with success/failure counts and rates\n3. **Costs Query**: Aggregates token usage and estimated costs by VendorName\n4. **Trends Query**: Groups prompt runs by date for time-series visualization\n5. **KPI Calculation**: Component computes summary metrics client-side from query results\n6. **Visualization**: Multiple SimpleChart instances render data in different chart types\n\n### State Management\n- `modelsData`: Array of model usage statistics (from Models query)\n- `costsData`: Array of vendor cost data (from Costs query)\n- `trendsData`: Array of daily usage counts (from Trends query)\n- `loading`: Boolean for initial load state (all queries loading)\n- `errors`: Object with per-query error states (models, costs, trends, general)\n\n### Multi-Query Pattern\n**Parallel Loading Strategy**:\n- All 3 queries execute simultaneously using Promise.all()\n- Independent error handling per query (one failure doesn't block others)\n- Component displays available data even if some queries fail\n- No dependencies between queries (truly parallel execution)\n\n### KPI Calculation\n**Client-Side Aggregation**:\n- `totalRuns`: Sum of RunCount from modelsData\n- `totalCost`: Sum of EstimatedCostUSD from costsData\n- `avgCostPerRun`: totalCost / totalRuns\n- `mostUsedModel`: Model with highest RunCount from modelsData\n\n### Error Handling Strategy\n- **Per-Chart Errors**: Each chart section can fail independently\n- **Graceful Degradation**: Shows available charts even if others fail\n- **Empty States**: Handles no-data gracefully for each chart\n- **General Error**: Catches Promise.all() failures that affect all queries\n\n### Chart Configuration\n**Model Usage Distribution** (Doughnut Chart):\n- Data: modelsData grouped by ModelName\n- Value: RunCount (sum aggregation)\n- Shows relative distribution of model usage\n\n**Cost by Vendor** (Bar Chart):\n- Data: costsData grouped by VendorName\n- Value: EstimatedCostUSD (sum aggregation)\n- Horizontal bars for vendor cost comparison\n\n**Usage Trends** (Line Chart):\n- Data: trendsData grouped by Date\n- Value: RunCount (sum aggregation)\n- Time-series showing usage over time\n- Note: sortBy=undefined to preserve query's natural date ordering\n\n### Date Filter Handling\n- `startDate`/`endDate`: Applied to Models and Costs queries\n- `daysBack`: Applied to Trends query (different parameter for time-series)\n- `vendorName`: Applied to all 3 queries for consistent filtering\n- Filters controlled externally via props (no internal UI)\n\n### UI Layout Architecture\n**Grid Layout Specifications**:\n- **KPI Cards Section**: 4-column grid (`gridTemplateColumns: 'repeat(4, 1fr)'`), 16px gap\n  - Each card: gray background (#f5f5f5), 20px padding, 8px border-radius, center-aligned\n  - Card metrics: Total Runs (blue), Total Cost (green), Avg Cost Per Run (orange), Most Used Model (purple)\n- **Charts Section**: 2-column grid (`gridTemplateColumns: 'repeat(2, 1fr)'`), 24px gap\n  - Model Usage Distribution (left): Doughnut chart with legend\n  - Cost by Vendor (right): Bar chart without legend\n- **Trends Section**: Full-width line chart below charts grid\n- **Model Performance Summary**: Conditional bottom panel (only when modelsData exists)\n  - 3-column grid showing: Total Models Used, Avg Success Rate, Total Failures\n  - Light gray background (#f9f9f9) with statistics in 3-column layout\n\n### Dynamic UI Features\n- **Dashboard Title**: Appends vendor name when filtered: `\"AI Model Analytics Dashboard${vendorName && ` - ${vendorName}`}\"`\n- **Conditional Rendering**: Model Performance Summary only displays when `modelsData && modelsData.length > 0`\n- **Per-Chart Error States**: Each chart section independently handles and displays errors\n- **Per-Chart Empty States**: Each visualization shows \"No data available\" message when its query returns no results\n\n### Model Performance Summary Calculations\n**Client-Side Metrics** (lines 359-398):\n- **Total Models Used**: `modelsData.length`\n- **Avg Success Rate**: `(modelsData.reduce((sum, row) => sum + (row.SuccessRate || 0), 0) / modelsData.length).toFixed(1)`\n- **Total Failures**: `modelsData.reduce((sum, row) => sum + (row.FailureCount || 0), 0).toLocaleString()`\n\n### Educational Value\nDemonstrates:\n1. **Multi-Query Coordination**: Parallel loading with Promise.all()\n2. **Independent Error Handling**: Per-query error states\n3. **Client-Side KPIs**: Aggregating across query results\n4. **Dashboard Layout**: Multi-panel visualization with KPI cards and CSS Grid\n5. **Pure Visualization**: No drill-down, just display\n6. **Graceful Degradation**: Show what works even if some fails\n7. **Conditional UI Elements**: Dynamic title and conditional summary panel",
   "code": "@file:../../code/query-examples/ai-model-analytics-dashboard.js",
   "exampleUsage": "// Basic usage (last 30 days, all vendors)\n<AIModelAnalyticsDashboard\n  utilities={utilities}\n  styles={styles}\n  components={components}\n/>\n\n// Last 60 days\n<AIModelAnalyticsDashboard\n  daysBack={60}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n/>\n\n// Filter by specific vendor\n<AIModelAnalyticsDashboard\n  vendorName=\"OpenAI\"\n  daysBack={30}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n/>\n\n// Custom date range for models and costs\n<AIModelAnalyticsDashboard\n  startDate=\"2024-01-01\"\n  endDate=\"2024-12-31\"\n  daysBack={365}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n/>\n\n// Specific vendor and date range\n<AIModelAnalyticsDashboard\n  vendorName=\"Anthropic\"\n  startDate=\"2024-06-01\"\n  endDate=\"2024-06-30\"\n  daysBack={30}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n/>"
 }

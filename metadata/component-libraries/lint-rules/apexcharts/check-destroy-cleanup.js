@@ -38,6 +38,10 @@
                   for (const cleanupStmt of cleanupStatements) {
                     if (t.isExpressionStatement(cleanupStmt) && t.isCallExpression(cleanupStmt.expression)) {
                       const call = cleanupStmt.expression;
+                      // Check if this is a call to destroy() - handles:
+                      // - chart.destroy()
+                      // - chartInstance.current.destroy()
+                      // - this.chart.destroy()
                       if (t.isMemberExpression(call.callee) &&
                           t.isIdentifier(call.callee.property) &&
                           call.callee.property.name === 'destroy') {
@@ -45,12 +49,31 @@
                         break;
                       }
                     }
-                    // Also handle optional chaining: chart?.destroy()
+                    // Also handle optional chaining: chart?.destroy() or ref.current?.destroy()
                     else if (t.isExpressionStatement(cleanupStmt) && t.isOptionalCallExpression(cleanupStmt.expression)) {
                       const call = cleanupStmt.expression;
                       if (t.isOptionalMemberExpression(call.callee) &&
                           t.isIdentifier(call.callee.property) &&
                           call.callee.property.name === 'destroy') {
+                        hasCleanup = true;
+                        break;
+                      }
+                    }
+                    // Also check if-statements with destroy calls: if (chartInstance.current) { chartInstance.current.destroy(); }
+                    else if (t.isIfStatement(cleanupStmt)) {
+                      const checkIfHasDestroy = (node) => {
+                        if (t.isBlockStatement(node)) {
+                          return node.body.some(s => checkIfHasDestroy(s));
+                        }
+                        if (t.isExpressionStatement(node) && t.isCallExpression(node.expression)) {
+                          const call = node.expression;
+                          return t.isMemberExpression(call.callee) &&
+                                 t.isIdentifier(call.callee.property) &&
+                                 call.callee.property.name === 'destroy';
+                        }
+                        return false;
+                      };
+                      if (checkIfHasDestroy(cleanupStmt.consequent)) {
                         hasCleanup = true;
                         break;
                       }

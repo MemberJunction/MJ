@@ -13,12 +13,14 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "ts-node-dev": "^2.0.0"
+    "ts-node-dev": "^2.0.0",
+    "vitest": "^1.0.0"
   },
   "dependencies": {
     "@babel/parser": "^7.23.0",
@@ -28,11 +30,13 @@
     "@memberjunction/aiengine": "2.124.0",
     "@memberjunction/core": "2.124.0",
     "@memberjunction/core-entities": "2.124.0",
+    "@memberjunction/global": "2.124.0",
     "@memberjunction/interactive-component-types": "2.124.0",
     "@memberjunction/react-runtime": "2.124.0",
     "@playwright/test": "^1.40.0",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
+    "node-sql-parser": "^5.3.13",
     "ora": "^5.4.1",
     "playwright": "^1.40.0",
     "typescript": "^5.4.5"
