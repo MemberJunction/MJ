@@ -21,8 +21,17 @@
         ],
         "fields": [
           {
-            "name": "ProductName",
+            "name": "ProductID",
             "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Product ID for drill-down filtering"
+          },
+          {
+            "name": "ProductName",
+            "sequence": 2,
             "defaultInView": true,
             "type": "nvarchar(255)",
             "allowsNull": false,
@@ -31,7 +40,7 @@
           },
           {
             "name": "Category",
-            "sequence": 2,
+            "sequence": 3,
             "defaultInView": true,
             "type": "nvarchar(255)",
             "allowsNull": true,
@@ -40,7 +49,7 @@
           },
           {
             "name": "TotalRevenue",
-            "sequence": 3,
+            "sequence": 4,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": true,
@@ -49,7 +58,7 @@
           },
           {
             "name": "TotalQuantity",
-            "sequence": 4,
+            "sequence": 5,
             "defaultInView": true,
             "type": "int",
             "allowsNull": true,
@@ -58,7 +67,7 @@
           },
           {
             "name": "InvoiceCount",
-            "sequence": 5,
+            "sequence": 6,
             "defaultInView": true,
             "type": "int",
             "allowsNull": false,
@@ -67,7 +76,7 @@
           },
           {
             "name": "AvgPrice",
-            "sequence": 6,
+            "sequence": 7,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": true,
@@ -128,10 +137,16 @@
         "name": "Invoice Line Items",
         "description": "Detail records shown when drilling down into a specific product. Loaded via RunView (not EntityDataGrid) to demonstrate manual data transformation.",
         "displayFields": [
+          "ID",
+          "InvoiceID",
+          "Product",
+          "Description",
           "InvoiceDate",
           "InvoiceName",
           "Quantity",
           "UnitPrice",
+          "Discount",
+          "TotalPrice",
           "Total",
           "AccountName"
         ],
@@ -140,6 +155,7 @@
           "InvoiceDate"
         ],
         "sortFields": [
+          "ID",
           "InvoiceDate",
           "Total"
         ],

@@ -58,7 +58,10 @@ function TopProductsRanking({
   }, [topN, category, startDate, endDate]);
 
   // Handle product click for drill-down
-  const handleProductClick = async (product) => {
+  const handleProductClick = async (event) => {
+    // DataGrid passes an event object with { record, cancel } - extract the actual product data
+    const product = event?.record;
+
     if (!product || !product.ProductID) {
       console.warn('Invalid product data for drill-down:', product);
       return;
@@ -73,7 +76,7 @@ function TopProductsRanking({
       const detailResult = await utilities.rv.RunView({
         EntityName: 'Invoice Line Items',
         ExtraFilter: `ProductID='${product.ProductID}'`,
-        OrderBy: 'InvoiceDate DESC',
+        OrderBy: 'ID DESC',  // vwInvoiceLineItems doesn't have InvoiceDate - order by ID instead
         MaxRows: 100
       });
 
@@ -256,9 +259,13 @@ function TopProductsRanking({
             </div>
             <DataGrid
               data={detailData}
+              entityName="Invoice Line Items"
+              entityPrimaryKeys={["ID"]}
               columns={[
-                { field: 'InvoiceDate', header: 'Invoice Date', sortable: true },
-                { field: 'InvoiceName', header: 'Invoice Name', sortable: true },
+                { field: 'ID', header: 'Line Item ID', sortable: true },
+                { field: 'InvoiceID', header: 'Invoice ID', sortable: true },
+                { field: 'Product', header: 'Product', sortable: true },
+                { field: 'Description', header: 'Description', sortable: true },
                 {
                   field: 'Quantity',
                   header: 'Quantity',
@@ -276,14 +283,21 @@ function TopProductsRanking({
                   }
                 },
                 {
-                  field: 'Total',
-                  header: 'Total',
+                  field: 'Discount',
+                  header: 'Discount',
                   sortable: true,
                   render: (value) => {
                     return value != null ? `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
                   }
                 },
-                { field: 'AccountName', header: 'Account Name', sortable: true }
+                {
+                  field: 'TotalPrice',
+                  header: 'Total Price',
+                  sortable: true,
+                  render: (value) => {
+                    return value != null ? `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
+                  }
+                }
               ]}
               sorting={true}
               paging={true}
@@ -291,6 +305,7 @@ function TopProductsRanking({
               utilities={utilities}
               styles={styles}
               components={components}
+              callbacks={callbacks}
             />
           </div>
         )}
