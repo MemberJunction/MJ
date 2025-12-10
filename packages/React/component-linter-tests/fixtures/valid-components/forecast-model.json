@@ -1,4 +1,4 @@
 {
   "$ref": "metadata/components/spec/forecast-model.spec.json",
-  "description": "Valid component demonstrating forecast model visualization"
+  "description": "Valid component demonstrating revenue forecast visualization with scenario modeling"
 }

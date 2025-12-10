@@ -2,64 +2,46 @@
   "name": "RevenueTrendChart",
   "namespace": "CRM/Finance",
   "type": "Chart",
-  "location": "embedded",
   "code": "@file:../code/revenue-trend-chart.js",
-  "functionalRequirements": "## Revenue Trend Chart\n\n### Purpose\nVisualize revenue trends over time.\n\n### Features\n- Multi-line chart\n- Invoice vs deal revenue\n- Time period selection\n- Trend indicators",
+  "functionalRequirements": "Area chart showing invoice and deal revenue trends over time.",
   "dataRequirements": {
-    "mode": "views",
-    "description": "Visualizes revenue trends over time",
-    "entities": [
-      {
-        "name": "Invoices",
-        "description": "Invoice data for revenue trends",
-        "displayFields": [
-          "TotalAmount",
-          "IssueDate"
-        ],
-        "filterFields": [],
-        "sortFields": [],
-        "fieldMetadata": [],
-        "permissionLevelNeeded": [
-          "read"
-        ],
-        "usageContext": "Historical revenue tracking"
-      },
-      {
-        "name": "Deals",
-        "description": "Deal pipeline revenue",
-        "displayFields": [
-          "Amount",
-          "CloseDate",
-          "Stage"
-        ],
-        "filterFields": [],
-        "sortFields": [],
-        "fieldMetadata": [],
-        "permissionLevelNeeded": [
-          "read"
-        ],
-        "usageContext": "Pipeline revenue tracking"
-      }
-    ],
-    "queries": []
+    "mode": "props"
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- trendData: Array of time-series data\n- period: Selected time period",
+  "technicalDesign": "Uses ApexCharts area chart to display revenue trends with gradient fill.",
   "properties": [
     {
-      "name": "trendData",
-      "type": "Array<{date: string, invoiceRevenue: number, dealRevenue: number}>",
+      "name": "loading",
+      "type": "boolean",
       "required": true,
-      "description": "Revenue trend data"
+      "description": "Loading state"
     },
     {
-      "name": "period",
-      "type": "'day' | 'week' | 'month' | 'quarter' | 'year'",
-      "required": false,
-      "description": "Time period selection"
+      "name": "trendData",
+      "type": "Array<object>",
+      "required": true,
+      "description": "Array of monthly revenue data"
+    },
+    {
+      "name": "chartRefs",
+      "type": "object",
+      "required": true,
+      "description": "Ref object for chart DOM elements"
+    },
+    {
+      "name": "formatCurrency",
+      "type": "function",
+      "required": true,
+      "description": "Function to format currency values"
     }
   ],
   "events": [],
   "dependencies": [],
-  "libraries": [],
-  "description": "Line chart showing revenue trends over time"
+  "libraries": [
+    {
+      "name": "ApexCharts",
+      "version": "^3.45.1",
+      "globalVariable": "ApexCharts"
+    }
+  ],
+  "description": "Revenue trend visualization with area chart"
 }
