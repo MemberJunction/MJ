@@ -1,0 +1,21 @@
+{
+  "name": "QueryExtraUnknownParamsComponent",
+  "description": "Component providing parameters NOT in query spec - should FAIL (violates runquery-parameters-validation)",
+  "code": "function QueryExtraUnknownParamsComponent({ utilities }) {\n  const [data, setData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'ActiveUsers',\n          CategoryPath: 'Admin/Users',\n          Parameters: {\n            IsActive: true,\n            // WRONG: These params don't exist in query spec\n            Department: 'Engineering',\n            IncludeDeleted: false,\n            Role: 'Admin'\n          }\n        });\n\n        if (result.Success) {\n          setData(result.Results);\n        }\n      } catch (err) {\n        console.error(err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Active Users</h1>\n      <p>Count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "ActiveUsers",
+        "categoryPath": "Admin/Users",
+        "fields": ["ID", "Name", "Email"],
+        "entityNames": ["Users"],
+        "parameters": [
+          { "name": "IsActive", "type": "bit", "isRequired": true }
+        ]
+      }
+    ]
+  }
+}

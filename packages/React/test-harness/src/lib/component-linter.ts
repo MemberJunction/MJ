@@ -3107,11 +3107,20 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
 
+                // Filter to only required parameters for validation
+                const requiredParams = specQuery.parameters.filter((p) => {
+                  const hasRequiredFlag = (p as any).isRequired === true || (p as any).isRequired === '1';
+                  const isRuntimeParam = p.value === '@runtime';
+                  return hasRequiredFlag || isRuntimeParam;
+                });
+
                 const specParamNames = specQuery.parameters.map((p) => p.name);
                 const specParamNamesLower = specParamNames.map((n) => n.toLowerCase());
 
-                // Find missing parameters (case-insensitive)
-                const missing = specParamNames.filter((n) => !providedParamsMap.has(n.toLowerCase()));
+                // Find missing REQUIRED parameters only (case-insensitive)
+                const missing = requiredParams
+                  .map((p) => p.name)
+                  .filter((n) => !providedParamsMap.has(n.toLowerCase()));
 
                 // Find extra parameters (not matching any spec param case-insensitively)
                 const extra = Array.from(providedParamsMap.values()).filter((providedName) => !specParamNamesLower.includes(providedName.toLowerCase()));
