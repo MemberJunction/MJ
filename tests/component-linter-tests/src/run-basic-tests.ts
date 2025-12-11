@@ -10,8 +10,8 @@
 
 import { ComponentLinter } from '@memberjunction/react-test-harness';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { describe, it, expect, runTests, SuiteResult } from './src/infrastructure/test-runner';
-import { initializeDatabase, getContextUser, cleanupDatabase } from './src/infrastructure/database-setup';
+import { describe, it, expect, runTests, SuiteResult } from './infrastructure/test-runner';
+import { initializeDatabase, getContextUser, cleanupDatabase } from './infrastructure/database-setup';
 import type { UserInfo } from '@memberjunction/core';
 
 // Store context user for tests

@@ -47,7 +47,7 @@ npm test
 Or directly:
 
 ```bash
-npx ts-node run-tests.ts
+npx ts-node src/run-basic-tests.ts
 ```
 
 ### Fixture-Based Tests (Real Components)
@@ -59,7 +59,7 @@ npm run test:fixtures
 Or directly:
 
 ```bash
-npx ts-node run-fixture-tests.ts
+npx ts-node src/run-fixture-tests.ts
 ```
 
 ### Single Fixture Test (NEW!)
@@ -138,8 +138,8 @@ The test suite validates:
 - Provides `describe`, `it`, `expect`, `beforeEach`
 - Synchronous test execution with readable output
 
-### `run-tests.ts`
-- Main test runner
+### `src/run-basic-tests.ts`
+- Main test runner for inline code tests
 - Contains all test cases
 - Uses `Component Linter` from `@memberjunction/react-test-harness`
 
@@ -179,7 +179,7 @@ The test suite validates:
 
 ## Adding New Tests
 
-Edit `run-tests.ts` and add new describe/it blocks:
+Edit `src/run-basic-tests.ts` and add new describe/it blocks:
 
 ```typescript
 describe('My New Test Suite', () => {
@@ -209,25 +209,29 @@ describe('My New Test Suite', () => {
 ```
 component-linter-tests/
 ├── .env                    # Database credentials (gitignored)
+├── .gitignore              # Prevents tracking build artifacts
 ├── .npmignore              # Prevents accidental publishing
 ├── package.json            # private: true, no @memberjunction namespace
-├── tsconfig.json          # TypeScript configuration
-├── run-tests.ts           # Basic test runner (inline code)
-├── run-fixture-tests.ts   # Fixture test runner (real components)
-├── lint-fixture.ts        # Single fixture linter (NEW!)
-├── fixtures/              # Test fixture components
-│   ├── broken-components/   # Components with bugs
-│   ├── fixed-components/    # Corrected versions
-│   └── valid-components/    # Good examples
-├── src/
-│   ├── fixtures/
-│   │   └── fixture-loader.ts    # Fixture loading utilities
-│   ├── infrastructure/
-│   │   ├── database-setup.ts    # DB connection & context user
-│   │   └── test-runner.ts       # Test framework
-│   └── tests/
-│       └── fixture-tests.ts     # Fixture-based test suite
-└── README.md              # This file
+├── tsconfig.json           # TypeScript configuration
+├── CHANGELOG.md            # Version history
+├── README.md               # This file
+├── fixtures/               # Test fixture components
+│   ├── broken-components/  # Components with known bugs (110 fixtures)
+│   ├── fixed-components/   # Corrected versions (39 fixtures)
+│   └── valid-components/   # Good examples (40 fixtures)
+├── scripts/                # Utility scripts
+│   └── export-valid-components.ts
+└── src/                    # Source code
+    ├── run-basic-tests.ts          # Basic test runner (inline code tests)
+    ├── run-fixture-tests.ts        # Fixture test runner (real components)
+    ├── lint-single-fixture.ts      # Single fixture linter
+    ├── fixtures/
+    │   └── fixture-loader.ts       # Fixture loading utilities
+    ├── infrastructure/
+    │   ├── database-setup.ts       # DB connection & context user
+    │   └── test-runner.ts          # Test framework
+    └── tests/
+        └── fixture-tests.ts        # Fixture-based test suite
 ```
 
 ## Troubleshooting
@@ -276,6 +280,50 @@ fixtures/
 3. **Add valid examples**:
    - Save good examples as `fixtures/valid-components/example.json`
    - Use for regression testing
+
+### Exporting Components from Database
+
+To populate fixtures with real production components:
+
+#### Method 1: SQL Query (Recommended)
+
+```sql
+SELECT
+    ID, Name, Type, Title, Description, Code, Location,
+    FunctionalRequirements, TechnicalDesign, ExampleUsage,
+    Namespace, Version, Registry, Status,
+    DataRequirementsJSON, ParentComponentID
+FROM [__mj].[vwComponents]
+WHERE Status = 'Active'
+    AND ParentComponentID IS NULL
+    AND Code IS NOT NULL
+    AND Code != ''
+ORDER BY Name;
+```
+
+Export results to JSON using your SQL client, then create fixture files in the format:
+
+```json
+{
+  "name": "ComponentName",
+  "type": "chart",
+  "title": "Component Title",
+  "description": "Component description",
+  "code": "function ComponentName() { ... }",
+  "location": "embedded",
+  "namespace": "namespace/path",
+  "version": "1.0.0",
+  "registry": "Skip",
+  "status": "Active"
+}
+```
+
+#### Tips for Exporting
+
+- **Start small**: Export 5-10 components first to validate your process
+- **Focus on recent**: Use `WHERE __mj_UpdatedAt >= DATEADD(month, -3, GETDATE())` for latest components
+- **Naming convention**: Use lowercase, hyphen-separated filenames (e.g., `user-dashboard.json`)
+- **Test after export**: Run `npm run test:fixtures` to validate all components
 
 ### Fixture Loader API
 
