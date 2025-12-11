@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/invoice-status-dashboard.spec.json",
+  "description": "Valid component demonstrating invoice status dashboard"
+}

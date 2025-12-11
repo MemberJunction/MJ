@@ -68,8 +68,8 @@ Test a specific component fixture with detailed violation output:
 
 ```bash
 npm run test:fixture fixtures/valid-components/win-loss-analysis.json
-npm run test:fixture fixtures/broken-components/query-field-invalid.json
-npm run test:fixture ./fixtures/fixed-components/entity-field-correct.json
+npm run test:fixture fixtures/broken-components/schema-validation/query-validation/query-field-invalid.json
+npm run test:fixture fixtures/fixed-components/schema-validation/entity-validation/entity-field-correct.json
 ```
 
 **Benefits**:
@@ -253,19 +253,52 @@ Verify SYSTEM_USER exists: `SELECT * FROM __mj.vwUsers WHERE Email = 'not.set@no
 
 ### Fixture Directory Structure
 
-Component specs are organized into three categories:
+Component specs are organized into three categories with nested subdirectories that mirror the linter architecture:
 
 ```
 fixtures/
-├── broken-components/    # Components with known bugs
-│   ├── broken-10.json    # Original bug: result?.records ?? result?.Rows
-│   └── ...
-├── fixed-components/     # Corrected versions
-│   ├── fix-10.json       # Fixed: result?.Results
-│   └── ...
-└── valid-components/     # Components that should pass linting
-    └── ...
+├── broken-components/           # Components with known bugs (109 fixtures)
+│   ├── README.md
+│   ├── runtime-rules/           # MJ platform requirements (22 files)
+│   │   ├── component-structure/ # Component structure validation
+│   │   ├── component-lifecycle/ # Lifecycle method validation
+│   │   ├── utilities-usage/     # Utilities API validation
+│   │   └── react-restrictions/  # React usage restrictions
+│   ├── type-rules/              # Type compatibility checks (6 files)
+│   ├── schema-validation/       # Entity/Query/Component schema (46 files)
+│   │   ├── entity-validation/   # Entity field/name validation
+│   │   ├── query-validation/    # Query parameter/field validation
+│   │   ├── component-validation/# Component dependency validation
+│   │   ├── data-grid-validation/# DataGrid property validation
+│   │   ├── chart-validation/    # Chart property validation
+│   │   └── result-access-validation/ # RunView/RunQuery result access
+│   └── best-practice-rules/     # Code quality patterns (35 files)
+│       ├── async-patterns/      # Async/await patterns
+│       ├── jsx-patterns/        # JSX usage patterns
+│       ├── state-management/    # State management
+│       ├── callbacks/           # Callback patterns
+│       ├── dependencies/        # Dependency management
+│       ├── data-operations/     # Data operations
+│       ├── string-operations/   # String operations
+│       ├── styling/             # Styling patterns
+│       ├── parameters/          # Parameter patterns
+│       └── misc/                # Miscellaneous
+├── fixed-components/            # Corrected versions (39 fixtures)
+│   ├── type-rules/
+│   ├── schema-validation/
+│   │   ├── entity-validation/
+│   │   ├── query-validation/
+│   │   ├── data-grid-validation/
+│   │   ├── chart-validation/
+│   │   └── result-access-validation/
+│   └── best-practice-rules/
+│       ├── data-operations/
+│       └── dependencies/
+└── valid-components/            # Components that should pass linting (41 fixtures)
 ```
+
+**Migration Date**: December 11, 2024
+**Reason**: Reorganized to mirror the refactored linter architecture (4 rule categories: runtime, type, schema, best-practice)
 
 ### Adding New Fixtures
 

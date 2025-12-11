@@ -1,0 +1,13 @@
+{
+  "name": "TestComponent",
+  "description": "Component with invalid component references (violates validate-component-references rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, components }) {\n  const { NonExistentComponent } = components;\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <NonExistentComponent data={savedUserSettings.data} />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": [
+    {
+      "name": "NonExistentComponent",
+      "code": "// This component does not actually exist"
+    }
+  ]
+}

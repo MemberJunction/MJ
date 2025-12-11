@@ -1,0 +1,55 @@
+{
+  "name": "SimpleDrilldownValidGridFields",
+  "description": "SimpleDrilldownChart with valid gridFields - FIXED version of simple-drilldown-invalid-gridfields",
+  "code": "function SimpleDrilldownValidGridFields({ components, utilities }) {\n  const { SimpleDrilldownChart } = components;\n  const [deals, setDeals] = React.useState(null);\n\n  React.useEffect(() => {\n    async function loadData() {\n      const results = await utilities.rv.RunView({\n        EntityName: 'Deals',\n        ExtraFilter: '',\n        MaxRows: 1000\n      });\n      setDeals(results.Results);\n    }\n    loadData();\n  }, []);\n\n  if (!deals) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Deals by Stage</h1>\n      <SimpleDrilldownChart\n        entityName=\"Deals\"\n        data={deals}\n        groupBy=\"Stage\"\n        valueField=\"Amount\"\n        aggregateMethod=\"sum\"\n        chartType=\"bar\"\n        gridFields={['Name', 'Account', 'Amount', 'Stage']}\n        entityPrimaryKeys={['ID']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Deals",
+        "type": "view",
+        "maxRows": 1000,
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "description": "Primary key"
+          },
+          {
+            "name": "Name",
+            "type": "nvarchar",
+            "description": "Deal name"
+          },
+          {
+            "name": "Account",
+            "type": "nvarchar",
+            "description": "Account name"
+          },
+          {
+            "name": "Amount",
+            "type": "decimal",
+            "description": "Deal amount"
+          },
+          {
+            "name": "Stage",
+            "type": "nvarchar",
+            "description": "Deal stage"
+          },
+          {
+            "name": "CloseDate",
+            "type": "datetime",
+            "description": "Expected close date"
+          }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "SimpleDrilldownChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry"
+    }
+  ]
+}

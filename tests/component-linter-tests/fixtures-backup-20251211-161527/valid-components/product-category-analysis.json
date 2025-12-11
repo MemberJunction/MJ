@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/product-category-analysis.spec.json",
+  "description": "Valid component demonstrating multi-level category analysis with drill-down"
+}
