@@ -1,0 +1,61 @@
+{
+  "name": "DependencyPropVariableCorrectComponent",
+  "description": "Demonstrates CORRECT variable type passing to dependency props - variables from entity fields, state, and computations all have correct types",
+  "code": "function DependencyPropVariableCorrectComponent({ utilities, components, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect, useCallback } = React;\n  const [users, setUsers] = useState([]);\n  const [selectedUserId, setSelectedUserId] = useState(null);\n  const [loading, setLoading] = useState(true);\n  const { DataGrid, ChartComponent, UserProfile } = components;\n\n  useEffect(() => {\n    async function loadUsers() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Users',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setUsers(result.Results);\n        if (result.Results.length > 0) {\n          // Setting ID (number type from entity)\n          setSelectedUserId(result.Results[0].UserNumber);\n        }\n      }\n      setLoading(false);\n    }\n    loadUsers();\n  }, []);\n\n  // CORRECT: Variables with proper types from entity fields\n  const firstUser = users[0];\n  const userName = firstUser?.Name; // userName is string (from entity metadata)\n  const userEmail = firstUser?.Email; // userEmail is string\n  const isActive = firstUser?.IsActive; // isActive is boolean (bit field)\n\n  // CORRECT: Variables from state and computations with proper types\n  const userCount = users.length; // userCount is number\n  const totalActiveUsers = users.filter(u => u.IsActive).length; // totalActiveUsers is number\n  \n  // CORRECT: Computed values with correct types\n  const chartTitle = `User Statistics (${userCount} total)`; // chartTitle is string\n  const gridHeight = 400; // gridHeight is number\n  const defaultPageSize = 20; // defaultPageSize is number\n  const enableFiltering = true; // enableFiltering is boolean\n  const chartWidth = 600; // chartWidth is number\n  const showChartLegend = totalActiveUsers > 10; // showChartLegend is boolean (computed from boolean expression)\n\n  const handleUserSelect = useCallback((userId) => {\n    setSelectedUserId(userId);\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>User Dashboard</h1>\n      \n      {/* CORRECT: All prop types match dependency expectations */}\n      <DataGrid\n        data={users}\n        entityName=\"Users\"\n        height={gridHeight}\n        pageSize={defaultPageSize}\n        filtering={enableFiltering}\n        sorting={true}\n        onRowSelect={handleUserSelect}\n      />\n\n      {/* CORRECT: Variables passed with matching types */}\n      <ChartComponent\n        data={users}\n        chartType=\"bar\"\n        title={chartTitle}\n        width={chartWidth}\n        height={gridHeight}\n        showLegend={showChartLegend}\n      />\n\n      {/* CORRECT: selectedUserId is number (from UserNumber field which is int) */}\n      {selectedUserId && (\n        <UserProfile\n          userId={selectedUserId}\n          userName={userName}\n          email={userEmail}\n          showDetails={isActive}\n        />\n      )}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Users",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "UserNumber", "type": "int" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Email", "type": "nvarchar" },
+          { "name": "Status", "type": "nvarchar" },
+          { "name": "IsActive", "type": "bit" }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "type": "registry",
+      "properties": [
+        { "name": "data", "type": "array", "required": true },
+        { "name": "entityName", "type": "string", "required": true },
+        { "name": "height", "type": "number", "required": false },
+        { "name": "pageSize", "type": "number", "required": false },
+        { "name": "filtering", "type": "boolean", "required": false },
+        { "name": "sorting", "type": "boolean", "required": false },
+        { "name": "onRowSelect", "type": "function", "required": false }
+      ]
+    },
+    {
+      "name": "ChartComponent",
+      "type": "registry",
+      "properties": [
+        { "name": "data", "type": "array", "required": true },
+        { "name": "chartType", "type": "string", "required": true },
+        { "name": "title", "type": "string", "required": false },
+        { "name": "width", "type": "number", "required": false },
+        { "name": "height", "type": "number", "required": false },
+        { "name": "showLegend", "type": "boolean", "required": false }
+      ]
+    },
+    {
+      "name": "UserProfile",
+      "type": "registry",
+      "properties": [
+        { "name": "userId", "type": "number", "required": true },
+        { "name": "userName", "type": "string", "required": false },
+        { "name": "email", "type": "string", "required": false },
+        { "name": "showDetails", "type": "boolean", "required": false }
+      ]
+    }
+  ]
+}

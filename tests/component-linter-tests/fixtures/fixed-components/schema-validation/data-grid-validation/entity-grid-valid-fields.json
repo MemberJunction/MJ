@@ -1,0 +1,55 @@
+{
+  "name": "EntityGridValidFields",
+  "description": "EntityDataGrid with correct fields - FIXED version of entity-grid-invalid-fields",
+  "code": "function EntityGridValidFields({ components, utilities }) {\n  const { EntityDataGrid } = components;\n  \n  return (\n    <div>\n      <h1>Members List</h1>\n      <EntityDataGrid\n        entityName=\"Members\"\n        fields={['FirstName', 'LastName', 'Email', 'JoinDate']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Members",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "description": "Primary key"
+          },
+          {
+            "name": "FirstName",
+            "type": "nvarchar",
+            "description": "First name"
+          },
+          {
+            "name": "LastName",
+            "type": "nvarchar",
+            "description": "Last name"
+          },
+          {
+            "name": "Email",
+            "type": "nvarchar",
+            "description": "Email address"
+          },
+          {
+            "name": "JoinDate",
+            "type": "datetime",
+            "description": "Date joined"
+          },
+          {
+            "name": "IsActive",
+            "type": "bit",
+            "description": "Active status"
+          }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "EntityDataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ]
+}

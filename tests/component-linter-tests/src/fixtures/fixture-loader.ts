@@ -40,7 +40,60 @@ function isReferenceFixture(data: unknown): data is ReferenceFixture {
  */
 function getRepoRoot(): string {
   // Navigate up from src/fixtures to package root, then to repo root
-  return path.resolve(__dirname, '../../../../..');
+  return path.resolve(__dirname, '../../../..');
+}
+
+/**
+ * Recursively search for a file by name in a directory
+ */
+async function findFileRecursive(dirPath: string, filename: string): Promise<string | null> {
+  try {
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+
+      if (entry.isDirectory()) {
+        const found = await findFileRecursive(fullPath, filename);
+        if (found) return found;
+      } else if (entry.name === filename) {
+        return fullPath;
+      }
+    }
+  } catch (error) {
+    // Directory doesn't exist or not readable
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Recursively get all JSON files from a directory
+ */
+async function getJsonFilesRecursive(dirPath: string, baseDir: string = dirPath): Promise<string[]> {
+  const results: string[] = [];
+
+  try {
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+
+      if (entry.isDirectory()) {
+        const nested = await getJsonFilesRecursive(fullPath, baseDir);
+        results.push(...nested);
+      } else if (entry.name.endsWith('.json')) {
+        // Return relative path from baseDir
+        const relativePath = path.relative(baseDir, fullPath);
+        results.push(relativePath);
+      }
+    }
+  } catch (error) {
+    // Directory doesn't exist or not readable
+  }
+
+  return results;
 }
 
 export interface FixtureMetadata {
@@ -68,14 +121,27 @@ export interface LoadedFixture {
 /**
  * Load a single fixture from the fixtures directory
  * Supports both direct fixtures and $ref-based fixtures that point to source specs
+ *
+ * @param category - The fixture category (broken, fixed, valid)
+ * @param name - The fixture name, can include nested path (e.g., "schema-validation/entity-validation/entity-field-invalid")
  */
 export async function loadFixture(category: 'broken' | 'fixed' | 'valid', name: string): Promise<LoadedFixture> {
   const fixturesRoot = path.join(__dirname, '../../fixtures');
   const categoryDir = `${category}-components`;
-  const filePath = path.join(fixturesRoot, categoryDir, `${name}.json`);
 
+  // Support nested paths with forward slashes
+  const nameWithExt = name.endsWith('.json') ? name : `${name}.json`;
+  let filePath = path.join(fixturesRoot, categoryDir, nameWithExt);
+
+  // If nested path not found, try searching for the file (backward compatibility)
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Fixture not found: ${filePath}`);
+    const basename = path.basename(nameWithExt);
+    const found = await findFileRecursive(path.join(fixturesRoot, categoryDir), basename);
+    if (found) {
+      filePath = found;
+    } else {
+      throw new Error(`Fixture not found: ${filePath}`);
+    }
   }
 
   const content = await fs.promises.readFile(filePath, 'utf8');
@@ -125,7 +191,7 @@ export async function loadFixture(category: 'broken' | 'fixed' | 'valid', name: 
 }
 
 /**
- * Load all fixtures from a specific category
+ * Load all fixtures from a specific category (recursively searches subdirectories)
  */
 export async function loadFixturesByCategory(category: 'broken' | 'fixed' | 'valid'): Promise<LoadedFixture[]> {
   const fixturesRoot = path.join(__dirname, '../../fixtures');
@@ -136,12 +202,13 @@ export async function loadFixturesByCategory(category: 'broken' | 'fixed' | 'val
     return [];
   }
 
-  const files = await fs.promises.readdir(dirPath);
-  const jsonFiles = files.filter(f => f.endsWith('.json'));
+  // Recursively get all JSON files from the category directory
+  const jsonFiles = await getJsonFilesRecursive(dirPath);
 
   const fixtures = await Promise.all(
-    jsonFiles.map(async (file) => {
-      const name = path.basename(file, '.json');
+    jsonFiles.map(async (relativePath) => {
+      // Remove .json extension to get the name (which may include nested path)
+      const name = relativePath.replace(/\.json$/, '');
       return loadFixture(category, name);
     })
   );

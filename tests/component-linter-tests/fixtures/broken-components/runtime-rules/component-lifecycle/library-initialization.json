@@ -1,0 +1,13 @@
+{
+  "name": "TestComponent",
+  "description": "Component with incorrect library initialization pattern (violates library-initialization rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  // Wrong: initializing library outside of useEffect\n  const chart = echarts.init(document.getElementById('chart'));\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Sales',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n        // Wrong: no check if chart was initialized\n        chart.setOption({\n          xAxis: { type: 'category' },\n          yAxis: { type: 'value' },\n          series: [{ data: result.Results.map(r => r.Amount), type: 'bar' }]\n        });\n      }\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Sales Chart</h1>\n      <div id=\"chart\" style={{ width: '100%', height: 400 }} />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [
+    {
+      "name": "echarts",
+      "globalName": "echarts",
+      "url": "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"
+    }
+  ]
+}

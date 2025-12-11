@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component using callbacks in non-child component (violates callbacks-usage-validation rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, callbacks }) {\n  const handleClick = () => {\n    callbacks.onDataChange({ value: 'test' });\n  };\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <button onClick={handleClick}>Click Me</button>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}
