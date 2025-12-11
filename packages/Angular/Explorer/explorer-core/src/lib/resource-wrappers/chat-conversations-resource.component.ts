@@ -1,6 +1,6 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended, ConversationEntity } from '@memberjunction/core-entities';
@@ -65,7 +65,8 @@ export function LoadChatConversationsResource() {
           (pendingArtifactConsumed)="onPendingArtifactConsumed()"
           (pendingMessageConsumed)="onPendingMessageConsumed()"
           (pendingMessageRequested)="onPendingMessageRequested($event)"
-          (artifactLinkClicked)="onArtifactLinkClicked($event)">
+          (artifactLinkClicked)="onArtifactLinkClicked($event)"
+          (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-conversation-chat-area>
       </div>
     </div>
@@ -570,5 +571,13 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Navigate using the generic nav item method
     this.navigationService.OpenNavItemByName(navItemName, params);
+  }
+
+  /**
+   * Handle entity record open request from chat area (from React component grids).
+   * Uses NavigationService to open the record in a new tab.
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 }

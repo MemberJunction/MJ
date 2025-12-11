@@ -18,7 +18,8 @@
         <mj-react-component
           #reactComponent
           [component]="component"
-          (componentEvent)="onComponentEvent($event)">
+          (componentEvent)="onComponentEvent($event)"
+          (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-react-component>
       } @else {
         <div class="error-state">
