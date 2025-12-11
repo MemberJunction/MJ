@@ -10,8 +10,8 @@
  *   npm test:fixtures -- --verbose       # Run with detailed output
  */
 
-import { runTests, SuiteResult } from './src/infrastructure/test-runner';
-import { initializeDatabase, getContextUser, initializeComponentEngine, cleanupDatabase } from './src/infrastructure/database-setup';
+import { runTests, SuiteResult } from './infrastructure/test-runner';
+import { initializeDatabase, getContextUser, initializeComponentEngine, cleanupDatabase } from './infrastructure/database-setup';
 import type { UserInfo } from '@memberjunction/core';
 import {
   setContextUser,
@@ -19,7 +19,7 @@ import {
   registerBulkFixedTests,
   registerBulkValidTests,
   displayFixtureStats
-} from './src/tests/fixture-tests';
+} from './tests/fixture-tests';
 
 // Store context user for tests
 let contextUser: UserInfo;

@@ -14,8 +14,8 @@
  */
 
 import { ComponentLinter } from '@memberjunction/react-test-harness';
-import { initializeDatabase, getContextUser, initializeComponentEngine, cleanupDatabase } from './src/infrastructure/database-setup';
-import { loadFixture } from './src/fixtures/fixture-loader';
+import { initializeDatabase, getContextUser, initializeComponentEngine, cleanupDatabase } from './infrastructure/database-setup';
+import { loadFixture } from './fixtures/fixture-loader';
 import type { UserInfo } from '@memberjunction/core';
 import * as path from 'path';
 
