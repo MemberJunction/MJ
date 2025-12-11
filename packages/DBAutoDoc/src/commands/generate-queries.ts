@@ -14,24 +14,21 @@ import { PromptEngine } from '../prompts/PromptEngine.js';
 import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
 import { DatabaseDocumentation } from '../types/state.js';
 import { SampleQueryGenerationConfig } from '../types/sample-queries.js';
+import { StateManager } from '../state/StateManager.js';
 
 export default class GenerateQueries extends Command {
   static description = 'Generate sample SQL queries from existing analysis state';
 
   static examples = [
     '$ db-auto-doc generate-queries --from-state ./output/run-1/state.json',
-    '$ db-auto-doc generate-queries --from-state ./output/run-1/state.json --output-dir ./queries',
-    '$ db-auto-doc generate-queries --from-state ./output/run-1/state.json --queries-per-table 10'
+    '$ db-auto-doc generate-queries --from-state ./output/run-1/state.json --queries-per-table 10',
+    '$ db-auto-doc generate-queries --from-state ./output/run-1/state.json --max-execution-time 60000'
   ];
 
   static flags = {
     'from-state': Flags.string({
       description: 'Path to existing state.json file from previous analysis',
       required: true
-    }),
-    'output-dir': Flags.string({
-      description: 'Output directory for generated queries',
-      required: false
     }),
     config: Flags.string({
       char: 'c',
@@ -63,10 +60,6 @@ export default class GenerateQueries extends Command {
       const stateJson = await fs.readFile(flags['from-state'], 'utf-8');
       const state = JSON.parse(stateJson) as DatabaseDocumentation;
       spinner.succeed(`State loaded: ${state.schemas.length} schemas, ${state.schemas.reduce((sum, s) => sum + s.tables.length, 0)} tables`);
-
-      // Determine output directory
-      const outputDir = flags['output-dir'] || path.dirname(flags['from-state']);
-      await fs.mkdir(outputDir, { recursive: true });
 
       // Connect to database
       spinner.start('Connecting to database');
@@ -119,9 +112,8 @@ export default class GenerateQueries extends Command {
       const effortLevel = config.ai.effortLevel || 75;
       const maxTokens = config.ai.maxTokens || 16000;  // Use config value or default
 
-      // Determine output file paths for incremental writes
-      const queriesPath = path.join(outputDir, 'sample-queries.json');
-      const summaryPath = path.join(outputDir, 'sample-queries-summary.json');
+      // Create StateManager for state file updates
+      const stateManager = new StateManager(flags['from-state']);
 
       // Create generator
       spinner.start('Generating sample queries');
@@ -130,32 +122,17 @@ export default class GenerateQueries extends Command {
         promptEngine,
         db.getDriver(),
         model,
+        stateManager,
         effortLevel,
-        maxTokens,
-        queriesPath,  // Pass queries output path for incremental writes
-        summaryPath   // Pass summary output path for incremental writes
+        maxTokens
       );
 
-      // Generate queries
+      // Generate queries (will update state file incrementally)
       const result = await generator.generateQueries(state.schemas);
 
       await db.close();
 
       if (result.success) {
-        // Save queries and summary (final write to ensure we have the complete set)
-        // Note: Both were already written incrementally during generation
-        await fs.writeFile(
-          queriesPath,
-          JSON.stringify(result.queries, null, 2),
-          'utf-8'
-        );
-
-        await fs.writeFile(
-          summaryPath,
-          JSON.stringify(result.summary, null, 2),
-          'utf-8'
-        );
-
         spinner.succeed('Sample queries generated!');
         this.log(chalk.green('\n✓ Query generation complete!'));
         this.log(`  Total queries: ${result.summary.totalQueriesGenerated}`);
@@ -165,9 +142,8 @@ export default class GenerateQueries extends Command {
         this.log(`  Estimated cost: $${result.summary.estimatedCost.toFixed(2)}`);
         this.log(`  Average confidence: ${(result.summary.averageConfidence * 100).toFixed(1)}%`);
         this.log(`  Execution time: ${(result.summary.totalExecutionTime / 1000).toFixed(1)}s`);
-        this.log(`\n  Output files:`);
-        this.log(`    - ${queriesPath}`);
-        this.log(`    - ${summaryPath}`);
+        this.log(`\n  Queries saved to:`);
+        this.log(`    - ${flags['from-state']} (state.sampleQueries)`);
 
         this.log(chalk.blue('\n  Query breakdown:'));
         this.log(`    By type:`);
