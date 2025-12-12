@@ -18,6 +18,9 @@ import type { PropertyConstraint, ConstraintViolation } from '@memberjunction/in
 import { MJGlobal } from '@memberjunction/global';
 import { TypeCompatibilityRule, LintContext as TypeRuleLintContext } from './type-rules/type-compatibility-rule';
 import { ComponentPropRule } from './schema-validation/component-prop-rule';
+import { RuleRegistry } from './rule-registry';
+// Side-effect import: triggers all runtime rules to self-register with RuleRegistry
+import './runtime-rules';
 
 export interface LintResult {
   success: boolean;
@@ -363,30 +366,8 @@ export class ComponentLinter {
   }
 
   // Universal rules that apply to all components with SavedUserSettings pattern
+  // NOTE: Runtime rules (no-import-statements, etc.) are now loaded from RuleRegistry
   private static universalComponentRules: Rule[] = [
-    {
-      name: 'no-import-statements',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-
-        traverse(ast, {
-          ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
-            violations.push({
-              rule: 'no-import-statements',
-              severity: 'critical',
-              line: path.node.loc?.start.line || 0,
-              column: path.node.loc?.start.column || 0,
-              message: `Component "${componentName}" contains an import statement. Interactive components cannot use import statements - all dependencies must be passed as props.`,
-              code: path.toString().substring(0, 100),
-            });
-          },
-        });
-
-        return violations;
-      },
-    },
-
     {
       name: 'no-export-statements',
       appliesTo: 'all',
@@ -8531,8 +8512,12 @@ const result = await utilities.rq.RunQuery({
       await typeEngine.analyze(ast);
       const typeContext = typeEngine.getTypeContext();
 
+      // Get runtime rules from registry (auto-registered via side-effect imports)
+      const runtimeRules = RuleRegistry.getInstance().getRuntimeRules();
+
       // Use universal rules for all components in the new pattern
-      let rules = this.universalComponentRules;
+      // Prepend runtime rules from registry
+      let rules = [...runtimeRules, ...this.universalComponentRules];
 
       // Filter rules based on component type and appliesTo property
       if (isRootComponent) {

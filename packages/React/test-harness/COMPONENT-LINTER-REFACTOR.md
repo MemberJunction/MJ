@@ -2053,11 +2053,144 @@ npx tsc --noEmit
 
 ---
 
-**Document Status**: ✅ Complete with Test Baseline
-**Current Phase**: Phase 0 - Documentation & Planning (60% complete)
-**Next Step**: Review architecture and create refactor branch
+## Lessons Learned (2025-12-12)
+
+### Session Summary
+Attempted Phase 4A execution with autonomous agent coordination. Key learnings that will improve future execution:
+
+### ✅ What Worked
+
+1. **Incremental Testing Strategy**
+   - Testing single rule extraction before batch extraction
+   - Validating test baseline after each change
+   - Building after each modification to catch TypeScript errors early
+
+2. **Self-Registration Architecture (Option 1)**
+   - **Pattern**: Each rule file self-registers when imported
+   - **Implementation**: Rule files add `RuleRegistry.getInstance().registerRuntimeRule(ruleName)` at module level
+   - **Benefits**: Zero maintenance on index.ts, self-documenting, no manual registration
+   - **Tested**: ✅ Verified working with `no-import-statements` rule
+   - **Result**: 255/303 tests passing with self-registration
+
+### ❌ What Didn't Work
+
+1. **Bulk Rule Extraction Without Verification**
+   - Task agents created 32 rule files but work was lost/not properly committed
+   - Attempted to remove rules from monolithic array before verifying all extracted rules worked
+   - Result: Test regression (255 → 180 passing)
+
+2. **Automated Bulk Deletion**
+   - Python script to remove 32 rules at once damaged other rules
+   - Boundary detection failed, removed more than intended
+   - Result: 8 test regressions (255 → 247 passing)
+
+3. **Missing Commit Workflow**
+   - Extraction work wasn't committed incrementally
+   - Lost progress when troubleshooting issues
+   - No checkpoints to rollback to
+
+### 🎯 Improved Strategy for Phase 4A Completion
+
+**Step-by-step approach (proven pattern):**
+
+1. **Add Self-Registration to Each Rule File** (31 remaining)
+   - Add import: `import { RuleRegistry } from '../rule-registry';`
+   - Add at end of file: `RuleRegistry.getInstance().registerRuntimeRule(ruleNameRule);`
+   - Can be done in batch since it's additive (no removal)
+
+2. **Verify All Rules Load**
+   - Check rule count: `RuleRegistry.getInstance().getRuleCount()` should return 32
+   - Run tests: Should maintain 255/303 baseline
+   - Build: Should have 0 TypeScript errors
+
+3. **Remove Rules from Monolithic Array (One at a Time)**
+   - Remove 1 rule from `universalComponentRules` array
+   - Build and test after EACH removal
+   - If tests regress, investigate immediately
+   - Commit after every 5-10 successful removals
+
+4. **Final Validation**
+   - Run full test suite: Must show 255/303 passing
+   - Verify file size reduction: ~10,700 → ~3,000 lines
+   - Check for duplicate violations (deduplication working correctly)
+
+### 📐 Self-Registration Architecture
+
+**File Pattern** (to be applied to 31 remaining rules):
+
+```typescript
+// runtime-rules/rule-name.ts
+import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
+// ... other imports
+
+export const ruleNameRule: LintRule = {
+  name: 'rule-name',
+  appliesTo: 'all',
+  test: (ast, componentName) => {
+    // Rule logic
+    return violations;
+  },
+};
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(ruleNameRule);
+```
+
+**Index File** (already updated):
+
+```typescript
+// runtime-rules/index.ts
+// Side-effect imports trigger self-registration
+import './no-import-statements';  // ✅ Has self-registration
+import './no-export-statements';   // ⚠️ Needs self-registration
+// ... 30 more rules need self-registration
+```
+
+**Component Linter** (already updated):
+
+```typescript
+// component-linter.ts
+import './runtime-rules'; // Side-effect import
+
+// In lintComponent():
+const runtimeRules = RuleRegistry.getInstance().getRuntimeRules();
+let rules = [...runtimeRules, ...this.universalComponentRules];
+```
+
+### 🔄 Current State (End of Session)
+
+**Completed:**
+- ✅ Infrastructure files created (lint-rule.ts, rule-registry.ts, lint-utils.ts, lint-context.ts)
+- ✅ Self-registration architecture designed and tested
+- ✅ 1 rule (`no-import-statements`) fully migrated with self-registration
+- ✅ Component-linter.ts integrated with RuleRegistry
+- ✅ Test baseline maintained: 255/303 passing
+
+**In Progress:**
+- ⚠️ 31 rules exist as files but lack self-registration code
+- ⚠️ All 32 rules still duplicated in monolithic array
+
+**Remaining Work:**
+1. Add self-registration to 31 rule files (~2 lines per file, ~10 minutes)
+2. Remove 32 rules from monolithic array (carefully, one at a time)
+3. Final validation and commit
+
+### 💡 Key Insights
+
+1. **Self-registration > Manual registration**: Scales better, self-documenting, easier to maintain
+2. **Test early, test often**: Every change should be verified with build + test
+3. **Incremental commits**: Commit after each successful step, not at end
+4. **One change at a time**: Bulk changes are risky, manual verification is safer
+5. **Baseline is sacred**: Any test regression requires immediate investigation
+
+---
+
+**Document Status**: ✅ Complete with Test Baseline + Lessons Learned
+**Current Phase**: Phase 4A - Runtime Rules Extraction (5% complete - 1/32 rules migrated)
+**Next Step**: Add self-registration to 31 remaining runtime rules, then remove from monolithic array
 **Owner**: Jordan Fanapour
-**Reviewers**: TBD
+**Last Updated**: 2025-12-12
 
 ---
 
