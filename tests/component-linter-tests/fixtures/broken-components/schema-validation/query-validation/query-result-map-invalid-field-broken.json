@@ -1,0 +1,19 @@
+{
+  "name": "QueryResultMapInvalidFieldBroken",
+  "type": "generic",
+  "title": "Query Result Map Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of mapping query results with invalid field",
+  "code": "function QueryResultMapInvalidFieldBroken({ utilities }) {\n  const [customerNames, setCustomerNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Customer List',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Mapping to CompanyName field that doesn't exist\n        const names = result.Results.map(c => c.CompanyName);\n        setCustomerNames(names);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Customers</h3>\n      {customerNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Customer List",
+      "categoryPath": "Sales/Reports",
+      "fields": ["CustomerID", "CustomerName", "Email", "TotalOrders", "TotalSpent"]
+    }]
+  }
+}

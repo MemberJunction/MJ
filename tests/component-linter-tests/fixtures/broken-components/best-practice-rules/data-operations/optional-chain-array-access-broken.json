@@ -1,0 +1,18 @@
+{
+  "name": "OptionalChainArrayAccessBroken",
+  "type": "generic",
+  "title": "Optional Chain Array Access - Broken Pattern",
+  "description": "Tests optional chaining on array with invalid field access (may fail until linter refactor)",
+  "code": "function OptionalChainArrayAccessBroken({ utilities }) {\n  const [productNames, setProductNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Products' });\n      if (result?.Success) {\n        // ❌ Mapping with invalid field using optional chaining\n        const names = result.Results?.map(p => p?.ProductTitle) || [];\n        setProductNames(names.filter(Boolean));\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Products</h3>\n      {productNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Products",
+      "fields": ["ID", "ProductName", "Category", "Price"]
+    }]
+  }
+}

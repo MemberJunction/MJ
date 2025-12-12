@@ -1,0 +1,18 @@
+{
+  "name": "DataGridEntityStringsInvalidFixed",
+  "type": "generic",
+  "title": "DataGrid Entity String Array Invalid - Fixed Pattern",
+  "description": "Tests correct field names in string array columns",
+  "code": "function DataGridEntityStringsInvalidFixed({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Invoices</h3>\n      {/* ✅ Using actual entity fields */}\n      <EntityGrid \n        entityName=\"Invoices\" \n        fields={['InvoiceNumber', 'TotalAmount', 'Status', 'DueDate']} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Invoices",
+      "fields": ["ID", "InvoiceNumber", "TotalAmount", "Status", "DueDate"]
+    }]
+  }
+}

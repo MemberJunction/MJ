@@ -1,0 +1,30 @@
+{
+  "name": "EntityGridEmptyArrays",
+  "description": "EntityDataGrid with empty arrays for optional properties - tests edge case handling",
+  "code": "function EntityGridEmptyArrays({ components, utilities }) {\n  const { EntityDataGrid } = components;\n  \n  return (\n    <div>\n      <h1>All Members</h1>\n      <EntityDataGrid\n        entityName=\"Members\"\n        fields={[]}\n        entityPrimaryKeys={[]}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "EntityDataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Members",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
+          { "name": "FirstName", "type": "nvarchar", "description": "First name" },
+          { "name": "LastName", "type": "nvarchar", "description": "Last name" },
+          { "name": "Email", "type": "nvarchar", "description": "Email address" },
+          { "name": "JoinDate", "type": "datetime", "description": "Date joined" }
+        ]
+      }
+    ]
+  }
+}

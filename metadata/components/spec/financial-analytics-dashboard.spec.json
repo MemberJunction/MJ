@@ -72,14 +72,32 @@
       "location": "registry",
       "namespace": "Generic/UI/Export",
       "version": "^1.0.0"
-    }
-  ],
-  "libraries": [
+    },
     {
-      "name": "ApexCharts",
-      "version": "^3.45.1",
-      "globalVariable": "ApexCharts"
+      "name": "KPIGauges",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "RevenueTrendChart",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "CashFlowChart",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "ForecastModel",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
     }
   ],
+  "libraries": [],
   "description": "Comprehensive financial overview with revenue trends, forecasting, and profitability analysis with export capabilities"
 }

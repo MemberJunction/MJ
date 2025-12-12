@@ -269,7 +269,7 @@ export class AnalysisOrchestrator {
       // Sample Query Generation (if enabled)
       if (this.config.analysis.sampleQueryGeneration?.enabled) {
         this.onProgress('Generating sample queries');
-        await this.generateSampleQueries(state, promptEngine, db.getDriver(), runFolder);
+        await this.generateSampleQueries(state, promptEngine, db.getDriver(), stateManager);
         stateManager.updateSummary(state);
         await stateManager.save(state);
       }
@@ -364,7 +364,7 @@ export class AnalysisOrchestrator {
     state: DatabaseDocumentation,
     promptEngine: PromptEngine,
     driver: any,
-    runFolder: string
+    stateManager: StateManager
   ): Promise<void> {
     const config = this.config.analysis.sampleQueryGeneration;
     if (!config) return;
@@ -374,38 +374,13 @@ export class AnalysisOrchestrator {
     const effortLevel = this.config.ai.effortLevel || 75;
     const maxTokens = this.config.ai.maxTokens || 16000;
 
-    // Determine output file paths for incremental writes
-    const queriesPath = path.join(runFolder, 'sample-queries.json');
-    const summaryPath = path.join(runFolder, 'sample-queries-summary.json');
-
-    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, effortLevel, maxTokens, queriesPath, summaryPath);
+    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, stateManager, effortLevel, maxTokens);
 
     try {
       const result = await generator.generateQueries(state.schemas);
 
       if (result.success) {
-        state.phases.sampleQueryGeneration = {
-          startedAt: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
-          status: 'completed',
-          queries: result.queries,
-          summary: result.summary
-        };
-
-        // Save queries and summary (final write to ensure we have the complete set)
-        // Note: Both were already written incrementally during generation
-        await fs.writeFile(
-          queriesPath,
-          JSON.stringify(result.queries, null, 2),
-          'utf-8'
-        );
-
-        await fs.writeFile(
-          summaryPath,
-          JSON.stringify(result.summary, null, 2),
-          'utf-8'
-        );
-
+        // Phase already updated in state by generator - just report progress
         this.onProgress('Sample queries generated', {
           total: result.summary.totalQueriesGenerated,
           validated: result.summary.queriesValidated,
@@ -413,39 +388,26 @@ export class AnalysisOrchestrator {
           cost: result.summary.estimatedCost
         });
       } else {
-        state.phases.sampleQueryGeneration = {
-          startedAt: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
-          status: 'failed',
-          queries: [],
-          summary: result.summary,
-          errorMessage: result.errorMessage
-        };
-
+        // Phase already marked as failed in state by generator
         this.onProgress('Sample query generation failed', {
           error: result.errorMessage
         });
       }
     } catch (error) {
-      state.phases.sampleQueryGeneration = {
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-        status: 'failed',
-        queries: [],
-        summary: {
-          totalQueriesGenerated: 0,
-          queriesValidated: 0,
-          queriesFailed: 0,
-          totalExecutionTime: 0,
+      // Unexpected error - generator should have caught this but handle anyway
+      const errorState = await stateManager.load();
+      if (errorState && !errorState.phases.queryGeneration) {
+        errorState.phases.queryGeneration = {
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          status: 'failed',
+          queriesGenerated: 0,
           tokensUsed: 0,
           estimatedCost: 0,
-          averageConfidence: 0,
-          queriesByType: {} as any,
-          queriesByPattern: {} as any,
-          queriesByComplexity: {} as any
-        },
-        errorMessage: (error as Error).message
-      };
+          errorMessage: (error as Error).message
+        };
+        await stateManager.save(errorState);
+      }
 
       this.onProgress('Sample query generation error', {
         error: (error as Error).message

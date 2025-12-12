@@ -1,0 +1,18 @@
+{
+  "name": "OptionalChainInvalidFieldFixed",
+  "type": "generic",
+  "title": "Optional Chain Invalid Field - Fixed Pattern",
+  "description": "Tests optional chaining on valid fields",
+  "code": "function OptionalChainInvalidFieldFixed({ utilities }) {\n  const [memberName, setMemberName] = useState('');\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Using actual FirstName field that exists\n        const first = result.Results?.[0];\n        setMemberName(first?.FirstName || 'Unknown');\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Member: {memberName}</div>;\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email"]
+    }]
+  }
+}

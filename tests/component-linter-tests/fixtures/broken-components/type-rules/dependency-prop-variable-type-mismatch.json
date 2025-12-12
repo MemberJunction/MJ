@@ -1,0 +1,57 @@
+{
+  "name": "DependencyPropVariableTypeMismatchComponent",
+  "description": "Component passing variables with WRONG types to dependency props (violates dependency-prop-validation with type inference) - THIS IS THE KEY TEST FOR TYPE INFERENCE!",
+  "code": "function DependencyPropVariableTypeMismatchComponent({ utilities, components, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [users, setUsers] = useState([]);\n  const [selectedUserId, setSelectedUserId] = useState(null);\n  const { DataGrid, ChartComponent, UserProfile } = components;\n\n  useEffect(() => {\n    async function loadUsers() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Users',\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setUsers(result.Results);\n        if (result.Results.length > 0) {\n          // Set selected user ID\n          setSelectedUserId(result.Results[0].ID);\n        }\n      }\n    }\n    loadUsers();\n  }, []);\n\n  // Variables from entity fields\n  const firstUser = users[0];\n  const userName = firstUser?.Name; // userName is string (from entity metadata)\n  const userEmail = firstUser?.Email; // userEmail is string\n  const userStatus = firstUser?.Status; // userStatus is string\n\n  // Variables from state\n  const userCount = users.length; // userCount is number\n\n  // Computed variables\n  const totalUsers = users.reduce((count) => count + 1, 0); // totalUsers is number\n  const userNamesList = users.map(u => u.Name); // userNamesList is array of strings\n\n  return (\n    <div>\n      <h1>User Dashboard</h1>\n      \n      {/* VIOLATION: Passing string (userName) where number expected (height) */}\n      {/* VIOLATION: Passing string (userEmail) where number expected (pageSize) */}\n      {/* VIOLATION: Passing string (userStatus) where boolean expected (filtering) */}\n      <DataGrid\n        data={users}\n        entityName=\"Users\"\n        height={userName}\n        pageSize={userEmail}\n        filtering={userStatus}\n        sorting={true}\n      />\n\n      {/* VIOLATION: Passing number (userCount) where string expected (title) */}\n      {/* VIOLATION: Passing number (totalUsers) where boolean expected (showLegend) */}\n      {/* VIOLATION: Passing array (userNamesList) where number expected (width) */}\n      <ChartComponent\n        data={users}\n        chartType=\"bar\"\n        title={userCount}\n        width={userNamesList}\n        height={300}\n        showLegend={totalUsers}\n      />\n\n      {/* VIOLATION: Passing string (selectedUserId is actually a GUID string) where number expected (userId) */}\n      {/* The type system should know selectedUserId is a string from useState(null) then set to result.Results[0].ID */}\n      {/* And ID field on Users entity is uniqueidentifier (string in JS) */}\n      <UserProfile\n        userId={selectedUserId}\n        userName={userName}\n        showDetails={true}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Users",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Email", "type": "nvarchar" },
+          { "name": "Status", "type": "nvarchar" }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "type": "registry",
+      "properties": [
+        { "name": "data", "type": "array", "required": true },
+        { "name": "entityName", "type": "string", "required": true },
+        { "name": "height", "type": "number", "required": false },
+        { "name": "pageSize", "type": "number", "required": false },
+        { "name": "filtering", "type": "boolean", "required": false },
+        { "name": "sorting", "type": "boolean", "required": false }
+      ]
+    },
+    {
+      "name": "ChartComponent",
+      "type": "registry",
+      "properties": [
+        { "name": "data", "type": "array", "required": true },
+        { "name": "chartType", "type": "string", "required": true },
+        { "name": "title", "type": "string", "required": false },
+        { "name": "width", "type": "number", "required": false },
+        { "name": "height", "type": "number", "required": false },
+        { "name": "showLegend", "type": "boolean", "required": false }
+      ]
+    },
+    {
+      "name": "UserProfile",
+      "type": "registry",
+      "properties": [
+        { "name": "userId", "type": "number", "required": true },
+        { "name": "userName", "type": "string", "required": false },
+        { "name": "showDetails", "type": "boolean", "required": false }
+      ]
+    }
+  ]
+}

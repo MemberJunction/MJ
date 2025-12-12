@@ -1,0 +1,19 @@
+{
+  "name": "QueryResultReduceInvalidFieldBroken",
+  "type": "generic",
+  "title": "Query Result Reduce Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of reducing query results with invalid field",
+  "code": "function QueryResultReduceInvalidFieldBroken({ utilities }) {\n  const [categoryCount, setCategoryCount] = useState({});\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Product Sales',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Grouping by ProductCategory field that doesn't exist\n        const counts = result.Results.reduce((acc, item) => {\n          const cat = item.ProductCategory || 'Unknown';\n          acc[cat] = (acc[cat] || 0) + 1;\n          return acc;\n        }, {});\n        setCategoryCount(counts);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Products by Category</h3>\n      {Object.entries(categoryCount).map(([cat, count]) => (\n        <div key={cat}>{cat}: {count}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Product Sales",
+      "categoryPath": "Sales/Reports",
+      "fields": ["ProductID", "ProductName", "Category", "Quantity", "Revenue"]
+    }]
+  }
+}

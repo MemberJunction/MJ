@@ -1,0 +1,50 @@
+{
+  "name": "SimpleChartMissingValueField",
+  "description": "SimpleChart with aggregateMethod='sum' but missing valueField - violates required-when constraint",
+  "code": "function SimpleChartMissingValueField({ components, utilities }) {\n  const { SimpleChart } = components;\n  const [sales, setSales] = React.useState(null);\n\n  React.useEffect(() => {\n    async function loadData() {\n      const results = await utilities.rv.RunView({\n        EntityName: 'Sales',\n        ExtraFilter: '',\n        MaxRows: 1000\n      });\n      setSales(results.Results);\n    }\n    loadData();\n  }, []);\n\n  if (!sales) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Revenue by Product</h1>\n      <SimpleChart\n        entityName=\"Sales\"\n        data={sales}\n        groupBy=\"ProductName\"\n        aggregateMethod=\"sum\"\n        chartType=\"bar\"\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Sales",
+        "type": "view",
+        "maxRows": 1000,
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "description": "Primary key"
+          },
+          {
+            "name": "ProductName",
+            "type": "nvarchar",
+            "description": "Product name"
+          },
+          {
+            "name": "Revenue",
+            "type": "decimal",
+            "description": "Sale revenue"
+          },
+          {
+            "name": "Quantity",
+            "type": "int",
+            "description": "Quantity sold"
+          },
+          {
+            "name": "SaleDate",
+            "type": "datetime",
+            "description": "Sale date"
+          }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry"
+    }
+  ]
+}

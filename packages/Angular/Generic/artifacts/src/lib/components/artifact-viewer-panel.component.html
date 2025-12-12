@@ -100,7 +100,8 @@
                 [artifactVersion]="artifactVersion"
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
-                [readonly]="true">
+                [readonly]="true"
+                (openEntityRecord)="onOpenEntityRecord($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }

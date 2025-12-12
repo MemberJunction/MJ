@@ -1,0 +1,18 @@
+{
+  "name": "DataGridEntityFieldCaseBroken",
+  "type": "generic",
+  "title": "DataGrid Entity Field Case Mismatch - Broken Pattern",
+  "description": "Tests linter detection of case mismatch in EntityGrid field",
+  "code": "function DataGridEntityFieldCaseBroken({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Events</h3>\n      {/* ❌ Case mismatch: eventname should be EventName */}\n      <EntityGrid \n        entityName=\"Events\" \n        fields={['ID', 'eventname', 'EventDate', 'Location']} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Events",
+      "fields": ["ID", "EventName", "EventDate", "Location", "AttendeeCount"]
+    }]
+  }
+}

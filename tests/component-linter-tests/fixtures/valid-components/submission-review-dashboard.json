@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/submission-review-dashboard.spec.json",
+  "description": "Valid component demonstrating submission review workflow with status tracking"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "CrossComponentFieldMismatchBroken",
+  "type": "generic",
+  "title": "Cross-Component Field Mismatch - Broken Pattern",
+  "description": "Tests data flow with field mismatch between query and component (may fail until linter refactor)",
+  "code": "function CrossComponentFieldMismatchBroken({ utilities, components }) {\n  const [salesData, setSalesData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Monthly Sales',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setSalesData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales Chart</h3>\n      {/* ❌ Query returns Revenue but chart expects TotalAmount */}\n      <SimpleChart data={salesData} groupBy=\"Month\" valueField=\"TotalAmount\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Monthly Sales",
+      "categoryPath": "Sales/Reports",
+      "fields": ["Month", "Revenue", "OrderCount"]
+    }]
+  }
+}

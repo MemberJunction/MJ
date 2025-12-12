@@ -1,0 +1,29 @@
+{
+  "name": "EntityGridFielddefMissingField",
+  "description": "EntityDataGrid with FieldDefinition object missing required 'field' property",
+  "code": "function EntityGridFielddefMissingField({ components, utilities }) {\n  const { EntityDataGrid } = components;\n  \n  return (\n    <div>\n      <h1>Members List</h1>\n      <EntityDataGrid\n        entityName=\"Members\"\n        fields={[\n          { header: 'Name', width: '200px' },\n          { header: 'Email', sortable: true }\n        ]}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "EntityDataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Members",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
+          { "name": "FirstName", "type": "nvarchar", "description": "First name" },
+          { "name": "LastName", "type": "nvarchar", "description": "Last name" },
+          { "name": "Email", "type": "nvarchar", "description": "Email address" }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "ComponentPropTypeStringToArrayBroken",
+  "type": "generic",
+  "title": "Component Property Type String to Array - Broken Pattern",
+  "description": "Tests linter detection of passing string to array property",
+  "code": "function ComponentPropTypeStringToArrayBroken({ utilities, components }) {\n  const [fieldNames, setFieldNames] = useState('Name,Email,Status');\n  const { DataTable } = components;\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* ❌ columns expects array, passing comma-separated string */}\n      <DataTable data={members} columns={fieldNames} />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "DataTable",
+      "properties": [
+        {"name": "data", "type": "array", "isRequired": true},
+        {"name": "columns", "type": "array", "isRequired": false}
+      ]
+    }]
+  }
+}
