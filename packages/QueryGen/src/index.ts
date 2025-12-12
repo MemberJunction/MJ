@@ -29,3 +29,11 @@ export { QueryGenConfig, loadConfig } from './cli/config';
 
 // Export utilities
 export { extractErrorMessage, requireValue, getPropertyOrDefault } from './utils/error-handlers';
+export {
+  formatEntityMetadataForPrompt,
+  findEntityById,
+  getPrimaryKeyFields,
+  getForeignKeyFields,
+  hasRelationships,
+  getRelationshipCount
+} from './utils/entity-helpers';
