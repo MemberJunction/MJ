@@ -31,6 +31,7 @@ export { QueryGenConfig, loadConfig } from './cli/config';
 export { extractErrorMessage, requireValue, getPropertyOrDefault } from './utils/error-handlers';
 export {
   formatEntityMetadataForPrompt,
+  formatEntityGroupForPrompt,
   findEntityById,
   getPrimaryKeyFields,
   getForeignKeyFields,

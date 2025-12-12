@@ -5,7 +5,12 @@
  */
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { EntityMetadataForPrompt, EntityFieldMetadata, EntityRelationshipMetadata } from '../data/schema';
+import {
+  EntityMetadataForPrompt,
+  EntityFieldMetadata,
+  EntityRelationshipMetadata,
+  EntityGroup
+} from '../data/schema';
 
 /**
  * Format entity metadata for AI prompt consumption
@@ -150,4 +155,17 @@ export function hasRelationships(entity: EntityInfo, allEntities: EntityInfo[]):
  */
 export function getRelationshipCount(entity: EntityInfo, allEntities: EntityInfo[]): number {
   return formatEntityRelationships(entity, allEntities).length;
+}
+
+/**
+ * Format an entire entity group for AI prompt consumption
+ * Converts all entities in the group to structured metadata
+ *
+ * @param entityGroup - Entity group to format
+ * @returns Array of formatted entity metadata for Nunjucks template
+ */
+export function formatEntityGroupForPrompt(entityGroup: EntityGroup): EntityMetadataForPrompt[] {
+  return entityGroup.entities.map((entity) =>
+    formatEntityMetadataForPrompt(entity, entityGroup.entities)
+  );
 }
