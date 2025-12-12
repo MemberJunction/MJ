@@ -5,23 +5,331 @@
  * the business question correctly and improve them through iterations.
  */
 
-import { GeneratedQuery, BusinessQuestion, EntityMetadataForPrompt, RefinedQuery } from '../data/schema';
+import { AIEngine } from '@memberjunction/aiengine';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
+import { extractErrorMessage } from '../utils/error-handlers';
+import {
+  GeneratedQuery,
+  BusinessQuestion,
+  EntityMetadataForPrompt,
+  RefinedQuery,
+  QueryEvaluation,
+  QueryTestResult,
+} from '../data/schema';
+import { QueryTester } from './QueryTester';
+import { PROMPT_QUERY_EVALUATOR, PROMPT_QUERY_REFINER } from '../prompts/PromptNames';
 
 /**
  * QueryRefiner class
- * Placeholder implementation - will be completed in Phase 7
+ * Iteratively refines queries based on evaluation feedback
  */
 export class QueryRefiner {
+  constructor(
+    private tester: QueryTester,
+    private contextUser: UserInfo
+  ) {}
+
   /**
    * Refine a query through evaluation and improvement iterations
+   *
+   * Loops up to maxRefinements times, testing and evaluating each iteration.
+   * Returns when query passes evaluation or max refinements reached.
+   *
+   * @param query - Initial generated query
+   * @param businessQuestion - Original business question
+   * @param entityMetadata - Entity metadata for refinement
+   * @param maxRefinements - Maximum refinement iterations (default: 3)
+   * @returns Refined query with test results and evaluation
    */
   async refineQuery(
     query: GeneratedQuery,
     businessQuestion: BusinessQuestion,
     entityMetadata: EntityMetadataForPrompt[],
-    maxRefinements: number
+    maxRefinements: number = 3
   ): Promise<RefinedQuery> {
-    // Placeholder - will be implemented in Phase 7
-    throw new Error('refineQuery not yet implemented');
+    let currentQuery = query;
+    let refinementCount = 0;
+
+    // Ensure AIEngine is configured
+    await this.configureAIEngine();
+
+    while (refinementCount < maxRefinements) {
+      // 1. Test the current query
+      const testResult = await this.testCurrentQuery(currentQuery);
+
+      // 2. Evaluate if it answers the question
+      const evaluation = await this.evaluateQuery(
+        currentQuery,
+        businessQuestion,
+        testResult
+      );
+
+      // 3. If evaluation passes, we're done!
+      if (this.shouldStopRefining(evaluation)) {
+        return this.buildSuccessResult(
+          currentQuery,
+          testResult,
+          evaluation,
+          refinementCount
+        );
+      }
+
+      // 4. Refine the query based on suggestions
+      refinementCount++;
+      console.log(`Refinement iteration ${refinementCount}/${maxRefinements}`);
+
+      currentQuery = await this.performRefinement(
+        currentQuery,
+        businessQuestion,
+        evaluation,
+        entityMetadata
+      );
+    }
+
+    // Reached max refinements - return best attempt
+    return await this.buildFinalResult(
+      currentQuery,
+      businessQuestion,
+      refinementCount
+    );
+  }
+
+  /**
+   * Configure AIEngine for prompt execution
+   * Ensures engine is ready before running prompts
+   */
+  private async configureAIEngine(): Promise<void> {
+    try {
+      const aiEngine = AIEngine.Instance;
+      await aiEngine.Config(false, this.contextUser);
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'AIEngine Configuration'));
+    }
+  }
+
+  /**
+   * Test current query using QueryTester
+   * Throws if query testing fails
+   */
+  private async testCurrentQuery(query: GeneratedQuery): Promise<QueryTestResult> {
+    const testResult = await this.tester.testQuery(query);
+
+    if (!testResult.success) {
+      throw new Error(
+        `Query testing failed after ${testResult.attempts} attempts: ${testResult.error}`
+      );
+    }
+
+    return testResult;
+  }
+
+  /**
+   * Determine if refinement should stop based on evaluation
+   * Stops if query answers question and doesn't need refinement
+   */
+  private shouldStopRefining(evaluation: QueryEvaluation): boolean {
+    return evaluation.answersQuestion && !evaluation.needsRefinement;
+  }
+
+  /**
+   * Build success result when refinement loop completes successfully
+   */
+  private buildSuccessResult(
+    query: GeneratedQuery,
+    testResult: QueryTestResult,
+    evaluation: QueryEvaluation,
+    refinementCount: number
+  ): RefinedQuery {
+    return {
+      query,
+      testResult,
+      evaluation,
+      refinementCount,
+    };
+  }
+
+  /**
+   * Build final result when max refinements reached
+   * Re-tests and re-evaluates final query
+   */
+  private async buildFinalResult(
+    query: GeneratedQuery,
+    businessQuestion: BusinessQuestion,
+    refinementCount: number
+  ): Promise<RefinedQuery> {
+    const testResult = await this.tester.testQuery(query);
+    const evaluation = await this.evaluateQuery(
+      query,
+      businessQuestion,
+      testResult
+    );
+
+    return {
+      query,
+      testResult,
+      evaluation,
+      refinementCount,
+      reachedMaxRefinements: true,
+    };
+  }
+
+  /**
+   * Evaluate if query answers the business question correctly
+   * Uses Query Result Evaluator AI prompt
+   *
+   * @param query - Query to evaluate
+   * @param businessQuestion - Original business question
+   * @param testResult - Test execution results with sample data
+   * @returns Evaluation with confidence and suggestions
+   */
+  private async evaluateQuery(
+    query: GeneratedQuery,
+    businessQuestion: BusinessQuestion,
+    testResult: QueryTestResult
+  ): Promise<QueryEvaluation> {
+    try {
+      const aiEngine = AIEngine.Instance;
+      const prompt = this.findPromptByName(aiEngine, PROMPT_QUERY_EVALUATOR);
+
+      // Limit sample results to first 10 rows for efficiency
+      const sampleResults = testResult.sampleRows?.slice(0, 10) || [];
+
+      const promptData = {
+        userQuestion: businessQuestion.userQuestion,
+        description: businessQuestion.description,
+        technicalDescription: businessQuestion.technicalDescription,
+        generatedSQL: query.sql,
+        parameters: query.parameters,
+        sampleResults,
+      };
+
+      const evaluation = await this.executePrompt<QueryEvaluation>(
+        prompt,
+        promptData
+      );
+
+      this.logEvaluation(evaluation);
+      return evaluation;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'QueryRefiner.evaluateQuery'));
+    }
+  }
+
+  /**
+   * Refine query based on evaluation feedback
+   * Uses Query Refiner AI prompt
+   *
+   * @param query - Current query to refine
+   * @param businessQuestion - Original business question
+   * @param evaluation - Evaluation feedback
+   * @param entityMetadata - Entity metadata for refinement
+   * @returns Refined query with improvements
+   */
+  private async performRefinement(
+    query: GeneratedQuery,
+    businessQuestion: BusinessQuestion,
+    evaluation: QueryEvaluation,
+    entityMetadata: EntityMetadataForPrompt[]
+  ): Promise<GeneratedQuery> {
+    try {
+      const aiEngine = AIEngine.Instance;
+      const prompt = this.findPromptByName(aiEngine, PROMPT_QUERY_REFINER);
+
+      const promptData = {
+        userQuestion: businessQuestion.userQuestion,
+        description: businessQuestion.description,
+        currentSQL: query.sql,
+        evaluationFeedback: evaluation,
+        entityMetadata,
+      };
+
+      const refinedQuery = await this.executePrompt<
+        GeneratedQuery & { improvementsSummary: string }
+      >(prompt, promptData);
+
+      console.log(`Refinements applied: ${refinedQuery.improvementsSummary}`);
+
+      return {
+        sql: refinedQuery.sql,
+        selectClause: refinedQuery.selectClause,
+        parameters: refinedQuery.parameters,
+      };
+    } catch (error: unknown) {
+      throw new Error(
+        extractErrorMessage(error, 'QueryRefiner.performRefinement')
+      );
+    }
+  }
+
+  /**
+   * Find prompt by name in AIEngine cache
+   * Throws if prompt not found
+   */
+  private findPromptByName(
+    aiEngine: AIEngine,
+    promptName: string
+  ): AIPromptEntityExtended {
+    const prompt = aiEngine.Prompts.find((p) => p.Name === promptName);
+    if (!prompt) {
+      throw new Error(`Prompt '${promptName}' not found in AIEngine cache`);
+    }
+    return prompt;
+  }
+
+  /**
+   * Execute AI prompt and parse result
+   * Generic method for any prompt type
+   */
+  private async executePrompt<T>(
+    prompt: AIPromptEntityExtended,
+    promptData: Record<string, unknown>
+  ): Promise<T> {
+    const promptRunner = new AIPromptRunner();
+    const result = await promptRunner.ExecutePrompt({
+      prompt,
+      data: promptData,
+      contextUser: this.contextUser,
+    });
+
+    if (!result || !result.success) {
+      throw new Error(
+        `AI prompt execution failed: ${result?.errorMessage || 'Unknown error'}`
+      );
+    }
+
+    return this.parsePromptResult<T>(result.result);
+  }
+
+  /**
+   * Parse and validate AI prompt result
+   * Ensures result is an object with expected structure
+   */
+  private parsePromptResult<T>(resultData: unknown): T {
+    if (!resultData || typeof resultData !== 'object') {
+      throw new Error('Invalid AI response: expected object');
+    }
+
+    return resultData as T;
+  }
+
+  /**
+   * Log evaluation results for debugging
+   */
+  private logEvaluation(evaluation: QueryEvaluation): void {
+    console.log(
+      `Evaluation: answersQuestion=${evaluation.answersQuestion}, ` +
+        `confidence=${evaluation.confidence}, ` +
+        `needsRefinement=${evaluation.needsRefinement}`
+    );
+
+    if (evaluation.reasoning) {
+      console.log(`Reasoning: ${evaluation.reasoning}`);
+    }
+
+    if (evaluation.suggestions.length > 0) {
+      console.log(`Suggestions: ${evaluation.suggestions.join('; ')}`);
+    }
   }
 }
