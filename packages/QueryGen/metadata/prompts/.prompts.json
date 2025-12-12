@@ -1,30 +1,62 @@
-{
-  "fields": {
-    "Name": "Business Question Generator",
-    "Description": "Generates domain-specific business questions for entity groups",
-    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-    "TemplateText": "@file:templates/query-gen/business-question-generator.template.md",
-    "Status": "Active",
-    "ResponseFormat": "JSON",
-    "SelectionStrategy": "Specific",
-    "PowerPreference": "Highest",
-    "ParallelizationMode": "None",
-    "OutputType": "object",
-    "ValidationBehavior": "Strict",
-    "MaxRetries": 3,
-    "FailoverMaxAttempts": 5,
-    "PromptRole": "System",
-    "PromptPosition": "First",
-    "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation?create&Description=Prompts for QueryGen system"
+[
+  {
+    "fields": {
+      "Name": "Business Question Generator",
+      "Description": "Generates domain-specific business questions for entity groups",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/business-question-generator.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation?create&Description=Prompts for QueryGen system"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet", "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic", "Priority": 1 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Kimi K2", "VendorID": "@lookup:MJ: AI Vendors.Name=Groq", "Priority": 2 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Kimi K2", "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras", "Priority": 3 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash", "VendorID": "@lookup:MJ: AI Vendors.Name=Google", "Priority": 4 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B", "VendorID": "@lookup:MJ: AI Vendors.Name=Groq", "Priority": 5 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=GPT 5-nano", "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI", "Priority": 6 } }
+      ]
+    }
   },
-  "relatedEntities": {
-    "MJ: AI Prompt Models": [
-      { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet", "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic", "Priority": 1 } },
-      { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Kimi K2", "VendorID": "@lookup:MJ: AI Vendors.Name=Groq", "Priority": 2 } },
-      { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Kimi K2", "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras", "Priority": 3 } },
-      { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash", "VendorID": "@lookup:MJ: AI Vendors.Name=Google", "Priority": 4 } },
-      { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B", "VendorID": "@lookup:MJ: AI Vendors.Name=Groq", "Priority": 5 } },
-      { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=GPT 5-nano", "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI", "Priority": 6 } }
-    ]
+  {
+    "fields": {
+      "Name": "SQL Query Writer",
+      "Description": "Generates Nunjucks SQL query templates from business questions using few-shot learning",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/sql-query-writer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet", "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic", "Priority": 1 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Kimi K2", "VendorID": "@lookup:MJ: AI Vendors.Name=Groq", "Priority": 2 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Kimi K2", "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras", "Priority": 3 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash", "VendorID": "@lookup:MJ: AI Vendors.Name=Google", "Priority": 4 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B", "VendorID": "@lookup:MJ: AI Vendors.Name=Groq", "Priority": 5 } },
+        { "fields": { "PromptID": "@parent:ID", "ModelID": "@lookup:AI Models.Name=GPT 5-nano", "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI", "Priority": 6 } }
+      ]
+    }
   }
-}
+]
