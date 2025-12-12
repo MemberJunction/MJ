@@ -1,8 +1,9 @@
 /**
- * Base Constraint Validator
+ * Semantic Validator
  *
- * Abstract base class for all constraint validators.
- * Validators implement business logic for validating prop values at lint-time.
+ * Abstract base class for all semantic validators.
+ * Semantic validators implement business logic for validating prop values at lint-time.
+ * They check semantic correctness beyond type checking (e.g., field names exist on entities).
  *
  * Key Concepts:
  * - **Validators = Code**: Implemented as TypeScript classes
@@ -12,8 +13,8 @@
  * Example:
  * ```typescript
  * // Validator implementation (code)
- * class SubsetOfEntityFieldsValidator extends BaseConstraintValidator {
- *   async validate(context, constraint) {
+ * class SubsetOfEntityFieldsValidator extends SemanticValidator {
+ *   validate(context, constraint) {
  *     // Implementation...
  *   }
  * }
@@ -31,14 +32,14 @@ import {
   ConstraintViolation,
 } from '@memberjunction/interactive-component-types';
 import { ValidationContext } from './validation-context';
-import { PropValueExtractor, DynamicValue } from '../prop-value-extractor';
+import { PropValueExtractor, DynamicValue } from '../../prop-value-extractor';
 
 /**
- * Abstract base class for constraint validators
+ * Abstract base class for semantic validators
  *
- * All constraint validators must extend this class and implement the validate() method.
+ * All semantic validators must extend this class and implement the validate() method.
  */
-export abstract class BaseConstraintValidator {
+export abstract class SemanticValidator {
   /**
    * Validate a prop value against a constraint
    *
@@ -55,7 +56,7 @@ export abstract class BaseConstraintValidator {
    *
    * @example
    * ```typescript
-   * class MyValidator extends BaseConstraintValidator {
+   * class MyValidator extends SemanticValidator {
    *   validate(context: ValidationContext, constraint: PropertyConstraint): ConstraintViolation[] {
    *     const violations: ConstraintViolation[] = [];
    *

@@ -12,7 +12,7 @@ import { StylesTypeAnalyzer } from './styles-type-analyzer';
 import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo, StandardTypes } from './type-context';
 import { TypeInferenceEngine } from './type-inference-engine';
 import { ControlFlowAnalyzer } from './control-flow-analyzer';
-import { ValidationContext, BaseConstraintValidator } from './constraint-validators';
+import { ValidationContext, SemanticValidator } from './schema-validation';
 import { PropValueExtractor } from './prop-value-extractor';
 import type { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
 import { MJGlobal } from '@memberjunction/global';
@@ -8307,8 +8307,8 @@ const result = await utilities.rq.RunQuery({
               // Run all validators for this property's constraints
               for (const constraint of property.constraints) {
                 // Use ClassFactory to instantiate validator by constraint type
-                const validator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseConstraintValidator>(
-                  BaseConstraintValidator,
+                const validator = MJGlobal.Instance.ClassFactory.CreateInstance<SemanticValidator>(
+                  SemanticValidator,
                   constraint.type
                 );
 

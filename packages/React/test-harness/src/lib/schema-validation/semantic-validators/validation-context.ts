@@ -1,7 +1,7 @@
 /**
  * Validation Context
  *
- * Provides all the information a constraint validator needs to perform validation.
+ * Provides all the information a semantic validator needs to perform validation.
  * This context is passed to validators by the linter rule and includes:
  * - AST node and path information for location tracking
  * - Component spec for type lookups
@@ -13,13 +13,13 @@
 import * as t from '@babel/types';
 import { NodePath } from '@babel/traverse';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { TypeInferenceEngine } from '../type-inference-engine';
-import { ExtractedValue } from '../prop-value-extractor';
+import { TypeInferenceEngine } from '../../type-inference-engine';
+import { ExtractedValue } from '../../prop-value-extractor';
 
 /**
- * Context object passed to constraint validators
+ * Context object passed to semantic validators
  *
- * Contains all information needed to validate a prop value against constraints.
+ * Contains all information needed to validate a prop value against semantic constraints.
  */
 export interface ValidationContext {
   // ============================================================================

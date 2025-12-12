@@ -41,9 +41,9 @@ import {
   ConstraintViolation,
 } from '@memberjunction/interactive-component-types';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseConstraintValidator } from './base-constraint-validator';
+import { SemanticValidator } from './semantic-validator';
 import { ValidationContext } from './validation-context';
-import { PropValueExtractor } from '../prop-value-extractor';
+import { PropValueExtractor } from '../../prop-value-extractor';
 import { Parser } from 'node-sql-parser';
 
 /**
@@ -59,8 +59,8 @@ import { Parser } from 'node-sql-parser';
  * **Implementation**: Uses node-sql-parser (same as QueryEntity.server.ts)
  * for accurate AST-based validation with regex fallback for edge cases.
  */
-@RegisterClass(BaseConstraintValidator, 'sql-where-clause')
-export class SqlWhereClauseValidator extends BaseConstraintValidator {
+@RegisterClass(SemanticValidator, 'sql-where-clause')
+export class SqlWhereClauseValidator extends SemanticValidator {
   /**
    * SQL keywords that are not field references
    * Used in regex fallback when AST parsing fails
