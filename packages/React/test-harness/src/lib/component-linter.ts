@@ -16,6 +16,7 @@ import { ValidationContext, BaseConstraintValidator } from './constraint-validat
 import { PropValueExtractor } from './prop-value-extractor';
 import type { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
 import { MJGlobal } from '@memberjunction/global';
+import { TypeCompatibilityRule, LintContext as TypeRuleLintContext } from './type-rules/type-compatibility-rule';
 
 export interface LintResult {
   success: boolean;
@@ -3368,6 +3369,8 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
     // TYPE INFERENCE ERRORS RULE
+    // ⚠️ DEPRECATED: This rule is being replaced by TypeCompatibilityRule in Phase 1 refactor
+    // Will be removed after Phase 1 validation is complete
     // Surfaces errors found by TypeInferenceEngine (e.g., date parameter validation)
     // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
     {
@@ -3404,6 +3407,8 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
     // TYPE MISMATCH OPERATION RULE
+    // ⚠️ DEPRECATED: This rule is being replaced by TypeCompatibilityRule in Phase 1 refactor
+    // Will be removed after Phase 1 validation is complete
     // Validates that operations are type-safe (e.g., no arithmetic on strings, array methods on non-arrays)
     // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
     {
@@ -8490,6 +8495,17 @@ const result = await utilities.rq.RunQuery({
       // Continue with existing linting logic
       const ast = parseResult;
 
+      // ═══════════════════════════════════════════════════════════════════════════
+      // PHASE 1 REFACTOR: Run Type Inference ONCE before all rules
+      // This creates a shared TypeContext that all rules can consume
+      // ═══════════════════════════════════════════════════════════════════════════
+      const typeEngine = new TypeInferenceEngine(componentSpec, contextUser);
+      const controlFlowAnalyzer = new ControlFlowAnalyzer(ast, componentSpec);
+
+      // Run type inference analysis once
+      await typeEngine.analyze(ast);
+      const typeContext = typeEngine.getTypeContext();
+
       // Use universal rules for all components in the new pattern
       let rules = this.universalComponentRules;
 
@@ -8515,6 +8531,28 @@ const result = await utilities.rq.RunQuery({
           if (debugMode) {
             console.error('Full error:', error);
           }
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // PHASE 1 REFACTOR: Run new TypeCompatibilityRule with shared context
+      // This consolidates all type checking into a single rule
+      // ═══════════════════════════════════════════════════════════════════════════
+      try {
+        const typeCompatRule = new TypeCompatibilityRule();
+        const lintContext: TypeRuleLintContext = {
+          componentName,
+          componentSpec,
+          typeContext,
+          typeEngine,
+          controlFlowAnalyzer,
+        };
+        const typeViolations = typeCompatRule.validate(ast, lintContext);
+        violations.push(...typeViolations);
+      } catch (error) {
+        console.warn('TypeCompatibilityRule failed during execution:', error instanceof Error ? error.message : error);
+        if (debugMode) {
+          console.error('Full error:', error);
         }
       }
 
