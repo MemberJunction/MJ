@@ -1,0 +1,19 @@
+{
+  "name": "DataGridQueryFieldNonexistentFixed",
+  "type": "generic",
+  "title": "DataGrid Query Field Nonexistent - Fixed Pattern",
+  "description": "Tests correct usage of actual query fields in DataGrid",
+  "code": "function DataGridQueryFieldNonexistentFixed({ utilities, components }) {\n  const [salesData, setSalesData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales Summary',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setSalesData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales Data</h3>\n      {/* ✅ Using actual query fields */}\n      <DataGrid \n        data={salesData} \n        columns={[\n          {field: 'ProductName', title: 'Product'},\n          {field: 'TotalRevenue', title: 'Revenue'},\n          {field: 'Quantity', title: 'Qty'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Sales Summary",
+      "categoryPath": "Sales/Reports",
+      "fields": ["ProductID", "ProductName", "TotalRevenue", "Quantity"]
+    }]
+  }
+}

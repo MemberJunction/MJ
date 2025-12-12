@@ -1,0 +1,18 @@
+{
+  "name": "DataGridEntityFieldTypoFixed",
+  "type": "generic",
+  "title": "DataGrid Entity Field Typo - Fixed Pattern",
+  "description": "Tests correct spelling of EntityGrid field name",
+  "code": "function DataGridEntityFieldTypoFixed({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Products</h3>\n      {/* ✅ Correct: ProductName */}\n      <EntityGrid \n        entityName=\"Products\" \n        fields={['ID', 'ProductName', 'Category', 'Price']} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Products",
+      "fields": ["ID", "ProductName", "Category", "Price", "StockLevel"]
+    }]
+  }
+}

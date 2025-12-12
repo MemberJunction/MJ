@@ -1,0 +1,16 @@
+{
+  "name": "EntityArraySortInvalidBroken",
+  "type": "generic",
+  "title": "Entity Array Sort Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of sorting by non-existent entity field",
+  "code": "function EntityArraySortInvalidBroken({ utilities }) {\n  const [sortedMembers, setSortedMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Sorting by non-existent field: Members has no Priority field\n        const sorted = [...result.Results].sort((a, b) => a.Priority - b.Priority);\n        setSortedMembers(sorted);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sorted Members</h3>\n      {sortedMembers.map((m, i) => (\n        <div key={i}>{m.FirstName} {m.LastName}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "requirements": {
+    "entity": "Members",
+    "expectedFields": ["FirstName", "LastName"]
+  }
+}

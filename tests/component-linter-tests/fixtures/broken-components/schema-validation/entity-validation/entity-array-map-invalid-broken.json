@@ -1,0 +1,15 @@
+{
+  "name": "EntityArrayMapInvalidBroken",
+  "type": "generic",
+  "title": "Entity Array Map Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of mapping to non-existent entity field",
+  "code": "function EntityArrayMapInvalidBroken({ utilities }) {\n  const [fullNames, setFullNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Mapping to non-existent field: Members has no FullName field\n        const names = result.Results.map(m => m.FullName);\n        setFullNames(names);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Names</h3>\n      {fullNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{"name": "Members", "type": "view"}]
+  }
+}

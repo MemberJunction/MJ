@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamVariableWrongTypeFixed",
+  "type": "generic",
+  "title": "Query Parameter Variable Wrong Type - Fixed Pattern",
+  "description": "Tests correct usage of variable with proper type conversion for query parameter",
+  "code": "function QueryParamVariableWrongTypeFixed({ utilities }) {\n  const [events, setEvents] = useState([]);\n  const [selectedDate] = useState('2024-01-01');\n\n  useEffect(() => {\n    async function loadData() {\n      if (!selectedDate) return;\n      \n      // ✅ Converting to ISO date string as parameter expects\n      const startDateString = new Date(selectedDate).toISOString();\n      \n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Events After Date',\n        CategoryPath: 'Events/Reports',\n        Parameters: { StartDate: startDateString }\n      });\n      if (result?.Success) {\n        setEvents(result.Results);\n      }\n    }\n    loadData();\n  }, [selectedDate]);\n\n  return (\n    <div>\n      <h3>Upcoming Events</h3>\n      {events.map((e, i) => <div key={i}>{e.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Events After Date",
+      "categoryPath": "Events/Reports",
+      "parameters": [
+        {"name": "StartDate", "type": "datetime", "isRequired": true}
+      ]
+    }]
+  }
+}

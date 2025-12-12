@@ -1,0 +1,19 @@
+{
+  "name": "DataGridQueryFieldTypoBroken",
+  "type": "generic",
+  "title": "DataGrid Query Field Typo - Broken Pattern",
+  "description": "Tests linter detection of typo in DataGrid query field",
+  "code": "function DataGridQueryFieldTypoBroken({ utilities, components }) {\n  const [reportData, setReportData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Member Report',\n        CategoryPath: 'Membership/Reports'\n      });\n      if (result?.Success) {\n        setReportData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Report</h3>\n      {/* ❌ Typo: MemebrName should be MemberName */}\n      <DataGrid \n        data={reportData} \n        columns={[\n          {field: 'MemebrName', title: 'Name'},\n          {field: 'JoinDate', title: 'Joined'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Member Report",
+      "categoryPath": "Membership/Reports",
+      "fields": ["MemberID", "MemberName", "JoinDate", "Status"]
+    }]
+  }
+}

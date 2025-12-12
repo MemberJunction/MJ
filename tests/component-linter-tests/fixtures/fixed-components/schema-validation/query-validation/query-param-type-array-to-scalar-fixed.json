@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamTypeArrayToScalarFixed",
+  "type": "generic",
+  "title": "Query Parameter Type Array to Scalar - Fixed Pattern",
+  "description": "Tests correct usage of scalar parameter with single string value",
+  "code": "function QueryParamTypeArrayToScalarFixed({ utilities }) {\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      // ✅ MembershipType expects string, passing single value\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Members By Type',\n        CategoryPath: 'Membership/Reports',\n        Parameters: { MembershipType: 'Gold' }\n      });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {members.map((m, i) => <div key={i}>{m.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Members By Type",
+      "categoryPath": "Membership/Reports",
+      "parameters": [
+        {"name": "MembershipType", "type": "nvarchar", "isRequired": true}
+      ]
+    }]
+  }
+}
