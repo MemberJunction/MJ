@@ -17,6 +17,7 @@ import { PropValueExtractor } from './prop-value-extractor';
 import type { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
 import { MJGlobal } from '@memberjunction/global';
 import { TypeCompatibilityRule, LintContext as TypeRuleLintContext } from './type-rules/type-compatibility-rule';
+import { ComponentPropRule } from './schema-validation/component-prop-rule';
 
 export interface LintResult {
   success: boolean;
@@ -49,6 +50,7 @@ export interface Violation {
 interface Rule {
   name: string;
   appliesTo: 'all' | 'child' | 'root';
+  deprecated?: boolean; // Phase 3: Mark rules as deprecated during transition
   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions) => Violation[];
 }
 
@@ -5750,10 +5752,21 @@ Correct pattern:
       },
     },
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ⚠️ DEPRECATED: This rule is being replaced by ComponentPropRule in Phase 3
+    // Will be removed after Phase 3 validation is complete
+    // Merged into ComponentPropRule which handles:
+    // - Prop existence, required props, type checking, unknown props
+    // ═══════════════════════════════════════════════════════════════════════════
     {
       name: 'dependency-prop-validation',
       appliesTo: 'all',
+      deprecated: true, // Phase 3: Merged into ComponentPropRule
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        // Skip - this rule is deprecated and replaced by ComponentPropRule
+        return [];
+
+        /*
         const violations: Violation[] = [];
 
         // Skip if no dependencies
@@ -6061,6 +6074,7 @@ Correct pattern:
         });
 
         return violations;
+        */
       },
     },
 
@@ -8173,10 +8187,20 @@ const result = await utilities.rq.RunQuery({
       },
     },
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ⚠️ DEPRECATED: This rule is being replaced by ComponentPropRule in Phase 3
+    // Will be removed after Phase 3 validation is complete
+    // Merged into ComponentPropRule which handles semantic constraint validation
+    // ═══════════════════════════════════════════════════════════════════════════
     {
       name: 'validate-component-props',
       appliesTo: 'all',
+      deprecated: true, // Phase 3: Merged into ComponentPropRule
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        // Skip - this rule is deprecated and replaced by ComponentPropRule
+        return [];
+
+        /*
         const violations: Violation[] = [];
 
         // Only validate if component spec exists
@@ -8395,6 +8419,7 @@ const result = await utilities.rq.RunQuery({
         });
 
         return violations;
+        */
       },
     },
   ];
@@ -8551,6 +8576,33 @@ const result = await utilities.rq.RunQuery({
         violations.push(...typeViolations);
       } catch (error) {
         console.warn('TypeCompatibilityRule failed during execution:', error instanceof Error ? error.message : error);
+        if (debugMode) {
+          console.error('Full error:', error);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // PHASE 3 REFACTOR: Run new ComponentPropRule with shared context
+      // This consolidates all component prop validation into a single rule:
+      // - Prop existence (from dependency-prop-validation)
+      // - Required props checking
+      // - Prop type validation (via TypeContext)
+      // - Semantic constraint validation (via SemanticValidators)
+      // - Unknown props warning
+      // ═══════════════════════════════════════════════════════════════════════════
+      try {
+        const componentPropRule = new ComponentPropRule();
+        const lintContext: TypeRuleLintContext = {
+          componentName,
+          componentSpec,
+          typeContext,
+          typeEngine,
+          controlFlowAnalyzer,
+        };
+        const propViolations = componentPropRule.validate(ast, lintContext);
+        violations.push(...propViolations);
+      } catch (error) {
+        console.warn('ComponentPropRule failed during execution:', error instanceof Error ? error.message : error);
         if (debugMode) {
           console.error('Full error:', error);
         }
