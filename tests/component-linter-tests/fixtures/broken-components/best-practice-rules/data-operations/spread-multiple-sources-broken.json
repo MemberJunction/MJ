@@ -1,0 +1,21 @@
+{
+  "name": "SpreadMultipleSourcesBroken",
+  "type": "generic",
+  "title": "Spread Multiple Sources - Broken Pattern",
+  "description": "Tests merging data from multiple sources with field conflicts (may fail until linter refactor)",
+  "code": "function SpreadMultipleSourcesBroken({ utilities, components }) {\n  const [combinedData, setCombinedData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const [members, orders] = await Promise.all([\n        utilities.rv.RunView({ EntityName: 'Members' }),\n        utilities.rv.RunView({ EntityName: 'Orders' })\n      ]);\n      \n      if (members?.Success && orders?.Success) {\n        // ❌ Merging spreads with ID field conflict\n        const combined = members.Results.map(m => {\n          const memberOrders = orders.Results.filter(o => o.MemberID === m.ID);\n          const firstOrder = memberOrders[0] || {};\n          return {\n            ...m,\n            ...firstOrder // ID from order overwrites member ID\n          };\n        });\n        setCombinedData(combined);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Orders</h3>\n      {/* Grid expects Member ID but may have Order ID */}\n      <DataGrid \n        data={combinedData} \n        columns={[\n          {field: 'FirstName', title: 'Name'},\n          {field: 'ID', title: 'Member ID'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email"]
+    }, {
+      "name": "Orders",
+      "fields": ["ID", "MemberID", "OrderNumber", "TotalAmount"]
+    }]
+  }
+}

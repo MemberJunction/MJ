@@ -1,0 +1,19 @@
+{
+  "name": "CrossComponentFieldMismatchFixed",
+  "type": "generic",
+  "title": "Cross-Component Field Mismatch - Fixed Pattern",
+  "description": "Tests correct data flow matching query fields to component requirements",
+  "code": "function CrossComponentFieldMismatchFixed({ utilities, components }) {\n  const [salesData, setSalesData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Monthly Sales',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setSalesData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales Chart</h3>\n      {/* ✅ Query returns Revenue and chart uses Revenue */}\n      <SimpleChart data={salesData} groupBy=\"Month\" valueField=\"Revenue\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Monthly Sales",
+      "categoryPath": "Sales/Reports",
+      "fields": ["Month", "Revenue", "OrderCount"]
+    }]
+  }
+}

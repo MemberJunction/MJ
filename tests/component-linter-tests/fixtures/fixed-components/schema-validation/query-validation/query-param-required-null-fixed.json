@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamRequiredNullFixed",
+  "type": "generic",
+  "title": "Query Parameter Required Null - Fixed Pattern",
+  "description": "Tests correct usage of required parameter with valid value",
+  "code": "function QueryParamRequiredNullFixed({ utilities }) {\n  const [products, setProducts] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      // ✅ Category is required and passing valid string\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Products By Category',\n        CategoryPath: 'Products/Reports',\n        Parameters: { Category: 'Electronics' }\n      });\n      if (result?.Success) {\n        setProducts(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Products</h3>\n      {products.map((p, i) => <div key={i}>{p.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Products By Category",
+      "categoryPath": "Products/Reports",
+      "parameters": [
+        {"name": "Category", "type": "nvarchar", "isRequired": true}
+      ]
+    }]
+  }
+}

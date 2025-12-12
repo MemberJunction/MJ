@@ -1,0 +1,18 @@
+{
+  "name": "CrossComponentAggregateFieldTypeBroken",
+  "type": "generic",
+  "title": "Cross-Component Aggregate Field Type - Broken Pattern",
+  "description": "Tests aggregation creates wrong type for downstream component (may fail until linter refactor)",
+  "code": "function CrossComponentAggregateFieldTypeBroken({ utilities, components }) {\n  const [summary, setSummary] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Sales' });\n      if (result?.Success) {\n        // ❌ Aggregating to object, but chart expects array\n        const byMonth = result.Results.reduce((acc, sale) => {\n          const month = sale.SaleDate.substring(0, 7);\n          acc[month] = (acc[month] || 0) + sale.Amount;\n          return acc;\n        }, {});\n        setSummary(byMonth);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales by Month</h3>\n      {/* Chart expects array but receives object */}\n      <SimpleChart data={summary} groupBy=\"Month\" valueField=\"Total\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Sales",
+      "fields": ["ID", "SaleDate", "Amount", "ProductID"]
+    }]
+  }
+}

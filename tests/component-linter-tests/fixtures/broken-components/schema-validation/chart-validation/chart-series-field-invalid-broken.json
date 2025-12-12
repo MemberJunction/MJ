@@ -1,0 +1,19 @@
+{
+  "name": "ChartSeriesFieldInvalidBroken",
+  "type": "generic",
+  "title": "Chart Series Field Invalid - Broken Pattern",
+  "description": "Tests multi-series chart with invalid series field (may fail until linter refactor)",
+  "code": "function ChartSeriesFieldInvalidBroken({ utilities, components }) {\n  const [salesData, setSalesData] = useState([]);\n  const { MultiSeriesChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales By Region and Month',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setSalesData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Regional Sales</h3>\n      {/* ❌ seriesField uses RegionName but query has Region */}\n      <MultiSeriesChart \n        data={salesData} \n        groupBy=\"Month\" \n        valueField=\"Revenue\" \n        seriesField=\"RegionName\" \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Sales By Region and Month",
+      "categoryPath": "Sales/Reports",
+      "fields": ["Month", "Region", "Revenue"]
+    }]
+  }
+}

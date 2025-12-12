@@ -1,0 +1,21 @@
+{
+  "name": "SpreadMultipleSourcesFixed",
+  "type": "generic",
+  "title": "Spread Multiple Sources - Fixed Pattern",
+  "description": "Tests merging data from multiple sources with explicit field names",
+  "code": "function SpreadMultipleSourcesFixed({ utilities, components }) {\n  const [combinedData, setCombinedData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const [members, orders] = await Promise.all([\n        utilities.rv.RunView({ EntityName: 'Members' }),\n        utilities.rv.RunView({ EntityName: 'Orders' })\n      ]);\n      \n      if (members?.Success && orders?.Success) {\n        // ✅ Explicit field naming to avoid conflicts\n        const combined = members.Results.map(m => {\n          const memberOrders = orders.Results.filter(o => o.MemberID === m.ID);\n          const firstOrder = memberOrders[0];\n          return {\n            MemberID: m.ID,\n            FirstName: m.FirstName,\n            LastName: m.LastName,\n            Email: m.Email,\n            OrderID: firstOrder?.ID,\n            OrderNumber: firstOrder?.OrderNumber,\n            OrderAmount: firstOrder?.TotalAmount\n          };\n        });\n        setCombinedData(combined);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Orders</h3>\n      {/* Grid uses explicit field names */}\n      <DataGrid \n        data={combinedData} \n        columns={[\n          {field: 'FirstName', title: 'Name'},\n          {field: 'MemberID', title: 'Member ID'},\n          {field: 'OrderNumber', title: 'Order'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email"]
+    }, {
+      "name": "Orders",
+      "fields": ["ID", "MemberID", "OrderNumber", "TotalAmount"]
+    }]
+  }
+}

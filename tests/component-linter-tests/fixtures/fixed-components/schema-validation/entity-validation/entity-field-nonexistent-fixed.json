@@ -1,0 +1,12 @@
+{
+  "name": "EntityFieldNonexistentFixed",
+  "type": "generic",
+  "title": "Entity Field Nonexistent - Fixed Pattern",
+  "description": "Corrected version using existing entity fields",
+  "code": "function EntityFieldNonexistentFixed({ utilities }) {\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Using existing fields: FirstName and MembershipType\n        const data = result.Results.map(m => ({\n          name: m.FirstName,\n          type: m.MembershipType\n        }));\n        setMembers(data);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      {members.map((item, i) => (\n        <div key={i}>{item.name}: {item.type}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active"
+}

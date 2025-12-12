@@ -1,0 +1,16 @@
+{
+  "name": "EntityFieldTypeCoercionBroken",
+  "type": "generic",
+  "title": "Entity Field Type Coercion - Broken Pattern",
+  "description": "Tests linter detection of incorrect type conversion on entity ID field",
+  "code": "function EntityFieldTypeCoercionBroken({ utilities }) {\n  const [memberIds, setMemberIds] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Wrong type conversion: ID is uniqueidentifier (GUID), not int\n        const ids = result.Results.map(m => parseInt(m.ID));\n        setMemberIds(ids);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member IDs</h3>\n      {memberIds.map((id, i) => <div key={i}>ID: {id}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "requirements": {
+    "entity": "Members",
+    "expectedFields": ["ID", "FirstName", "LastName", "Email"]
+  }
+}

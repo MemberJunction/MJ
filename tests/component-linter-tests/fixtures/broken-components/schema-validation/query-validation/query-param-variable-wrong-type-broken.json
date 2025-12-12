@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamVariableWrongTypeBroken",
+  "type": "generic",
+  "title": "Query Parameter Variable Wrong Type - Broken Pattern",
+  "description": "Tests linter detection of variable with wrong type used as query parameter",
+  "code": "function QueryParamVariableWrongTypeBroken({ utilities }) {\n  const [events, setEvents] = useState([]);\n  const [selectedDate] = useState('2024-01-01');\n  \n  // ❌ Converting date to timestamp number, but parameter expects date string\n  const startTimestamp = new Date(selectedDate).getTime();\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Events After Date',\n        CategoryPath: 'Events/Reports',\n        Parameters: { StartDate: startTimestamp }\n      });\n      if (result?.Success) {\n        setEvents(result.Results);\n      }\n    }\n    loadData();\n  }, [startTimestamp]);\n\n  return (\n    <div>\n      <h3>Upcoming Events</h3>\n      {events.map((e, i) => <div key={i}>{e.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Events After Date",
+      "categoryPath": "Events/Reports",
+      "parameters": [
+        {"name": "StartDate", "type": "datetime", "isRequired": true}
+      ]
+    }]
+  }
+}
