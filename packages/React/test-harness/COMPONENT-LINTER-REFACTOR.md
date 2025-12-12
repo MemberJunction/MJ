@@ -522,16 +522,17 @@ export class ComponentPropRule {
 
 ---
 
-### Phase 4: Split Rules Into Files
-**Duration**: 1.5 weeks
-**Goal**: Break monolithic file into manageable pieces
+### Phase 4: Split Rules Into Files (REVISED - Sub-Phase Approach)
+**Duration**: 2 weeks (revised from 1.5 weeks)
+**Goal**: Break monolithic file into manageable pieces with incremental integration
 
-**Tasks**:
-1. Create directory structure
-2. Extract each rule to its own file
-3. Create rule registry system
-4. Update component-linter.ts to be thin orchestrator
-5. Update imports across codebase
+**⚠️ CRITICAL LESSONS LEARNED**:
+- **Context window limitation**: Cannot extract all ~99 rules at once
+- **Integration essential**: Rules must be hooked up immediately after extraction
+- **Testing mandatory**: Run 255/303 baseline after EACH sub-phase
+- **Incremental approach**: Extract → Register → Integrate → Test → Commit
+
+**Revised Strategy**: Split Phase 4 into 5 sub-phases with validation at each step
 
 **Target Structure**:
 
@@ -670,10 +671,173 @@ export class ComponentLinter {
 }
 ```
 
-**Testing**:
-- Run full test suite after each file extraction
-- Create integration test that validates all rules still work
-- Performance test to ensure no regression
+---
+
+#### Phase 4A: Foundation & Runtime Rules (Week 1, Days 1-2)
+**Goal**: Set up infrastructure and extract simplest rules first
+
+**Tasks**:
+1. Create shared interfaces and types:
+   - `lint-rule.ts` - LintRule interface definition
+   - `lint-context.ts` - LintContext interface
+   - `lint-utils.ts` - Shared helper functions
+2. Create RuleRegistry singleton class
+3. Extract 13 runtime rules (simplest, no dependencies):
+   - `no-import-statements.ts`
+   - `no-export-statements.ts`
+   - `no-require-statements.ts`
+   - `no-iife-wrapper.ts`
+   - `single-function-only.ts`
+   - `use-function-declaration.ts`
+   - `react-component-naming.ts`
+   - `no-react-destructuring.ts`
+   - `use-unwrap-components.ts`
+   - `callbacks-passthrough-only.ts`
+   - `callbacks-usage-validation.ts`
+   - `pass-standard-props.ts`
+   - `no-return-component.ts`
+4. **INTEGRATE**: Update component-linter.ts to use RuleRegistry for runtime rules ONLY
+5. **TEST**: Verify 255/303 baseline maintained
+6. **COMMIT**: "Phase 4A: Extract runtime rules and create RuleRegistry"
+
+**Why Runtime First**: These rules are self-contained, have no external dependencies, and are easiest to extract. Success here validates the approach.
+
+**Expected File Changes**:
+- +16 new files (3 infrastructure + 13 runtime rules)
+- component-linter.ts modified (add RuleRegistry for runtime rules only)
+- ~300 lines removed from monolithic array (runtime rules only)
+
+---
+
+#### Phase 4B: Schema Validation Rules (Week 1, Days 3-5)
+**Goal**: Extract and integrate all schema validation rules
+
+**Tasks**:
+1. Extract existing consolidated schema rules (from Phase 3):
+   - Move `component-prop-rule.ts` (already exists, just organize)
+2. Extract remaining schema rules (~15 rules):
+   - Entity validation rules (4-5 rules)
+   - Query validation rules (5-6 rules)
+   - Component validation rules (3-4 rules)
+   - Data access validation rules (2-3 rules)
+3. Add schema rules to RuleRegistry
+4. **INTEGRATE**: Update component-linter.ts to use RuleRegistry for schema rules
+5. **TEST**: Verify 255/303 baseline maintained
+6. **COMMIT**: "Phase 4B: Extract schema validation rules"
+
+**Why Schema Second**: These rules depend on ComponentMetadataEngine and entity/query metadata, so need more careful extraction.
+
+**Expected File Changes**:
+- +15 new files (schema validation rules)
+- component-linter.ts modified (add schema rules to RuleRegistry)
+- ~2,000 lines removed from monolithic array
+
+---
+
+#### Phase 4C: Best Practice Rules - Part 1 (Week 2, Days 1-2)
+**Goal**: Extract first batch of best practice rules (~15 rules)
+
+**Tasks**:
+1. Extract simpler best practice rules (no complex dependencies):
+   - `prefer-async-await.ts`
+   - `prefer-jsx-syntax.ts`
+   - `no-use-reducer.ts`
+   - `no-window-access.ts`
+   - `no-child-implementation.ts`
+   - `no-data-prop.ts`
+   - `noisy-settings-updates.ts`
+   - `saved-user-settings-pattern.ts`
+   - `prop-state-sync.ts`
+   - `callback-parameter-validation.ts`
+   - `event-invocation-pattern.ts`
+   - `library-variable-names.ts`
+   - `unused-libraries.ts`
+   - `dependency-shadowing.ts`
+   - `component-usage-without-destructuring.ts`
+2. Add to RuleRegistry
+3. **INTEGRATE**: Update component-linter.ts
+4. **TEST**: Verify 255/303 baseline
+5. **COMMIT**: "Phase 4C: Extract best practice rules (part 1)"
+
+**Expected File Changes**:
+- +15 new files
+- ~1,500 lines removed from monolithic array
+
+---
+
+#### Phase 4D: Best Practice Rules - Part 2 (Week 2, Days 3-4)
+**Goal**: Extract remaining best practice rules (~15 rules)
+
+**Tasks**:
+1. Extract more complex best practice rules:
+   - `react-hooks-rules.ts`
+   - `useeffect-unstable-dependencies.ts`
+   - `server-reload-on-client-operation.ts`
+   - `unsafe-array-operations.ts`
+   - `unsafe-formatting-methods.ts`
+   - `utilities-no-direct-instantiation.ts`
+   - `runquery-runview-spread-operator.ts`
+   - `property-name-consistency.ts`
+   - `unused-component-dependencies.ts`
+   - `type-inference-errors.ts` (may overlap with Phase 1)
+   - `type-mismatch-operation.ts` (may overlap with Phase 1)
+   - Plus any remaining rules from monolithic code
+2. Add to RuleRegistry
+3. **INTEGRATE**: Update component-linter.ts
+4. **TEST**: Verify 255/303 baseline
+5. **COMMIT**: "Phase 4D: Extract best practice rules (part 2)"
+
+**Expected File Changes**:
+- +15 new files
+- ~2,000 lines removed from monolithic array
+
+---
+
+#### Phase 4E: Final Integration & Cleanup (Week 2, Day 5)
+**Goal**: Remove old monolithic array and finalize orchestrator
+
+**Tasks**:
+1. **VERIFY**: All rules now in RuleRegistry
+2. **COUNT**: Confirm all ~99 rules accounted for
+3. **REMOVE**: Delete lines 364-8430 (old monolithic `universalComponentRules` array)
+4. **REFACTOR**: component-linter.ts becomes thin orchestrator (~500 lines)
+5. Update TypeCompatibilityRule and ComponentPropRule to use RuleRegistry pattern
+6. Remove any deprecated rule stubs
+7. Clean up imports
+8. **TEST**: Full validation
+   - 255/303 fixture tests passing
+   - Package unit tests passing
+   - TypeScript compilation clean
+   - No performance regression
+9. **COMMIT**: "Phase 4E: Remove monolithic rules array and finalize orchestrator"
+
+**Final File Stats**:
+- component-linter.ts: 10,782 lines → ~500 lines (95% reduction)
+- Total new files: ~58 rule files + 3 infrastructure files
+- Average rule file size: 50-150 lines
+
+---
+
+**Phase 4 Success Criteria**:
+- ✅ All 99 rules extracted to individual files
+- ✅ RuleRegistry managing all rules
+- ✅ Component-linter.ts is thin orchestrator
+- ✅ 255/303 baseline maintained throughout
+- ✅ 5 clean commits (one per sub-phase)
+- ✅ No performance regression
+- ✅ TypeScript compilation clean at each step
+
+**Testing Strategy for Each Sub-Phase**:
+```bash
+# After each sub-phase completion:
+cd /Users/jordanfanapour/Documents/GitHub/MJ/packages/React/test-harness
+npm run build  # Must succeed with 0 errors
+
+cd /Users/jordanfanapour/Documents/GitHub/MJ/tests/component-linter-tests
+npm run test:fixtures  # Must show 255/303 passing
+
+# If baseline breaks, STOP and debug before proceeding
+```
 
 ---
 
