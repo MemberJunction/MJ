@@ -8,6 +8,192 @@
 
 ---
 
+## 📚 Required Reading
+
+**CRITICAL**: Before starting ANY work, both the coordinator and all sub-agents MUST read:
+
+**[@packages/React/test-harness/COMPONENT-LINTER-REFACTOR.md](./COMPONENT-LINTER-REFACTOR.md)**
+
+This document contains:
+- Complete refactoring plan with all 6 phases
+- Detailed task breakdown for each phase
+- Architecture diagrams and target structure
+- Rule inventory (all 99 rules organized by category)
+- Testing strategy and validation approach
+- Success criteria and expected outcomes
+
+**This coordinator document (REFACTOR-COORDINATOR.md) tells you HOW to execute.**
+**The COMPONENT-LINTER-REFACTOR.md tells you WHAT to do.**
+
+Both documents must be read together.
+
+---
+
+## 🤖 Autonomous Execution Mode
+
+**IMPORTANT**: This refactoring should be completed **without user intervention**. The coordinator agent should work through all phases autonomously until completion.
+
+### Execution Loop
+
+**Continue working through phases until all 6 phases are complete:**
+
+```
+WHILE (any phase not complete):
+  1. Identify next incomplete phase/sub-phase
+  2. Launch Task tool with general-purpose agent to execute phase work
+     - Agent reads phase instructions from this document
+     - Agent extracts rules, integrates code, runs tests
+     - Agent returns completion report
+  3. Launch Task tool with general-purpose agent as VALIDATOR
+     - Validator checks build, tests, integration, file sizes
+     - Validator returns PASS or FAIL report
+  4. IF validator PASS:
+       - Commit changes
+       - Mark phase complete in this document
+       - Continue to next phase
+  5. IF validator FAIL:
+       - Launch Task tool to debug and fix issues
+       - Re-run validator
+       - Do NOT proceed until validator passes
+  6. Update progress log in this document
+END WHILE
+
+When all phases complete:
+  - Create final completion report
+  - Verify all success criteria met
+  - Report completion to user
+```
+
+### Sub-Agent Delegation Pattern
+
+**CRITICAL**: You are a **coordinator**, not an executor. Use the Task tool to delegate work to sub-agents.
+
+**For each phase/sub-phase:**
+
+1. **Launch Executor Agent** using Task tool:
+```
+Task(
+  subagent_type: "general-purpose",
+  description: "Execute Phase 4A: Foundation & Runtime Rules",
+  prompt: "You are executing Phase 4A of the component linter refactoring.
+
+REQUIRED READING (in order):
+1. @packages/React/test-harness/COMPONENT-LINTER-REFACTOR.md - Read the full Phase 4A section for detailed tasks
+2. @packages/React/test-harness/REFACTOR-COORDINATOR.md - Read Phase 4A section for execution context
+
+The COMPONENT-LINTER-REFACTOR.md contains:
+- Complete list of 13 runtime rules to extract
+- Target file structure
+- Code patterns and examples
+- Integration requirements
+
+Your Phase 4A tasks (from COMPONENT-LINTER-REFACTOR.md):
+1. Create lint-rule.ts, lint-context.ts, lint-utils.ts (infrastructure)
+2. Create rule-registry.ts (singleton pattern)
+3. Extract 13 runtime rules to runtime-rules/ directory
+4. INTEGRATE with component-linter.ts (import RuleRegistry, use for runtime rules ONLY)
+5. Remove runtime rules from monolithic array (keep rest for now)
+6. Build and test (must get 255/303 passing)
+
+Return a completion report with:
+- Files created/modified
+- Line count changes (component-linter.ts should go from 10,782 → ~10,500 lines)
+- Test results (must be 255/303 passing)
+- Integration verification (RuleRegistry imported and used)
+"
+)
+```
+
+2. **Launch Validator Agent** using Task tool:
+```
+Task(
+  subagent_type: "general-purpose",
+  description: "Validate Phase 4A completion",
+  prompt: "You are a validation agent for Phase 4A completion.
+
+REQUIRED READING:
+1. @packages/React/test-harness/REFACTOR-COORDINATOR.md - Read the 'Validator Agent Instructions' section
+2. @packages/React/test-harness/COMPONENT-LINTER-REFACTOR.md - Read Phase 4A expected outcomes
+
+Your validation checklist for Phase 4A:
+
+1. **File Inspection**:
+   - Verify 16 new files created (3 infrastructure + 13 runtime rules)
+   - Check lint-rule.ts, lint-context.ts, lint-utils.ts exist
+   - Check rule-registry.ts exists with RuleRegistry class
+   - Check runtime-rules/ directory has 13 rule files
+   - Verify all files have proper exports and structure
+
+2. **Build Verification**:
+   cd /Users/jordanfanapour/Documents/GitHub/MJ/packages/React/test-harness
+   npm run build
+   - Must compile with 0 TypeScript errors
+   - If errors, FAIL validation and report details
+
+3. **Test Baseline**:
+   cd /Users/jordanfanapour/Documents/GitHub/MJ/tests/component-linter-tests
+   npm run test:fixtures
+   - Must show EXACTLY 255/303 passing (84.2%)
+   - Must show EXACTLY 48 failures (15.8%)
+   - If different, FAIL validation and report which tests changed
+
+4. **Integration Check**:
+   - Search component-linter.ts for 'import.*RuleRegistry'
+   - Verify RuleRegistry.getInstance() is called in lintComponent()
+   - Verify runtime rules are loaded from registry
+   - Verify old runtime rules removed from monolithic array
+
+5. **File Size Check**:
+   wc -l component-linter.ts
+   - Should be ~10,500 lines (down from 10,782)
+   - If still 10,782, integration didn't happen - FAIL
+
+Return PASS or FAIL report with:
+- ✅ or ❌ for each check above
+- File list with sizes
+- Test results comparison (expected vs actual)
+- Build output (if errors)
+- Integration verification results
+- **PASS** or **FAIL** determination at end
+"
+)
+```
+
+3. **Process Results**:
+   - If validator reports PASS → Commit and proceed
+   - If validator reports FAIL → Launch debug agent, fix, re-validate
+
+**IMPORTANT**: You should NEVER do the extraction/integration work yourself. Always delegate to Task agents.
+
+### Autonomous Decision Making
+
+**You MUST:**
+- ✅ Work through all sub-phases sequentially (4A → 4B → 4C → 4D → 4E → Phase 5 → Phase 6)
+- ✅ Run validator after EACH sub-phase (not optional)
+- ✅ Fix any validation failures before proceeding
+- ✅ Commit after each successful validation
+- ✅ Update this document with progress
+- ✅ Continue until all 6 phases are 100% complete
+
+**You MUST NOT:**
+- ❌ Skip validator checkpoints
+- ❌ Proceed to next phase if validator fails
+- ❌ Mark phases complete without verification
+- ❌ Stop working until all phases are done (unless blocker requires user input)
+- ❌ Ask user for approval between phases (work autonomously)
+
+### When to Stop and Ask User
+
+**ONLY stop and ask user if:**
+- Validator fails multiple times and you cannot resolve the issue
+- Fundamental architectural decision needed that wasn't specified
+- External system dependency is broken (database, network, etc.)
+- Test baseline regresses and root cause is unclear
+
+**Otherwise: Keep working autonomously through all phases.**
+
+---
+
 ## 🚨 CRITICAL: Validator Agent Required After Each Phase
 
 **MANDATORY PROCESS**:
