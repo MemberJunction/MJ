@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Example Golden Query Placeholder",
+    "userQuestion": "This is a placeholder golden query that will be populated with real examples",
+    "description": "Golden queries provide few-shot learning examples for SQL generation",
+    "technicalDescription": "The AI uses these examples to understand query patterns, naming conventions, and best practices",
+    "sql": "SELECT * FROM [dbo].[vwExample] WHERE ID = {{ exampleId | sqlString }}",
+    "parameters": [
+      {
+        "name": "exampleId",
+        "type": "string",
+        "isRequired": true,
+        "description": "Example parameter description",
+        "usage": ["WHERE clause filtering"],
+        "defaultValue": null,
+        "sampleValue": "123"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ExampleField",
+        "description": "Example output field",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  }
+]
