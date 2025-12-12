@@ -12,6 +12,7 @@ export { EntityGrouper } from './core/EntityGrouper';
 export { QuestionGenerator } from './core/QuestionGenerator';
 export { QueryWriter } from './core/QueryWriter';
 export { QueryTester } from './core/QueryTester';
+export { QueryFixer } from './core/QueryFixer';
 export { QueryRefiner } from './core/QueryRefiner';
 export { MetadataExporter } from './core/MetadataExporter';
 
