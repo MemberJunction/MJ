@@ -23,11 +23,11 @@
 
 import { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseConstraintValidator } from './base-constraint-validator';
+import { SemanticValidator } from './semantic-validator';
 import { ValidationContext } from './validation-context';
 
-@RegisterClass(BaseConstraintValidator, 'required-when')
-export class RequiredWhenValidator extends BaseConstraintValidator {
+@RegisterClass(SemanticValidator, 'required-when')
+export class RequiredWhenValidator extends SemanticValidator {
   /**
    * Get description of this validator
    */

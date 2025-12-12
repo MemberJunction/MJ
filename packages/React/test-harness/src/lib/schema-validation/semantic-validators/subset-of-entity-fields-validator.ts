@@ -36,9 +36,9 @@ import {
   ConstraintViolation,
 } from '@memberjunction/interactive-component-types';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseConstraintValidator } from './base-constraint-validator';
+import { SemanticValidator } from './semantic-validator';
 import { ValidationContext } from './validation-context';
-import { PropValueExtractor } from '../prop-value-extractor';
+import { PropValueExtractor } from '../../prop-value-extractor';
 
 /**
  * Validates that array elements are valid field names for an entity
@@ -50,8 +50,8 @@ import { PropValueExtractor } from '../prop-value-extractor';
  * - DataGrid columns (when using entity binding)
  * - Custom components with entity field arrays
  */
-@RegisterClass(BaseConstraintValidator, 'subset-of-entity-fields')
-export class SubsetOfEntityFieldsValidator extends BaseConstraintValidator {
+@RegisterClass(SemanticValidator, 'subset-of-entity-fields')
+export class SubsetOfEntityFieldsValidator extends SemanticValidator {
   /**
    * Validate that array elements are valid entity field names
    *

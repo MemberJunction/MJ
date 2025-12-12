@@ -41,9 +41,9 @@ import {
   ConstraintViolation,
 } from '@memberjunction/interactive-component-types';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseConstraintValidator } from './base-constraint-validator';
+import { SemanticValidator } from './semantic-validator';
 import { ValidationContext } from './validation-context';
-import { PropValueExtractor } from '../prop-value-extractor';
+import { PropValueExtractor } from '../../prop-value-extractor';
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { GetDialect } from '@memberjunction/sql-dialect';
@@ -68,8 +68,8 @@ let activeDialect: SQLParserDialect = GetDialect('sqlserver');
  * **Implementation**: Uses SQLParser for accurate AST-based validation
  * with regex fallback for edge cases.
  */
-@RegisterClass(BaseConstraintValidator, 'sql-where-clause')
-export class SqlWhereClauseValidator extends BaseConstraintValidator {
+@RegisterClass(SemanticValidator, 'sql-where-clause')
+export class SqlWhereClauseValidator extends SemanticValidator {
   /**
    * Sets the SQL dialect used for WHERE clause parsing.
    * Call before running validations if targeting a non-SQL Server platform.

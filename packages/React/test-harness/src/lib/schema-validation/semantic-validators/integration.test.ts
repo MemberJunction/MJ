@@ -1,5 +1,5 @@
 /**
- * Integration Tests for Constraint Validators
+ * Integration Tests for Semantic Validators
  *
  * These tests verify that validators work correctly with the linter integration.
  */
@@ -7,22 +7,26 @@
 import { describe, it, expect } from 'vitest';
 import { SubsetOfEntityFieldsValidator } from './subset-of-entity-fields-validator';
 import { SqlWhereClauseValidator } from './sql-where-clause-validator';
-import { ConstraintValidatorRegistry } from './constraint-validator-registry';
-import type { ValidationContext, PropertyConstraint } from './validation-context';
+import { SemanticValidatorRegistry } from './semantic-validator-registry';
+import type { ValidationContext } from './validation-context';
+import type { PropertyConstraint } from '@memberjunction/interactive-component-types';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 
-describe('Constraint Validator Integration', () => {
-  describe('ConstraintValidatorRegistry', () => {
+describe('Semantic Validator Integration', () => {
+  describe('SemanticValidatorRegistry', () => {
     it('should have subset-of-entity-fields validator registered', () => {
-      expect(ConstraintValidatorRegistry.has('subset-of-entity-fields')).toBe(true);
+      const registry = SemanticValidatorRegistry.getInstance();
+      expect(registry.has('subset-of-entity-fields')).toBe(true);
     });
 
     it('should have sql-where-clause validator registered', () => {
-      expect(ConstraintValidatorRegistry.has('sql-where-clause')).toBe(true);
+      const registry = SemanticValidatorRegistry.getInstance();
+      expect(registry.has('sql-where-clause')).toBe(true);
     });
 
     it('should return validator instances', () => {
-      const validator = ConstraintValidatorRegistry.get('subset-of-entity-fields');
+      const registry = SemanticValidatorRegistry.getInstance();
+      const validator = registry.get('subset-of-entity-fields');
       expect(validator).toBeInstanceOf(SubsetOfEntityFieldsValidator);
     });
   });
