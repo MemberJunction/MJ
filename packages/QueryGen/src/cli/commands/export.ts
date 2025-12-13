@@ -11,7 +11,8 @@ import ora from 'ora';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Metadata, UserInfo, RunView } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { getSystemUser } from '../../utils/user-helpers';
 import { QueryEntity } from '@memberjunction/core-entities';
 import { extractErrorMessage } from '../../utils/error-handlers';
 import { QueryMetadataRecord } from '../../data/schema';
@@ -28,8 +29,8 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
     const outputPath = String(options.output || './metadata/queries');
     const verbose = Boolean(options.verbose);
 
-    // 1. Create context user
-    const contextUser = createContextUser();
+    // 1. Get system user from UserCache (populated by provider initialization)
+    const contextUser = getSystemUser();
 
     // 2. Verify database connection and load metadata
     spinner.text = 'Loading metadata...';
@@ -111,18 +112,6 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
     console.error(chalk.red(extractErrorMessage(error, 'Query Export')));
     process.exit(1);
   }
-}
-
-/**
- * Create a context user for CLI operations
- */
-function createContextUser(): UserInfo {
-  const user = new UserInfo();
-  user.Email = 'system@memberjunction.com';
-  user.Name = 'System';
-  user.FirstName = 'System';
-  user.LastName = 'User';
-  return user;
 }
 
 /**

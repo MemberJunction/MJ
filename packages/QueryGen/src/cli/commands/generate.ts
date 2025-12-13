@@ -12,9 +12,9 @@
 
 import ora from 'ora';
 import chalk from 'chalk';
-import { Metadata, UserInfo, DatabaseProviderBase } from '@memberjunction/core';
-import { AIEngine } from '@memberjunction/aiengine';
+import { Metadata, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { loadConfig } from '../config';
+import { getSystemUser } from '../../utils/user-helpers';
 import { EntityGrouper } from '../../core/EntityGrouper';
 import { QuestionGenerator } from '../../core/QuestionGenerator';
 import { QueryWriter } from '../../core/QueryWriter';
@@ -47,16 +47,15 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       console.log(chalk.dim(JSON.stringify(config, null, 2)));
     }
 
-    // 2. Create context user (system user for CLI operations)
-    const contextUser = createContextUser();
+    // 2. Get system user from UserCache (populated by provider initialization)
+    const contextUser = getSystemUser();
 
-    // 3. Verify database connection and load metadata
+    // 3. Verify database connection and metadata
     spinner.text = 'Loading metadata...';
-    // Assume provider is already configured by the calling application
+    // Assume provider and AIEngine are already configured by the calling application (MJCLI)
     if (!Metadata.Provider) {
       throw new Error('Metadata provider not configured. Please ensure database connection is set up before running CLI.');
     }
-    await AIEngine.Instance.Config(false, contextUser);
     spinner.succeed('Metadata loaded');
 
     // 4. Build entity groups
@@ -216,19 +215,6 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     console.error(chalk.red(extractErrorMessage(error, 'Query Generation')));
     process.exit(1);
   }
-}
-
-/**
- * Create a context user for CLI operations
- * Uses system user credentials
- */
-function createContextUser(): UserInfo {
-  const user = new UserInfo();
-  user.Email = 'system@memberjunction.com';
-  user.Name = 'System';
-  user.FirstName = 'System';
-  user.LastName = 'User';
-  return user;
 }
 
 /**
