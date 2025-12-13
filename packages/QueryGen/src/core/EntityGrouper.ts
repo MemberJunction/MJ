@@ -5,8 +5,8 @@
  * foreign key relationships. Uses breadth-first traversal by default.
  */
 
-import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { EntityGroup, RelationshipInfo } from '../data/schema';
+import { EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import { EntityGroup } from '../data/schema';
 import { extractErrorMessage } from '../utils/error-handlers';
 
 /**
@@ -60,31 +60,16 @@ export class EntityGrouper {
   }
 
   /**
-   * Build a relationship graph from entity foreign keys
+   * Build a relationship graph from entity metadata
+   * Uses EntityInfo.RelatedEntities getter for pre-computed relationships
    * Maps entity names to their related entities
    */
-  private buildRelationshipGraph(entities: EntityInfo[]): Map<string, RelationshipInfo[]> {
-    const graph = new Map<string, RelationshipInfo[]>();
+  private buildRelationshipGraph(entities: EntityInfo[]): Map<string, EntityRelationshipInfo[]> {
+    const graph = new Map<string, EntityRelationshipInfo[]>();
 
     for (const entity of entities) {
-      const relationships: RelationshipInfo[] = [];
-
-      // Find all foreign key fields in this entity
-      for (const field of entity.Fields) {
-        if (this.isForeignKeyField(field)) {
-          const relatedEntity = this.findRelatedEntityName(field, entities);
-          if (relatedEntity) {
-            relationships.push({
-              from: entity.Name,
-              to: relatedEntity,
-              via: field.Name,
-              type: 'many-to-one',
-            });
-          }
-        }
-      }
-
-      graph.set(entity.Name, relationships);
+      // Use entity.RelatedEntities directly - it's already computed by MJ metadata
+      graph.set(entity.Name, entity.RelatedEntities);
     }
 
     return graph;
@@ -97,7 +82,7 @@ export class EntityGrouper {
   private generateRelatedGroups(
     primaryEntity: EntityInfo,
     allEntities: EntityInfo[],
-    relationshipGraph: Map<string, RelationshipInfo[]>,
+    relationshipGraph: Map<string, EntityRelationshipInfo[]>,
     minSize: number,
     maxSize: number,
   ): EntityGroup[] {
@@ -134,7 +119,7 @@ export class EntityGrouper {
   private findConnectedEntitiesBFS(
     primaryEntity: EntityInfo,
     allEntities: EntityInfo[],
-    relationshipGraph: Map<string, RelationshipInfo[]>,
+    relationshipGraph: Map<string, EntityRelationshipInfo[]>,
     maxDepth: number,
   ): EntityInfo[] {
     const visited = new Set<string>([primaryEntity.Name]);
@@ -148,9 +133,9 @@ export class EntityGrouper {
       const relationships = relationshipGraph.get(current.entity.Name) || [];
 
       for (const rel of relationships) {
-        if (!visited.has(rel.to)) {
-          visited.add(rel.to);
-          const relatedEntity = allEntities.find((e) => e.Name === rel.to);
+        if (!visited.has(rel.RelatedEntity)) {
+          visited.add(rel.RelatedEntity);
+          const relatedEntity = allEntities.find((e) => e.Name === rel.RelatedEntity);
 
           if (relatedEntity) {
             connected.push(relatedEntity);
@@ -162,7 +147,7 @@ export class EntityGrouper {
       // Also check reverse relationships (entities pointing to current)
       for (const [entityName, rels] of relationshipGraph.entries()) {
         if (!visited.has(entityName)) {
-          const hasReverseRel = rels.some((r) => r.to === current.entity.Name);
+          const hasReverseRel = rels.some((r) => r.RelatedEntity === current.entity.Name);
           if (hasReverseRel) {
             visited.add(entityName);
             const relatedEntity = allEntities.find((e) => e.Name === entityName);
@@ -205,14 +190,14 @@ export class EntityGrouper {
   /**
    * Collect all relationships between entities in a group
    */
-  private collectRelationships(entities: EntityInfo[], relationshipGraph: Map<string, RelationshipInfo[]>): RelationshipInfo[] {
+  private collectRelationships(entities: EntityInfo[], relationshipGraph: Map<string, EntityRelationshipInfo[]>): EntityRelationshipInfo[] {
     const entityNames = new Set(entities.map((e) => e.Name));
-    const relationships: RelationshipInfo[] = [];
+    const relationships: EntityRelationshipInfo[] = [];
 
     for (const entity of entities) {
       const rels = relationshipGraph.get(entity.Name) || [];
       for (const rel of rels) {
-        if (entityNames.has(rel.to)) {
+        if (entityNames.has(rel.RelatedEntity)) {
           relationships.push(rel);
         }
       }
@@ -224,13 +209,13 @@ export class EntityGrouper {
   /**
    * Determine relationship type based on relationship count and pattern
    */
-  private determineRelationshipType(relationships: RelationshipInfo[]): 'single' | 'parent-child' | 'many-to-many' {
+  private determineRelationshipType(relationships: EntityRelationshipInfo[]): 'single' | 'parent-child' | 'many-to-many' {
     if (relationships.length === 0) {
       return 'single';
     }
 
     // Check for many-to-many pattern (junction table pattern)
-    const hasManyToMany = relationships.some((r) => r.type === 'many-to-many');
+    const hasManyToMany = relationships.some((r) => r.Type === 'Many to Many');
     if (hasManyToMany) {
       return 'many-to-many';
     }
@@ -266,20 +251,4 @@ export class EntityGrouper {
     return entityIds;
   }
 
-  /**
-   * Check if a field is a foreign key field
-   */
-  private isForeignKeyField(field: EntityFieldInfo): boolean {
-    return field.RelatedEntityID != null && field.RelatedEntityID.trim().length > 0;
-  }
-
-  /**
-   * Find the related entity name for a foreign key field
-   */
-  private findRelatedEntityName(field: EntityFieldInfo, entities: EntityInfo[]): string | null {
-    if (!field.RelatedEntityID) return null;
-
-    const relatedEntity = entities.find((e) => e.ID === field.RelatedEntityID);
-    return relatedEntity ? relatedEntity.Name : null;
-  }
 }

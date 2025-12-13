@@ -41,3 +41,4 @@ export {
   hasRelationships,
   getRelationshipCount
 } from './utils/entity-helpers';
+export { generateQueryName } from './utils/query-helpers';

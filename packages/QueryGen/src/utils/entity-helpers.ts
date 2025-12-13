@@ -55,46 +55,33 @@ function formatEntityFields(entity: EntityInfo): EntityFieldMetadata[] {
 /**
  * Format entity relationships for AI prompt
  * Includes schema and view names for proper JOIN generation
+ * Uses EntityInfo.RelatedEntities getter for pre-computed relationships
  */
 function formatEntityRelationships(entity: EntityInfo, allEntities: EntityInfo[]): EntityRelationshipMetadata[] {
-  const relationships: EntityRelationshipMetadata[] = [];
+  // Use entity.RelatedEntities getter which returns EntityRelationshipInfo[]
+  return entity.RelatedEntities.map(rel => {
+    const relatedEntity = findEntityById(rel.RelatedEntityID, allEntities);
 
-  // Foreign key relationships (many-to-one)
-  for (const field of entity.Fields) {
-    if (isForeignKeyField(field) && field.RelatedEntity) {
-      const relatedEntity = findEntityByName(field.RelatedEntity, allEntities);
-      if (relatedEntity) {
-        relationships.push({
-          type: 'many-to-one',
-          relatedEntity: relatedEntity.Name,
-          relatedEntityView: relatedEntity.BaseView || `vw${relatedEntity.Name}`,
-          relatedEntitySchema: relatedEntity.SchemaName || 'dbo',
-          foreignKeyField: field.Name,
-          description: `${entity.Name} references ${relatedEntity.Name} via ${field.Name}`,
-        });
-      }
-    }
-  }
+    return {
+      type: mapRelationshipType(rel.Type),
+      relatedEntity: rel.RelatedEntity,
+      relatedEntityView: relatedEntity?.BaseView || `vw${rel.RelatedEntity}`,
+      relatedEntitySchema: relatedEntity?.SchemaName || 'dbo',
+      foreignKeyField: rel.EntityKeyField,
+      description: `${entity.Name} ${rel.Type} relationship with ${rel.RelatedEntity} via ${rel.EntityKeyField}`,
+    };
+  });
+}
 
-  // Reverse relationships (one-to-many)
-  for (const otherEntity of allEntities) {
-    if (otherEntity.ID === entity.ID) continue;
-
-    for (const field of otherEntity.Fields) {
-      if (isForeignKeyField(field) && field.RelatedEntityID === entity.ID) {
-        relationships.push({
-          type: 'one-to-many',
-          relatedEntity: otherEntity.Name,
-          relatedEntityView: otherEntity.BaseView || `vw${otherEntity.Name}`,
-          relatedEntitySchema: otherEntity.SchemaName || 'dbo',
-          foreignKeyField: field.Name,
-          description: `${otherEntity.Name} references ${entity.Name} via ${field.Name}`,
-        });
-      }
-    }
-  }
-
-  return relationships;
+/**
+ * Map MJ relationship types to QueryGen types
+ */
+function mapRelationshipType(mjType: string): 'one-to-many' | 'many-to-one' | 'many-to-many' {
+  const normalized = mjType.toLowerCase().replace(/\s+/g, '-');
+  if (normalized === 'many-to-one') return 'many-to-one';
+  if (normalized === 'one-to-many') return 'one-to-many';
+  if (normalized === 'many-to-many') return 'many-to-many';
+  return 'many-to-one'; // Default fallback
 }
 
 /**
@@ -134,27 +121,18 @@ export function getForeignKeyFields(entity: EntityInfo): EntityFieldInfo[] {
 
 /**
  * Check if an entity has any relationships
+ * Uses EntityInfo.RelatedEntities getter
  */
 export function hasRelationships(entity: EntityInfo, allEntities: EntityInfo[]): boolean {
-  // Check if this entity has any foreign keys
-  const hasForeignKeys = entity.Fields.some((f) => isForeignKeyField(f));
-  if (hasForeignKeys) return true;
-
-  // Check if any other entity references this entity
-  for (const otherEntity of allEntities) {
-    if (otherEntity.ID === entity.ID) continue;
-    const referencesThisEntity = otherEntity.Fields.some((f) => isForeignKeyField(f) && f.RelatedEntityID === entity.ID);
-    if (referencesThisEntity) return true;
-  }
-
-  return false;
+  return entity.RelatedEntities.length > 0;
 }
 
 /**
  * Get count of relationships for an entity
+ * Uses EntityInfo.RelatedEntities getter
  */
 export function getRelationshipCount(entity: EntityInfo, allEntities: EntityInfo[]): number {
-  return formatEntityRelationships(entity, allEntities).length;
+  return entity.RelatedEntities.length;
 }
 
 /**
