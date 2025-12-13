@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { ValidatedQuery, ExportResult, QueryMetadataRecord, BusinessQuestion } from '../data/schema';
+import { generateQueryName } from '../utils/query-helpers';
 
 /**
  * MetadataExporter class
@@ -61,13 +62,18 @@ export class MetadataExporter {
   /**
    * Transform a validated query into MJ metadata format
    *
+   * Note: This method only creates the Query record.
+   * QueryFields and QueryParameters are automatically extracted
+   * by QueryEntity.server.ts using AI analysis of the SQL template.
+   * This happens asynchronously during the Save() operation.
+   *
    * @param query - Validated query to transform
    * @returns Query metadata record
    */
   private toQueryMetadata(query: ValidatedQuery): QueryMetadataRecord {
     return {
       fields: {
-        Name: this.generateQueryName(query.businessQuestion),
+        Name: generateQueryName(query.businessQuestion),
         CategoryID: '@lookup:Query Categories.Name=Auto-Generated',
         UserQuestion: query.businessQuestion.userQuestion,
         Description: query.businessQuestion.description,
@@ -76,49 +82,8 @@ export class MetadataExporter {
         OriginalSQL: query.query.sql,
         UsesTemplate: true,
         Status: 'Pending'
-      },
-      relatedEntities: {
-        'Query Fields': query.query.selectClause.map((field, i) => ({
-          fields: {
-            QueryID: '@parent:ID',
-            Name: field.name,
-            Description: field.description,
-            SQLBaseType: field.type,
-            Sequence: i + 1
-          }
-        })),
-        'Query Params': query.query.parameters.map((param, i) => ({
-          fields: {
-            QueryID: '@parent:ID',
-            Name: param.name,
-            Type: param.type,
-            Description: param.description,
-            ValidationFilters: param.usage.join(', '),
-            IsRequired: param.isRequired,
-            DefaultValue: param.defaultValue,
-            Sequence: i + 1
-          }
-        }))
       }
+      // relatedEntities removed - QueryEntity.server.ts handles extraction automatically
     };
-  }
-
-  /**
-   * Generate a concise query name from the user question
-   *
-   * Converts "What are the top customers by revenue?" to "Top Customers By Revenue"
-   * Takes up to 5 meaningful words (longer than 2 characters) and capitalizes them.
-   *
-   * @param question - Business question to generate name from
-   * @returns Generated query name
-   */
-  private generateQueryName(question: BusinessQuestion): string {
-    return question.userQuestion
-      .replace(/\?/g, '')
-      .split(' ')
-      .filter(word => word.length > 2)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .slice(0, 5)
-      .join(' ');
   }
 }

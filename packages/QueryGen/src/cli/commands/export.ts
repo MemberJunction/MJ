@@ -149,36 +149,15 @@ async function loadQueriesFromDatabase(contextUser: UserInfo): Promise<QueryEnti
 
 /**
  * Convert QueryEntity to metadata record format
+ *
+ * Note: For the export command, we only export the Query entity itself.
+ * QueryFields and QueryParameters are managed by QueryEntity.server.ts and
+ * will be automatically extracted when the query is imported/saved.
  */
 async function convertQueryToMetadata(
   query: QueryEntity,
   contextUser: UserInfo
 ): Promise<QueryMetadataRecord> {
-  const rv = new RunView();
-
-  // Load related Query Fields
-  const fieldsResult = await rv.RunView(
-    {
-      EntityName: 'Query Fields',
-      ExtraFilter: `QueryID='${query.ID}'`,
-      OrderBy: 'Sequence',
-    },
-    contextUser
-  );
-
-  // Load related Query Params
-  const paramsResult = await rv.RunView(
-    {
-      EntityName: 'Query Params',
-      ExtraFilter: `QueryID='${query.ID}'`,
-      OrderBy: 'Name',
-    },
-    contextUser
-  );
-
-  const fields = fieldsResult.Success ? fieldsResult.Results || [] : [];
-  const params = paramsResult.Success ? paramsResult.Results || [] : [];
-
   return {
     fields: {
       Name: query.Name,
@@ -188,12 +167,8 @@ async function convertQueryToMetadata(
       TechnicalDescription: query.TechnicalDescription || '',
       SQL: query.SQL || '',
       OriginalSQL: query.OriginalSQL || query.SQL || '',
-      UsesTemplate: false,
+      UsesTemplate: query.UsesTemplate || false,
       Status: query.Status || 'Active',
-    },
-    relatedEntities: {
-      'Query Fields': fields.map((field) => ({ fields: field })),
-      'Query Params': params.map((param) => ({ fields: param })),
     },
   };
 }

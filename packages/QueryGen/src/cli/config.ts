@@ -63,7 +63,7 @@ export interface QueryGenConfig {
 const DEFAULT_CONFIG: QueryGenConfig = {
   includeEntities: [],
   excludeEntities: [],
-  excludeSchemas: ['sys', 'INFORMATION_SCHEMA'],
+  excludeSchemas: ['sys', 'INFORMATION_SCHEMA', '__mj'],
   maxEntitiesPerGroup: 3,
   minEntitiesPerGroup: 1,
   questionsPerGroup: 2,

@@ -2,26 +2,16 @@
  * Type definitions for QueryGen package
  */
 
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
 
 /**
  * Represents a group of related entities for query generation
  */
 export interface EntityGroup {
   entities: EntityInfo[];
-  relationships: RelationshipInfo[];
+  relationships: EntityRelationshipInfo[];
   primaryEntity: EntityInfo;
   relationshipType: 'single' | 'parent-child' | 'many-to-many';
-}
-
-/**
- * Represents a relationship between two entities
- */
-export interface RelationshipInfo {
-  from: string;
-  to: string;
-  via: string;
-  type: 'one-to-many' | 'many-to-one' | 'many-to-many';
 }
 
 /**
@@ -200,6 +190,10 @@ export interface WriteResult {
 
 /**
  * Query metadata record for MJ metadata format
+ *
+ * Note: QueryFields and QueryParameters are not included here.
+ * They are automatically extracted by QueryEntity.server.ts using
+ * AI analysis of the SQL template during the Save() operation.
  */
 export interface QueryMetadataRecord {
   fields: {
@@ -212,10 +206,6 @@ export interface QueryMetadataRecord {
     OriginalSQL: string;
     UsesTemplate: boolean;
     Status: string;
-  };
-  relatedEntities: {
-    'Query Fields': Array<{ fields: Record<string, unknown> }>;
-    'Query Params': Array<{ fields: Record<string, unknown> }>;
   };
 }
 

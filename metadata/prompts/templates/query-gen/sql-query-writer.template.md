@@ -40,7 +40,7 @@ Generate a SQL query template that answers the following business question:
 
 **SQL Template**:
 ```sql
-{{ example.sql }}
+{% raw %}{{ example.sql }}{% endraw %}
 ```
 
 **Parameters**:

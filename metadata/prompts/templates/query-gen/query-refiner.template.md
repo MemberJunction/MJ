@@ -10,7 +10,7 @@ You are an expert SQL developer refining a query based on evaluation feedback.
 ## Current Query
 
 ```sql
-{{ currentSQL }}
+{% raw %}{{ currentSQL }}{% endraw %}
 ```
 
 ## Evaluation Feedback

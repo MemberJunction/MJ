@@ -6,6 +6,7 @@
  */
 
 import { QueryEmbeddings, EmbeddedGoldenQuery, SimilarQuery } from '../data/schema';
+import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 
 /**
  * Field weights for weighted similarity calculation
@@ -21,7 +22,7 @@ interface FieldWeights {
  * SimilaritySearch class
  * Finds most similar golden queries using weighted cosine similarity across multiple fields
  */
-export class SimilaritySearch {
+export class SimilaritySearch extends SimpleVectorService {
   /**
    * Weights for each field in similarity calculation
    * Total weights sum to 1.0
@@ -73,10 +74,10 @@ export class SimilaritySearch {
     goldenEmbeddings: QueryEmbeddings
   ): SimilarQuery['fieldScores'] {
     return {
-      nameSim: this.cosineSimilarity(queryEmbeddings.name, goldenEmbeddings.name),
-      userQuestionSim: this.cosineSimilarity(queryEmbeddings.userQuestion, goldenEmbeddings.userQuestion),
-      descSim: this.cosineSimilarity(queryEmbeddings.description, goldenEmbeddings.description),
-      techDescSim: this.cosineSimilarity(queryEmbeddings.technicalDescription, goldenEmbeddings.technicalDescription)
+      nameSim: this.CosineSimilarity(queryEmbeddings.name, goldenEmbeddings.name),
+      userQuestionSim: this.CosineSimilarity(queryEmbeddings.userQuestion, goldenEmbeddings.userQuestion),
+      descSim: this.CosineSimilarity(queryEmbeddings.description, goldenEmbeddings.description),
+      techDescSim: this.CosineSimilarity(queryEmbeddings.technicalDescription, goldenEmbeddings.technicalDescription)
     };
   }
 
@@ -99,40 +100,5 @@ export class SimilaritySearch {
     return similarities
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, topK);
-  }
-
-  /**
-   * Calculate cosine similarity between two vectors
-   *
-   * Returns a value between -1 and 1:
-   * - 1.0: Vectors point in same direction (identical meaning)
-   * - 0.0: Vectors are perpendicular (unrelated)
-   * - -1.0: Vectors point in opposite directions
-   *
-   * @param a - First vector
-   * @param b - Second vector
-   * @returns Cosine similarity score (-1 to 1)
-   */
-  private cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) {
-      throw new Error(`Vector dimension mismatch: ${a.length} vs ${b.length}`);
-    }
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
-    }
-
-    // Handle zero vectors
-    if (normA === 0 || normB === 0) {
-      return 0;
-    }
-
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 }
