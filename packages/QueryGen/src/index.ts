@@ -19,6 +19,7 @@ export { QueryDatabaseWriter } from './core/QueryDatabaseWriter';
 
 // Export utility classes
 export { SimilaritySearch } from './vectors/SimilaritySearch';
+export { EmbeddingService } from './vectors/EmbeddingService';
 
 // Export types
 export * from './data/schema';
