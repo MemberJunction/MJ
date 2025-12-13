@@ -32,7 +32,31 @@ npm link
 
 ## Quick Start
 
-### Basic Usage
+QueryGen is integrated into the MemberJunction CLI (`mj`) for seamless workflow integration. You can also use the standalone CLI for direct access.
+
+### Using MemberJunction CLI (Recommended)
+
+```bash
+# Generate queries for all entities
+mj querygen generate
+
+# Generate with verbose output
+mj querygen generate -v
+
+# Generate for specific entities
+mj querygen generate --entities "Customers,Orders,Products"
+
+# Exclude specific schemas
+mj querygen generate --exclude-schemas "sys,INFORMATION_SCHEMA"
+
+# Validate existing queries
+mj querygen validate
+
+# Export queries from database
+mj querygen export
+```
+
+### Using Standalone CLI
 
 ```bash
 # Generate queries for all entities
@@ -48,23 +72,17 @@ mj-querygen generate -e Customers Orders Products
 mj-querygen generate -s sys INFORMATION_SCHEMA
 ```
 
-### Validate Existing Queries
+### Additional Examples
 
 ```bash
-# Validate all queries in default directory
-mj-querygen validate
+# Validate queries with MJ CLI
+mj querygen validate --path ./metadata/queries
 
-# Validate queries in specific directory
+# Export from database with MJ CLI
+mj querygen export --output ./exported-queries
+
+# Or use standalone CLI
 mj-querygen validate -p ./metadata/queries
-```
-
-### Export Queries from Database
-
-```bash
-# Export all queries to metadata files
-mj-querygen export
-
-# Export to specific directory
 mj-querygen export -o ./exported-queries
 ```
 
