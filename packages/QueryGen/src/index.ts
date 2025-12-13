@@ -15,6 +15,7 @@ export { QueryTester } from './core/QueryTester';
 export { QueryFixer } from './core/QueryFixer';
 export { QueryRefiner } from './core/QueryRefiner';
 export { MetadataExporter } from './core/MetadataExporter';
+export { QueryDatabaseWriter } from './core/QueryDatabaseWriter';
 
 // Export utility classes
 export { SimilaritySearch } from './vectors/SimilaritySearch';
