@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { generateCommand } from '@memberjunction/query-gen';
-import { loadMJConfig, initializeProvider } from '@memberjunction/metadata-sync';
+import { loadMJConfig, initializeProvider, getSystemUser } from '@memberjunction/metadata-sync';
 import { AIEngine } from '@memberjunction/aiengine';
 
 export default class Generate extends Command {
@@ -70,7 +70,10 @@ export default class Generate extends Command {
       }
 
       await initializeProvider(mjConfig);
-      await AIEngine.Instance.Config(false);
+
+      // Get system user and initialize AI Engine
+      const systemUser = getSystemUser();
+      await AIEngine.Instance.Config(false, systemUser);
 
       // Convert flags to options object for QueryGen
       const options: Record<string, unknown> = {
