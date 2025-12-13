@@ -30,6 +30,11 @@ export * from './prompts/PromptNames';
 // Export configuration
 export { QueryGenConfig, loadConfig } from './cli/config';
 
+// Export CLI commands
+export { generateCommand } from './cli/commands/generate';
+export { validateCommand } from './cli/commands/validate';
+export { exportCommand } from './cli/commands/export';
+
 // Export utilities
 export { extractErrorMessage, requireValue, getPropertyOrDefault } from './utils/error-handlers';
 export {
