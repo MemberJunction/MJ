@@ -10,7 +10,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
@@ -536,6 +536,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    * Emits events to show temporary intent checking message in conversation
    */
   private async checkContinuityIntent(agentId: string, message: string) {
+    // FAST PATH: If message contains form response syntax, skip the intent check entirely
+    // Form responses always continue with the agent that requested the form
+    // Don't show "Analyzing intent..." message for this obvious case
+    if (ConversationUtility.ContainsFormResponse(message)) {
+      console.log('✅ Form response detected, skipping intent check UI (fast path)');
+      return {
+        decision: 'YES' as const,
+        reasoning: 'User submitted a form response to the previous agent'
+      };
+    }
+
     // Emit event to show temporary "Analyzing intent..." message in conversation
     this.intentCheckStarted.emit();
 

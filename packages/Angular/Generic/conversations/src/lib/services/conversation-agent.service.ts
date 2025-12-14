@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIAgentEntityExtended, AIAgentRunEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
@@ -427,17 +427,6 @@ export class ConversationAgentService {
     conversationHistory: ConversationDetailEntity[],
     context: ArtifactLookupContext
   ): Promise<IntentCheckResult> {
-    // FAST PATH: If message contains form response syntax, always continue with last agent
-    // Form responses are structured answers to an agent's form request and should always
-    // route back to that agent - no need to run LLM inference for this case
-    if (ConversationUtility.ContainsFormResponse(latestMessage)) {
-      console.log('✅ Form response detected, continuing with previous agent (fast path)');
-      return {
-        decision: 'YES',
-        reasoning: 'User submitted a form response to the previous agent'
-      };
-    }
-
     if (!this._aiClient) {
       console.warn('AI Client not initialized, defaulting to UNSURE for intent check');
       return { decision: 'UNSURE', reasoning: 'AI Client not initialized' };
