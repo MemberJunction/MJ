@@ -34,11 +34,19 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() disabled: boolean = false;
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
-  @Input() conversationHistory: ConversationDetailEntity[] = []; // For agent context
   @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
+
+  private _conversationHistory: ConversationDetailEntity[] = [];
+  @Input()
+  public get conversationHistory(): ConversationDetailEntity[] {
+    return this._conversationHistory;
+  }
+  public set conversationHistory(value: ConversationDetailEntity[]) {
+    this._conversationHistory = value;
+  }
 
   // Message IDs that are in-progress and need streaming reconnection
   // Using getter/setter to react immediately when value changes (avoids timing issues with ngOnChanges)
