@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { AuthService, IdToken, User, AuthGuard, AuthConfigService, Auth0ClientService, Auth0ClientFactory, AuthClientConfig } from '@auth0/auth0-angular';
-import { Observable, of } from 'rxjs';
+import { Observable, of, firstValueFrom } from 'rxjs';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 
 // Prevent tree-shaking by explicitly referencing the class
@@ -72,7 +72,8 @@ export class MJAuth0Provider extends MJAuthBase {
   }
 
   public async refresh(): Promise<Observable<any>> {
-    await this.auth.getAccessTokenSilently();
+    // Properly await token refresh by converting Observable to Promise
+    await firstValueFrom(this.auth.getAccessTokenSilently());
     return this.auth.idTokenClaims$;
   }
 
@@ -116,7 +117,7 @@ export class MJAuth0Provider extends MJAuthBase {
 
   async getToken(): Promise<string | null> {
     try {
-      const token = await this.auth.getAccessTokenSilently().toPromise();
+      const token = await firstValueFrom(this.auth.getAccessTokenSilently());
       return token || null;
     } catch (error) {
       console.error('Error getting Auth0 token:', error);

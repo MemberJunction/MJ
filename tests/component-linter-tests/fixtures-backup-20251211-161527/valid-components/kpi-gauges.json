@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/kpi-gauges.spec.json",
+  "description": "Valid component demonstrating KPI visualization with radial gauge charts"
+}

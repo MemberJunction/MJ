@@ -1,0 +1,18 @@
+{
+  "name": "SpreadLosesRequiredFieldFixed",
+  "type": "generic",
+  "title": "Spread Loses Required Field - Fixed Pattern",
+  "description": "Tests spread operator that preserves required fields",
+  "code": "function SpreadLosesRequiredFieldFixed({ utilities, components }) {\n  const [members, setMembers] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Spread keeps all fields including Email\n        const processed = result.Results.map(m => ({\n          ...m,\n          FullName: `${m.FirstName} ${m.LastName}`\n        }));\n        setMembers(processed);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* Grid has access to Email field */}\n      <DataGrid \n        data={members} \n        columns={[\n          {field: 'FullName', title: 'Name'},\n          {field: 'Email', title: 'Email'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email", "Status"]
+    }]
+  }
+}

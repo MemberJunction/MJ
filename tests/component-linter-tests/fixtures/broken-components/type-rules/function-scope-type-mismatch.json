@@ -1,0 +1,22 @@
+{
+  "name": "FunctionScopeTypeMismatch",
+  "description": "Component with actual type mismatches in nested function scopes - calling array methods on objects and vice versa",
+  "code": "function FunctionScopeTypeMismatch({ utilities, components }) {\n  const [data, setData] = useState([]);\n  const { DataGrid } = components;\n  \n  // Test at root level first\n  const rootObj = {};\n  rootObj.push('test'); // VIOLATION: should be caught\n\n  // Helper function with ACTUAL type mismatch - object treated as array\n  const processData = (rawData) => {\n    const result = {}; // Explicitly an OBJECT\n    \n    // VIOLATION: calling push on object\n    result.push({ id: 1, name: 'test' });\n    \n    // VIOLATION: calling map on object  \n    result.map(item => item.name);\n    \n    return result;\n  };\n\n  // Arrow function with ACTUAL type mismatch\n  const buildList = (items) => {\n    const list = {}; // OBJECT, not array\n    \n    items.forEach(item => {\n      list[item.ID] = item;\n    });\n    \n    // VIOLATION: calling array methods on object\n    list.map(val => val.Name);\n    list.filter(val => val.Active);\n    \n    return list;\n  };\n\n  // String variable treated as array\n  const formatName = (name) => {\n    const formatted = name.toUpperCase(); // formatted is a string\n    \n    // VIOLATION: calling array method on string\n    return formatted.push('!!!'); // strings don't have push\n  };\n\n  // Number treated as array\n  const processValue = (value) => {\n    const doubled = value * 2; // doubled is a number\n    \n    // VIOLATION: calling array method on number\n    return doubled.filter(n => n > 0);\n  };\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sample Data',\n        CategoryPath: 'Test'\n      });\n\n      if (result.Success) {\n        const processed = processData(result.Results);\n        const list = buildList(result.Results);\n        setData(processed);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h1>Function Scope Type Mismatch Test</h1>\n      <DataGrid\n        data={data}\n        columns={['name']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "Sample Data",
+        "categoryPath": "Test",
+        "parameters": [],
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Active", "type": "bit" },
+          { "name": "Value", "type": "decimal" }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/deals-by-stage-board.spec.json",
+  "description": "Valid component demonstrating deals organized by stage in board view"
+}

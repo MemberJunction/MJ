@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/monthly-invoice-revenue.spec.json",
+  "description": "Valid component demonstrating flexible monthly invoice revenue analysis with dynamic grouping"
+}

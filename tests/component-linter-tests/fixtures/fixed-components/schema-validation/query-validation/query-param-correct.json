@@ -1,0 +1,24 @@
+{
+  "name": "SalesReportComponent",
+  "description": "Demonstrates CORRECT query parameter usage - all required parameters provided with correct types (numbers as numbers, strings as strings)",
+  "code": "function SalesReportComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [reportData, setReportData] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    async function loadReport() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'MonthlySalesReport',\n          CategoryPath: 'Reports/Sales',\n          Parameters: {\n            // CORRECT: Number parameters get number values\n            year: 2024,\n            month: 11,\n            // CORRECT: String parameters get string values\n            region: 'North America',\n            // CORRECT: Boolean parameters get boolean values\n            includeReturns: true\n          }\n        });\n        \n        // CORRECT: Check result.Success before accessing Results\n        if (result.Success) {\n          setReportData(result.Results || []);\n        } else {\n          setError(result.ErrorMessage || 'Failed to load report');\n        }\n      } catch (err) {\n        setError('An unexpected error occurred');\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadReport();\n  }, []);\n\n  if (loading) return <div>Loading report...</div>;\n  if (error) return <div className=\"error\">{error}</div>;\n\n  return (\n    <div className=\"sales-report\">\n      <h1>Monthly Sales Report</h1>\n      <p>Total records: {reportData.length}</p>\n      <table>\n        <thead>\n          <tr>\n            <th>Product</th>\n            <th>Amount</th>\n            <th>Date</th>\n          </tr>\n        </thead>\n        <tbody>\n          {reportData.map((row, index) => (\n            <tr key={index}>\n              {/* CORRECT: Only accessing fields declared in query definition */}\n              <td>{row.ProductName}</td>\n              <td>${row.Amount}</td>\n              <td>{row.SaleDate}</td>\n            </tr>\n          ))}\n        </tbody>\n      </table>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "MonthlySalesReport",
+        "categoryPath": "Reports/Sales",
+        "fields": ["ProductName", "Amount", "SaleDate"],
+        "entityNames": ["Invoices", "Products"],
+        "parameters": [
+          { "name": "year", "type": "number", "required": true },
+          { "name": "month", "type": "number", "required": true },
+          { "name": "region", "type": "string", "required": true },
+          { "name": "includeReturns", "type": "boolean", "required": false }
+        ]
+      }
+    ]
+  }
+}

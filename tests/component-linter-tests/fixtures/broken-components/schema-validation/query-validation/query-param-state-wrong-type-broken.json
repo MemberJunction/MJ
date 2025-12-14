@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamStateWrongTypeBroken",
+  "type": "generic",
+  "title": "Query Parameter State Wrong Type - Broken Pattern",
+  "description": "Tests linter detection of state value with wrong type used as query parameter",
+  "code": "function QueryParamStateWrongTypeBroken({ utilities }) {\n  const [members, setMembers] = useState([]);\n  // ❌ State initialized as boolean, but parameter expects int\n  const [maxResults, setMaxResults] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Recent Members',\n        CategoryPath: 'Membership/Reports',\n        Parameters: { MaxResults: maxResults }\n      });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, [maxResults]);\n\n  return (\n    <div>\n      <h3>Recent Members</h3>\n      <button onClick={() => setMaxResults(false)}>Update</button>\n      {members.map((m, i) => <div key={i}>{m.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Recent Members",
+      "categoryPath": "Membership/Reports",
+      "parameters": [
+        {"name": "MaxResults", "type": "int", "isRequired": true}
+      ]
+    }]
+  }
+}

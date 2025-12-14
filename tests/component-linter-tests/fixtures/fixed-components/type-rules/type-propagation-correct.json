@@ -1,0 +1,24 @@
+{
+  "name": "TypePropagationCorrectComponent",
+  "description": "Demonstrates CORRECT type propagation through array methods like .map(), .filter(), .reduce() - showing that the type system tracks types through transformations",
+  "code": "function TypePropagationCorrectComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [products, setProducts] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadProducts() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Products',\n        MaxRows: 100\n      });\n\n      if (result.Success) {\n        setProducts(result.Results);\n      }\n      setLoading(false);\n    }\n    loadProducts();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  // CORRECT: Type propagation through .map() - returns array of strings\n  const productNames = products.map(p => p.Name);\n  const productCodes = products.map(p => p.Code);\n  \n  // CORRECT: Type propagation through .filter() - returns array of entity-row\n  const expensiveProducts = products.filter(p => p.Price > 100);\n  const activeProducts = products.filter(p => p.IsActive);\n  \n  // CORRECT: Type propagation through .reduce() - returns number\n  const totalPrice = products.reduce((sum, p) => sum + p.Price, 0);\n  const productCount = products.reduce((count) => count + 1, 0);\n  \n  // CORRECT: Chained transformations with proper type tracking\n  const activeProductNames = products\n    .filter(p => p.IsActive) // returns array of entity-row\n    .map(p => p.Name); // returns array of string\n  \n  const averagePrice = products\n    .filter(p => p.IsActive) // returns array of entity-row\n    .reduce((sum, p) => sum + p.Price, 0) / products.length; // returns number\n  \n  // CORRECT: Complex transformations\n  const pricesByCategory = products.reduce((acc, p) => {\n    const category = p.Category || 'Uncategorized';\n    if (!acc[category]) {\n      acc[category] = 0;\n    }\n    acc[category] += p.Price;\n    return acc;\n  }, {}); // returns object\n  \n  // CORRECT: Array methods preserve types\n  const sortedProducts = products.slice().sort((a, b) => a.Price - b.Price); // returns array of entity-row\n  const firstTenProducts = products.slice(0, 10); // returns array of entity-row\n  \n  // CORRECT: Using transformed data with proper types\n  const categorySummary = Object.entries(pricesByCategory).map(([category, total]) => ({\n    category, // string\n    total, // number\n    formatted: `$${total.toFixed(2)}` // string (toFixed works because total is number)\n  }));\n\n  return (\n    <div>\n      <h1>Product Analysis</h1>\n      \n      <section>\n        <h2>Statistics</h2>\n        <p>Total Products: {productCount}</p>\n        <p>Total Price: ${totalPrice.toFixed(2)}</p>\n        <p>Average Price: ${averagePrice.toFixed(2)}</p>\n        <p>Active Products: {activeProducts.length}</p>\n      </section>\n      \n      <section>\n        <h2>Product Names</h2>\n        <ul>\n          {/* CORRECT: productNames is array of strings */}\n          {productNames.slice(0, 5).map((name, idx) => (\n            <li key={idx}>{name.toUpperCase()}</li>\n          ))}\n        </ul>\n      </section>\n      \n      <section>\n        <h2>Expensive Products</h2>\n        <ul>\n          {/* CORRECT: expensiveProducts is array of entity-row */}\n          {expensiveProducts.map(product => (\n            <li key={product.ID}>\n              {product.Name} - ${product.Price.toFixed(2)}\n            </li>\n          ))}\n        </ul>\n      </section>\n      \n      <section>\n        <h2>Category Summary</h2>\n        <ul>\n          {/* CORRECT: categorySummary has proper types */}\n          {categorySummary.map((item, idx) => (\n            <li key={idx}>\n              {item.category}: {item.formatted}\n            </li>\n          ))}\n        </ul>\n      </section>\n      \n      <section>\n        <h2>Top Products by Price</h2>\n        <ul>\n          {/* CORRECT: sortedProducts is array of entity-row */}\n          {sortedProducts.slice(-5).reverse().map(product => (\n            <li key={product.ID}>\n              {product.Name} - ${product.Price.toFixed(2)}\n            </li>\n          ))}\n        </ul>\n      </section>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Products",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Code", "type": "nvarchar" },
+          { "name": "Category", "type": "nvarchar" },
+          { "name": "Price", "type": "decimal" },
+          { "name": "IsActive", "type": "bit" }
+        ]
+      }
+    ]
+  }
+}

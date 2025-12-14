@@ -1,0 +1,7 @@
+{
+  "name": "ChildComponent",
+  "description": "Child component with invalid callback parameters (violates callback-parameter-validation rule)",
+  "code": "function ChildComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, callbacks }) {\n  const handleClick = () => {\n    callbacks?.onAction?.(savedUserSettings, 'extra', 'params');\n  };\n  \n  return (\n    <div>\n      <h1>Child Component</h1>\n      <button onClick={handleClick}>Trigger Action</button>\n    </div>\n  );\n}",
+  "componentType": "child",
+  "libraries": []
+}

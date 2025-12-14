@@ -1,0 +1,18 @@
+{
+  "name": "PipelineEntityToFilterToGridBroken",
+  "type": "generic",
+  "title": "Pipeline Entity Filter Grid - Broken Pattern",
+  "description": "Tests entity to filter to grid pipeline with field name change (may fail until linter refactor)",
+  "code": "function PipelineEntityToFilterToGridBroken({ utilities, components }) {\n  const [gridData, setGridData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      // Stage 1: Load entity\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      \n      if (result?.Success) {\n        // Stage 2: Filter and transform\n        const active = result.Results\n          .filter(m => m.Status === 'Active')\n          .map(m => ({\n            ID: m.ID,\n            Name: `${m.FirstName} ${m.LastName}`, // ❌ Creates Name field\n            Email: m.Email\n          }));\n        \n        setGridData(active);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Active Members</h3>\n      {/* ❌ Grid expects FullName but data has Name */}\n      <DataGrid \n        data={gridData} \n        columns={[\n          {field: 'FullName', title: 'Member'},\n          {field: 'Email', title: 'Email'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email", "Status"]
+    }]
+  }
+}

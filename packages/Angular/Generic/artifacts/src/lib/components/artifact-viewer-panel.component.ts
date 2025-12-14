@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity, ArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -34,6 +34,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -839,6 +840,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   onMaximizeToggle(): void {
     this.maximizeToggled.emit();
+  }
+
+  /**
+   * Handle entity record open request from artifact viewer plugin (React component)
+   * Propagates the event up to parent components
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.openEntityRecord.emit(event);
   }
 
   /**

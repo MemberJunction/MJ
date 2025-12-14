@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/cash-flow-chart.spec.json",
+  "description": "Valid component demonstrating cash flow visualization with bar chart"
+}

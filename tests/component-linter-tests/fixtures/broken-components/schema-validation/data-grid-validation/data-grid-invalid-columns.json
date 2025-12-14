@@ -1,0 +1,55 @@
+{
+  "name": "DataGridInvalidColumns",
+  "description": "DataGrid with invalid column names - violates subset-of-entity-fields constraint",
+  "code": "function DataGridInvalidColumns({ components, utilities }) {\n  const { DataGrid } = components;\n  const [invoices, setInvoices] = React.useState(null);\n\n  React.useEffect(() => {\n    async function loadData() {\n      const results = await utilities.rv.RunView({\n        EntityName: 'Invoices',\n        ExtraFilter: '',\n        MaxRows: 100\n      });\n      setInvoices(results.Results);\n    }\n    loadData();\n  }, []);\n\n  if (!invoices) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Invoices List</h1>\n      <DataGrid\n        entityName=\"Invoices\"\n        data={invoices}\n        columns={['InvoiceNum', 'CustomerName', 'TotalPrice', 'InvoiceStatus']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Invoices",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "description": "Primary key"
+          },
+          {
+            "name": "InvoiceNumber",
+            "type": "nvarchar",
+            "description": "Invoice number"
+          },
+          {
+            "name": "Member",
+            "type": "nvarchar",
+            "description": "Member name"
+          },
+          {
+            "name": "Total",
+            "type": "decimal",
+            "description": "Invoice total"
+          },
+          {
+            "name": "Status",
+            "type": "nvarchar",
+            "description": "Invoice status"
+          },
+          {
+            "name": "InvoiceDate",
+            "type": "datetime",
+            "description": "Invoice date"
+          }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ]
+}
