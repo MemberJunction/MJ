@@ -40,10 +40,43 @@ export interface MarkdownConfig {
   collapsibleDefaultExpanded?: boolean;
 
   /**
+   * Specify which heading levels should start expanded.
+   * Array of heading levels (2-6) that should be expanded by default.
+   * Takes precedence over collapsibleDefaultExpanded for specified levels.
+   *
+   * Examples:
+   * - [2] = Only h2 expanded, h3-h6 collapsed
+   * - [2, 3] = h2 and h3 expanded, h4-h6 collapsed
+   * - [] = All collapsed (same as collapsibleDefaultExpanded: false)
+   * - undefined = Uses collapsibleDefaultExpanded for all levels
+   *
+   * @default undefined (uses collapsibleDefaultExpanded)
+   */
+  autoExpandLevels?: number[];
+
+  /**
    * Enable GitHub-style alerts ([!NOTE], [!WARNING], etc.)
    * @default true
    */
   enableAlerts?: boolean;
+
+  /**
+   * Enable smartypants for typography (curly quotes, em/en dashes, ellipses)
+   * Converts:
+   * - "quotes" to "curly quotes"
+   * - -- to en-dash (–)
+   * - --- to em-dash (—)
+   * - ... to ellipsis (…)
+   * @default true
+   */
+  enableSmartypants?: boolean;
+
+  /**
+   * Enable SVG code block rendering
+   * When enabled, ```svg code blocks are rendered as actual SVG images
+   * @default true
+   */
+  enableSvgRenderer?: boolean;
 
   /**
    * Enable GitHub-style heading IDs for anchor links
@@ -91,14 +124,17 @@ export interface MarkdownConfig {
 /**
  * Default configuration values
  */
-export const DEFAULT_MARKDOWN_CONFIG: Required<MarkdownConfig> = {
+export const DEFAULT_MARKDOWN_CONFIG: Required<Omit<MarkdownConfig, 'autoExpandLevels'>> & { autoExpandLevels?: number[] } = {
   enableHighlight: true,
   enableMermaid: true,
   enableCodeCopy: true,
   enableCollapsibleHeadings: false,
   collapsibleHeadingLevel: 2,
   collapsibleDefaultExpanded: true,
+  autoExpandLevels: undefined,
   enableAlerts: true,
+  enableSmartypants: true,
+  enableSvgRenderer: true,
   enableHeadingIds: true,
   headingIdPrefix: '',
   enableLineNumbers: false,

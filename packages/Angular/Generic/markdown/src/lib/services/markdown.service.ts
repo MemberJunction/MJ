@@ -3,6 +3,7 @@ import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import { gfmHeadingId, getHeadingList } from 'marked-gfm-heading-id';
 import markedAlert from 'marked-alert';
+import { markedSmartypants } from 'marked-smartypants';
 import Prism from 'prismjs';
 import mermaid from 'mermaid';
 import {
@@ -12,6 +13,7 @@ import {
   MarkdownRenderEvent
 } from '../types/markdown.types';
 import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension';
+import { createSvgRendererExtension } from '../extensions/svg-renderer.extension';
 
 // Import common Prism language components
 // Additional languages can be imported by the consuming application
@@ -30,6 +32,9 @@ import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/components/prism-graphql';
 
+// Type for config with optional autoExpandLevels
+type ResolvedMarkdownConfig = Required<Omit<MarkdownConfig, 'autoExpandLevels'>> & { autoExpandLevels?: number[] };
+
 /**
  * Service for parsing and rendering markdown content.
  * Uses marked.js with various extensions for syntax highlighting,
@@ -41,7 +46,7 @@ import 'prismjs/components/prism-graphql';
 export class MarkdownService {
   private marked: Marked;
   private mermaidInitialized = false;
-  private currentConfig: Required<MarkdownConfig> = { ...DEFAULT_MARKDOWN_CONFIG };
+  private currentConfig: ResolvedMarkdownConfig = { ...DEFAULT_MARKDOWN_CONFIG };
   private headingList: HeadingInfo[] = [];
 
   constructor() {
@@ -106,9 +111,20 @@ export class MarkdownService {
       extensions.push(
         createCollapsibleHeadingsExtension({
           startLevel: this.currentConfig.collapsibleHeadingLevel,
-          defaultExpanded: this.currentConfig.collapsibleDefaultExpanded
+          defaultExpanded: this.currentConfig.collapsibleDefaultExpanded,
+          autoExpandLevels: this.currentConfig.autoExpandLevels
         })
       );
+    }
+
+    // Smartypants for typography (curly quotes, em/en dashes, ellipses)
+    if (this.currentConfig.enableSmartypants) {
+      extensions.push(markedSmartypants());
+    }
+
+    // SVG code block renderer
+    if (this.currentConfig.enableSvgRenderer) {
+      extensions.push(createSvgRendererExtension());
     }
 
     // Apply all extensions
@@ -302,7 +318,7 @@ export class MarkdownService {
   /**
    * Get the current configuration
    */
-  public getConfig(): Required<MarkdownConfig> {
+  public getConfig(): ResolvedMarkdownConfig {
     return { ...this.currentConfig };
   }
 

@@ -95,9 +95,33 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() collapsibleDefaultExpanded: boolean = DEFAULT_MARKDOWN_CONFIG.collapsibleDefaultExpanded;
 
   /**
+   * Specify which heading levels should start expanded.
+   * Array of heading levels (2-6) that should be expanded by default.
+   * Takes precedence over collapsibleDefaultExpanded for specified levels.
+   *
+   * Examples:
+   * - [2] = Only h2 expanded, h3-h6 collapsed
+   * - [2, 3] = h2 and h3 expanded, h4-h6 collapsed
+   * - [] = All collapsed
+   * - undefined = Uses collapsibleDefaultExpanded for all levels
+   */
+  @Input() autoExpandLevels?: number[];
+
+  /**
    * Enable GitHub-style alerts
    */
   @Input() enableAlerts: boolean = DEFAULT_MARKDOWN_CONFIG.enableAlerts;
+
+  /**
+   * Enable smartypants for typography (curly quotes, em/en dashes, ellipses)
+   */
+  @Input() enableSmartypants: boolean = DEFAULT_MARKDOWN_CONFIG.enableSmartypants;
+
+  /**
+   * Enable SVG code block rendering
+   * When enabled, ```svg code blocks are rendered as actual SVG images
+   */
+  @Input() enableSvgRenderer: boolean = DEFAULT_MARKDOWN_CONFIG.enableSvgRenderer;
 
   /**
    * Enable heading IDs for anchor links
@@ -170,7 +194,10 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       changes['enableCollapsibleHeadings'] ||
       changes['collapsibleHeadingLevel'] ||
       changes['collapsibleDefaultExpanded'] ||
+      changes['autoExpandLevels'] ||
       changes['enableAlerts'] ||
+      changes['enableSmartypants'] ||
+      changes['enableSvgRenderer'] ||
       changes['enableHeadingIds'] ||
       changes['headingIdPrefix'] ||
       changes['mermaidTheme'] ||
@@ -213,7 +240,10 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       enableCollapsibleHeadings: this.enableCollapsibleHeadings,
       collapsibleHeadingLevel: this.collapsibleHeadingLevel,
       collapsibleDefaultExpanded: this.collapsibleDefaultExpanded,
+      autoExpandLevels: this.autoExpandLevels,
       enableAlerts: this.enableAlerts,
+      enableSmartypants: this.enableSmartypants,
+      enableSvgRenderer: this.enableSvgRenderer,
       enableHeadingIds: this.enableHeadingIds,
       headingIdPrefix: this.headingIdPrefix,
       mermaidTheme: this.mermaidTheme,

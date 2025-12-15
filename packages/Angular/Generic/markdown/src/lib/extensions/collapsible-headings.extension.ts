@@ -18,15 +18,30 @@ export interface CollapsibleHeadingsOptions {
   defaultExpanded?: boolean;
 
   /**
+   * Specify which heading levels should start expanded.
+   * Takes precedence over defaultExpanded for specified levels.
+   * @default undefined (uses defaultExpanded for all levels)
+   */
+  autoExpandLevels?: number[];
+
+  /**
    * CSS class prefix for generated elements
    * @default 'collapsible'
    */
   classPrefix?: string;
 }
 
-const DEFAULT_OPTIONS: Required<CollapsibleHeadingsOptions> = {
+interface ResolvedOptions {
+  startLevel: 1 | 2 | 3 | 4 | 5 | 6;
+  defaultExpanded: boolean;
+  autoExpandLevels?: number[];
+  classPrefix: string;
+}
+
+const DEFAULT_OPTIONS: ResolvedOptions = {
   startLevel: 2,
   defaultExpanded: true,
+  autoExpandLevels: undefined,
   classPrefix: 'collapsible'
 };
 
@@ -74,7 +89,7 @@ const DEFAULT_OPTIONS: Required<CollapsibleHeadingsOptions> = {
 export function createCollapsibleHeadingsExtension(
   options?: CollapsibleHeadingsOptions
 ): MarkedExtension {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const opts: ResolvedOptions = { ...DEFAULT_OPTIONS, ...options };
 
   return {
     renderer: {
@@ -112,7 +127,7 @@ export function createCollapsibleHeadingsExtension(
  */
 function restructureToNestedSections(
   html: string,
-  opts: Required<CollapsibleHeadingsOptions>
+  opts: ResolvedOptions
 ): string {
   // Parse the HTML to find all content chunks and headings
   const markerRegex = /<!--COLLAPSIBLE_HEADING:(\d):([^:]+):([^>]+)-->/g;
@@ -161,16 +176,27 @@ function restructureToNestedSections(
 }
 
 /**
+ * Determine if a heading level should start expanded based on options
+ */
+function shouldLevelBeExpanded(level: number, opts: ResolvedOptions): boolean {
+  // If autoExpandLevels is specified, use it
+  if (opts.autoExpandLevels !== undefined) {
+    return opts.autoExpandLevels.includes(level);
+  }
+  // Otherwise fall back to defaultExpanded
+  return opts.defaultExpanded;
+}
+
+/**
  * Builds the nested HTML structure from the parsed parts.
  */
 function buildNestedStructure(
   parts: Array<{ type: 'content' | 'heading'; content: string; level?: number; id?: string; text?: string }>,
-  opts: Required<CollapsibleHeadingsOptions>
+  opts: ResolvedOptions
 ): string {
   const result: string[] = [];
   // Stack tracks open sections: { level, hasContent }
   const sectionStack: Array<{ level: number }> = [];
-  const expandedClass = opts.defaultExpanded ? '' : ' collapsed';
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
@@ -187,6 +213,10 @@ function buildNestedStructure(
         result.push('</div></div>');
         sectionStack.pop();
       }
+
+      // Determine expanded state for this specific level
+      const isExpanded = shouldLevelBeExpanded(level, opts);
+      const expandedClass = isExpanded ? '' : ' collapsed';
 
       // Extract the actual h tag from the next content piece if it starts with it
       let headingHtml = `<h${level} class="${opts.classPrefix}-heading" id="${part.id}">${part.text}</h${level}>`;

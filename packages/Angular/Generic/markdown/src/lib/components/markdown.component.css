@@ -643,6 +643,32 @@
 }
 
 /* ============================================
+   SVG Rendered Content
+   ============================================ */
+.mj-markdown-container .svg-rendered {
+  margin: 1em 0;
+  padding: 1em;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  text-align: center;
+  overflow: auto;
+}
+
+.mj-markdown-container .svg-rendered svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Dark mode for SVG rendered content */
+@media (prefers-color-scheme: dark) {
+  .mj-markdown-container.dark-mode .svg-rendered {
+    background: #1f2937;
+    border-color: #374151;
+  }
+}
+
+/* ============================================
    Print Styles
    ============================================ */
 @media print {
