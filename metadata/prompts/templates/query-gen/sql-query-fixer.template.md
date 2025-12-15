@@ -144,3 +144,12 @@ Return JSON with four properties:
 - Ensure the fix addresses the root cause, not just symptoms
 - Test logic mentally with the provided sample values
 - If the error is ambiguous, make the most likely fix
+
+## Response Format
+
+**CRITICAL INSTRUCTIONS:**
+- I am a computer and can **only** read JSON responses
+- Your response **must** be pure JSON that starts with `{` and ends with `}`
+- **NO leading or trailing text** - no explanations, no markdown code blocks, no commentary
+- **NO markdown formatting** like \`\`\`json - just the raw JSON
+- Your response **must** match the exact structure shown in the "Output Format" section above

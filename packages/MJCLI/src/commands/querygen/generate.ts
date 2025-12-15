@@ -34,6 +34,11 @@ export default class Generate extends Command {
       description: 'Max entities per group',
       default: 3
     }),
+    'target-groups': Flags.integer({
+      char: 't',
+      description: 'Target number of entity groups to generate',
+      default: 75
+    }),
     'max-refinements': Flags.integer({
       char: 'r',
       description: 'Max refinement iterations',
@@ -81,6 +86,7 @@ export default class Generate extends Command {
         excludeEntities: flags['exclude-entities'],
         excludeSchemas: flags['exclude-schemas'],
         maxEntities: flags['max-entities'],
+        targetGroupCount: flags['target-groups'],
         maxRefinements: flags['max-refinements'],
         maxFixes: flags['max-fixes'],
         model: flags.model,

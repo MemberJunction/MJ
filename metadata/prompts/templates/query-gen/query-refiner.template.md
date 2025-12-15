@@ -115,3 +115,12 @@ Return JSON with four properties:
 - If adding fields, ensure they come from available entity metadata
 - If adding parameters, provide complete metadata including sample values
 - Keep the query focused on answering the user's question
+
+## Response Format
+
+**CRITICAL INSTRUCTIONS:**
+- I am a computer and can **only** read JSON responses
+- Your response **must** be pure JSON that starts with `{` and ends with `}`
+- **NO leading or trailing text** - no explanations, no markdown code blocks, no commentary
+- **NO markdown formatting** like \`\`\`json - just the raw JSON
+- Your response **must** match the exact structure shown in the "Output Format" section above

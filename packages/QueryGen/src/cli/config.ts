@@ -16,6 +16,7 @@ export interface QueryGenConfig {
   // Entity Grouping
   maxEntitiesPerGroup: number;
   minEntitiesPerGroup: number;
+  targetGroupCount: number;
   questionsPerGroup: number;
   entityGroupStrategy: 'breadth' | 'depth';
 
@@ -66,6 +67,7 @@ const DEFAULT_CONFIG: QueryGenConfig = {
   excludeSchemas: ['sys', 'INFORMATION_SCHEMA', '__mj'],
   maxEntitiesPerGroup: 3,
   minEntitiesPerGroup: 1,
+  targetGroupCount: 75,
   questionsPerGroup: 2,
   entityGroupStrategy: 'breadth',
   embeddingModel: 'text-embedding-3-small',
@@ -122,6 +124,9 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
   }
   if (cliOptions.maxEntities) {
     config.maxEntitiesPerGroup = parseNumberOption(cliOptions.maxEntities, 'maxEntities');
+  }
+  if (cliOptions.targetGroupCount) {
+    config.targetGroupCount = parseNumberOption(cliOptions.targetGroupCount, 'targetGroupCount');
   }
   if (cliOptions.maxRefinements) {
     config.maxRefinementIterations = parseNumberOption(cliOptions.maxRefinements, 'maxRefinements');

@@ -12,7 +12,7 @@
 
 import ora from 'ora';
 import chalk from 'chalk';
-import { Metadata, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { Metadata, DatabaseProviderBase } from '@memberjunction/core';
 import { loadConfig } from '../config';
 import { getSystemUser } from '../../utils/user-helpers';
 import { EntityGrouper } from '../../core/EntityGrouper';
@@ -68,9 +68,41 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     const entityGroups = await grouper.generateEntityGroups(
       allEntities,
       config.minEntitiesPerGroup,
-      config.maxEntitiesPerGroup
+      config.maxEntitiesPerGroup,
+      config.targetGroupCount,
+      contextUser
     );
     spinner.succeed(chalk.green(`Found ${entityGroups.length} entity groups`));
+
+    if (config.verbose) {
+      const singleGroups = entityGroups.filter(g => g.entities.length === 1).length;
+      const pairGroups = entityGroups.filter(g => g.entities.length === 2).length;
+      const tripleGroups = entityGroups.filter(g => g.entities.length === 3).length;
+      console.log(chalk.dim(`  Single entities: ${singleGroups}`));
+      console.log(chalk.dim(`  Pairs (1-hop): ${pairGroups}`));
+      console.log(chalk.dim(`  Triples (bridge/connected): ${tripleGroups}`));
+
+      // Show some examples
+      console.log(chalk.dim('\n  Sample groups:'));
+      const sampleSingle = entityGroups.find(g => g.entities.length === 1);
+      if (sampleSingle) {
+        console.log(chalk.dim(`    Single: ${sampleSingle.entities[0].Name}`));
+      }
+      const samplePair = entityGroups.find(g => g.entities.length === 2);
+      if (samplePair) {
+        console.log(chalk.dim(`    Pair: ${samplePair.entities.map(e => e.Name).join(' + ')}`));
+      }
+      const sampleTriple = entityGroups.find(g => g.entities.length === 3);
+      if (sampleTriple) {
+        console.log(chalk.dim(`    Triple: ${sampleTriple.entities.map(e => e.Name).join(' + ')}`));
+      }
+    }
+
+    // Early exit for testing group counts
+    if (process.env.QUERYGEN_COUNT_ONLY === 'true') {
+      console.log(chalk.green('\n✓ Group count test complete (QUERYGEN_COUNT_ONLY=true)'));
+      process.exit(0);
+    }
 
     // 5. Initialize vector similarity search
     spinner.start('Embedding golden queries...');

@@ -88,3 +88,12 @@ Return JSON evaluation with these five fields:
 - Suggest refinements only if they would significantly improve the answer
 - If the query is fundamentally correct but could be enhanced, set `answersQuestion: true` and `needsRefinement: false`
 - Only set `needsRefinement: true` if the query fails to answer the question or has serious issues
+
+## Response Format
+
+**CRITICAL INSTRUCTIONS:**
+- I am a computer and can **only** read JSON responses
+- Your response **must** be pure JSON that starts with `{` and ends with `}`
+- **NO leading or trailing text** - no explanations, no markdown code blocks, no commentary
+- **NO markdown formatting** like \`\`\`json - just the raw JSON
+- Your response **must** match the exact structure shown in the "Output Format" section above

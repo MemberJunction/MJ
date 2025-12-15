@@ -12,6 +12,11 @@ export interface EntityGroup {
   relationships: EntityRelationshipInfo[];
   primaryEntity: EntityInfo;
   relationshipType: 'single' | 'parent-child' | 'many-to-many';
+
+  // LLM-generated semantic metadata
+  businessDomain: string;           // e.g., "Sales Pipeline", "Inventory Management"
+  businessRationale: string;        // Why this grouping makes business sense
+  expectedQuestionTypes: string[];  // e.g., ["trend_analysis", "aggregation", "comparison"]
 }
 
 /**

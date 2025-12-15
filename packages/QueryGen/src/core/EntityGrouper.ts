@@ -1,202 +1,206 @@
 /**
- * EntityGrouper - Analyzes entity relationships and creates logical groups
+ * LLM-based Entity Grouper
  *
- * Creates groups of 1-N related entities for query generation based on
- * foreign key relationships. Uses breadth-first traversal by default.
+ * Uses AI to generate semantically meaningful entity groupings based on
+ * business context and schema understanding, replacing the deterministic
+ * hub-and-spoke algorithm with intelligent semantic analysis.
  */
 
-import { EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import { EntityInfo, EntityRelationshipInfo, UserInfo } from '@memberjunction/core';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import { EntityGroup } from '../data/schema';
+import { generateRelationshipGraph, formatEntitiesForPrompt } from '../utils/graph-helpers';
 import { extractErrorMessage } from '../utils/error-handlers';
 
 /**
- * EntityGrouper class
- * Generates logical groups of related entities for query generation
+ * LLM response format from Entity Group Generator prompt
+ */
+interface LLMEntityGroupResponse {
+  groups: Array<{
+    entities: string[];
+    primaryEntity: string;
+    businessDomain: string;
+    businessRationale: string;
+    relationshipType: 'single' | 'parent-child' | 'many-to-many';
+    expectedQuestionTypes: string[];
+  }>;
+}
+
+/**
+ * Generates entity groups using LLM-based semantic analysis
+ *
+ * This class replaces the deterministic hub-and-spoke algorithm with an
+ * intelligent approach that understands business context and generates
+ * meaningful entity combinations for query generation.
  */
 export class EntityGrouper {
+  private readonly promptName = 'Entity Group Generator';
+
   /**
-   * Generate entity groups from available entities
-   * Creates combinations of 1-N entities based on foreign key relationships
+   * Generate semantically meaningful entity groups using LLM analysis
    *
-   * @param entities - Array of entities to analyze
-   * @param minSize - Minimum number of entities per group (usually 1)
-   * @param maxSize - Maximum number of entities per group
-   * @returns Array of unique entity groups with relationship metadata
+   * @param entities - All entities to analyze
+   * @param minSize - Minimum entities per group (typically 1)
+   * @param maxSize - Maximum entities per group (typically 3-5)
+   * @param targetGroupCount - Desired number of groups (approximate, default 75)
+   * @param contextUser - User context for server-side operations
+   * @returns Array of validated entity groups with business context
    */
-  async generateEntityGroups(entities: EntityInfo[], minSize: number, maxSize: number): Promise<EntityGroup[]> {
+  async generateEntityGroups(
+    entities: EntityInfo[],
+    minSize: number,
+    maxSize: number,
+    targetGroupCount: number = 75,
+    contextUser: UserInfo
+  ): Promise<EntityGroup[]> {
     try {
-      // Build relationship graph from foreign keys
-      const relationshipGraph = this.buildRelationshipGraph(entities);
+      // 1. Prepare schema data for LLM
+      const schemaData = this.prepareSchemaData(entities, minSize, maxSize, targetGroupCount);
 
-      // Generate all valid entity groups
-      const groups: EntityGroup[] = [];
+      // 2. Call LLM to generate groups
+      const llmResponse = await this.callLLMForGrouping(schemaData, contextUser);
 
-      // For each entity, generate groups of different sizes
-      for (const primaryEntity of entities) {
-        // Single entity groups (size 1)
-        if (minSize <= 1) {
-          groups.push({
-            entities: [primaryEntity],
-            relationships: [],
-            primaryEntity,
-            relationshipType: 'single',
-          });
-        }
+      // 3. Validate and convert to EntityGroup objects
+      const validatedGroups = this.validateAndConvertGroups(llmResponse, entities);
 
-        // Multi-entity groups (size 2 to maxSize)
-        if (maxSize > 1) {
-          const relatedGroups = this.generateRelatedGroups(primaryEntity, entities, relationshipGraph, minSize, maxSize);
-          groups.push(...relatedGroups);
-        }
-      }
+      // 4. Deduplicate any similar groups
+      const deduplicatedGroups = this.deduplicateGroups(validatedGroups);
 
-      // Deduplicate groups (same entities = same group)
-      const uniqueGroups = this.deduplicateGroups(groups);
-
-      return uniqueGroups;
+      return deduplicatedGroups;
     } catch (error: unknown) {
       throw new Error(extractErrorMessage(error, 'EntityGrouper.generateEntityGroups'));
     }
   }
 
   /**
-   * Build a relationship graph from entity metadata
-   * Uses EntityInfo.RelatedEntities getter for pre-computed relationships
-   * Maps entity names to their related entities
+   * Prepare schema data for LLM prompt
    */
-  private buildRelationshipGraph(entities: EntityInfo[]): Map<string, EntityRelationshipInfo[]> {
-    const graph = new Map<string, EntityRelationshipInfo[]>();
+  private prepareSchemaData(
+    entities: EntityInfo[],
+    minSize: number,
+    maxSize: number,
+    targetGroupCount: number
+  ): Record<string, unknown> {
+    const formattedEntities = formatEntitiesForPrompt(entities);
+    const relationshipGraph = generateRelationshipGraph(entities);
 
-    for (const entity of entities) {
-      // Use entity.RelatedEntities directly - it's already computed by MJ metadata
-      graph.set(entity.Name, entity.RelatedEntities);
-    }
+    // Get schema name from first entity (assume single schema)
+    const schemaName = entities[0]?.SchemaName || 'Unknown';
 
-    return graph;
+    return {
+      schemaName,
+      entities: formattedEntities,
+      relationshipGraph,
+      minGroupSize: minSize,
+      maxGroupSize: maxSize,
+      targetGroupCount
+    };
   }
 
   /**
-   * Generate groups of related entities using breadth-first traversal
-   * Prefers directly related entities (1 hop) over distant ones
+   * Call LLM via AIPromptRunner to generate entity groups
    */
-  private generateRelatedGroups(
-    primaryEntity: EntityInfo,
-    allEntities: EntityInfo[],
-    relationshipGraph: Map<string, EntityRelationshipInfo[]>,
-    minSize: number,
-    maxSize: number,
+  private async callLLMForGrouping(
+    schemaData: Record<string, unknown>,
+    contextUser: UserInfo
+  ): Promise<LLMEntityGroupResponse> {
+    // Get prompt entity from AIEngine
+    const prompt = AIEngine.Instance.Prompts.find(p => p.Name === this.promptName);
+    if (!prompt) {
+      throw new Error(`Prompt "${this.promptName}" not found. Ensure metadata has been synced to database.`);
+    }
+
+    const promptParams = new AIPromptParams();
+    promptParams.prompt = prompt;
+    promptParams.data = schemaData;
+    promptParams.contextUser = contextUser;
+    promptParams.skipValidation = false; // Enable JSON schema validation
+
+    const runner = new AIPromptRunner();
+    const result = await runner.ExecutePrompt<LLMEntityGroupResponse>(promptParams);
+
+    if (!result.success) {
+      throw new Error(`LLM grouping failed: ${result.errorMessage || 'Unknown error'}`);
+    }
+
+    if (!result.result) {
+      throw new Error('LLM did not return structured data');
+    }
+
+    return result.result;
+  }
+
+  /**
+   * Validate LLM output and convert to EntityGroup objects
+   */
+  private validateAndConvertGroups(
+    llmResponse: LLMEntityGroupResponse,
+    entities: EntityInfo[]
   ): EntityGroup[] {
-    const groups: EntityGroup[] = [];
+    const entityMap = new Map(entities.map(e => [e.Name, e]));
+    const validGroups: EntityGroup[] = [];
 
-    // Get entities connected to primary entity using BFS
-    const connectedEntities = this.findConnectedEntitiesBFS(primaryEntity, allEntities, relationshipGraph, maxSize);
+    for (const llmGroup of llmResponse.groups) {
+      try {
+        // Validate all entity names exist
+        const groupEntities = llmGroup.entities
+          .map(name => entityMap.get(name))
+          .filter((e): e is EntityInfo => e !== undefined);
 
-    // Generate combinations of different sizes
-    for (let size = Math.max(2, minSize); size <= maxSize && size <= connectedEntities.length + 1; size++) {
-      const combinations = this.generateCombinations(connectedEntities, size - 1);
+        if (groupEntities.length !== llmGroup.entities.length) {
+          console.warn(`Skipping group "${llmGroup.businessDomain}": contains unknown entities`);
+          continue;
+        }
 
-      for (const combination of combinations) {
-        const groupEntities = [primaryEntity, ...combination];
-        const relationships = this.collectRelationships(groupEntities, relationshipGraph);
-        const relationshipType = this.determineRelationshipType(relationships);
+        // Validate primary entity exists
+        const primaryEntity = entityMap.get(llmGroup.primaryEntity);
+        if (!primaryEntity) {
+          console.warn(`Skipping group "${llmGroup.businessDomain}": primary entity "${llmGroup.primaryEntity}" not found`);
+          continue;
+        }
 
-        groups.push({
+        // Build relationships array (collect all relationships between entities in the group)
+        const relationships = this.extractRelationships(groupEntities);
+
+        // Validate connectivity (all entities must be reachable from primary)
+        if (groupEntities.length > 1 && !this.isConnected(groupEntities, relationships)) {
+          console.warn(`Skipping group "${llmGroup.businessDomain}": entities are not connected`);
+          continue;
+        }
+
+        // Create EntityGroup with LLM metadata
+        validGroups.push({
           entities: groupEntities,
           relationships,
           primaryEntity,
-          relationshipType,
+          relationshipType: llmGroup.relationshipType,
+          businessDomain: llmGroup.businessDomain,
+          businessRationale: llmGroup.businessRationale,
+          expectedQuestionTypes: llmGroup.expectedQuestionTypes
         });
+      } catch (error: unknown) {
+        console.warn(`Skipping invalid group: ${extractErrorMessage(error, 'validateGroup')}`);
       }
     }
 
-    return groups;
-  }
-
-  /**
-   * Find connected entities using breadth-first search
-   * Returns entities ordered by distance from primary entity
-   */
-  private findConnectedEntitiesBFS(
-    primaryEntity: EntityInfo,
-    allEntities: EntityInfo[],
-    relationshipGraph: Map<string, EntityRelationshipInfo[]>,
-    maxDepth: number,
-  ): EntityInfo[] {
-    const visited = new Set<string>([primaryEntity.Name]);
-    const queue: Array<{ entity: EntityInfo; depth: number }> = [{ entity: primaryEntity, depth: 0 }];
-    const connected: EntityInfo[] = [];
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current || current.depth >= maxDepth) continue;
-
-      const relationships = relationshipGraph.get(current.entity.Name) || [];
-
-      for (const rel of relationships) {
-        if (!visited.has(rel.RelatedEntity)) {
-          visited.add(rel.RelatedEntity);
-          const relatedEntity = allEntities.find((e) => e.Name === rel.RelatedEntity);
-
-          if (relatedEntity) {
-            connected.push(relatedEntity);
-            queue.push({ entity: relatedEntity, depth: current.depth + 1 });
-          }
-        }
-      }
-
-      // Also check reverse relationships (entities pointing to current)
-      for (const [entityName, rels] of relationshipGraph.entries()) {
-        if (!visited.has(entityName)) {
-          const hasReverseRel = rels.some((r) => r.RelatedEntity === current.entity.Name);
-          if (hasReverseRel) {
-            visited.add(entityName);
-            const relatedEntity = allEntities.find((e) => e.Name === entityName);
-            if (relatedEntity) {
-              connected.push(relatedEntity);
-              queue.push({ entity: relatedEntity, depth: current.depth + 1 });
-            }
-          }
-        }
-      }
+    if (validGroups.length === 0) {
+      throw new Error('No valid entity groups generated by LLM');
     }
 
-    return connected;
+    return validGroups;
   }
 
   /**
-   * Generate all combinations of entities of a given size
+   * Extract relationships between entities in a group
    */
-  private generateCombinations(entities: EntityInfo[], size: number): EntityInfo[][] {
-    if (size === 0) return [[]];
-    if (size > entities.length) return [];
-
-    const combinations: EntityInfo[][] = [];
-
-    const generate = (start: number, current: EntityInfo[]): void => {
-      if (current.length === size) {
-        combinations.push([...current]);
-        return;
-      }
-
-      for (let i = start; i < entities.length; i++) {
-        generate(i + 1, [...current, entities[i]]);
-      }
-    };
-
-    generate(0, []);
-    return combinations;
-  }
-
-  /**
-   * Collect all relationships between entities in a group
-   */
-  private collectRelationships(entities: EntityInfo[], relationshipGraph: Map<string, EntityRelationshipInfo[]>): EntityRelationshipInfo[] {
-    const entityNames = new Set(entities.map((e) => e.Name));
+  private extractRelationships(entities: EntityInfo[]): EntityRelationshipInfo[] {
+    const entityNames = new Set(entities.map(e => e.Name));
     const relationships: EntityRelationshipInfo[] = [];
 
     for (const entity of entities) {
-      const rels = relationshipGraph.get(entity.Name) || [];
-      for (const rel of rels) {
+      for (const rel of entity.RelatedEntities) {
         if (entityNames.has(rel.RelatedEntity)) {
           relationships.push(rel);
         }
@@ -207,48 +211,70 @@ export class EntityGrouper {
   }
 
   /**
-   * Determine relationship type based on relationship count and pattern
+   * Check if all entities in a group are connected by relationships
+   *
+   * Uses BFS to verify all entities are reachable from the first entity
    */
-  private determineRelationshipType(relationships: EntityRelationshipInfo[]): 'single' | 'parent-child' | 'many-to-many' {
-    if (relationships.length === 0) {
-      return 'single';
+  private isConnected(entities: EntityInfo[], relationships: EntityRelationshipInfo[]): boolean {
+    if (entities.length <= 1) return true;
+
+    // Build adjacency map
+    const adjacency = new Map<string, Set<string>>();
+    for (const entity of entities) {
+      adjacency.set(entity.Name, new Set());
     }
 
-    // Check for many-to-many pattern (junction table pattern)
-    const hasManyToMany = relationships.some((r) => r.Type === 'Many to Many');
-    if (hasManyToMany) {
-      return 'many-to-many';
-    }
+    for (const rel of relationships) {
+      const entityName = entities.find(e =>
+        e.RelatedEntities.includes(rel)
+      )?.Name;
 
-    return 'parent-child';
-  }
-
-  /**
-   * Deduplicate groups by entity composition
-   * Groups with same entities (regardless of order) are considered duplicates
-   */
-  private deduplicateGroups(groups: EntityGroup[]): EntityGroup[] {
-    const uniqueGroups = new Map<string, EntityGroup>();
-
-    for (const group of groups) {
-      const key = this.generateGroupKey(group);
-      if (!uniqueGroups.has(key)) {
-        uniqueGroups.set(key, group);
+      if (entityName) {
+        adjacency.get(entityName)?.add(rel.RelatedEntity);
+        adjacency.get(rel.RelatedEntity)?.add(entityName); // Bidirectional
       }
     }
 
-    return Array.from(uniqueGroups.values());
+    // BFS from first entity
+    const visited = new Set<string>();
+    const queue = [entities[0].Name];
+    visited.add(entities[0].Name);
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const neighbors = adjacency.get(current) || new Set();
+
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    // All entities should be visited
+    return visited.size === entities.length;
   }
 
   /**
-   * Generate unique key for a group based on entity IDs
+   * Remove duplicate or highly similar groups
+   *
+   * Groups are considered duplicates if they contain the exact same set of entities
    */
-  private generateGroupKey(group: EntityGroup): string {
-    const entityIds = group.entities
-      .map((e) => e.ID)
-      .sort()
-      .join('|');
-    return entityIds;
-  }
+  private deduplicateGroups(groups: EntityGroup[]): EntityGroup[] {
+    const seen = new Set<string>();
+    const unique: EntityGroup[] = [];
 
+    for (const group of groups) {
+      // Create normalized key (sorted entity names)
+      const key = group.entities.map(e => e.Name).sort().join('|');
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(group);
+      }
+    }
+
+    return unique;
+  }
 }
