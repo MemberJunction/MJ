@@ -6,7 +6,6 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
@@ -16,13 +15,18 @@ import {
   BusinessQuestion,
 } from '../data/schema';
 import { PROMPT_SQL_QUERY_FIXER } from '../prompts/PromptNames';
+import { QueryGenConfig } from '../cli/config';
+import { executePromptWithOverrides } from '../utils/prompt-helpers';
 
 /**
  * QueryFixer class
  * Fixes SQL queries that fail to execute
  */
 export class QueryFixer {
-  constructor(private contextUser: UserInfo) {}
+  constructor(
+    private contextUser: UserInfo,
+    private config: QueryGenConfig
+  ) {}
 
   /**
    * Fix a SQL query that failed to execute
@@ -102,12 +106,9 @@ export class QueryFixer {
       description: string;
     }
   ): Promise<GeneratedQuery> {
-    const promptRunner = new AIPromptRunner();
-    const result = await promptRunner.ExecutePrompt({
-      prompt,
-      data: promptData,
-      contextUser: this.contextUser,
-    });
+    const result = await executePromptWithOverrides<
+      GeneratedQuery & { changesSummary: string }
+    >(prompt, promptData, this.contextUser, this.config);
 
     if (!result || !result.success) {
       throw new Error(
@@ -115,47 +116,19 @@ export class QueryFixer {
       );
     }
 
-    return this.parsePromptResult(result.result);
-  }
-
-  /**
-   * Parse and validate AI prompt result
-   * Ensures fixed query has all required properties
-   */
-  private parsePromptResult(resultData: unknown): GeneratedQuery {
-    if (!resultData || typeof resultData !== 'object') {
-      throw new Error('Invalid AI response: expected object');
+    if (!result.result) {
+      throw new Error('AI prompt returned no result');
     }
 
-    const result = resultData as Partial<
-      GeneratedQuery & { changesSummary: string }
-    >;
-
-    // Check for required properties
-    if (!result.sql || typeof result.sql !== 'string') {
-      throw new Error('Invalid AI response: sql property missing or invalid');
+    // Log the changes summary if available
+    if (result.result.changesSummary) {
+      console.log(`Query fix applied: ${result.result.changesSummary}`);
     }
-
-    if (!Array.isArray(result.selectClause)) {
-      throw new Error('Invalid AI response: selectClause must be an array');
-    }
-
-    if (!Array.isArray(result.parameters)) {
-      throw new Error('Invalid AI response: parameters must be an array');
-    }
-
-    if (!result.changesSummary || typeof result.changesSummary !== 'string') {
-      throw new Error(
-        'Invalid AI response: changesSummary property missing or invalid'
-      );
-    }
-
-    console.log(`Query fix applied: ${result.changesSummary}`);
 
     return {
-      sql: result.sql,
-      selectClause: result.selectClause,
-      parameters: result.parameters,
+      sql: result.result.sql,
+      selectClause: result.result.selectClause,
+      parameters: result.result.parameters,
     };
   }
 

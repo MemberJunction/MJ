@@ -19,6 +19,7 @@ import {
   BusinessQuestion,
 } from '../data/schema';
 import { QueryFixer } from './QueryFixer';
+import { QueryGenConfig } from '../cli/config';
 
 /**
  * QueryTester class
@@ -31,7 +32,8 @@ export class QueryTester {
     private dataProvider: DatabaseProviderBase,
     private entityMetadata: EntityMetadataForPrompt[],
     private businessQuestion: BusinessQuestion,
-    private contextUser: UserInfo
+    private contextUser: UserInfo,
+    private config: QueryGenConfig
   ) {
     // Initialize Nunjucks environment with SQL-safe filters
     this.nunjucksEnv = new nunjucks.Environment(null, {
@@ -225,7 +227,7 @@ export class QueryTester {
     query: GeneratedQuery,
     errorMessage: string
   ): Promise<GeneratedQuery> {
-    const fixer = new QueryFixer(this.contextUser);
+    const fixer = new QueryFixer(this.contextUser, this.config);
     return await fixer.fixQuery(
       query,
       errorMessage,

@@ -6,11 +6,12 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+import { QueryGenConfig } from '../cli/config';
 import { extractErrorMessage } from '../utils/error-handlers';
 import { formatEntityGroupForPrompt } from '../utils/entity-helpers';
+import { executePromptWithOverrides } from '../utils/prompt-helpers';
 import { EntityGroup, BusinessQuestion } from '../data/schema';
 import { PROMPT_BUSINESS_QUESTION_GENERATOR } from '../prompts/PromptNames';
 
@@ -26,7 +27,10 @@ interface QuestionGeneratorResult {
  * Generates domain-specific business questions using AI
  */
 export class QuestionGenerator {
-  constructor(private contextUser: UserInfo) {}
+  constructor(
+    private contextUser: UserInfo,
+    private config: QueryGenConfig
+  ) {}
 
   /**
    * Generate business questions for an entity group
@@ -77,43 +81,31 @@ export class QuestionGenerator {
   }
 
   /**
-   * Execute the AI prompt using AIPromptRunner
+   * Execute the AI prompt with model/vendor overrides
    * Parses JSON response and validates structure
    */
   private async executePrompt(
     prompt: AIPromptEntityExtended,
     entityMetadata: unknown
   ): Promise<QuestionGeneratorResult> {
-    const promptRunner = new AIPromptRunner();
-    const result = await promptRunner.ExecutePrompt({
+    const result = await executePromptWithOverrides<QuestionGeneratorResult>(
       prompt,
-      data: { entityGroupMetadata: entityMetadata },
-      contextUser: this.contextUser,
-    });
+      { entityGroupMetadata: entityMetadata },
+      this.contextUser,
+      this.config
+    );
 
     if (!result || !result.success) {
       throw new Error(`AI prompt execution failed: ${result?.errorMessage || 'Unknown error'}`);
     }
 
-    return this.parsePromptResult(result.result);
-  }
-
-  /**
-   * Parse and validate AI prompt result
-   * Ensures questions array exists
-   */
-  private parsePromptResult(resultData: unknown): QuestionGeneratorResult {
-    if (!resultData || typeof resultData !== 'object') {
-      throw new Error('Invalid AI response: expected object');
+    if (!result.result) {
+      throw new Error('AI prompt returned no result');
     }
 
-    const result = resultData as { questions?: unknown };
-    if (!Array.isArray(result.questions)) {
-      throw new Error('Invalid AI response: questions array not found');
-    }
-
-    return result as QuestionGeneratorResult;
+    return result.result;
   }
+
 
   /**
    * Validate and filter business questions

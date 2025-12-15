@@ -6,10 +6,11 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+import { QueryGenConfig } from '../cli/config';
 import { extractErrorMessage } from '../utils/error-handlers';
+import { executePromptWithOverrides } from '../utils/prompt-helpers';
 import { BusinessQuestion, GeneratedQuery, EntityMetadataForPrompt, GoldenQuery } from '../data/schema';
 import { PROMPT_SQL_QUERY_WRITER } from '../prompts/PromptNames';
 
@@ -18,7 +19,10 @@ import { PROMPT_SQL_QUERY_WRITER } from '../prompts/PromptNames';
  * Generates Nunjucks SQL query templates using AI with few-shot learning
  */
 export class QueryWriter {
-  constructor(private contextUser: UserInfo) {}
+  constructor(
+    private contextUser: UserInfo,
+    private config: QueryGenConfig
+  ) {}
 
   /**
    * Generate SQL query template for a business question
@@ -94,12 +98,12 @@ export class QueryWriter {
       fewShotExamples: GoldenQuery[];
     }
   ): Promise<GeneratedQuery> {
-    const promptRunner = new AIPromptRunner();
-    const result = await promptRunner.ExecutePrompt({
+    const result = await executePromptWithOverrides<GeneratedQuery>(
       prompt,
-      data: promptData,
-      contextUser: this.contextUser,
-    });
+      promptData,
+      this.contextUser,
+      this.config
+    );
 
     if (!result || !result.success) {
       throw new Error(
@@ -107,34 +111,11 @@ export class QueryWriter {
       );
     }
 
-    return this.parsePromptResult(result.result);
-  }
-
-  /**
-   * Parse and validate AI prompt result
-   * Ensures query has all required properties
-   */
-  private parsePromptResult(resultData: unknown): GeneratedQuery {
-    if (!resultData || typeof resultData !== 'object') {
-      throw new Error('Invalid AI response: expected object');
+    if (!result.result) {
+      throw new Error('AI prompt returned no result');
     }
 
-    const result = resultData as Partial<GeneratedQuery>;
-
-    // Check for required properties
-    if (!result.sql || typeof result.sql !== 'string') {
-      throw new Error('Invalid AI response: sql property missing or invalid');
-    }
-
-    if (!Array.isArray(result.selectClause)) {
-      throw new Error('Invalid AI response: selectClause must be an array');
-    }
-
-    if (!Array.isArray(result.parameters)) {
-      throw new Error('Invalid AI response: parameters must be an array');
-    }
-
-    return result as GeneratedQuery;
+    return result.result;
   }
 
   /**

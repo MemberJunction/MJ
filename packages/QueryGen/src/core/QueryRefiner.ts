@@ -6,7 +6,6 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
@@ -20,6 +19,8 @@ import {
 } from '../data/schema';
 import { QueryTester } from './QueryTester';
 import { PROMPT_QUERY_EVALUATOR, PROMPT_QUERY_REFINER } from '../prompts/PromptNames';
+import { QueryGenConfig } from '../cli/config';
+import { executePromptWithOverrides } from '../utils/prompt-helpers';
 
 /**
  * QueryRefiner class
@@ -28,7 +29,8 @@ import { PROMPT_QUERY_EVALUATOR, PROMPT_QUERY_REFINER } from '../prompts/PromptN
 export class QueryRefiner {
   constructor(
     private tester: QueryTester,
-    private contextUser: UserInfo
+    private contextUser: UserInfo,
+    private config: QueryGenConfig
   ) {}
 
   /**
@@ -286,12 +288,12 @@ export class QueryRefiner {
     prompt: AIPromptEntityExtended,
     promptData: Record<string, unknown>
   ): Promise<T> {
-    const promptRunner = new AIPromptRunner();
-    const result = await promptRunner.ExecutePrompt({
+    const result = await executePromptWithOverrides<T>(
       prompt,
-      data: promptData,
-      contextUser: this.contextUser,
-    });
+      promptData,
+      this.contextUser,
+      this.config
+    );
 
     if (!result || !result.success) {
       throw new Error(
@@ -299,19 +301,11 @@ export class QueryRefiner {
       );
     }
 
-    return this.parsePromptResult<T>(result.result);
-  }
-
-  /**
-   * Parse and validate AI prompt result
-   * Ensures result is an object with expected structure
-   */
-  private parsePromptResult<T>(resultData: unknown): T {
-    if (!resultData || typeof resultData !== 'object') {
-      throw new Error('Invalid AI response: expected object');
+    if (!result.result) {
+      throw new Error('AI prompt returned no result');
     }
 
-    return resultData as T;
+    return result.result;
   }
 
   /**

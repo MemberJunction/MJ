@@ -9,20 +9,20 @@
  */
 export interface QueryGenConfig {
   // Entity Filtering
+  // NOTE: includeEntities and excludeEntities are mutually exclusive
+  // - includeEntities: If provided, ONLY these entities will be processed (allowlist)
+  // - excludeEntities: If provided, these entities will be excluded from processing (denylist)
+  // - If both are provided, includeEntities takes precedence and excludeEntities is ignored
   includeEntities: string[];
   excludeEntities: string[];
   excludeSchemas: string[];
 
   // Entity Grouping
-  maxEntitiesPerGroup: number;
-  minEntitiesPerGroup: number;
-  targetGroupCount: number;
   questionsPerGroup: number;
-  entityGroupStrategy: 'breadth' | 'depth';
 
   // AI Configuration
-  modelOverride?: string;
-  vendorOverride?: string;
+  modelOverride?: string;    // Override model for all prompts (e.g., "GPT-OSS-120B")
+  vendorOverride?: string;   // Override vendor for all prompts (e.g., "Groq")
   embeddingModel: string;
 
   // Iteration Limits
@@ -65,11 +65,7 @@ const DEFAULT_CONFIG: QueryGenConfig = {
   includeEntities: [],
   excludeEntities: [],
   excludeSchemas: ['sys', 'INFORMATION_SCHEMA', '__mj'],
-  maxEntitiesPerGroup: 3,
-  minEntitiesPerGroup: 1,
-  targetGroupCount: 75,
   questionsPerGroup: 2,
-  entityGroupStrategy: 'breadth',
   embeddingModel: 'text-embedding-3-small',
   maxRefinementIterations: 3,
   maxFixingIterations: 5,
@@ -122,12 +118,6 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
   if (cliOptions.excludeSchemas) {
     config.excludeSchemas = parseArrayOption(cliOptions.excludeSchemas);
   }
-  if (cliOptions.maxEntities) {
-    config.maxEntitiesPerGroup = parseNumberOption(cliOptions.maxEntities, 'maxEntities');
-  }
-  if (cliOptions.targetGroupCount) {
-    config.targetGroupCount = parseNumberOption(cliOptions.targetGroupCount, 'targetGroupCount');
-  }
   if (cliOptions.maxRefinements) {
     config.maxRefinementIterations = parseNumberOption(cliOptions.maxRefinements, 'maxRefinements');
   }
@@ -153,6 +143,12 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
   }
   if (cliOptions.verbose) {
     config.verbose = true;
+  }
+
+  // Validate entity filtering (includeEntities and excludeEntities are mutually exclusive)
+  if (config.includeEntities.length > 0 && config.excludeEntities.length > 0) {
+    console.warn('[Warning] Both includeEntities and excludeEntities provided. includeEntities takes precedence, excludeEntities will be ignored.');
+    config.excludeEntities = [];
   }
 
   return config;

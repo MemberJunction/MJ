@@ -60,20 +60,28 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     }
     spinner.succeed('Metadata loaded');
 
-    // 4. Build entity groups
-    spinner.start('Analyzing entity relationships...');
+    // 4. Filter and build entity groups
+    spinner.start('Filtering entities...');
     const md = new Metadata();
-    const allEntities = md.Entities.filter(
+
+    // Apply entity filtering (includeEntities takes precedence over excludeEntities)
+    let filteredEntities = md.Entities.filter(
       e => !config.excludeSchemas.includes(e.SchemaName || '')
     );
-    const grouper = new EntityGrouper();
-    const entityGroups = await grouper.generateEntityGroups(
-      allEntities,
-      config.minEntitiesPerGroup,
-      config.maxEntitiesPerGroup,
-      config.targetGroupCount,
-      contextUser
-    );
+
+    if (config.includeEntities.length > 0) {
+      // Allowlist: only include specified entities
+      filteredEntities = filteredEntities.filter(e => config.includeEntities.includes(e.Name));
+      spinner.info(chalk.dim(`Including only ${config.includeEntities.length} specified entities`));
+    } else if (config.excludeEntities.length > 0) {
+      // Denylist: exclude specified entities
+      filteredEntities = filteredEntities.filter(e => !config.excludeEntities.includes(e.Name));
+      spinner.info(chalk.dim(`Excluded ${config.excludeEntities.length} entities`));
+    }
+
+    spinner.text = 'Analyzing entity relationships...';
+    const grouper = new EntityGrouper(config);
+    const entityGroups = (await grouper.generateEntityGroups(filteredEntities, contextUser)).slice(0, 1); //TODO: remove limit
     spinner.succeed(chalk.green(`Found ${entityGroups.length} entity groups`));
 
 
@@ -96,7 +104,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 
       try {
         // 6a. Generate business questions
-        const questionGen = new QuestionGenerator(contextUser);
+        const questionGen = new QuestionGenerator(contextUser, config);
         const questions = await questionGen.generateQuestions(group);
 
         if (config.verbose) {
@@ -125,7 +133,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
           const fewShotExamples = fewShotResults.map(s => s.query);
 
           // Generate SQL query
-          const queryWriter = new QueryWriter(contextUser);
+          const queryWriter = new QueryWriter(contextUser, config);
           const generatedQuery = await queryWriter.generateQuery(
             question,
             group.entities.map(e => formatEntityMetadataForPrompt(e, group.entities)),
@@ -139,7 +147,8 @@ export async function generateCommand(options: Record<string, unknown>): Promise
             dataProvider,
             entityMetadata,
             question,
-            contextUser
+            contextUser,
+            config
           );
           const testResult = await queryTester.testQuery(
             generatedQuery,
@@ -154,7 +163,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
           }
 
           // Refine query
-          const queryRefiner = new QueryRefiner(queryTester, contextUser);
+          const queryRefiner = new QueryRefiner(queryTester, contextUser, config);
           const refinedResult = await queryRefiner.refineQuery(
             generatedQuery,
             question,

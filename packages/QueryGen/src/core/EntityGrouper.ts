@@ -7,12 +7,14 @@
  */
 
 import { EntityInfo, EntityRelationshipInfo, UserInfo } from '@memberjunction/core';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EntityGroup } from '../data/schema';
+import { QueryGenConfig } from '../cli/config';
 import { generateRelationshipGraph, formatEntitiesForPrompt } from '../utils/graph-helpers';
 import { extractErrorMessage } from '../utils/error-handlers';
+import { executePromptWithOverrides } from '../utils/prompt-helpers';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * LLM response format from Entity Group Generator prompt
@@ -37,27 +39,29 @@ interface LLMEntityGroupResponse {
  */
 export class EntityGrouper {
   private readonly promptName = 'Entity Group Generator';
+  private readonly config: QueryGenConfig;
+
+  constructor(config: QueryGenConfig) {
+    this.config = config;
+  }
 
   /**
    * Generate semantically meaningful entity groups using LLM analysis
    *
+   * Note: The LLM determines the optimal number and size of entity groups based on
+   * business domain understanding. The number of groups is not strictly enforced.
+   *
    * @param entities - All entities to analyze
-   * @param minSize - Minimum entities per group (typically 1)
-   * @param maxSize - Maximum entities per group (typically 3-5)
-   * @param targetGroupCount - Desired number of groups (approximate, default 75)
    * @param contextUser - User context for server-side operations
    * @returns Array of validated entity groups with business context
    */
   async generateEntityGroups(
     entities: EntityInfo[],
-    minSize: number,
-    maxSize: number,
-    targetGroupCount: number = 75,
     contextUser: UserInfo
   ): Promise<EntityGroup[]> {
     try {
       // 1. Prepare schema data for LLM
-      const schemaData = this.prepareSchemaData(entities, minSize, maxSize, targetGroupCount);
+      const schemaData = this.prepareSchemaData(entities);
 
       // 2. Call LLM to generate groups
       const llmResponse = await this.callLLMForGrouping(schemaData, contextUser);
@@ -76,13 +80,12 @@ export class EntityGrouper {
 
   /**
    * Prepare schema data for LLM prompt
+   *
+   * Note: The LLM will determine appropriate group sizes and count based on
+   * business domain understanding. We provide the full entity schema and
+   * relationship graph for intelligent analysis.
    */
-  private prepareSchemaData(
-    entities: EntityInfo[],
-    minSize: number,
-    maxSize: number,
-    targetGroupCount: number
-  ): Record<string, unknown> {
+  private prepareSchemaData(entities: EntityInfo[]): Record<string, unknown> {
     const formattedEntities = formatEntitiesForPrompt(entities);
     const relationshipGraph = generateRelationshipGraph(entities);
 
@@ -92,10 +95,7 @@ export class EntityGrouper {
     return {
       schemaName,
       entities: formattedEntities,
-      relationshipGraph,
-      minGroupSize: minSize,
-      maxGroupSize: maxSize,
-      targetGroupCount
+      relationshipGraph
     };
   }
 
@@ -112,14 +112,13 @@ export class EntityGrouper {
       throw new Error(`Prompt "${this.promptName}" not found. Ensure metadata has been synced to database.`);
     }
 
-    const promptParams = new AIPromptParams();
-    promptParams.prompt = prompt;
-    promptParams.data = schemaData;
-    promptParams.contextUser = contextUser;
-    promptParams.skipValidation = false; // Enable JSON schema validation
-
-    const runner = new AIPromptRunner();
-    const result = await runner.ExecutePrompt<LLMEntityGroupResponse>(promptParams);
+    // Execute with model/vendor overrides if specified in config
+    const result = await executePromptWithOverrides<LLMEntityGroupResponse>(
+      prompt,
+      schemaData,
+      contextUser,
+      this.config
+    );
 
     if (!result.success) {
       throw new Error(`LLM grouping failed: ${result.errorMessage || 'Unknown error'}`);
