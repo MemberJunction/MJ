@@ -17,6 +17,7 @@ import { getSystemUser } from '../../utils/user-helpers';
 import { QueryTester } from '../../core/QueryTester';
 import { extractErrorMessage } from '../../utils/error-handlers';
 import { GeneratedQuery, QueryMetadataRecord } from '../../data/schema';
+import { loadConfig } from '../config';
 
 /**
  * Execute the validate command
@@ -30,6 +31,9 @@ export async function validateCommand(options: Record<string, unknown>): Promise
   try {
     const queryPath = String(options.path || './metadata/queries');
     const verbose = Boolean(options.verbose);
+
+    // Load configuration
+    const config = loadConfig(options);
 
     // 1. Get system user from UserCache (populated by provider initialization)
     const contextUser = getSystemUser();
@@ -74,7 +78,7 @@ export async function validateCommand(options: Record<string, unknown>): Promise
             entities: []
           };
 
-          const tester = new QueryTester(dataProvider, [], dummyQuestion, contextUser);
+          const tester = new QueryTester(dataProvider, [], dummyQuestion, contextUser, config);
 
           // Test query execution
           const testResult = await tester.testQuery(query, 1);
