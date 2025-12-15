@@ -22,7 +22,7 @@ import { TestingModule } from '@memberjunction/ng-testing';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Markdown module
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
@@ -146,7 +146,7 @@ const COMPONENTS = [
     ArtifactsModule,
     TestingModule,
     SharedGenericModule,
-    MarkdownModule.forRoot(),
+    MarkdownModule,
     // Standalone components
     TasksFullViewComponent,
     CollectionShareModalComponent,

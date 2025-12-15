@@ -1,0 +1,667 @@
+/**
+ * MJ Markdown Component Styles
+ *
+ * These styles apply to rendered markdown content.
+ * Using ViewEncapsulation.None so styles penetrate into dynamically generated content.
+ */
+
+/* ============================================
+   Container
+   ============================================ */
+.mj-markdown-container {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #1f2937;
+  word-wrap: break-word;
+}
+
+/* ============================================
+   Typography
+   ============================================ */
+.mj-markdown-container h1,
+.mj-markdown-container h2,
+.mj-markdown-container h3,
+.mj-markdown-container h4,
+.mj-markdown-container h5,
+.mj-markdown-container h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #111827;
+}
+
+.mj-markdown-container h1 { font-size: 1.75em; }
+.mj-markdown-container h2 { font-size: 1.5em; }
+.mj-markdown-container h3 { font-size: 1.25em; }
+.mj-markdown-container h4 { font-size: 1.1em; }
+.mj-markdown-container h5 { font-size: 1em; }
+.mj-markdown-container h6 { font-size: 0.9em; color: #6b7280; }
+
+.mj-markdown-container > h1:first-child,
+.mj-markdown-container > h2:first-child,
+.mj-markdown-container > h3:first-child {
+  margin-top: 0;
+}
+
+.mj-markdown-container p {
+  margin: 0 0 1em 0;
+}
+
+.mj-markdown-container > p:last-child {
+  margin-bottom: 0;
+}
+
+.mj-markdown-container a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.mj-markdown-container a:hover {
+  text-decoration: underline;
+}
+
+.mj-markdown-container strong {
+  font-weight: 600;
+}
+
+.mj-markdown-container em {
+  font-style: italic;
+}
+
+/* ============================================
+   Lists
+   ============================================ */
+.mj-markdown-container ul,
+.mj-markdown-container ol {
+  margin: 0 0 1em 0;
+  padding-left: 2em;
+}
+
+.mj-markdown-container li {
+  margin-bottom: 0.25em;
+}
+
+.mj-markdown-container li > ul,
+.mj-markdown-container li > ol {
+  margin-top: 0.25em;
+  margin-bottom: 0;
+}
+
+/* Task lists */
+.mj-markdown-container ul.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.mj-markdown-container li.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.mj-markdown-container li.task-list-item input[type="checkbox"] {
+  margin-top: 0.35em;
+}
+
+/* ============================================
+   Blockquotes
+   ============================================ */
+.mj-markdown-container blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid #e5e7eb;
+  background: #f9fafb;
+  color: #4b5563;
+}
+
+.mj-markdown-container blockquote > p:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================
+   Code Blocks
+   ============================================ */
+.mj-markdown-container code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+/* Inline code */
+.mj-markdown-container :not(pre) > code {
+  padding: 0.2em 0.4em;
+  background: #f3f4f6;
+  border-radius: 4px;
+  color: #be185d;
+}
+
+/* Code blocks */
+.mj-markdown-container pre {
+  margin: 1em 0;
+  padding: 1em;
+  background: #1e1e1e;
+  border-radius: 8px;
+  overflow-x: auto;
+  position: relative;
+}
+
+.mj-markdown-container pre code {
+  background: transparent;
+  padding: 0;
+  color: #d4d4d4;
+  font-size: 0.875em;
+  line-height: 1.5;
+}
+
+/* ============================================
+   Code Toolbar (copy button, language label)
+   ============================================ */
+.mj-markdown-container .code-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+}
+
+.mj-markdown-container .code-language-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+.mj-markdown-container .code-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.mj-markdown-container pre:hover .code-copy-btn {
+  opacity: 1;
+}
+
+.mj-markdown-container .code-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.mj-markdown-container .code-copy-btn.copied {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.mj-markdown-container .code-copy-btn.error {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+/* ============================================
+   Tables
+   ============================================ */
+.mj-markdown-container table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.mj-markdown-container th,
+.mj-markdown-container td {
+  padding: 0.5em 1em;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.mj-markdown-container th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.mj-markdown-container tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+/* ============================================
+   Horizontal Rule
+   ============================================ */
+.mj-markdown-container hr {
+  margin: 2em 0;
+  border: none;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ============================================
+   Images
+   ============================================ */
+.mj-markdown-container img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* ============================================
+   GitHub-style Alerts (marked-alert)
+   ============================================ */
+.mj-markdown-container .markdown-alert {
+  margin: 1em 0;
+  padding: 1em;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.mj-markdown-container .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+}
+
+.mj-markdown-container .markdown-alert > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Note */
+.mj-markdown-container .markdown-alert-note {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.mj-markdown-container .markdown-alert-note .markdown-alert-title {
+  color: #1d4ed8;
+}
+
+/* Tip */
+.mj-markdown-container .markdown-alert-tip {
+  background: #f0fdf4;
+  border-color: #22c55e;
+}
+
+.mj-markdown-container .markdown-alert-tip .markdown-alert-title {
+  color: #16a34a;
+}
+
+/* Important */
+.mj-markdown-container .markdown-alert-important {
+  background: #faf5ff;
+  border-color: #a855f7;
+}
+
+.mj-markdown-container .markdown-alert-important .markdown-alert-title {
+  color: #9333ea;
+}
+
+/* Warning */
+.mj-markdown-container .markdown-alert-warning {
+  background: #fffbeb;
+  border-color: #f59e0b;
+}
+
+.mj-markdown-container .markdown-alert-warning .markdown-alert-title {
+  color: #d97706;
+}
+
+/* Caution */
+.mj-markdown-container .markdown-alert-caution {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+
+.mj-markdown-container .markdown-alert-caution .markdown-alert-title {
+  color: #dc2626;
+}
+
+/* ============================================
+   Collapsible Headings
+   ============================================ */
+.mj-markdown-container .collapsible-section {
+  margin: 0.75em 0;
+  border-left: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.mj-markdown-container .collapsible-section:hover {
+  border-left-color: #e5e7eb;
+}
+
+/* Heading wrapper - contains toggle and heading */
+.mj-markdown-container .collapsible-heading-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+  user-select: none;
+}
+
+.mj-markdown-container .collapsible-heading-wrapper:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* The heading itself */
+.mj-markdown-container .collapsible-heading {
+  margin: 0 !important;
+  flex: 1;
+}
+
+/* Toggle button/icon */
+.mj-markdown-container .collapsible-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #9ca3af;
+  transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.mj-markdown-container .collapsible-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mj-markdown-container .collapsible-heading-wrapper:hover .collapsible-toggle {
+  color: #6b7280;
+}
+
+/* Expanded state - arrow points down */
+.mj-markdown-container .collapsible-section:not(.collapsed) .collapsible-toggle {
+  transform: rotate(90deg);
+}
+
+/* Collapsed state - arrow points right (default SVG orientation) */
+.mj-markdown-container .collapsible-section.collapsed .collapsible-toggle {
+  transform: rotate(0deg);
+}
+
+/* Content area */
+.mj-markdown-container .collapsible-content {
+  padding-left: 26px;
+  overflow: hidden;
+  max-height: 5000px; /* Large enough for most content */
+  opacity: 1;
+  transition: max-height 0.3s ease-out, opacity 0.2s ease-out, padding 0.2s ease;
+}
+
+.mj-markdown-container .collapsible-section.collapsed .collapsible-content {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  visibility: hidden;
+}
+
+/* Nested sections - indent further */
+.mj-markdown-container .collapsible-section .collapsible-section {
+  margin-left: 0;
+}
+
+/* Focus styles for accessibility */
+.mj-markdown-container .collapsible-heading-wrapper:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.mj-markdown-container .collapsible-toggle:focus {
+  outline: none;
+}
+
+/* Action buttons container - expand/collapse all */
+.mj-markdown-container .collapsible-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 12px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.mj-markdown-container .collapsible-heading-wrapper:hover .collapsible-actions {
+  opacity: 1;
+}
+
+/* Individual action buttons */
+.mj-markdown-container .collapsible-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.mj-markdown-container .collapsible-action-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: #374151;
+}
+
+.mj-markdown-container .collapsible-action-btn:active {
+  transform: scale(0.92);
+}
+
+.mj-markdown-container .collapsible-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Expand all button - double down chevron */
+.mj-markdown-container .collapsible-action-btn.expand-all:hover {
+  color: #059669;
+  background-color: rgba(5, 150, 105, 0.1);
+}
+
+/* Collapse all button - double up chevron */
+.mj-markdown-container .collapsible-action-btn.collapse-all:hover {
+  color: #dc2626;
+  background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* ============================================
+   Mermaid Diagrams
+   ============================================ */
+.mj-markdown-container .mermaid-diagram {
+  margin: 1em 0;
+  padding: 1em;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.mj-markdown-container .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mj-markdown-container .mermaid-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.mj-markdown-container .mermaid-error::before {
+  content: 'Diagram rendering failed';
+  display: block;
+  color: #dc2626;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+/* ============================================
+   Heading Anchors
+   ============================================ */
+.mj-markdown-container h1[id],
+.mj-markdown-container h2[id],
+.mj-markdown-container h3[id],
+.mj-markdown-container h4[id],
+.mj-markdown-container h5[id],
+.mj-markdown-container h6[id] {
+  scroll-margin-top: 1em;
+}
+
+.mj-markdown-container h1[id]:hover,
+.mj-markdown-container h2[id]:hover,
+.mj-markdown-container h3[id]:hover,
+.mj-markdown-container h4[id]:hover,
+.mj-markdown-container h5[id]:hover,
+.mj-markdown-container h6[id]:hover {
+  cursor: pointer;
+}
+
+/* Anchor link indicator on hover */
+.mj-markdown-container h1[id]::before,
+.mj-markdown-container h2[id]::before,
+.mj-markdown-container h3[id]::before,
+.mj-markdown-container h4[id]::before,
+.mj-markdown-container h5[id]::before,
+.mj-markdown-container h6[id]::before {
+  content: '#';
+  position: absolute;
+  left: -1.5em;
+  color: #9ca3af;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.mj-markdown-container h1[id]:hover::before,
+.mj-markdown-container h2[id]:hover::before,
+.mj-markdown-container h3[id]:hover::before,
+.mj-markdown-container h4[id]:hover::before,
+.mj-markdown-container h5[id]:hover::before,
+.mj-markdown-container h6[id]:hover::before {
+  opacity: 1;
+}
+
+/* ============================================
+   Line Numbers (optional)
+   ============================================ */
+.mj-markdown-container pre.line-numbers {
+  padding-left: 3.5em;
+  counter-reset: line;
+}
+
+.mj-markdown-container pre.line-numbers code {
+  display: block;
+}
+
+.mj-markdown-container pre.line-numbers code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 2em;
+  margin-left: -3em;
+  margin-right: 1em;
+  text-align: right;
+  color: #6b7280;
+  user-select: none;
+}
+
+/* ============================================
+   Error State
+   ============================================ */
+.mj-markdown-container .markdown-error {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 1em;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  white-space: pre-wrap;
+  font-family: monospace;
+}
+
+/* ============================================
+   Dark Mode Support
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  .mj-markdown-container.dark-mode {
+    color: #e5e7eb;
+  }
+
+  .mj-markdown-container.dark-mode h1,
+  .mj-markdown-container.dark-mode h2,
+  .mj-markdown-container.dark-mode h3,
+  .mj-markdown-container.dark-mode h4,
+  .mj-markdown-container.dark-mode h5,
+  .mj-markdown-container.dark-mode h6 {
+    color: #f9fafb;
+  }
+
+  .mj-markdown-container.dark-mode blockquote {
+    background: #1f2937;
+    border-color: #374151;
+    color: #9ca3af;
+  }
+
+  .mj-markdown-container.dark-mode :not(pre) > code {
+    background: #374151;
+    color: #f472b6;
+  }
+
+  .mj-markdown-container.dark-mode table th {
+    background: #1f2937;
+  }
+
+  .mj-markdown-container.dark-mode table tr:nth-child(even) {
+    background: #1f2937;
+  }
+
+  .mj-markdown-container.dark-mode th,
+  .mj-markdown-container.dark-mode td {
+    border-color: #374151;
+  }
+
+  .mj-markdown-container.dark-mode hr {
+    border-color: #374151;
+  }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+  .mj-markdown-container .code-toolbar {
+    display: none;
+  }
+
+  .mj-markdown-container .collapsible-section.collapsed .collapsible-content {
+    max-height: none;
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .mj-markdown-container pre {
+    background: #f3f4f6 !important;
+    color: #1f2937 !important;
+  }
+
+  .mj-markdown-container pre code {
+    color: #1f2937 !important;
+  }
+}
