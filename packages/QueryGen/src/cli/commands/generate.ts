@@ -141,7 +141,8 @@ export async function generateCommand(options: Record<string, unknown>): Promise
           );
 
           // Test and fix query
-          const dataProvider = Metadata.Provider.DatabaseConnection as DatabaseProviderBase;
+          // Access the database provider through Metadata.Provider
+          const dataProvider = Metadata.Provider as DatabaseProviderBase;
           const entityMetadata = group.entities.map(e => formatEntityMetadataForPrompt(e, group.entities));
           const queryTester = new QueryTester(
             dataProvider,
