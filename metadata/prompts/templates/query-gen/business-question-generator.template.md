@@ -33,9 +33,17 @@ Generate 1-2 realistic business questions that:
 4. Vary in complexity (simple aggregations vs. complex joins)
 5. Leverage entity descriptions to understand domain context
 
-## Output Format
-Return JSON array of questions:
-```json
+## Response Format
+
+**CRITICAL INSTRUCTIONS:**
+- I am a computer and can **only** read JSON responses
+- Your response **must** be pure JSON that starts with `{` and ends with `}`
+- **NO leading or trailing text** - no explanations, no markdown code blocks, no commentary
+- **NO markdown formatting** like \`\`\`json - just the raw JSON
+- Your response **must** match this exact structure:
+
+Example JSON structure:
+```
 {
   "questions": [
     {
@@ -50,12 +58,3 @@ Return JSON array of questions:
   ]
 }
 ```
-
-## Response Format
-
-**CRITICAL INSTRUCTIONS:**
-- I am a computer and can **only** read JSON responses
-- Your response **must** be pure JSON that starts with `{` and ends with `}`
-- **NO leading or trailing text** - no explanations, no markdown code blocks, no commentary
-- **NO markdown formatting** like \`\`\`json - just the raw JSON
-- Your response **must** match the exact structure shown in the "Output Format" section above

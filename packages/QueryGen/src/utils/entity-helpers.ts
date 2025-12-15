@@ -37,40 +37,85 @@ export function formatEntityMetadataForPrompt(entity: EntityInfo, allEntities: E
 /**
  * Format entity fields for AI prompt
  * Includes field metadata with types, descriptions, and relationship info
+ * Labels internal (__mj_*) and virtual fields appropriately
  */
 function formatEntityFields(entity: EntityInfo): EntityFieldMetadata[] {
-  return entity.Fields.map((field) => ({
-    name: field.Name,
-    displayName: field.DisplayName || field.Name,
-    type: field.Type,
-    description: field.Description || '',
-    isPrimaryKey: field.IsPrimaryKey || false,
-    isForeignKey: field.RelatedEntityID != null && field.RelatedEntityID.trim().length > 0,
-    relatedEntity: field.RelatedEntity || undefined,
-    isRequired: !field.AllowsNull,
-    defaultValue: field.DefaultValue || undefined,
-  }));
+  return entity.Fields.map((field) => {
+    const isInternalField = field.Name.startsWith('__mj_');
+    const isVirtualField = field.IsVirtual || false;
+
+    let description = field.Description || '';
+
+    // Add labels for special fields
+    if (isInternalField) {
+      description = `[INTERNAL] ${description}`;
+    } else if (isVirtualField) {
+      description = `[VIRTUAL] ${description}`;
+    }
+
+    return {
+      name: field.Name,
+      displayName: field.DisplayName || field.Name,
+      type: field.Type,
+      description,
+      isPrimaryKey: field.IsPrimaryKey || false,
+      isForeignKey: field.RelatedEntityID != null && field.RelatedEntityID.trim().length > 0,
+      relatedEntity: field.RelatedEntity || undefined,
+      isRequired: !field.AllowsNull,
+      defaultValue: field.DefaultValue || undefined,
+    };
+  });
 }
 
 /**
  * Format entity relationships for AI prompt
  * Includes schema and view names for proper JOIN generation
+ * Only includes relationships to entities in the current entity group
  * Uses EntityInfo.RelatedEntities getter for pre-computed relationships
  */
 function formatEntityRelationships(entity: EntityInfo, allEntities: EntityInfo[]): EntityRelationshipMetadata[] {
-  // Use entity.RelatedEntities getter which returns EntityRelationshipInfo[]
-  return entity.RelatedEntities.map(rel => {
-    const relatedEntity = findEntityById(rel.RelatedEntityID, allEntities);
+  // Create set of entity names in the group for filtering
+  const entityNamesInGroup = new Set(allEntities.map(e => e.Name));
 
-    return {
-      type: mapRelationshipType(rel.Type),
-      relatedEntity: rel.RelatedEntity,
-      relatedEntityView: relatedEntity?.BaseView || `vw${rel.RelatedEntity}`,
-      relatedEntitySchema: relatedEntity?.SchemaName || 'dbo',
-      foreignKeyField: rel.EntityKeyField,
-      description: `${entity.Name} ${rel.Type} relationship with ${rel.RelatedEntity} via ${rel.EntityKeyField}`,
-    };
-  });
+  // Use entity.RelatedEntities getter which returns EntityRelationshipInfo[]
+  return entity.RelatedEntities
+    .filter(rel => entityNamesInGroup.has(rel.RelatedEntity))  // Only include relationships within the group
+    .map(rel => {
+      const relatedEntity = findEntityById(rel.RelatedEntityID, allEntities);
+
+      // Determine the foreign key field based on relationship type and available fields
+      let foreignKeyField: string;
+      let joinDescription: string;
+
+      const currentSchema = entity.SchemaName || 'dbo';
+      const currentView = entity.BaseView || `vw${entity.Name}`;
+      const relatedSchema = relatedEntity?.SchemaName || 'dbo';
+      const relatedView = relatedEntity?.BaseView || `vw${rel.RelatedEntity}`;
+
+      if (rel.EntityKeyField && rel.EntityKeyField.trim() !== '') {
+        // Current entity has the foreign key
+        foreignKeyField = rel.EntityKeyField;
+        const relatedJoinField = rel.RelatedEntityJoinField || 'ID';
+        joinDescription = `${currentSchema}.${currentView}.${foreignKeyField} = ${relatedSchema}.${relatedView}.${relatedJoinField}`;
+      } else if (rel.RelatedEntityJoinField && rel.RelatedEntityJoinField.trim() !== '') {
+        // Related entity has the foreign key pointing back to this entity
+        foreignKeyField = rel.RelatedEntityJoinField;
+        joinDescription = `${relatedSchema}.${relatedView}.${foreignKeyField} = ${currentSchema}.${currentView}.ID`;
+      } else {
+        // No foreign key field specified (possibly many-to-many through join table)
+        foreignKeyField = '';
+        joinDescription = `Related via ${rel.JoinView || 'join table'}`;
+      }
+
+      return {
+        type: mapRelationshipType(rel.Type),
+        relatedEntity: rel.RelatedEntity,
+        relatedEntityView: relatedEntity?.BaseView || `vw${rel.RelatedEntity}`,
+        relatedEntitySchema: relatedEntity?.SchemaName || 'dbo',
+        foreignKeyField,
+        description: joinDescription,
+      };
+    });
 }
 
 /**
